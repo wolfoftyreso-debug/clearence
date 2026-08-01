@@ -6,6 +6,7 @@ import { COMPANY } from "@/lib/company";
 import type { DataPort } from "../ports";
 import type {
   AccountBillingRecord,
+  ApplicationForReview,
   ApplicationRecord,
   CaseMessage,
   CaseRecord,
@@ -310,6 +311,20 @@ export const supabaseAdapter: DataPort = {
     },
     async signOut() {
       await supabase.auth.signOut();
+    },
+    async requestPasswordReset(email) {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/login`,
+      });
+      // "User not found" och liknande sväljs: svaret får inte avslöja vilka
+      // adresser som har konto. Supabase svarar redan enhetligt, men den här
+      // raden ska hålla även om det ändras.
+      if (error && /not found|user/i.test(error.message)) return { error: null };
+      return { error: error?.message ?? null };
+    },
+    async updatePassword(newPassword) {
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      return { error: error?.message ?? null };
     },
   },
 
@@ -886,6 +901,51 @@ export const supabaseAdapter: DataPort = {
         credential_reference: input.credentialReference,
         credential_note: input.credentialNote,
         terms_accepted_at: input.termsAcceptedAt,
+      });
+      if (error) throw error;
+    },
+    async listAll() {
+      const { data, error } = await supabase
+        .from("professional_applications")
+        .select("*")
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return (data ?? []).map(
+        (row): ApplicationForReview => ({
+          id: row.id,
+          category: row.category,
+          status: row.status,
+          reviewNote: row.review_note,
+          createdAt: row.created_at,
+          contactName: row.contact_name,
+          email: row.email,
+          phone: row.phone,
+          company: row.company,
+          orgNumber: row.org_number,
+          location: row.location,
+          description: row.description,
+          website: row.website,
+          specializations: row.specializations ?? [],
+          fixedPrices: asFixedPrices(row.fixed_prices),
+          credentialAuthority: row.credential_authority,
+          credentialReference: row.credential_reference,
+          credentialNote: row.credential_note,
+          reviewedAt: row.reviewed_at,
+        }),
+      );
+    },
+    async approve(id) {
+      const { data, error } = await supabase.rpc("approve_professional_application", {
+        p_application_id: id,
+      });
+      if (error) throw error;
+      return data as string;
+    },
+    async review(id, status, note) {
+      const { error } = await supabase.rpc("review_professional_application", {
+        p_application_id: id,
+        p_status: status,
+        p_note: note,
       });
       if (error) throw error;
     },

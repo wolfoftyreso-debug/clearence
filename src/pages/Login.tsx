@@ -36,7 +36,7 @@ const Login = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { signIn, signUp } = useAuth();
-  const [mode, setMode] = useState<"login" | "signup">("login");
+  const [mode, setMode] = useState<"login" | "signup" | "reset">("login");
   const [role, setRole] = useState<UserRole>("company");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -68,6 +68,22 @@ const Login = () => {
     setError(null);
     setInfo(null);
     setLoading(true);
+
+    if (mode === "reset") {
+      const result = await data.auth.requestPasswordReset(email.trim());
+      setLoading(false);
+      if (result.error) {
+        setError(translateAuthError(result.error));
+        return;
+      }
+      // Samma besked oavsett om adressen finns. Ett formulär som svarar
+      // olika är ett register över vilka bolag som är kunder här.
+      setInfo(
+        "Om adressen har ett konto hos oss skickar vi en återställningslänk dit inom någon minut. Titta även i skräpposten.",
+      );
+      setMode("login");
+      return;
+    }
 
     if (mode === "login") {
       const result = await signIn(email, password);
@@ -143,12 +159,14 @@ const Login = () => {
         <WizardCard>
           <div className="mb-6 text-center">
             <h1 className="text-xl font-display font-semibold text-foreground mb-1">
-              {mode === "login" ? "Logga in" : "Skapa konto"}
+              {mode === "login" ? "Logga in" : mode === "signup" ? "Skapa konto" : "Återställ lösenord"}
             </h1>
             <p className="text-sm text-muted-foreground">
               {mode === "login"
                 ? "Logga in för att se dina sparade ärenden."
-                : "Ett konto sparar din utvärdering så du kan återkomma till den."}
+                : mode === "signup"
+                  ? "Ett konto sparar din utvärdering så du kan återkomma till den."
+                  : "Ange din e-postadress så skickar vi en länk för att välja ett nytt lösenord."}
             </p>
           </div>
 
@@ -211,21 +229,38 @@ const Login = () => {
               />
             </div>
 
-            <div className="space-y-2">
-              <label htmlFor="password" className="block text-sm font-medium text-foreground">
-                Lösenord
-              </label>
-              <Input
-                id="password"
-                type="password"
-                autoComplete={mode === "login" ? "current-password" : "new-password"}
-                required
-                minLength={6}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Minst 6 tecken"
-              />
-            </div>
+            {mode !== "reset" && (
+              <div className="space-y-2">
+                <div className="flex items-baseline justify-between">
+                  <label htmlFor="password" className="block text-sm font-medium text-foreground">
+                    Lösenord
+                  </label>
+                  {mode === "login" && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMode("reset");
+                        setError(null);
+                        setInfo(null);
+                      }}
+                      className="text-sm text-accent underline-offset-4 hover:underline"
+                    >
+                      Glömt lösenordet?
+                    </button>
+                  )}
+                </div>
+                <Input
+                  id="password"
+                  type="password"
+                  autoComplete={mode === "login" ? "current-password" : "new-password"}
+                  required
+                  minLength={6}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Minst 6 tecken"
+                />
+              </div>
+            )}
 
             {error && (
               <p className="text-sm text-destructive" role="alert">
@@ -240,23 +275,39 @@ const Login = () => {
 
             <Button type="submit" variant="accent" size="lg" className="w-full" disabled={loading}>
               {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-              {mode === "login" ? "Logga in" : "Skapa konto"}
+              {mode === "login" ? "Logga in" : mode === "signup" ? "Skapa konto" : "Skicka återställningslänk"}
             </Button>
           </form>
 
           <p className="mt-6 text-center text-sm text-muted-foreground">
-            {mode === "login" ? "Inget konto än?" : "Har du redan ett konto?"}{" "}
-            <button
-              type="button"
-              onClick={() => {
-                setMode(mode === "login" ? "signup" : "login");
-                setError(null);
-                setInfo(null);
-              }}
-              className="text-accent font-medium hover:underline"
-            >
-              {mode === "login" ? "Skapa ett" : "Logga in"}
-            </button>
+            {mode === "reset" ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setMode("login");
+                  setError(null);
+                  setInfo(null);
+                }}
+                className="text-accent font-medium hover:underline"
+              >
+                Tillbaka till inloggningen
+              </button>
+            ) : (
+              <>
+                {mode === "login" ? "Inget konto än?" : "Har du redan ett konto?"}{" "}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMode(mode === "login" ? "signup" : "login");
+                    setError(null);
+                    setInfo(null);
+                  }}
+                  className="text-accent font-medium hover:underline"
+                >
+                  {mode === "login" ? "Skapa ett" : "Logga in"}
+                </button>
+              </>
+            )}
           </p>
         </WizardCard>
       </div>

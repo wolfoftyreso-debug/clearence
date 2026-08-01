@@ -27,6 +27,7 @@ const KBRModule = lazy(() => import("./pages/KBRModule"));
 const Contact = lazy(() => import("./pages/Contact"));
 const AdminInbox = lazy(() => import("./pages/AdminInbox"));
 const AdminCustomers = lazy(() => import("./pages/AdminCustomers"));
+const AdminApplications = lazy(() => import("./pages/AdminApplications"));
 const DashboardDocuments = lazy(() => import("./pages/DashboardDocuments"));
 const DashboardMessages = lazy(() => import("./pages/DashboardMessages"));
 const DashboardSettings = lazy(() => import("./pages/DashboardSettings"));
@@ -120,6 +121,14 @@ const App = () => (
                   element={
                     <ProtectedRoute>
                       <AdminCustomers />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/admin/ansokningar"
+                  element={
+                    <ProtectedRoute>
+                      <AdminApplications />
                     </ProtectedRoute>
                   }
                 />

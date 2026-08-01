@@ -288,6 +288,14 @@ export const DashboardShell = ({ children, title, actions }: DashboardShellProps
                   <span className="min-w-0 flex-1 text-left">Inkorg</span>
                 </Link>
                 <Link
+                  to="/admin/ansokningar"
+                  onClick={() => setSidebarOpen(false)}
+                  className="flex w-full items-center gap-3 rounded-md px-4 py-3 text-sm font-medium text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                >
+                  <Briefcase className="h-5 w-5 flex-shrink-0" aria-hidden="true" />
+                  <span className="min-w-0 flex-1 text-left">Ansökningar</span>
+                </Link>
+                <Link
                   to="/admin/kunder"
                   onClick={() => setSidebarOpen(false)}
                   className="flex w-full items-center gap-3 rounded-md px-4 py-3 text-sm font-medium text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"

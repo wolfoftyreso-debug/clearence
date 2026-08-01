@@ -136,6 +136,29 @@ export interface ApplicationRecord {
   createdAt: string;
 }
 
+/**
+ * Hela ansökan, som granskaren ser den. Skild från ApplicationRecord med
+ * flit: den sökandes egen vy behöver inte sina inskickade fält i retur, och
+ * granskarens vy får aldrig sakna behörighetsuppgifterna - det är dem
+ * granskningen består i att kontrollera.
+ */
+export interface ApplicationForReview extends ApplicationRecord {
+  contactName: string;
+  email: string;
+  phone: string | null;
+  company: string | null;
+  orgNumber: string | null;
+  location: string | null;
+  description: string | null;
+  website: string | null;
+  specializations: string[];
+  fixedPrices: FixedPrice[];
+  credentialAuthority: string | null;
+  credentialReference: string | null;
+  credentialNote: string | null;
+  reviewedAt: string | null;
+}
+
 export interface NewApplication {
   contactName: string;
   email: string;

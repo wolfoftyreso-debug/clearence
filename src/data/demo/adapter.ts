@@ -18,7 +18,7 @@
 import type { DataPort } from "../ports";
 import type {
   AccountBillingRecord,
-  ApplicationRecord,
+  ApplicationForReview,
   AuthUser,
   CaseMessage,
   CaseRecord,
@@ -47,7 +47,7 @@ interface DemoState {
   invoices: InvoiceRecord[];
   documents: DocumentRecord[];
   referrals: ReferralRecord[];
-  application: ApplicationRecord | null;
+  application: ApplicationForReview | null;
   contactMessages: ContactMessageRecord[];
   profile: UserProfile | null;
   caseMessages: CaseMessage[];
@@ -494,6 +494,14 @@ export const demoAdapter: DataPort = {
       save();
       notify();
     },
+    async requestPasswordReset() {
+      // Demon har inga lösenord. Flödet svarar som det skarpa gör, så att
+      // gränssnittet går att prova - texten på sidan förklarar läget.
+      return { error: null };
+    },
+    async updatePassword() {
+      return { error: null };
+    },
   },
 
   contact: {
@@ -777,7 +785,58 @@ export const demoAdapter: DataPort = {
         status: "pending",
         reviewNote: null,
         createdAt: now(),
+        contactName: input.contactName,
+        email: input.email,
+        phone: input.phone,
+        company: input.company,
+        orgNumber: input.orgNumber,
+        location: input.location,
+        description: input.description,
+        website: input.website,
+        specializations: input.specializations,
+        fixedPrices: input.fixedPrices,
+        credentialAuthority: input.credentialAuthority,
+        credentialReference: input.credentialReference,
+        credentialNote: input.credentialNote,
+        reviewedAt: null,
       };
+      save();
+    },
+    async listAll() {
+      return state.application ? [state.application] : [];
+    },
+    async approve(id) {
+      const app = state.application;
+      if (!app || app.id !== id) throw new Error("Ansökan finns inte");
+      if (app.status === "approved") throw new Error("Ansökan är redan godkänd");
+      // Samma atomära innebörd som databasfunktionen: publicering och
+      // statusbyte hör ihop.
+      const professionalId = uid();
+      DEMO_PROFESSIONALS.unshift({
+        id: professionalId,
+        name: app.contactName,
+        company: app.company,
+        category: app.category,
+        description: app.description,
+        location: app.location,
+        email: app.email,
+        phone: app.phone,
+        website: app.website,
+        fixedPrices: app.fixedPrices,
+        specializations: app.specializations,
+        verified: true,
+      });
+      state.application = { ...app, status: "approved", reviewNote: null, reviewedAt: now() };
+      save();
+      return professionalId;
+    },
+    async review(id, status, note) {
+      const app = state.application;
+      if (!app || app.id !== id) throw new Error("Ansökan finns inte");
+      if (note.trim().length < 10) {
+        throw new Error("Motivering krävs - den sökande ska veta vad som saknas eller varför det blev nej");
+      }
+      state.application = { ...app, status, reviewNote: note.trim(), reviewedAt: now() };
       save();
     },
   },

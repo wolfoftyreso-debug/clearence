@@ -20,7 +20,7 @@ const WIDTHS = [320, 375, 414];
 const ROUTES = [
   "/", "/wizard", "/kbr", "/likviditetsplan", "/marketplace",
   "/for-radgivare", "/login", "/dashboard", "/dashboard/liquidity",
-  "/mina-forfragningar", "/om", "/kontakt", "/admin/inkorg", "/admin/kunder",
+  "/mina-forfragningar", "/om", "/kontakt", "/admin/inkorg", "/admin/kunder", "/admin/ansokningar",
   "/dashboard/dokument", "/dashboard/meddelanden", "/dashboard/installningar",
 ];
 

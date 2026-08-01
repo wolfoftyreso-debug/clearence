@@ -1,5 +1,6 @@
 import type {
   AccountBillingRecord,
+  ApplicationForReview,
   ApplicationRecord,
   AuthUser,
   CaseMessage,
@@ -56,6 +57,15 @@ export interface AuthPort {
   ): Promise<{ error: string | null; needsEmailConfirmation: boolean }>;
   signIn(email: string, password: string): Promise<{ error: string | null }>;
   signOut(): Promise<void>;
+  /**
+   * Skickar återställningslänk. Returnerar ALLTID ok utåt sett - om adressen
+   * finns eller inte får aldrig gå att avläsa här, för då är formuläret ett
+   * register över vilka bolag som är kunder. Fel som inte avslöjar det
+   * (nätverk, takfrekvens) returneras.
+   */
+  requestPasswordReset(email: string): Promise<{ error: string | null }>;
+  /** Sätter nytt lösenord för den inloggade sessionen (efter återställningslänken). */
+  updatePassword(newPassword: string): Promise<{ error: string | null }>;
 }
 
 export interface CasesPort {
@@ -91,6 +101,18 @@ export interface ApplicationsPort {
   /** Latest application belonging to the signed-in user, or null. */
   getMine(): Promise<ApplicationRecord | null>;
   create(input: NewApplication & { userId: string }): Promise<void>;
+
+  /* Drift. Behörigheten prövas i databasen, inte här. */
+
+  /** Alla ansökningar, nyast först, med behörighetsuppgifterna. */
+  listAll(): Promise<ApplicationForReview[]>;
+  /**
+   * Godkänner: publicerar rådgivaren i katalogen och märker ansökan, som EN
+   * händelse i databasen. Returnerar katalogpostens id.
+   */
+  approve(id: string): Promise<string>;
+  /** Begär komplettering eller avslår. Motiveringen är obligatorisk. */
+  review(id: string, status: "needs_info" | "rejected", note: string): Promise<void>;
 }
 
 export interface ReferralsPort {

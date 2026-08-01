@@ -737,6 +737,18 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: Database["public"]["Enums"]["user_role"]
       }
+      approve_professional_application: {
+        Args: { p_application_id: string }
+        Returns: string
+      }
+      review_professional_application: {
+        Args: {
+          p_application_id: string
+          p_status: Database["public"]["Enums"]["application_status"]
+          p_note: string
+        }
+        Returns: undefined
+      }
       close_overdue_accounts: {
         Args: { p_now?: string }
         Returns: {
