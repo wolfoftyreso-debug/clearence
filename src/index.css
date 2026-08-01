@@ -1,4 +1,38 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&display=swap');
+/*
+ * Typsnitten ligger i repot. Tidigare hämtades DM Sans från Googles CDN vid
+ * varje sidladdning, vilket var fel på två sätt:
+ *
+ *  1. Det var ett yttre beroende i en produkt som ska drivas helt i egen
+ *    miljö, och db/README.md påstod uttryckligen att det inte fanns några
+ *    CDN-typsnitt. Dokumentationen var alltså osann.
+ *  2. Besökarens IP-adress skickades till tredje part innan sidan ens
+ *    ritades ut. Här är besökaren ett bolag som håller på att gå omkull och
+ *    som söker på ordet konkurs. Den uppgiften ska inte lämna vår server.
+ *    LG München I, 3 O 17493/20, slog fast att just detta upplägg kräver
+ *    samtycke enligt GDPR - vilket vi inte hade.
+ *
+ * Filerna är variabla latinska subset, ~35 kB styck, licens SIL OFL 1.1.
+ *
+ * Två roller, medvetet olika: Archivo är smalare och mer officiell i formen
+ * och bär rubrikerna; DM Sans är öppnare och läser bättre i brödtext och i
+ * långa sifferkolumner. Ett typsnitt som gör båda jobben gör inget av dem
+ * särskilt väl.
+ */
+@font-face {
+  font-family: "Archivo";
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url("./assets/fonts/archivo-latin.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "DM Sans";
+  font-style: normal;
+  font-weight: 100 1000;
+  font-display: swap;
+  src: url("./assets/fonts/dm-sans-latin.woff2") format("woff2");
+}
 
 @tailwind base;
 @tailwind components;

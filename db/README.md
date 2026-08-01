@@ -73,7 +73,9 @@ SES. Det är AWS, alltså innanför gränsen. Alternativet, egen SMTP-server, ko
 | Fortnox/Visma m.fl. | Bara om kunden vill | Frivillig integration, en per adapter |
 | Bolagsverket | Nej, men | Ersätter manuell inmatning av företagsuppgifter |
 
-**Inget annat.** Ingen SaaS-analys, ingen extern felrapportering, inga CDN-typsnitt (rapportmotorn i `src/lib/reports/` är redan självförsörjande av just det skälet), ingen extern AI-tjänst — insiktsmotorn i `src/lib/financial/insights.ts` är deterministisk och anropar ingenting.
+**Inget annat.** Ingen SaaS-analys, ingen extern felrapportering, ingen extern AI-tjänst — insiktsmotorn i `src/lib/financial/insights.ts` är deterministisk och anropar ingenting.
+
+**Inga CDN-typsnitt.** Det här påståendet var osant fram till att typsnitten lades i repot: `src/index.css` hämtade DM Sans från Googles CDN vid varje sidladdning. Det innebar att besökarens IP-adress gick till tredje part innan sidan ritades ut — och besökaren här är ett bolag som håller på att gå omkull. LG München I (3 O 17493/20) har slagit fast att just det upplägget kräver samtycke enligt GDPR. Typsnitten ligger nu i `src/assets/fonts/` (SIL OFL 1.1) och bygget gör noll externa anrop, vilket verifieras av `scripts/verify-no-external-requests`.
 
 ## Datalagring
 

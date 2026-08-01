@@ -17,7 +17,8 @@
     "test:bank": "esbuild tests/bankStatement.ts --bundle --platform=node --format=cjs --outfile=node_modules/.cache/test-bank.cjs --log-level=error && node node_modules/.cache/test-bank.cjs",
     "test:financial": "esbuild tests/financial.ts --bundle --platform=node --format=cjs --outfile=node_modules/.cache/test-financial.cjs --log-level=error && node node_modules/.cache/test-financial.cjs",
     "test:reports": "esbuild tests/reports.ts --bundle --platform=node --format=cjs --outfile=node_modules/.cache/test-reports.cjs --log-level=error && node node_modules/.cache/test-reports.cjs",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:external": "node tests/browser/no-external-requests.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

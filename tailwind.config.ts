@@ -16,7 +16,9 @@ export default {
     extend: {
       fontFamily: {
         sans: ["DM Sans", "system-ui", "sans-serif"],
-        display: ["DM Sans", "system-ui", "sans-serif"],
+        // Rubrikerna bär en egen röst. Archivo är smalare och mer formell i
+        // formen - närmare ett myndighetstryck än en produktsajt.
+        display: ["Archivo", "DM Sans", "system-ui", "sans-serif"],
       },
       colors: {
         border: "hsl(var(--border))",

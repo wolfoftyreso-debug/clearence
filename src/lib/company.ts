@@ -30,11 +30,22 @@ export interface CompanyIdentity {
   /** MÅSTE FYLLAS I. Format SE + 12 siffror. */
   vatNumber: string;
   /**
-   * Plusgiro, inte bankgiro. Uppgiften kommer från Nordea-kontot och har
-   * formatet XX XX XX-X. Fel kontotyp på en faktura gör att betalningen inte
-   * går fram.
+   * Plusgiro, format XX XX XX-X. Bekräftat från Nordea-kontot.
+   *
+   * Bolaget har både plusgiro och bankgiro. Att jag först skrev om "bankgiro"
+   * till "plusgiro" var fel: jag hade bara sett plusgirokontot och behandlade
+   * det som en rättelse i stället för som ett val. Båda finns här nu, och
+   * `invoiceGiro` avgör vilket som trycks på fakturan - inte den som råkar
+   * skriva texten.
    */
   plusgiro: string;
+  /** Bankgiro, format XXX-XXXX. */
+  bankgiro: string;
+  /**
+   * Vilket konto som anges på faktura. Två konton på samma faktura är den
+   * vanligaste orsaken till att betalningen bokförs fel eller uteblir.
+   */
+  invoiceGiro: "plusgiro" | "bankgiro";
   /** För utländska betalningar. */
   iban: string;
   bic: string;
@@ -78,6 +89,10 @@ export const COMPANY: CompanyIdentity = {
   // Se vatRegistered ovan.
   vatNumber: "SE559141704201",
   plusgiro: "87 53 07-1",
+  // TOM MED FLIT: numret finns men jag har inte sett det. Ett bankgironummer
+  // jag gissar fram är ett konto pengarna inte kommer fram till.
+  bankgiro: "",
+  invoiceGiro: "plusgiro",
   iban: "SE30 9500 0099 6026 0875 3071",
   bic: "NDEASESS",
   email: "",
@@ -127,7 +142,8 @@ export const companyInfoIsComplete = (c: CompanyIdentity = COMPANY): boolean =>
 export const missingInvoiceFields = (c: CompanyIdentity = COMPANY): string[] => {
   const missing = missingCompanyFields(c);
   if (!c.vatNumber.trim()) missing.push("momsregistreringsnummer");
-  if (!c.plusgiro.trim()) missing.push("plusgiro");
+  const giro = c.invoiceGiro === "bankgiro" ? c.bankgiro : c.plusgiro;
+  if (!giro.trim()) missing.push(c.invoiceGiro);
   if (!c.hasFSkatt) missing.push("bekräftat godkännande för F-skatt");
   if (!c.vatRegistered) missing.push("bekräftad momsregistrering");
   return missing;
@@ -137,3 +153,19 @@ export const formatAddress = (c: CompanyIdentity = COMPANY): string =>
   [c.address.street, `${c.address.postalCode} ${c.address.city}`.trim(), c.address.country]
     .filter((line) => line.trim().length > 0)
     .join(", ");
+
+/**
+ * Kontot som ska stå på fakturan, med rätt benämning.
+ *
+ * Returnerar null när numret saknas. Anropande kod ska då inte skriva ut
+ * något alls - en faktura utan betalningsuppgift är ett fel som syns, en
+ * faktura med fel kontotyp är ett fel som inte syns förrän betalningen
+ * uteblir.
+ */
+export const invoiceAccount = (
+  c: CompanyIdentity = COMPANY,
+): { label: string; number: string } | null => {
+  const number = c.invoiceGiro === "bankgiro" ? c.bankgiro : c.plusgiro;
+  if (!number.trim()) return null;
+  return { label: c.invoiceGiro === "bankgiro" ? "Bankgiro" : "Plusgiro", number };
+};

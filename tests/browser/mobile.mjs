@@ -57,14 +57,21 @@ for (const width of WIDTHS) {
 
   // Demo builds expose a one-click sign-in; without it the protected routes
   // just redirect and the test would silently check nothing.
-  await page.goto(`${BASE}/login`, { waitUntil: "networkidle" });
+  // Enkelsidesbygget är 1,3 MB och tar flera sekunder att tolka på en belastad
+  // maskin. Gränsen ska fånga en trasig rutt, inte en långsam burk.
+  page.setDefaultTimeout(30_000);
+  page.setDefaultNavigationTimeout(30_000);
+  await page.goto(`${BASE}/login`, { waitUntil: "domcontentloaded" });
   await page.waitForTimeout(400);
   await page.click('button:has-text("Gå in i demon")').catch(() => {});
   await page.waitForTimeout(900);
 
   for (const route of ROUTES) {
-    await page.goto(BASE + route, { waitUntil: "networkidle" });
-    await page.waitForTimeout(500);
+    // domcontentloaded + fast väntan i stället för networkidle: networkidle
+    // återvänder aldrig på en sida som håller en anslutning öppen, och sviten
+    // hängde då i det oändliga i stället för att svara.
+    await page.goto(BASE + route, { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(900);
     checks += 1;
 
     // En 404-sida spiller aldrig. Utan den här kontrollen godkänns en rutt
