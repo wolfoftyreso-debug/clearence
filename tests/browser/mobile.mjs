@@ -26,6 +26,22 @@ const ROUTES = [
 /** A couple of pixels of rounding is not a layout defect. */
 const TOLERANCE = 2;
 
+// Utan server svarar page.goto aldrig, och sviten hänger tills något utifrån
+// dödar den - fem minuters väntan i stället för en rad som säger vad som
+// saknas. Fråga först, med kort tidsgräns.
+try {
+  await fetch(BASE, { signal: AbortSignal.timeout(3000) });
+} catch {
+  console.error(
+    `Ingen server svarar på ${BASE}.\n\n` +
+      "Sviten testar en byggd sida, inte utvecklingsservern. Kör:\n" +
+      "  npm run build && npm run preview &\n" +
+      "  npm run test:mobile\n\n" +
+      "Vill du testa mot något annat: node tests/browser/mobile.mjs <baseUrl>",
+  );
+  process.exit(1);
+}
+
 const { chromium } = pw;
 const browser = await chromium.launch();
 let failures = 0;
@@ -50,6 +66,19 @@ for (const width of WIDTHS) {
     await page.goto(BASE + route, { waitUntil: "networkidle" });
     await page.waitForTimeout(500);
     checks += 1;
+
+    // En 404-sida spiller aldrig. Utan den här kontrollen godkänns en rutt
+    // som inte finns - och en gammal dist i preview-servern ger då grönt för
+    // sidor som inte ens är byggda. Det hände.
+    const notFound = await page.evaluate(() =>
+      document.body.innerText.includes("Sidan finns inte") ||
+      document.body.innerText.includes("404"),
+    );
+    if (notFound) {
+      failures += 1;
+      console.log(`FAIL ${width}px ${route} — rutten renderar 404, inget testat`);
+      continue;
+    }
 
     const result = await page.evaluate((tolerance) => {
       const de = document.documentElement;
