@@ -9,7 +9,7 @@
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.node.json",
-    "test": "npm run test:bank && npm run test:reports && npm run test:financial && npm run test:crisis && npm run test:billing && npm run test:email",
+    "test": "npm run test:bank && npm run test:reports && npm run test:financial && npm run test:crisis && npm run test:billing && npm run test:email && npm run test:integrations",
     "test:crisis": "esbuild tests/crisisAnalysis.ts --bundle --platform=node --format=cjs --outfile=node_modules/.cache/test-crisis.cjs --log-level=error && node node_modules/.cache/test-crisis.cjs",
     "test:rls": "bash supabase/tests/run.sh",
     "test:selfhosted": "bash db/tests/run.sh",
@@ -21,7 +21,8 @@
     "test:external": "node tests/browser/no-external-requests.mjs",
     "test:billing": "esbuild tests/billing.ts --bundle --platform=node --format=cjs --outfile=node_modules/.cache/test-billing.cjs --log-level=error && node node_modules/.cache/test-billing.cjs",
     "test:email": "esbuild tests/email.ts --bundle --platform=node --format=cjs --outfile=node_modules/.cache/test-email.cjs --log-level=error && node node_modules/.cache/test-email.cjs",
-    "build:worker": "esbuild db/worker/email-worker.ts --bundle --platform=node --format=cjs --external:pg --external:@aws-sdk/client-ses --outfile=db/dist/email-worker.cjs --log-level=error"
+    "build:worker": "esbuild db/worker/email-worker.ts --bundle --platform=node --format=cjs --external:pg --external:@aws-sdk/client-ses --outfile=db/dist/email-worker.cjs --log-level=error",
+    "test:integrations": "esbuild tests/integrations.ts --bundle --platform=node --format=cjs --outfile=node_modules/.cache/test-integrations.cjs --log-level=error && node node_modules/.cache/test-integrations.cjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
