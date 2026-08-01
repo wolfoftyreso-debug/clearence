@@ -347,6 +347,51 @@ select pg_temp.check('other company reads no storage objects',
   (select count(*)::int from storage.objects), 0);
 
 /* ========================================================================== */
+/* Handlingsplanens uppgifter följer ärendets gränser                         */
+/* ========================================================================== */
+
+select pg_temp.as_user('11111111-1111-1111-1111-111111111111');
+
+insert into public.case_tasks (case_id, label, source)
+values ('aaaaaaaa-0000-0000-0000-000000000001', 'Kontakta rekonstruktör', 'recommendation');
+
+select pg_temp.check('owner reads own tasks',
+  (select count(*)::int from public.case_tasks), 1);
+
+-- Avbockningen sparar vem och när.
+update public.case_tasks
+set done_at = now(), done_by = auth.uid()
+where label = 'Kontakta rekonstruktör';
+select pg_temp.check('task completion records who',
+  (select count(*)::int from public.case_tasks where done_by = auth.uid()), 1);
+
+-- Revisorn, inte rekonstruktören: rekonstruktörens medlemskap återkallas i
+-- revokeringstestet längre upp, så 0 rader är RÄTT svar för hen här.
+select pg_temp.as_user('44444444-4444-4444-4444-444444444444');
+select pg_temp.check('auditor reads the task list',
+  (select count(*)::int from public.case_tasks), 1);
+
+select pg_temp.as_user('55555555-5555-5555-5555-555555555555');
+select pg_temp.check('creditor reads no tasks',
+  (select count(*)::int from public.case_tasks), 0);
+
+select pg_temp.as_user('22222222-2222-2222-2222-222222222222');
+select pg_temp.check('other company reads no tasks',
+  (select count(*)::int from public.case_tasks), 0);
+
+do $$
+begin
+  begin
+    insert into public.case_tasks (case_id, label)
+    values ('aaaaaaaa-0000-0000-0000-000000000001', 'Smyginlagd uppgift');
+    raise exception 'FAIL  other company inserted a task into a foreign case';
+  exception
+    when insufficient_privilege or check_violation then
+      raise notice 'ok    other company cannot write tasks into a foreign case';
+  end;
+end $$;
+
+/* ========================================================================== */
 /* The audit trail outlives the case                                          */
 /* ========================================================================== */
 

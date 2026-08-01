@@ -35,6 +35,37 @@ export type Database = {
         }
         Relationships: []
       }
+      case_tasks: {
+        Row: {
+          case_id: string
+          created_at: string
+          done_at: string | null
+          done_by: string | null
+          due_date: string | null
+          id: string
+          label: string
+          source: string
+        }
+        Insert: {
+          case_id: string
+          due_date?: string | null
+          label: string
+          source?: string
+        }
+        Update: {
+          done_at?: string | null
+          done_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "case_tasks_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: false
+            referencedRelation: "cases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       case_messages: {
         Row: {
           author_user_id: string | null

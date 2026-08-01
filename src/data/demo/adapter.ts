@@ -22,6 +22,7 @@ import type {
   AuthUser,
   CaseMessage,
   CaseRecord,
+  CaseTask,
   ContactMessageRecord,
   CustomerInvoiceRecord,
   OutboundEmailRecord,
@@ -51,6 +52,7 @@ interface DemoState {
   contactMessages: ContactMessageRecord[];
   profile: UserProfile | null;
   caseMessages: CaseMessage[];
+  caseTasks: CaseTask[];
   billing: AccountBillingRecord | null;
   customerInvoices: CustomerInvoiceRecord[];
   outbox: OutboundEmailRecord[];
@@ -67,6 +69,7 @@ const emptyState = (): DemoState => ({
   contactMessages: [],
   profile: null,
   caseMessages: [],
+  caseTasks: [],
   billing: null,
   customerInvoices: [],
   outbox: [],
@@ -563,6 +566,50 @@ export const demoAdapter: DataPort = {
     async update(input) {
       if (!state.profile) return;
       state.profile = { ...state.profile, ...input };
+      save();
+    },
+  },
+
+  tasks: {
+    async listByCase(caseId) {
+      return state.caseTasks
+        .filter((t) => t.caseId === caseId)
+        .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    },
+    async seed(caseId, labels) {
+      for (const label of labels) {
+        if (state.caseTasks.some((t) => t.caseId === caseId && t.label === label)) continue;
+        state.caseTasks.push({
+          id: uid(),
+          caseId,
+          label,
+          dueDate: null,
+          doneAt: null,
+          doneBy: null,
+          source: "recommendation",
+          createdAt: now(),
+        });
+      }
+      save();
+    },
+    async add(caseId, label, dueDate) {
+      state.caseTasks.push({
+        id: uid(),
+        caseId,
+        label,
+        dueDate,
+        doneAt: null,
+        doneBy: null,
+        source: "manual",
+        createdAt: now(),
+      });
+      save();
+    },
+    async setDone(id, done) {
+      const task = state.caseTasks.find((t) => t.id === id);
+      if (!task) return;
+      task.doneAt = done ? now() : null;
+      task.doneBy = done ? (state.user?.id ?? null) : null;
       save();
     },
   },

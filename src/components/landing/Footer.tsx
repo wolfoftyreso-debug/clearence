@@ -2,12 +2,19 @@ import { Link } from "react-router-dom";
 import { ExternalLink, MapPin, MessageSquare } from "lucide-react";
 import { COMPANY, formatAddress, legalIdentityIsComplete } from "@/lib/company";
 
-const serviceLinks = [
-  { to: "/om", label: "Om Clearance" },
+// Sidfoten är sajtens karta. Toppmenyn hålls medvetet kort - orientering,
+// inte sitemap - så varje väg som togs bort därifrån ska finnas här.
+const toolLinks = [
   { to: "/wizard", label: "Utvärdera situationen" },
   { to: "/kbr", label: "Kontrollbalansräkning" },
   { to: "/likviditetsplan", label: "Likviditetsplanering" },
+];
+
+const serviceLinks = [
+  { to: "/om", label: "Om Clearance" },
   { to: "/marketplace", label: "Hitta rådgivare" },
+  { to: "/kontakt", label: "Kontakta oss" },
+  { to: "/login", label: "Logga in" },
 ];
 
 const providerLinks = [
@@ -47,9 +54,9 @@ const Footer = () => {
   return (
     <footer className="bg-primary text-primary-foreground">
       <div className="container px-4 py-12 md:py-16">
-        <div className="grid grid-cols-1 gap-10 md:grid-cols-12 md:gap-8">
+        <div className="grid grid-cols-2 gap-10 md:grid-cols-12 md:gap-8">
           {/* Identity */}
-          <div className="md:col-span-4">
+          <div className="col-span-2 md:col-span-3">
             <Link to="/" className="flex items-center gap-2">
               <div className="flex h-8 w-8 items-center justify-center rounded-sm bg-accent">
                 <span className="text-sm font-bold text-accent-foreground">C</span>
@@ -79,6 +86,25 @@ const Footer = () => {
                 "."
               )}
             </p>
+          </div>
+
+          {/* Tools */}
+          <div className="md:col-span-2">
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-primary-foreground/50">
+              Verktyg
+            </h2>
+            <ul className="mt-4 space-y-2.5 text-sm">
+              {toolLinks.map((link) => (
+                <li key={link.to}>
+                  <Link
+                    to={link.to}
+                    className="text-primary-foreground/80 underline-offset-4 transition-colors hover:text-primary-foreground hover:underline"
+                  >
+                    {link.label}
+                  </Link>
+                </li>
+              ))}
+            </ul>
           </div>
 
           {/* Services */}
@@ -143,7 +169,7 @@ const Footer = () => {
           </div>
 
           {/* Official sources */}
-          <div className="md:col-span-4" id="contact">
+          <div className="col-span-2 md:col-span-3" id="contact">
             <h2 className="text-xs font-semibold uppercase tracking-wider text-primary-foreground/50">
               Officiella källor
             </h2>

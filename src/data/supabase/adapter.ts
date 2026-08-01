@@ -10,6 +10,7 @@ import type {
   ApplicationRecord,
   CaseMessage,
   CaseRecord,
+  CaseTask,
   ContactMessageRecord,
   CustomerInvoiceRecord,
   CustomerOverview,
@@ -415,6 +416,60 @@ export const supabaseAdapter: DataPort = {
         .from("user_profiles")
         .update({ display_name: input.displayName, phone: input.phone })
         .eq("user_id", (await supabase.auth.getSession()).data.session?.user.id ?? "");
+      if (error) throw error;
+    },
+  },
+
+  tasks: {
+    async listByCase(caseId) {
+      const { data, error } = await supabase
+        .from("case_tasks")
+        .select("*")
+        .eq("case_id", caseId)
+        .order("created_at", { ascending: true });
+      if (error) throw error;
+      return (data ?? []).map(
+        (row): CaseTask => ({
+          id: row.id,
+          caseId: row.case_id,
+          label: row.label,
+          dueDate: row.due_date,
+          doneAt: row.done_at,
+          doneBy: row.done_by,
+          // CHECK-villkoret i migrationen begränsar värdemängden; kolumnen
+          // är text i schemat, därav förträngningen här vid gränsen.
+          source: row.source as CaseTask["source"],
+          createdAt: row.created_at,
+        }),
+      );
+    },
+    async seed(caseId, labels) {
+      if (labels.length === 0) return;
+      // ignoreDuplicates mot det unika indexet: två flikar som sår
+      // samtidigt ger en lista, inte två.
+      const { error } = await supabase.from("case_tasks").upsert(
+        labels.map((label) => ({ case_id: caseId, label, source: "recommendation" as const })),
+        { onConflict: "case_id,label", ignoreDuplicates: true },
+      );
+      if (error) throw error;
+    },
+    async add(caseId, label, dueDate) {
+      const { error } = await supabase
+        .from("case_tasks")
+        .insert({ case_id: caseId, label, due_date: dueDate, source: "manual" });
+      if (error) throw error;
+    },
+    async setDone(id, done) {
+      const { data: session } = await supabase.auth.getSession();
+      const userId = session.session?.user.id ?? null;
+      const { error } = await supabase
+        .from("case_tasks")
+        .update(
+          done
+            ? { done_at: new Date().toISOString(), done_by: userId }
+            : { done_at: null, done_by: null },
+        )
+        .eq("id", id);
       if (error) throw error;
     },
   },

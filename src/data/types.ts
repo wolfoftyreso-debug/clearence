@@ -374,3 +374,15 @@ export interface OutboundEmailRecord {
   createdAt: string;
   sentAt: string | null;
 }
+
+/** En uppgift i handlingsplanen. Avbockning sparar vem och när. */
+export interface CaseTask {
+  id: string;
+  caseId: string;
+  label: string;
+  dueDate: string | null;
+  doneAt: string | null;
+  doneBy: string | null;
+  source: "recommendation" | "manual";
+  createdAt: string;
+}

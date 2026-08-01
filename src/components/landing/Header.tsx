@@ -35,15 +35,9 @@ const Header = () => {
             <a href="/#how-it-works" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
               Så fungerar det
             </a>
-            <Link to="/marketplace" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
-              Hitta rådgivare
-            </Link>
             <Link to="/om" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
               Om oss
             </Link>
-            <a href="/#contact" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
-              Kontakt
-            </a>
           </nav>
 
           {/* Desktop CTA */}
@@ -104,19 +98,12 @@ const Header = () => {
                 Så fungerar det
               </a>
               <Link
-                to="/marketplace"
+                to="/om"
                 className="px-4 py-3 text-foreground hover:bg-secondary rounded-lg transition-colors"
                 onClick={() => setIsMenuOpen(false)}
               >
-                Hitta rådgivare
+                Om oss
               </Link>
-              <a
-                href="/#contact"
-                className="px-4 py-3 text-foreground hover:bg-secondary rounded-lg transition-colors"
-                onClick={() => setIsMenuOpen(false)}
-              >
-                Kontakt
-              </a>
               <div className="flex flex-col gap-2 mt-4 px-4">
                 {user ? (
                   <>

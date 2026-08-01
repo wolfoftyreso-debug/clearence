@@ -29,6 +29,7 @@ import { data } from "@/data";
 import { useAuth } from "@/hooks/useAuth";
 import type { CaseRecord } from "@/data/types";
 import { DashboardShell } from "@/components/dashboard/DashboardShell";
+import { ActionPlan } from "@/components/dashboard/ActionPlan";
 
 const parseAmount = (value: string | null): number => {
   if (!value) return 0;
@@ -219,6 +220,15 @@ const Dashboard = () => {
                   </div>
                 </div>
               )}
+
+              {/* Handlingsplanen först: frågan "vad gör jag, före vilket
+                  datum" ska besvaras före all statistik. */}
+              <div className="mb-6">
+                <ActionPlan
+                  caseRecord={latestCase}
+                  timeline={analyseCrisis(analysisInput(latestCase)).timeline}
+                />
+              </div>
 
               {/* Stats grid */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">

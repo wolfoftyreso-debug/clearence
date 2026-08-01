@@ -5,6 +5,7 @@ import type {
   AuthUser,
   CaseMessage,
   CaseRecord,
+  CaseTask,
   CompanyInfo,
   CustomerInvoiceRecord,
   CustomerOverview,
@@ -197,6 +198,19 @@ export interface ProfilePort {
   update(input: { displayName: string | null; phone: string | null }): Promise<void>;
 }
 
+export interface TasksPort {
+  listByCase(caseId: string): Promise<CaseTask[]>;
+  /**
+   * Sår rekommendationens nästa steg som uppgifter. Idempotent: dubbletter
+   * på (ärende, text) ignoreras, så två flikar som sår samtidigt ger EN
+   * lista. Det är därför tabellen har sitt unika index.
+   */
+  seed(caseId: string, labels: string[]): Promise<void>;
+  add(caseId: string, label: string, dueDate: string | null): Promise<void>;
+  /** Bockar av eller ångrar. Vem och när sätts av implementationen. */
+  setDone(id: string, done: boolean): Promise<void>;
+}
+
 export interface MessagesPort {
   listByCase(caseId: string): Promise<CaseMessage[]>;
   send(caseId: string, body: string): Promise<void>;
@@ -259,6 +273,7 @@ export interface DataPort {
   contact: ContactPort;
   profile: ProfilePort;
   messages: MessagesPort;
+  tasks: TasksPort;
   billing: BillingPort;
   cases: CasesPort;
   kbr: KbrPort;
