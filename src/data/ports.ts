@@ -28,6 +28,7 @@ import type {
   InvoiceRecord,
   InvoiceStatus,
   KbrAssessmentInput,
+  KbrStatus,
   NewApplication,
   NewCase,
   NewDocument,
@@ -97,6 +98,8 @@ export interface CasesPort {
 
 export interface KbrPort {
   create(input: KbrAssessmentInput & { userId: string }): Promise<void>;
+  /** Senaste bedömningen för ärendet, eller null. Praktikervyns lägesbadge. */
+  getLatestByCase(caseId: string): Promise<{ status: KbrStatus; createdAt: string } | null>;
 }
 
 export interface PaymentsPort {

@@ -27,6 +27,7 @@ import type {
   CaseRecord,
   ConversationRecord,
   CaseTask,
+  KbrStatus,
   ContactMessageRecord,
   CustomerInvoiceRecord,
   SecretInfo,
@@ -66,6 +67,7 @@ interface DemoState {
   caseMembers: CaseMemberRecord[];
   caseInvitations: CaseInvitationRecord[];
   conversations: ConversationRecord[];
+  kbrAssessments: { caseId: string | null; status: KbrStatus; createdAt: string }[];
 }
 
 const emptyState = (): DemoState => ({
@@ -87,6 +89,7 @@ const emptyState = (): DemoState => ({
   caseMembers: [],
   caseInvitations: [],
   conversations: [],
+  kbrAssessments: [],
 });
 
 /** Files cannot go in localStorage, so they live for the session only. */
@@ -1096,8 +1099,19 @@ export const demoAdapter: DataPort = {
   },
 
   kbr: {
-    async create() {
-      // Nothing reads KBR assessments back yet, so there is nothing to store.
+    async create(input) {
+      state.kbrAssessments.push({
+        caseId: input.caseId ?? null,
+        status: input.status,
+        createdAt: now(),
+      });
+      save();
+    },
+    async getLatestByCase(caseId) {
+      const mine = state.kbrAssessments
+        .filter((a) => a.caseId === caseId)
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+      return mine[0] ? { status: mine[0].status, createdAt: mine[0].createdAt } : null;
     },
   },
 

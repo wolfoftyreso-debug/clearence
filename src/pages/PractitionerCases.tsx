@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { DashboardShell } from "@/components/dashboard/DashboardShell";
@@ -5,15 +6,18 @@ import { Button } from "@/components/ui/button";
 import { data } from "@/data";
 import { countdownTo } from "@/lib/actionPlan";
 import { timelineForCase, slugName } from "@/lib/caseAnalysis";
-import { timelineToIcs } from "@/lib/integrations/caseBundle";
+import { buildCaseBundle, timelineToIcs } from "@/lib/integrations/caseBundle";
 import { downloadTextFile } from "@/lib/integrations/download";
 import type { CaseRecord } from "@/data/types";
 import type { TimelineEvent } from "@/lib/crisisAnalysis";
+import type { KbrStatus } from "@/data/types";
 import {
   ArrowRight,
+  AtSign,
   Briefcase,
   CalendarClock,
   CalendarPlus,
+  FolderDown,
   Loader2,
   Plug,
 } from "lucide-react";
@@ -72,10 +76,80 @@ const PractitionerCases = () => {
     })),
   });
 
+  // Taggnotiserna på korten: "N väntar på DITT svar" per ärende. Samma
+  // källa som notisklockan, så siffrorna kan inte säga olika saker.
+  const { data: mentions } = useQuery({
+    queryKey: ["open-mentions"],
+    queryFn: () => data.messages.myOpenMentions(),
+    retry: false,
+  });
+  const mentionCount = (caseId: string): number =>
+    (mentions ?? []).filter((m) => m.caseId === caseId).length;
+
+  const kbrQueries = useQueries({
+    queries: (cases ?? []).map((c) => ({
+      queryKey: ["kbr-latest", c.id],
+      queryFn: () => data.kbr.getLatestByCase(c.id),
+    })),
+  });
+
+  const [exportingAll, setExportingAll] = useState(false);
+
   const openTaskCount = (index: number): number | null => {
     const q = taskQueries[index];
     if (!q || !q.data) return null;
     return q.data.filter((t) => !t.doneAt).length;
+  };
+
+  /**
+   * KBR-läget som badge. Tonerna följer produktens regel: fristfärgen är
+   * reserverad för lagstadgat allvar - 'krävs' och 'kritisk' - inte för
+   * information.
+   */
+  const KBR_BADGE: Record<KbrStatus, { label: string; tone: string }> = {
+    not_required: { label: "KBR ej påkallad", tone: "border-border text-muted-foreground" },
+    warning: { label: "KBR: varningszon", tone: "border-warning/50 bg-warning/10 text-foreground" },
+    required: { label: "KBR krävs", tone: "border-frist/50 bg-frist/10 text-frist" },
+    critical: { label: "KBR: kritisk", tone: "border-frist/50 bg-frist/10 text-frist" },
+  };
+
+  /**
+   * Massexporten: samtliga akter i EN fil. Sekventiellt per ärende - tio
+   * bolags underlag hämtas på någon sekund, och en fil är vad ett
+   * byråsystem eller en pärm förväntar sig, inte tio nedladdningar.
+   */
+  const exportAllBundles = async () => {
+    if (!cases || cases.length === 0) return;
+    setExportingAll(true);
+    try {
+      const exportedAt = new Date().toISOString();
+      const bundles = [];
+      for (const record of cases) {
+        const [payments, documents, messages] = await Promise.all([
+          data.payments.listByCase(record.id),
+          data.documents.listByCase(record.id),
+          data.messages.listByCase(record.id),
+        ]);
+        bundles.push(
+          buildCaseBundle({
+            caseRecord: record,
+            timeline: timelineForCase(record),
+            payments,
+            documents,
+            messages,
+            ownerUserId: null,
+            exportedAt,
+          }),
+        );
+      }
+      downloadTextFile(
+        JSON.stringify({ format: "clearance-akt-samling", formatVersion: 1, exportedAt, bundles }, null, 2),
+        `akter-alla-arenden-${exportedAt.slice(0, 10)}.json`,
+        "application/json",
+      );
+    } finally {
+      setExportingAll(false);
+    }
   };
 
   // Alla ärendens frister i en lista, närmast först.
@@ -153,15 +227,30 @@ const PractitionerCases = () => {
                   <CalendarClock className="h-5 w-5 text-accent" aria-hidden="true" />
                   Närmaste frister – alla ärenden
                 </h2>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={allEvents.length === 0}
-                  onClick={exportAllIcs}
-                >
-                  <CalendarPlus className="h-4 w-4" aria-hidden="true" />
-                  Hela kalendern (ICS)
-                </Button>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={allEvents.length === 0}
+                    onClick={exportAllIcs}
+                  >
+                    <CalendarPlus className="h-4 w-4" aria-hidden="true" />
+                    Hela kalendern (ICS)
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={exportingAll}
+                    onClick={() => void exportAllBundles()}
+                  >
+                    {exportingAll ? (
+                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                    ) : (
+                      <FolderDown className="h-4 w-4" aria-hidden="true" />
+                    )}
+                    Alla akter (JSON)
+                  </Button>
+                </div>
               </div>
               {allEvents.length === 0 ? (
                 <p className="mt-3 rounded-md bg-secondary/40 p-4 text-sm text-muted-foreground">
@@ -205,9 +294,24 @@ const PractitionerCases = () => {
                     className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-md border border-border bg-card p-4"
                   >
                     <div className="min-w-0 flex-1">
-                      <h3 className="font-medium text-foreground">
-                        {record.companyName ?? record.orgNumber}
-                      </h3>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="font-medium text-foreground">
+                          {record.companyName ?? record.orgNumber}
+                        </h3>
+                        {kbrQueries[index]?.data && (
+                          <span
+                            className={`rounded-full border px-2 py-0.5 text-xs font-medium ${KBR_BADGE[kbrQueries[index].data.status].tone}`}
+                          >
+                            {KBR_BADGE[kbrQueries[index].data.status].label}
+                          </span>
+                        )}
+                        {mentionCount(record.id) > 0 && (
+                          <span className="flex items-center gap-1 rounded-full border border-frist/50 bg-frist/10 px-2 py-0.5 text-xs font-medium text-frist">
+                            <AtSign className="h-3 w-3" aria-hidden="true" />
+                            {mentionCount(record.id)} väntar på ditt svar
+                          </span>
+                        )}
+                      </div>
                       <p className="text-xs text-muted-foreground">
                         {record.orgNumber}
                         {record.recommendationTitle && ` · ${record.recommendationTitle}`}

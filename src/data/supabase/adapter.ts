@@ -1127,6 +1127,17 @@ export const supabaseAdapter: DataPort = {
       });
       if (error) throw error;
     },
+    async getLatestByCase(caseId) {
+      const { data, error } = await supabase
+        .from("kbr_assessments")
+        .select("status, created_at")
+        .eq("case_id", caseId)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (error) throw error;
+      return data ? { status: data.status, createdAt: data.created_at } : null;
+    },
   },
 
   payments: {
