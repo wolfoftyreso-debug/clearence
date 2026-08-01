@@ -1,10 +1,15 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { Json } from "@/integrations/supabase/types";
+import { nextInvoiceNumber } from "@/lib/invoice";
 import type { DataPort } from "../ports";
 import type {
+  AccountBillingRecord,
   ApplicationRecord,
+  CaseMessage,
   CaseRecord,
   ContactMessageRecord,
+  CustomerInvoiceRecord,
+  CustomerOverview,
   DocumentRecord,
   FixedPrice,
   InvoiceRecord,
@@ -49,6 +54,56 @@ const sanitiseFileName = (name: string): string => {
     .replace(/^[-.]+/, "");
   return (cleaned || "fil").slice(-120);
 };
+
+const toBilling = (row: {
+  user_id: string;
+  started_at: string;
+  due_at: string | null;
+  paid_at: string | null;
+  closed_at: string | null;
+  note: string | null;
+}): AccountBillingRecord => ({
+  userId: row.user_id,
+  startedAt: row.started_at,
+  dueAt: row.due_at,
+  paidAt: row.paid_at,
+  closedAt: row.closed_at,
+  note: row.note,
+});
+
+const toCustomerInvoice = (row: {
+  id: string;
+  user_id: string;
+  invoice_number: string;
+  issued_at: string;
+  due_at: string;
+  net_ore: number | string;
+  vat_ore: number | string;
+  gross_ore: number | string;
+  vat_rate: number | string;
+  description: string;
+  status: CustomerInvoiceRecord["status"];
+  paid_at: string | null;
+  payment_reference: string | null;
+  receipt_number: string | null;
+}): CustomerInvoiceRecord => ({
+  id: row.id,
+  userId: row.user_id,
+  invoiceNumber: row.invoice_number,
+  issuedAt: row.issued_at,
+  dueAt: row.due_at,
+  // bigint kommer som sträng genom PostgREST. Number() här, en gång, i
+  // stället för överallt i gränssnittet.
+  netOre: Number(row.net_ore),
+  vatOre: Number(row.vat_ore),
+  grossOre: Number(row.gross_ore),
+  vatRate: Number(row.vat_rate),
+  description: row.description,
+  status: row.status,
+  paidAt: row.paid_at,
+  paymentReference: row.payment_reference,
+  receiptNumber: row.receipt_number,
+});
 
 const toContactMessage = (row: {
   id: string;
@@ -277,6 +332,222 @@ export const supabaseAdapter: DataPort = {
           ...(internalNote === undefined ? {} : { internal_note: internalNote }),
         })
         .eq("id", id);
+      if (error) throw error;
+    },
+  },
+
+  profile: {
+    async getMine() {
+      const { data, error } = await supabase
+        .from("user_profiles")
+        .select("*")
+        .maybeSingle();
+      if (error) throw error;
+      return data
+        ? {
+            userId: data.user_id,
+            role: data.role,
+            displayName: data.display_name,
+            phone: data.phone,
+          }
+        : null;
+    },
+    async create(input) {
+      const { data: session } = await supabase.auth.getSession();
+      const userId = session.session?.user.id;
+      if (!userId) throw new Error("Inte inloggad");
+      const { data, error } = await supabase
+        .from("user_profiles")
+        .insert({ user_id: userId, role: input.role, display_name: input.displayName })
+        .select()
+        .single();
+      if (error) throw error;
+      return {
+        userId: data.user_id,
+        role: data.role,
+        displayName: data.display_name,
+        phone: data.phone,
+      };
+    },
+    async update(input) {
+      const { error } = await supabase
+        .from("user_profiles")
+        .update({ display_name: input.displayName, phone: input.phone })
+        .eq("user_id", (await supabase.auth.getSession()).data.session?.user.id ?? "");
+      if (error) throw error;
+    },
+  },
+
+  messages: {
+    async listByCase(caseId) {
+      const { data, error } = await supabase
+        .from("case_messages")
+        .select("*")
+        .eq("case_id", caseId)
+        .order("created_at", { ascending: true });
+      if (error) throw error;
+      return (data ?? []).map(
+        (row): CaseMessage => ({
+          id: row.id,
+          caseId: row.case_id,
+          authorUserId: row.author_user_id,
+          body: row.body,
+          createdAt: row.created_at,
+          readAt: row.read_at,
+        }),
+      );
+    },
+    async send(caseId, body) {
+      const { data: session } = await supabase.auth.getSession();
+      const { error } = await supabase.from("case_messages").insert({
+        case_id: caseId,
+        author_user_id: session.session?.user.id ?? null,
+        body,
+      });
+      if (error) throw error;
+    },
+    async markRead(id) {
+      const { error } = await supabase
+        .from("case_messages")
+        .update({ read_at: new Date().toISOString() })
+        .eq("id", id)
+        .is("read_at", null);
+      if (error) throw error;
+    },
+  },
+
+  billing: {
+    async getMine() {
+      const { data: session } = await supabase.auth.getSession();
+      const userId = session.session?.user.id;
+      if (!userId) throw new Error("Inte inloggad");
+
+      const { data, error } = await supabase
+        .from("account_billing")
+        .select("*")
+        .maybeSingle();
+      if (error) throw error;
+      if (data) return toBilling(data);
+
+      // Gratisveckan börjar när kontot först används, inte när någon kör ett
+      // skript. Raden skapas därför lat, av kunden själv.
+      const { data: created, error: insertError } = await supabase
+        .from("account_billing")
+        .insert({ user_id: userId })
+        .select()
+        .single();
+      if (insertError) throw insertError;
+      return toBilling(created);
+    },
+    async listMyInvoices() {
+      const { data, error } = await supabase
+        .from("customer_invoices")
+        .select("*")
+        .order("issued_at", { ascending: false });
+      if (error) throw error;
+      return (data ?? []).map(toCustomerInvoice);
+    },
+    async listCustomers() {
+      // RLS filtrerar: den som inte är administratör får sina egna rader,
+      // vilket är rätt svar och inte ett fel.
+      const [profiles, billing, invoices] = await Promise.all([
+        supabase.from("user_profiles").select("*"),
+        supabase.from("account_billing").select("*"),
+        supabase.from("customer_invoices").select("*").order("issued_at", { ascending: false }),
+      ]);
+      if (profiles.error) throw profiles.error;
+      if (billing.error) throw billing.error;
+      if (invoices.error) throw invoices.error;
+
+      const billingByUser = new Map(
+        (billing.data ?? []).map((b) => [b.user_id, toBilling(b)]),
+      );
+      const invoicesByUser = new Map<string, CustomerInvoiceRecord[]>();
+      for (const row of invoices.data ?? []) {
+        const list = invoicesByUser.get(row.user_id) ?? [];
+        list.push(toCustomerInvoice(row));
+        invoicesByUser.set(row.user_id, list);
+      }
+
+      return (profiles.data ?? []).map(
+        (p): CustomerOverview => ({
+          userId: p.user_id,
+          // Adressen ligger i auth.users, som klienten inte får läsa. Drift
+          // ser den i inkorgen och i fakturan i stället.
+          email: null,
+          displayName: p.display_name,
+          role: p.role,
+          billing: billingByUser.get(p.user_id) ?? null,
+          invoices: invoicesByUser.get(p.user_id) ?? [],
+        }),
+      );
+    },
+    async issueInvoice(input) {
+      const { data: existing, error: readError } = await supabase
+        .from("customer_invoices")
+        .select("invoice_number");
+      if (readError) throw readError;
+
+      const number = nextInvoiceNumber(
+        (existing ?? []).map((r) => r.invoice_number),
+        new Date(),
+      );
+
+      const { data, error } = await supabase
+        .from("customer_invoices")
+        .insert({
+          user_id: input.userId,
+          invoice_number: number,
+          due_at: input.dueAt,
+          net_ore: input.netOre,
+          vat_ore: input.vatOre,
+          gross_ore: input.netOre + input.vatOre,
+          vat_rate: input.vatRate,
+          description: input.description,
+        })
+        .select()
+        .single();
+      if (error) throw error;
+
+      await supabase
+        .from("account_billing")
+        .update({ due_at: input.dueAt })
+        .eq("user_id", input.userId);
+
+      return toCustomerInvoice(data);
+    },
+    async registerPayment(input) {
+      const { data: invoice, error: readError } = await supabase
+        .from("customer_invoices")
+        .select("*")
+        .eq("id", input.invoiceId)
+        .single();
+      if (readError) throw readError;
+
+      const { error } = await supabase
+        .from("customer_invoices")
+        .update({
+          status: "paid",
+          paid_at: input.paidAt,
+          payment_reference: input.reference,
+          receipt_number: `K-${invoice.invoice_number}`,
+        })
+        .eq("id", input.invoiceId);
+      if (error) throw error;
+
+      // Betalning öppnar kontot igen. Lämnas closed_at kvar hålls en
+      // betalande kund utelåst, vilket är det värsta felet i hela kedjan.
+      const { error: billingError } = await supabase
+        .from("account_billing")
+        .update({ paid_at: input.paidAt, closed_at: null })
+        .eq("user_id", invoice.user_id);
+      if (billingError) throw billingError;
+    },
+    async closeAccount(userId) {
+      const { error } = await supabase
+        .from("account_billing")
+        .update({ closed_at: new Date().toISOString() })
+        .eq("user_id", userId);
       if (error) throw error;
     },
   },

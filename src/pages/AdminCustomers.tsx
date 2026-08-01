@@ -1,0 +1,287 @@
+import { useState } from "react";
+import { Link } from "react-router-dom";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { DashboardShell } from "@/components/dashboard/DashboardShell";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { data } from "@/data";
+import { billingState, TRIAL_DAYS } from "@/lib/billing";
+import { missingInvoiceFields } from "@/lib/company";
+import { formatOre, invoiceTotals, PAYMENT_TERMS_DAYS, VAT_RATE } from "@/lib/invoice";
+import type { CustomerOverview } from "@/data/types";
+import { AlertTriangle, Loader2, Lock, ShieldOff } from "lucide-react";
+
+/**
+ * Drift: kunder, deras läge och deras fakturor.
+ *
+ * Två saker som sidan gör och som är lätta att missa varför:
+ *
+ *  1. Den vägrar ställa ut fakturor så länge bolagsuppgifterna inte är
+ *     kompletta. En faktura utan momsregistreringsnummer eller med tomt
+ *     betalkonto är ett dokument mottagaren varken kan bokföra eller betala,
+ *     och den skickas hellre aldrig än i efterhand krediteras.
+ *
+ *  2. Den visar summan innan man trycker. En avgift skriven i kronor och
+ *     lagrad i ören är precis den sortens omvandling som blir hundra gånger
+ *     fel utan att någon märker det förrän fakturan är hos kunden.
+ */
+
+const swedishDate = (iso: string) =>
+  new Date(iso).toLocaleDateString("sv-SE", { day: "numeric", month: "short", year: "numeric" });
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+const statusLabel = (customer: CustomerOverview): { text: string; tone: string } => {
+  if (!customer.billing) return { text: "Ingen kontorad", tone: "text-muted-foreground" };
+  const state = billingState(customer.billing, new Date());
+  switch (state.status) {
+    case "active":
+      return { text: "Betalt", tone: "text-success" };
+    case "closed":
+      return { text: "Stängt", tone: "text-destructive" };
+    case "invoiced":
+      return { text: `Fakturerad, ${state.daysLeft} dagar kvar`, tone: "text-warning" };
+    default:
+      return { text: `Gratisperiod, ${state.daysLeft} dagar kvar`, tone: "text-muted-foreground" };
+  }
+};
+
+const CustomerRow = ({ customer }: { customer: CustomerOverview }) => {
+  const queryClient = useQueryClient();
+  const [amountKr, setAmountKr] = useState("");
+  const [description, setDescription] = useState("");
+  const [reference, setReference] = useState("");
+
+  const blockers = missingInvoiceFields();
+  const canInvoice = blockers.length === 0;
+
+  const refresh = () => {
+    queryClient.invalidateQueries({ queryKey: ["customers"] });
+    queryClient.invalidateQueries({ queryKey: ["my-invoices"] });
+    queryClient.invalidateQueries({ queryKey: ["my-billing"] });
+  };
+
+  const issue = useMutation({
+    mutationFn: () => {
+      // Kronor in, ören lagrat. Omvandlingen sker här, en gång, och summorna
+      // kommer från samma funktion som fakturadokumentet använder.
+      const netOre = Math.round(Number(amountKr.replace(/\s/g, "").replace(",", ".")) * 100);
+      const totals = invoiceTotals([{ description, quantity: 1, unitPriceOre: netOre }], VAT_RATE);
+      return data.billing.issueInvoice({
+        userId: customer.userId,
+        description: description.trim(),
+        netOre: totals.netOre,
+        vatOre: totals.vatOre,
+        vatRate: VAT_RATE,
+        dueAt: new Date(Date.now() + PAYMENT_TERMS_DAYS * DAY_MS).toISOString(),
+      });
+    },
+    onSuccess: () => {
+      setAmountKr("");
+      setDescription("");
+      refresh();
+    },
+  });
+
+  const pay = useMutation({
+    mutationFn: (invoiceId: string) =>
+      data.billing.registerPayment({
+        invoiceId,
+        paidAt: new Date().toISOString(),
+        reference: reference.trim() || null,
+      }),
+    onSuccess: () => {
+      setReference("");
+      refresh();
+    },
+  });
+
+  const close = useMutation({
+    mutationFn: () => data.billing.closeAccount(customer.userId),
+    onSuccess: refresh,
+  });
+
+  const status = statusLabel(customer);
+  const netOre = Math.round(Number(amountKr.replace(/\s/g, "").replace(",", ".")) * 100);
+  const preview =
+    Number.isFinite(netOre) && netOre > 0
+      ? invoiceTotals([{ description, quantity: 1, unitPriceOre: netOre }], VAT_RATE)
+      : null;
+
+  return (
+    <li className="rounded-md border border-border bg-card p-5">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h3 className="font-semibold text-foreground">
+            {customer.displayName || customer.email || customer.userId.slice(0, 8)}
+          </h3>
+          <p className="mt-0.5 text-sm text-muted-foreground">
+            {customer.role === "advisor" ? "Rådgivare" : "Företagare"}
+            {customer.billing && <> · startade {swedishDate(customer.billing.startedAt)}</>}
+          </p>
+        </div>
+        <span className={`flex-shrink-0 text-sm font-medium ${status.tone}`}>{status.text}</span>
+      </div>
+
+      {customer.invoices.length > 0 && (
+        <ul className="mt-4 divide-y divide-border rounded-md border border-border text-sm">
+          {customer.invoices.map((invoice) => (
+            <li key={invoice.id} className="flex flex-wrap items-center gap-3 p-3">
+              <span className="min-w-0 flex-1">
+                <span className="font-medium text-foreground">{invoice.invoiceNumber}</span>{" "}
+                <span className="text-muted-foreground">
+                  {invoice.description} · {formatOre(invoice.grossOre)}
+                </span>
+              </span>
+              {invoice.status === "paid" ? (
+                <span className="flex-shrink-0 text-success">
+                  Betald {invoice.paidAt ? swedishDate(invoice.paidAt) : ""}
+                </span>
+              ) : (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={pay.isPending}
+                  onClick={() => pay.mutate(invoice.id)}
+                >
+                  Registrera betalning
+                </Button>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <div className="mt-4 space-y-3 rounded-md bg-secondary/40 p-4">
+        {!canInvoice && (
+          <p className="flex gap-2 text-sm text-destructive">
+            <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0" aria-hidden="true" />
+            <span>
+              Kan inte fakturera än. Saknas: {blockers.join(", ")}. Fyll i det i{" "}
+              <code className="text-xs">src/lib/company.ts</code> först – en faktura utan de
+              uppgifterna går varken att bokföra eller betala.
+            </span>
+          </p>
+        )}
+        <div className="flex flex-col gap-3 sm:flex-row">
+          <Input
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Vad avser fakturan?"
+            aria-label="Beskrivning"
+            disabled={!canInvoice}
+          />
+          <Input
+            value={amountKr}
+            onChange={(e) => setAmountKr(e.target.value)}
+            placeholder="Belopp exkl. moms"
+            inputMode="decimal"
+            aria-label="Belopp i kronor exklusive moms"
+            className="sm:w-52"
+            disabled={!canInvoice}
+          />
+          <Button
+            variant="accent"
+            disabled={!canInvoice || !description.trim() || !preview || issue.isPending}
+            onClick={() => issue.mutate()}
+          >
+            {issue.isPending && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
+            Ställ ut faktura
+          </Button>
+        </div>
+        {preview && (
+          <p className="text-sm text-muted-foreground">
+            {formatOre(preview.netOre)} + moms {formatOre(preview.vatOre)} ={" "}
+            <span className="font-medium text-foreground">{formatOre(preview.grossOre)}</span>.
+            Förfaller om {PAYMENT_TERMS_DAYS} dagar.
+          </p>
+        )}
+        <div className="flex flex-wrap items-center gap-3">
+          <Input
+            value={reference}
+            onChange={(e) => setReference(e.target.value)}
+            placeholder="Betalningsreferens (frivillig)"
+            aria-label="Betalningsreferens"
+            className="sm:w-72"
+          />
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={close.isPending}
+            onClick={() => close.mutate()}
+          >
+            <Lock className="h-4 w-4" aria-hidden="true" />
+            Stäng kontot
+          </Button>
+          <span className="text-xs text-muted-foreground">
+            Stängning låser åtkomsten. Inget material raderas.
+          </span>
+        </div>
+        {(issue.isError || pay.isError || close.isError) && (
+          <p className="text-sm text-destructive" role="alert">
+            Åtgärden gick inte igenom. Kontrollera att du har driftbehörighet.
+          </p>
+        )}
+      </div>
+    </li>
+  );
+};
+
+const AdminCustomers = () => {
+  const { data: isAdmin, isLoading: checking } = useQuery({
+    queryKey: ["am-i-admin"],
+    queryFn: () => data.contact.amIAdmin(),
+  });
+
+  const { data: customers, isLoading } = useQuery({
+    queryKey: ["customers"],
+    queryFn: () => data.billing.listCustomers(),
+    enabled: isAdmin === true,
+  });
+
+  return (
+    <DashboardShell title="Kunder">
+      {checking ? (
+        <div className="flex justify-center py-16">
+          <Loader2 className="h-6 w-6 animate-spin text-accent" aria-hidden="true" />
+        </div>
+      ) : !isAdmin ? (
+        <div className="max-w-xl rounded-md border border-border bg-card p-6">
+          <ShieldOff className="h-6 w-6 text-muted-foreground" aria-hidden="true" />
+          <h2 className="mt-4 font-display text-xl text-foreground">Kräver driftbehörighet</h2>
+          <p className="mt-2 leading-relaxed text-muted-foreground">
+            Behörighet tilldelas direkt i databasen. Det finns med flit ingen väg att
+            begära den härifrån.
+          </p>
+          <Button variant="outline" className="mt-6" asChild>
+            <Link to="/dashboard">Till översikten</Link>
+          </Button>
+        </div>
+      ) : isLoading ? (
+        <div className="flex justify-center py-16">
+          <Loader2 className="h-6 w-6 animate-spin text-accent" aria-hidden="true" />
+        </div>
+      ) : (
+        <div className="max-w-4xl">
+          <p className="text-muted-foreground">
+            Gratisperioden är {TRIAL_DAYS} dagar. Betalningsvillkor {PAYMENT_TERMS_DAYS} dagar.
+            Betalningar registreras här när de syns på kontot.
+          </p>
+          {(customers ?? []).length === 0 ? (
+            <p className="mt-8 rounded-md border border-border bg-secondary/40 p-8 text-center text-muted-foreground">
+              Inga kunder än.
+            </p>
+          ) : (
+            <ul className="mt-6 space-y-4">
+              {(customers ?? []).map((customer) => (
+                <CustomerRow key={customer.userId} customer={customer} />
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+    </DashboardShell>
+  );
+};
+
+export default AdminCustomers;

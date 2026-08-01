@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Link, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -11,15 +11,9 @@ import { analyseSnapshot } from "@/lib/financial/insights";
 import { format } from "date-fns";
 import { sv } from "date-fns/locale";
 import {
-  LayoutDashboard,
   TrendingDown,
-  FileText,
-  MessageSquare,
   Scale,
   Users,
-  Settings,
-  Menu,
-  Bell,
   AlertCircle,
   CheckCircle2,
   AlertTriangle,
@@ -30,6 +24,7 @@ import {
 import { data } from "@/data";
 import { useAuth } from "@/hooks/useAuth";
 import type { CaseRecord } from "@/data/types";
+import { DashboardShell } from "@/components/dashboard/DashboardShell";
 
 const parseAmount = (value: string | null): number => {
   if (!value) return 0;
@@ -57,7 +52,6 @@ const recommendationCopy: Record<
 const Dashboard = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const { data: latestCase, isLoading } = useQuery({
     queryKey: ["latest-case", user?.id],
@@ -106,129 +100,21 @@ const Dashboard = () => {
   const liquidationValue = latestCase ? parseAmount(latestCase.quickLiquidationValue) : 0;
   const coverageRatio = totalDebt > 0 ? Math.round((liquidationValue / totalDebt) * 100) : null;
 
-  const navItems = [
-    { icon: LayoutDashboard, label: "Översikt", href: "/dashboard", active: true },
-    { icon: TrendingDown, label: "Likviditet", href: "/dashboard/liquidity" },
-    { icon: FileText, label: "Dokument", href: "/dashboard/documents", comingSoon: true },
-    { icon: MessageSquare, label: "Meddelanden", href: "/dashboard/messages", comingSoon: true },
-    { icon: Users, label: "Rådgivare", href: "/marketplace" },
-    { icon: Settings, label: "Inställningar", href: "/dashboard/settings", comingSoon: true },
-  ];
 
-  const initials = (latestCase?.companyName || user?.email || "??").slice(0, 2).toUpperCase();
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Mobile sidebar overlay */}
-      {sidebarOpen && (
-        <div
-          className="fixed inset-0 bg-foreground/30 z-40 lg:hidden"
-          onClick={() => setSidebarOpen(false)}
-        />
-      )}
-
-      {/* Sidebar */}
-      <aside
-        className={`fixed top-0 left-0 h-full w-64 bg-sidebar z-50 transform transition-transform duration-300 lg:translate-x-0 ${
-          sidebarOpen ? "translate-x-0" : "-translate-x-full"
-        }`}
-      >
-        <div className="flex flex-col h-full">
-          {/* Logo */}
-          <div className="p-4 border-b border-sidebar-border">
-            <Link to="/" className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-sidebar-primary flex items-center justify-center">
-                <span className="text-sidebar-primary-foreground font-bold text-sm">C</span>
-              </div>
-              <span className="font-display text-xl text-sidebar-foreground">CLEARANCE</span>
-            </Link>
-          </div>
-
-          {/* Navigation */}
-          <nav className="flex-1 p-4 space-y-1">
-            {navItems.map((item) => {
-              const Icon = item.icon;
-              return (
-                <button
-                  key={item.label}
-                  onClick={() => !item.comingSoon && navigate(item.href)}
-                  disabled={item.comingSoon}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-md text-sm font-medium transition-colors ${
-                    item.comingSoon
-                      ? "text-sidebar-foreground/40 cursor-not-allowed"
-                      : item.active
-                      ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                      : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
-                  }`}
-                >
-                  <Icon className="w-5 h-5" />
-                  <span className="flex-1 text-left">{item.label}</span>
-                  {item.comingSoon && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-sidebar-accent/50">
-                      Snart
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </nav>
-
-          {/* User */}
-          <div className="p-4 border-t border-sidebar-border">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-sidebar-accent flex items-center justify-center">
-                <span className="text-sm font-medium text-sidebar-foreground">{initials}</span>
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-sidebar-foreground truncate">
-                  {latestCase?.companyName || user?.email || "Ditt konto"}
-                </p>
-                <p className="text-xs text-sidebar-foreground/60 truncate">
-                  {latestCase?.orgNumber || ""}
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </aside>
-
-      {/* Main content */}
-      <div className="lg:pl-64">
-        {/* Header */}
-        <header className="sticky top-0 z-30 bg-background border-b border-border">
-          <div className="flex items-center justify-between px-4 md:px-6 h-16">
-            <div className="flex items-center gap-4">
-              <button
-                className="lg:hidden p-2 text-foreground"
-                onClick={() => setSidebarOpen(true)}
-                aria-label="Öppna meny"
-              >
-                <Menu className="w-6 h-6" />
-              </button>
-              <div>
-                <h1 className="text-lg font-semibold text-foreground">Översikt</h1>
-                <p className="text-sm text-muted-foreground">Ditt ärende</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <button
-                className="p-2 text-muted-foreground/40 cursor-not-allowed"
-                disabled
-                aria-label="Notifikationer (kommer snart)"
-                title="Kommer snart"
-              >
-                <Bell className="w-5 h-5" />
-              </button>
-              <Button variant="accent" size="sm" className="hidden sm:flex" disabled title="Kommer snart">
-                <Plus className="w-4 h-4" />
-                Ny uppgift
-              </Button>
-            </div>
-          </div>
-        </header>
-
-        {/* Content */}
-        <main className="p-4 md:p-6 max-w-7xl mx-auto">
+    <DashboardShell
+      title="Översikt"
+      actions={
+        <Button variant="accent" size="sm" asChild>
+          <Link to="/wizard">
+            <Plus className="h-4 w-4" aria-hidden="true" />
+            <span className="hidden sm:inline">Ny utvärdering</span>
+          </Link>
+        </Button>
+      }
+    >
+      <div className="mx-auto max-w-5xl">
           {isLoading ? (
             <div className="flex items-center justify-center py-24">
               <Loader2 className="w-6 h-6 animate-spin text-accent" />
@@ -489,9 +375,8 @@ const Dashboard = () => {
               </div>
             </>
           )}
-        </main>
       </div>
-    </div>
+    </DashboardShell>
   );
 };
 

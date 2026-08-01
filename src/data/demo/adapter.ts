@@ -17,11 +17,15 @@
 
 import type { DataPort } from "../ports";
 import type {
+  AccountBillingRecord,
   ApplicationRecord,
   AuthUser,
+  CaseMessage,
   CaseRecord,
   ContactMessageRecord,
+  CustomerInvoiceRecord,
   DocumentRecord,
+  UserProfile,
   InvoiceRecord,
   PaymentRecord,
   ProfessionalRecord,
@@ -29,6 +33,7 @@ import type {
   ReferralRecord,
 } from "../types";
 import type { FinancialSnapshot, OpenItem, Voucher } from "@/lib/financial/model";
+import { nextInvoiceNumber } from "@/lib/invoice";
 
 const STORAGE_KEY = "clearance-demo-state";
 
@@ -41,6 +46,10 @@ interface DemoState {
   referrals: ReferralRecord[];
   application: ApplicationRecord | null;
   contactMessages: ContactMessageRecord[];
+  profile: UserProfile | null;
+  caseMessages: CaseMessage[];
+  billing: AccountBillingRecord | null;
+  customerInvoices: CustomerInvoiceRecord[];
 }
 
 const emptyState = (): DemoState => ({
@@ -52,6 +61,10 @@ const emptyState = (): DemoState => ({
   referrals: [],
   application: null,
   contactMessages: [],
+  profile: null,
+  caseMessages: [],
+  billing: null,
+  customerInvoices: [],
 });
 
 /** Files cannot go in localStorage, so they live for the session only. */
@@ -480,6 +493,136 @@ export const demoAdapter: DataPort = {
       message.handledAt = handled ? now() : null;
       if (internalNote !== undefined) message.internalNote = internalNote;
       save();
+    },
+  },
+
+  profile: {
+    async getMine() {
+      return state.profile;
+    },
+    async create(input) {
+      if (!state.user) throw new Error("Inte inloggad");
+      state.profile = {
+        userId: state.user.id,
+        role: input.role,
+        displayName: input.displayName,
+        phone: null,
+      };
+      save();
+      return state.profile;
+    },
+    async update(input) {
+      if (!state.profile) return;
+      state.profile = { ...state.profile, ...input };
+      save();
+    },
+  },
+
+  messages: {
+    async listByCase(caseId) {
+      return state.caseMessages
+        .filter((m) => m.caseId === caseId)
+        .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    },
+    async send(caseId, body) {
+      state.caseMessages.push({
+        id: uid(),
+        caseId,
+        authorUserId: state.user?.id ?? null,
+        body,
+        createdAt: now(),
+        readAt: null,
+      });
+      save();
+    },
+    async markRead(id) {
+      const m = state.caseMessages.find((x) => x.id === id);
+      if (m && !m.readAt) {
+        m.readAt = now();
+        save();
+      }
+    },
+  },
+
+  billing: {
+    async getMine() {
+      if (!state.user) throw new Error("Inte inloggad");
+      if (!state.billing) {
+        // Gratisveckan börjar när kontot först används.
+        state.billing = {
+          userId: state.user.id,
+          startedAt: now(),
+          dueAt: null,
+          paidAt: null,
+          closedAt: null,
+          note: null,
+        };
+        save();
+      }
+      return state.billing;
+    },
+    async listMyInvoices() {
+      return [...state.customerInvoices].sort((a, b) => b.issuedAt.localeCompare(a.issuedAt));
+    },
+    async listCustomers() {
+      if (!state.user) return [];
+      return [
+        {
+          userId: state.user.id,
+          email: state.user.email,
+          displayName: state.profile?.displayName ?? null,
+          role: state.profile?.role ?? "company",
+          billing: state.billing,
+          invoices: [...state.customerInvoices],
+        },
+      ];
+    },
+    async issueInvoice(input) {
+      const number = nextInvoiceNumber(
+        state.customerInvoices.map((i) => i.invoiceNumber),
+        new Date(),
+      );
+      const invoice: CustomerInvoiceRecord = {
+        id: uid(),
+        userId: input.userId,
+        invoiceNumber: number,
+        issuedAt: now(),
+        dueAt: input.dueAt,
+        netOre: input.netOre,
+        vatOre: input.vatOre,
+        grossOre: input.netOre + input.vatOre,
+        vatRate: input.vatRate,
+        description: input.description,
+        status: "issued",
+        paidAt: null,
+        paymentReference: null,
+        receiptNumber: null,
+      };
+      state.customerInvoices.unshift(invoice);
+      if (state.billing) state.billing.dueAt = input.dueAt;
+      save();
+      return invoice;
+    },
+    async registerPayment(input) {
+      const invoice = state.customerInvoices.find((i) => i.id === input.invoiceId);
+      if (!invoice) return;
+      invoice.status = "paid";
+      invoice.paidAt = input.paidAt;
+      invoice.paymentReference = input.reference;
+      invoice.receiptNumber = `K-${invoice.invoiceNumber}`;
+      if (state.billing) {
+        // Betalning öppnar kontot igen. Att låta closedAt ligga kvar skulle
+        // hålla en betalande kund utelåst.
+        state.billing.paidAt = input.paidAt;
+        state.billing.closedAt = null;
+      }
+      save();
+    },
+    async closeAccount() {
+      if (state.billing) {
+        state.billing.closedAt = now();
+        save();
+      }
     },
   },
 

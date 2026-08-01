@@ -14,6 +14,111 @@ export type Database = {
   }
   public: {
     Tables: {
+      user_profiles: {
+        Row: {
+          created_at: string
+          display_name: string | null
+          phone: string | null
+          role: Database["public"]["Enums"]["user_role"]
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          display_name?: string | null
+          phone?: string | null
+          role?: Database["public"]["Enums"]["user_role"]
+          user_id: string
+        }
+        Update: {
+          display_name?: string | null
+          phone?: string | null
+        }
+        Relationships: []
+      }
+      case_messages: {
+        Row: {
+          author_user_id: string | null
+          body: string
+          case_id: string
+          created_at: string
+          id: string
+          read_at: string | null
+        }
+        Insert: {
+          author_user_id?: string | null
+          body: string
+          case_id: string
+        }
+        // Endast read_at. En skickad text kan inte ändras - se triggern
+        // case_messages_no_edit i migrationen.
+        Update: {
+          read_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "case_messages_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: false
+            referencedRelation: "cases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      account_billing: {
+        Row: {
+          closed_at: string | null
+          due_at: string | null
+          note: string | null
+          paid_at: string | null
+          started_at: string
+          user_id: string
+        }
+        Insert: {
+          user_id: string
+        }
+        Update: {
+          closed_at?: string | null
+          due_at?: string | null
+          note?: string | null
+          paid_at?: string | null
+        }
+        Relationships: []
+      }
+      customer_invoices: {
+        Row: {
+          description: string
+          due_at: string
+          gross_ore: number
+          id: string
+          invoice_number: string
+          issued_at: string
+          net_ore: number
+          paid_at: string | null
+          payment_reference: string | null
+          receipt_number: string | null
+          status: Database["public"]["Enums"]["customer_invoice_status"]
+          user_id: string
+          vat_ore: number
+          vat_rate: number
+        }
+        Insert: {
+          description: string
+          due_at: string
+          gross_ore: number
+          invoice_number: string
+          net_ore: number
+          user_id: string
+          vat_ore: number
+          vat_rate: number
+        }
+        Update: {
+          paid_at?: string | null
+          payment_reference?: string | null
+          receipt_number?: string | null
+          status?: Database["public"]["Enums"]["customer_invoice_status"]
+        }
+        Relationships: []
+      }
       contact_messages: {
         Row: {
           company: string | null
@@ -595,10 +700,16 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: boolean
       }
+      current_user_role: {
+        Args: Record<PropertyKey, never>
+        Returns: Database["public"]["Enums"]["user_role"]
+      }
     }
     Enums: {
       application_status: "pending" | "needs_info" | "approved" | "rejected"
       contact_status: "new" | "in_progress" | "answered" | "closed"
+      customer_invoice_status: "issued" | "paid" | "cancelled"
+      user_role: "company" | "advisor"
       contact_topic:
         | "question"
         | "company"

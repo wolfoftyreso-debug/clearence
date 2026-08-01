@@ -1,8 +1,14 @@
 import type {
+  AccountBillingRecord,
   ApplicationRecord,
   AuthUser,
+  CaseMessage,
   CaseRecord,
   CompanyInfo,
+  CustomerInvoiceRecord,
+  CustomerOverview,
+  UserProfile,
+  UserRole,
   ContactMessageRecord,
   ContactStatus,
   NewContactMessage,
@@ -156,9 +162,65 @@ export interface ContactPort {
   updateStatus(id: string, status: ContactStatus, internalNote?: string | null): Promise<void>;
 }
 
+export interface ProfilePort {
+  /** Den inloggades profil. Null innan den skapats. */
+  getMine(): Promise<UserProfile | null>;
+  /**
+   * Skapar profilen vid första inloggningen. Rollen väljs vid registrering
+   * och är inget användaren kan byta själv efteråt - en företagare som blir
+   * rådgivare ska gå genom ansökan, inte genom en rullgardin.
+   */
+  create(input: { role: UserRole; displayName: string | null }): Promise<UserProfile>;
+  update(input: { displayName: string | null; phone: string | null }): Promise<void>;
+}
+
+export interface MessagesPort {
+  listByCase(caseId: string): Promise<CaseMessage[]>;
+  send(caseId: string, body: string): Promise<void>;
+  markRead(id: string): Promise<void>;
+}
+
+export interface BillingPort {
+  /**
+   * Den inloggades kontostatus. Skapas vid första anropet om den saknas -
+   * gratisveckan börjar när kontot först används, inte när någon råkar
+   * köra ett skript.
+   */
+  getMine(): Promise<AccountBillingRecord>;
+  /** Kundens egna fakturor och kvitton, nyast först. */
+  listMyInvoices(): Promise<CustomerInvoiceRecord[]>;
+
+  /* Drift. Kräver administratörsbehörighet, som prövas i databasen. */
+
+  listCustomers(): Promise<CustomerOverview[]>;
+  /** Ställer ut en faktura. Numret sätts av implementationen, inte av vyn. */
+  issueInvoice(input: {
+    userId: string;
+    description: string;
+    netOre: number;
+    vatOre: number;
+    vatRate: number;
+    dueAt: string;
+  }): Promise<CustomerInvoiceRecord>;
+  /**
+   * Registrerar en inbetalning. Skapar kvittonumret och öppnar kontot igen
+   * om det var stängt.
+   */
+  registerPayment(input: {
+    invoiceId: string;
+    paidAt: string;
+    reference: string | null;
+  }): Promise<void>;
+  /** Stänger ett konto vars faktura förfallit. Raderar ingenting. */
+  closeAccount(userId: string): Promise<void>;
+}
+
 export interface DataPort {
   auth: AuthPort;
   contact: ContactPort;
+  profile: ProfilePort;
+  messages: MessagesPort;
+  billing: BillingPort;
   cases: CasesPort;
   kbr: KbrPort;
   payments: PaymentsPort;

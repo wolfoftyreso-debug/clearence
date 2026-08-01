@@ -4,15 +4,40 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { WizardCard } from "@/components/wizard/WizardCard";
 import { useAuth } from "@/hooks/useAuth";
-import { IS_DEMO } from "@/data";
+import { data, IS_DEMO } from "@/data";
 import { translateAuthError } from "@/lib/authErrors";
-import { Loader2 } from "lucide-react";
+import type { UserRole } from "@/data/types";
+import { Briefcase, Building2, Loader2 } from "lucide-react";
+
+/**
+ * Rollen väljs en gång, vid registrering.
+ *
+ * Företagare och rådgivare ska mötas av olika saker vid inloggning. Att låta
+ * det vara en inställning man byter i efterhand vore fel: en rådgivare är
+ * rådgivare först när behörigheten är kontrollerad, och den kontrollen sker i
+ * ansökan - inte i en rullgardin.
+ */
+const ROLES: { value: UserRole; label: string; description: string; icon: typeof Building2 }[] = [
+  {
+    value: "company",
+    label: "Jag driver företaget",
+    description: "Utvärdering, likviditetsplan, kontrollbalansräkning och dokument.",
+    icon: Building2,
+  },
+  {
+    value: "advisor",
+    label: "Jag är rådgivare",
+    description: "Rekonstruktör, konkursförvaltare, revisor eller jurist som tar uppdrag.",
+    icon: Briefcase,
+  },
+];
 
 const Login = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { signIn, signUp } = useAuth();
   const [mode, setMode] = useState<"login" | "signup">("login");
+  const [role, setRole] = useState<UserRole>("company");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -56,11 +81,26 @@ const Login = () => {
     }
 
     const result = await signUp(email, password);
-    setLoading(false);
     if (result.error) {
+      setLoading(false);
       setError(translateAuthError(result.error));
       return;
     }
+
+    // Profilen skapas direkt, medan sessionen finns. Skjuts det upp till
+    // första inloggningen hamnar användaren i fel gränssnitt en gång, och
+    // rollen är just det som avgör vad hen ser.
+    if (!result.needsEmailConfirmation) {
+      try {
+        await data.profile.create({ role, displayName: null });
+      } catch {
+        // Profilen kan skapas i efterhand; rollen faller tillbaka på
+        // "company", vilket är det ofarliga alternativet. Att stoppa
+        // inloggningen här vore värre än att visa fel meny.
+      }
+    }
+
+    setLoading(false);
     if (result.needsEmailConfirmation) {
       setInfo("Kontot är skapat. Kontrollera din e-post för att bekräfta adressen, logga sedan in.");
       setMode("login");
@@ -113,6 +153,49 @@ const Login = () => {
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
+            {mode === "signup" && (
+              <fieldset className="space-y-2">
+                <legend className="mb-2 block text-sm font-medium text-foreground">
+                  Vem är du?
+                </legend>
+                {ROLES.map((option) => {
+                  const Icon = option.icon;
+                  const selected = role === option.value;
+                  return (
+                    <label
+                      key={option.value}
+                      className={`flex cursor-pointer gap-3 rounded-md border p-3 transition-colors ${
+                        selected
+                          ? "border-accent bg-accent/5"
+                          : "border-border hover:border-accent/40"
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="role"
+                        value={option.value}
+                        checked={selected}
+                        onChange={() => setRole(option.value)}
+                        className="sr-only"
+                      />
+                      <Icon
+                        className={`mt-0.5 h-5 w-5 flex-shrink-0 ${selected ? "text-accent" : "text-muted-foreground"}`}
+                        aria-hidden="true"
+                      />
+                      <span className="min-w-0">
+                        <span className="block text-sm font-medium text-foreground">
+                          {option.label}
+                        </span>
+                        <span className="mt-0.5 block text-xs leading-relaxed text-muted-foreground">
+                          {option.description}
+                        </span>
+                      </span>
+                    </label>
+                  );
+                })}
+              </fieldset>
+            )}
+
             <div className="space-y-2">
               <label htmlFor="email" className="block text-sm font-medium text-foreground">
                 E-post

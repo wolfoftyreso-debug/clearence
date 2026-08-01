@@ -20,7 +20,8 @@ const WIDTHS = [320, 375, 414];
 const ROUTES = [
   "/", "/wizard", "/kbr", "/likviditetsplan", "/marketplace",
   "/for-radgivare", "/login", "/dashboard", "/dashboard/liquidity",
-  "/mina-forfragningar", "/om", "/kontakt", "/admin/inkorg",
+  "/mina-forfragningar", "/om", "/kontakt", "/admin/inkorg", "/admin/kunder",
+  "/dashboard/dokument", "/dashboard/meddelanden", "/dashboard/installningar",
 ];
 
 /** A couple of pixels of rounding is not a layout defect. */

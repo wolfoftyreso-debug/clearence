@@ -270,3 +270,71 @@ export interface ContactMessageRecord {
   internalNote: string | null;
   createdAt: string;
 }
+
+/* -------------------------------------------------------------------------- */
+/* Roller, meddelanden och kontots ekonomi                                    */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Vem användaren är. Styr vad som visas vid inloggning.
+ *
+ * En sluten uppsättning och inte en uppsättning flaggor: en användare är
+ * antingen företagare eller rådgivare, och ett gränssnitt som försöker vara
+ * båda samtidigt blir obegripligt för båda.
+ */
+export type UserRole = "company" | "advisor";
+
+export interface UserProfile {
+  userId: string;
+  role: UserRole;
+  displayName: string | null;
+  phone: string | null;
+}
+
+export interface CaseMessage {
+  id: string;
+  caseId: string;
+  authorUserId: string | null;
+  body: string;
+  createdAt: string;
+  readAt: string | null;
+}
+
+export interface AccountBillingRecord {
+  userId: string;
+  startedAt: string;
+  dueAt: string | null;
+  paidAt: string | null;
+  closedAt: string | null;
+  note: string | null;
+}
+
+export type CustomerInvoiceStatus = "issued" | "paid" | "cancelled";
+
+/** Belopp i ören. Aldrig kronor som flyttal - se src/lib/invoice.ts. */
+export interface CustomerInvoiceRecord {
+  id: string;
+  userId: string;
+  invoiceNumber: string;
+  issuedAt: string;
+  dueAt: string;
+  netOre: number;
+  vatOre: number;
+  grossOre: number;
+  vatRate: number;
+  description: string;
+  status: CustomerInvoiceStatus;
+  paidAt: string | null;
+  paymentReference: string | null;
+  receiptNumber: string | null;
+}
+
+/** En kund som drift ser den: vem, vilket läge, vilka fakturor. */
+export interface CustomerOverview {
+  userId: string;
+  email: string | null;
+  displayName: string | null;
+  role: UserRole;
+  billing: AccountBillingRecord | null;
+  invoices: CustomerInvoiceRecord[];
+}

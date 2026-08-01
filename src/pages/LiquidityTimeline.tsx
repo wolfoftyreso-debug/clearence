@@ -1,5 +1,5 @@
 import { useMemo, useState, type FormEvent } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -10,10 +10,7 @@ import {
   LayoutDashboard,
   TrendingDown,
   FileText,
-  MessageSquare,
   Users,
-  Settings,
-  Menu,
   ArrowDownLeft,
   ArrowUpRight,
   Calendar,
@@ -46,6 +43,7 @@ import { format, addDays, isBefore, startOfDay } from "date-fns";
 import { sv } from "date-fns/locale";
 import { data } from "@/data";
 import { useAuth } from "@/hooks/useAuth";
+import { DashboardShell } from "@/components/dashboard/DashboardShell";
 import type {
   CaseRecord,
   InvoiceDirection,
@@ -157,7 +155,6 @@ const LiquidityTimeline = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const queryClient = useQueryClient();
-  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [activeScenario, setActiveScenario] = useState<Scenario>('baseline');
   const [invoiceTab, setInvoiceTab] = useState<InvoiceDirection>('in');
   const [startingBalance, setStartingBalance] = useState(0);
@@ -253,14 +250,6 @@ const LiquidityTimeline = () => {
     },
   });
 
-  const navItems = [
-    { icon: LayoutDashboard, label: "Översikt", href: "/dashboard" },
-    { icon: TrendingDown, label: "Likviditet", href: "/dashboard/liquidity", active: true },
-    { icon: FileText, label: "Dokument", href: "/dashboard/documents", comingSoon: true },
-    { icon: MessageSquare, label: "Meddelanden", href: "/dashboard/messages", comingSoon: true },
-    { icon: Users, label: "Rådgivare", href: "/marketplace" },
-    { icon: Settings, label: "Inställningar", href: "/dashboard/settings", comingSoon: true },
-  ];
 
   // Calculate cashflow data for chart
   const cashflowData = useMemo((): CashflowDay[] => {
@@ -359,100 +348,8 @@ const LiquidityTimeline = () => {
   const isDataLoading = paymentsLoading || invoicesLoading;
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Mobile sidebar overlay */}
-      {sidebarOpen && (
-        <div
-          className="fixed inset-0 bg-foreground/30 z-40 lg:hidden"
-          onClick={() => setSidebarOpen(false)}
-        />
-      )}
-
-      {/* Sidebar */}
-      <aside
-        className={`fixed top-0 left-0 h-full w-64 bg-sidebar z-50 transform transition-transform duration-300 lg:translate-x-0 ${
-          sidebarOpen ? "translate-x-0" : "-translate-x-full"
-        }`}
-      >
-        <div className="flex flex-col h-full">
-          <div className="p-4 border-b border-sidebar-border">
-            <Link to="/" className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-sidebar-primary flex items-center justify-center">
-                <span className="text-sidebar-primary-foreground font-bold text-sm">C</span>
-              </div>
-              <span className="font-display text-xl text-sidebar-foreground">CLEARANCE</span>
-            </Link>
-          </div>
-
-          <nav className="flex-1 p-4 space-y-1">
-            {navItems.map((item) => {
-              const Icon = item.icon;
-              return (
-                <button
-                  key={item.label}
-                  onClick={() => !item.comingSoon && navigate(item.href)}
-                  disabled={item.comingSoon}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-md text-sm font-medium transition-colors ${
-                    item.comingSoon
-                      ? "text-sidebar-foreground/40 cursor-not-allowed"
-                      : item.active
-                      ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                      : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
-                  }`}
-                >
-                  <Icon className="w-5 h-5" />
-                  <span className="flex-1 text-left">{item.label}</span>
-                  {item.comingSoon && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-sidebar-accent/50">
-                      Snart
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </nav>
-
-          <div className="p-4 border-t border-sidebar-border">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-sidebar-accent flex items-center justify-center">
-                <span className="text-sm font-medium text-sidebar-foreground">
-                  {(latestCase?.companyName || user?.email || "??").slice(0, 2).toUpperCase()}
-                </span>
-              </div>
-              <div className="min-w-[7rem] flex-1">
-                <p className="text-sm font-medium text-sidebar-foreground truncate">
-                  {latestCase?.companyName || user?.email || "Ditt konto"}
-                </p>
-                <p className="text-xs text-sidebar-foreground/60 truncate">{latestCase?.orgNumber || ""}</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </aside>
-
-      {/* Main content */}
-      <div className="lg:pl-64">
-        {/* Header */}
-        <header className="sticky top-0 z-30 bg-background border-b border-border">
-          <div className="flex items-center justify-between px-4 md:px-6 h-16">
-            <div className="flex items-center gap-4">
-              <button className="lg:hidden p-2 text-foreground" onClick={() => setSidebarOpen(true)} aria-label="Öppna meny">
-                <Menu className="w-6 h-6" />
-              </button>
-              <div>
-                <h1 className="text-lg font-semibold text-foreground">Likviditetstidslinje</h1>
-                <p className="text-sm text-muted-foreground">Dag-för-dag cashflow-prognos</p>
-              </div>
-            </div>
-            <Button variant="outline" size="sm" onClick={() => navigate("/likviditetsplan")}>
-              <Plus className="w-4 h-4" />
-              <span className="hidden sm:inline">Ny plan</span>
-            </Button>
-          </div>
-        </header>
-
-        {/* Content */}
-        <main className="p-4 md:p-6 max-w-7xl mx-auto space-y-6">
+    <DashboardShell title="Likviditet">
+      <div className="mx-auto max-w-5xl space-y-6">
           {!latestCase ? (
             <div className="text-center py-16 px-4 rounded-md bg-card border border-border shadow-soft">
               <h2 className="text-xl font-display font-semibold text-foreground mb-2">Ingen plan ännu</h2>
@@ -1032,9 +929,8 @@ const LiquidityTimeline = () => {
           </Card>
           </>
           )}
-        </main>
       </div>
-    </div>
+    </DashboardShell>
   );
 };
 

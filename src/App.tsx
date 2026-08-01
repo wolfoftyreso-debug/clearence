@@ -26,6 +26,10 @@ const LiquidityPlanner = lazy(() => import("./pages/LiquidityPlanner"));
 const KBRModule = lazy(() => import("./pages/KBRModule"));
 const Contact = lazy(() => import("./pages/Contact"));
 const AdminInbox = lazy(() => import("./pages/AdminInbox"));
+const AdminCustomers = lazy(() => import("./pages/AdminCustomers"));
+const DashboardDocuments = lazy(() => import("./pages/DashboardDocuments"));
+const DashboardMessages = lazy(() => import("./pages/DashboardMessages"));
+const DashboardSettings = lazy(() => import("./pages/DashboardSettings"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 const queryClient = new QueryClient();
@@ -71,6 +75,30 @@ const App = () => (
                     </ProtectedRoute>
                   }
                 />
+                <Route
+                  path="/dashboard/dokument"
+                  element={
+                    <ProtectedRoute>
+                      <DashboardDocuments />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/dashboard/meddelanden"
+                  element={
+                    <ProtectedRoute>
+                      <DashboardMessages />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/dashboard/installningar"
+                  element={
+                    <ProtectedRoute>
+                      <DashboardSettings />
+                    </ProtectedRoute>
+                  }
+                />
                 <Route path="/likviditetsplan" element={<LiquidityPlanner />} />
                 <Route path="/marketplace" element={<Marketplace />} />
                 <Route path="/for-radgivare" element={<ForAdvisors />} />
@@ -84,6 +112,14 @@ const App = () => (
                   element={
                     <ProtectedRoute>
                       <AdminInbox />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/admin/kunder"
+                  element={
+                    <ProtectedRoute>
+                      <AdminCustomers />
                     </ProtectedRoute>
                   }
                 />
