@@ -46,6 +46,9 @@ const toJson = (value: unknown): Json => value as Json;
 
 const DOCUMENT_BUCKET = "case-documents";
 
+/** Praktikerns valda ärende. Rent gränssnittsval - åtkomsten prövas i databasen. */
+const ACTIVE_CASE_KEY = "clearance-active-case";
+
 type MessageRow = {
   id: string;
   case_id: string;
@@ -1034,14 +1037,36 @@ export const supabaseAdapter: DataPort = {
 
   cases: {
     async getLatest() {
-      const { data, error } = await supabase
+      const selected = localStorage.getItem(ACTIVE_CASE_KEY);
+      if (selected) {
+        const { data, error } = await supabase
+          .from("cases").select("*").eq("id", selected).maybeSingle();
+        if (error) throw error;
+        // Raden kan ha försvunnit eller åtkomsten återkallats - radskyddet
+        // svarar då tomt, och valet faller tillbaka till senaste.
+        if (data) return toCase(data as CaseRow);
+        localStorage.removeItem(ACTIVE_CASE_KEY);
+      }
+      const latest = await supabase
         .from("cases")
         .select("*")
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
+      if (latest.error) throw latest.error;
+      return latest.data ? toCase(latest.data as CaseRow) : null;
+    },
+    async listMine() {
+      const { data, error } = await supabase
+        .from("cases")
+        .select("*")
+        .order("updated_at", { ascending: false });
       if (error) throw error;
-      return data ? toCase(data as CaseRow) : null;
+      return (data ?? []).map((row) => toCase(row as CaseRow));
+    },
+    select(caseId) {
+      if (caseId) localStorage.setItem(ACTIVE_CASE_KEY, caseId);
+      else localStorage.removeItem(ACTIVE_CASE_KEY);
     },
     async create(input) {
       const { data, error } = await supabase

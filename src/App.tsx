@@ -30,6 +30,7 @@ const AdminOverview = lazy(() => import("./pages/AdminOverview"));
 const DashboardParticipants = lazy(() => import("./pages/DashboardParticipants"));
 const InvitationAccept = lazy(() => import("./pages/InvitationAccept"));
 const DashboardAudit = lazy(() => import("./pages/DashboardAudit"));
+const PractitionerCases = lazy(() => import("./pages/PractitionerCases"));
 const AdminCustomers = lazy(() => import("./pages/AdminCustomers"));
 const AdminApplications = lazy(() => import("./pages/AdminApplications"));
 const DashboardDocuments = lazy(() => import("./pages/DashboardDocuments"));
@@ -126,6 +127,14 @@ const App = () => (
                   element={
                     <ProtectedRoute>
                       <DashboardAudit />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/arenden"
+                  element={
+                    <ProtectedRoute>
+                      <PractitionerCases />
                     </ProtectedRoute>
                   }
                 />

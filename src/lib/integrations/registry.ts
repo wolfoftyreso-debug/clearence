@@ -121,6 +121,22 @@ export const INTEGRATION_REGISTRY: IntegrationTarget[] = [
     ],
   },
   {
+    id: "arendesystem-api",
+    name: "Ärendesystem – direktsynk (API)",
+    category: "advokatsystem",
+    status: "avtal",
+    value:
+      "Akten och fristerna synkas automatiskt in i byråns befintliga " +
+      "ärendesystem, i stället för att exporteras som fil.",
+    builtToday:
+      "Filvägen är byggd och är formatet synken ska återanvända: akten som " +
+      "JSON (src/lib/integrations/caseBundle.ts) och fristkalendern som ICS, " +
+      "samlad över alla ärenden i praktikervyn.",
+    nextStep:
+      "Partneravtal med leverantörerna av byråsystem. ANTAGANDE: vilka API:er " +
+      "systemen exponerar varierar per leverantör och är inte verifierat.",
+  },
+  {
     id: "advokatsystem-frister",
     name: "Fristkalender (iCalendar)",
     category: "advokatsystem",

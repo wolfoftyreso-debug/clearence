@@ -79,8 +79,17 @@ export interface AuthPort {
 }
 
 export interface CasesPort {
-  /** Most recently created case for the signed-in user, or null. */
+  /**
+   * Det aktiva ärendet. För en företagare är det senaste ärendet; för en
+   * praktiker med många ärenden styrs det av select() nedan, så att hela
+   * inloggade läget (handlingsplan, meddelanden, dokument, logg) följer
+   * det ärende praktikern öppnat.
+   */
   getLatest(): Promise<CaseRecord | null>;
+  /** Alla ärenden den inloggade har åtkomst till, senast uppdaterat först. */
+  listMine(): Promise<CaseRecord[]>;
+  /** Väljer aktivt ärende. null återgår till senaste. Rent klientval - åtkomsten prövas i databasen. */
+  select(caseId: string | null): void;
   create(input: NewCase & { userId: string }): Promise<CaseRecord>;
   /** Creates a minimal case so a plan has somewhere to live. */
   createMinimal(userId: string): Promise<CaseRecord>;

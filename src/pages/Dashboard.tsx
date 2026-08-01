@@ -5,7 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { CaseDocuments } from "@/components/documents/CaseDocuments";
 import { ReportButton } from "@/components/reports/ReportButton";
 import { buildCrisisReport } from "@/lib/reports/builders";
-import { analyseCrisis, type AnalysisInput } from "@/lib/crisisAnalysis";
+import { analyseCrisis } from "@/lib/crisisAnalysis";
 import { buildCaseBundle, timelineToIcs } from "@/lib/integrations/caseBundle";
 import { downloadTextFile } from "@/lib/integrations/download";
 import { InsightList } from "@/components/financial/InsightList";
@@ -30,11 +30,9 @@ import { useAuth } from "@/hooks/useAuth";
 import type { CaseRecord } from "@/data/types";
 import { DashboardShell } from "@/components/dashboard/DashboardShell";
 import { ActionPlan } from "@/components/dashboard/ActionPlan";
+import { analysisInputFromCase, parseAmount } from "@/lib/caseAnalysis";
 
-const parseAmount = (value: string | null): number => {
-  if (!value) return 0;
-  return parseInt(value.replace(/\s/g, ""), 10) || 0;
-};
+
 
 const nextOccurrence = (day: number): Date => {
   const today = new Date();
@@ -106,21 +104,7 @@ const Dashboard = () => {
   // En enda analysinput för rapport, aktexport och fristkalender. Tre
   // ställen som räknar var för sig är tre ställen som kan säga olika saker
   // om samma ärende.
-  const analysisInput = (record: CaseRecord): AnalysisInput => ({
-    canPaySalary: record.canPaySalary,
-    canPayTax: record.canPayTax,
-    canPayRent: record.canPayRent,
-    canPaySuppliers: record.canPaySuppliers,
-    salaryAmount: parseAmount(record.salaryAmount),
-    salaryDay: record.salaryDay ?? 25,
-    taxAmount: parseAmount(record.taxAmount),
-    taxDay: record.taxDay ?? 12,
-    rentAmount: parseAmount(record.rentAmount),
-    rentDay: record.rentDay ?? 1,
-    totalDebt: parseAmount(record.totalDebt),
-    quickLiquidationValue: parseAmount(record.quickLiquidationValue),
-    employees: record.employees ?? "",
-  });
+  const analysisInput = analysisInputFromCase;
 
   const slugName = (record: CaseRecord): string =>
     (record.companyName ?? record.orgNumber).toLowerCase().replace(/[^a-z0-9åäö]+/gi, "-");

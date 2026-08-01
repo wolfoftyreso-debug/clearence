@@ -1061,7 +1061,20 @@ export const demoAdapter: DataPort = {
 
   cases: {
     async getLatest() {
+      const selected = localStorage.getItem("clearance-active-case");
+      if (selected) {
+        const found = state.cases.find((c) => c.id === selected);
+        if (found) return found;
+        localStorage.removeItem("clearance-active-case");
+      }
       return state.cases[0] ?? null;
+    },
+    async listMine() {
+      return [...state.cases];
+    },
+    select(caseId) {
+      if (caseId) localStorage.setItem("clearance-active-case", caseId);
+      else localStorage.removeItem("clearance-active-case");
     },
     async create(input) {
       const record: CaseRecord = {

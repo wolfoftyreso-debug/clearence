@@ -61,7 +61,8 @@ const COMPANY_NAV: NavItem[] = [
 ];
 
 const ADVISOR_NAV: NavItem[] = [
-  { icon: LayoutDashboard, label: "Översikt", href: "/dashboard" },
+  { icon: Briefcase, label: "Ärendeöversikt", href: "/arenden" },
+  { icon: LayoutDashboard, label: "Aktivt ärende", href: "/dashboard" },
   { icon: Briefcase, label: "Mina förfrågningar", href: "/mina-forfragningar" },
   { icon: FileText, label: "Min profil", href: "/for-radgivare" },
   { icon: MessageSquare, label: "Meddelanden", href: "/dashboard/meddelanden" },
