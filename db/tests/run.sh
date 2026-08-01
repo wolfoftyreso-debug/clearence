@@ -25,3 +25,9 @@ done
 
 $PSQL -d "$DB" -f supabase/tests/rls.sql 2>&1 \
   | grep -E "^(NOTICE|ERROR|psql:)|ALL RLS" | sed 's/^NOTICE:  //'
+
+# Jobblogiken: stängning av förfallna konton och utkorgen. Körs även
+# självhostat, av samma skäl som RLS-sviten - en skillnad mellan miljöerna
+# ska synas här och inte i produktion.
+$PSQL -d "$DB" -f supabase/tests/billingJob.sql 2>&1 \
+  | grep -E "^(NOTICE|ERROR|psql:)|ALL BILLING" | sed 's/^NOTICE:  //'

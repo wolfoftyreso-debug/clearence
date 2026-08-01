@@ -24,6 +24,7 @@ import type {
   CaseRecord,
   ContactMessageRecord,
   CustomerInvoiceRecord,
+  OutboundEmailRecord,
   DocumentRecord,
   UserProfile,
   InvoiceRecord,
@@ -34,6 +35,8 @@ import type {
 } from "../types";
 import type { FinancialSnapshot, OpenItem, Voucher } from "@/lib/financial/model";
 import { nextInvoiceNumber } from "@/lib/invoice";
+import { invoiceEmail, receiptEmail } from "@/lib/email/messages";
+import { COMPANY } from "@/lib/company";
 
 const STORAGE_KEY = "clearance-demo-state";
 
@@ -50,6 +53,7 @@ interface DemoState {
   caseMessages: CaseMessage[];
   billing: AccountBillingRecord | null;
   customerInvoices: CustomerInvoiceRecord[];
+  outbox: OutboundEmailRecord[];
 }
 
 const emptyState = (): DemoState => ({
@@ -65,6 +69,7 @@ const emptyState = (): DemoState => ({
   caseMessages: [],
   billing: null,
   customerInvoices: [],
+  outbox: [],
 });
 
 /** Files cannot go in localStorage, so they live for the session only. */
@@ -104,6 +109,42 @@ const uid = () =>
     : `demo-${Math.floor(Number(String(Date.now()).slice(-9)))}-${listeners.size}`;
 
 const now = () => new Date().toISOString();
+
+/** Fakturaraden som fakturamodell, så att e-postbyggarna kan användas. */
+const demoInvoice = (record: CustomerInvoiceRecord, email: string) => ({
+  invoiceNumber: record.invoiceNumber,
+  issuedAt: record.issuedAt,
+  dueAt: record.dueAt,
+  seller: COMPANY,
+  customer: { name: email, orgNumber: null, email, address: null },
+  lines: [{ description: record.description, quantity: 1, unitPriceOre: record.netOre }],
+  note: null,
+  totals: {
+    netOre: record.netOre,
+    vatOre: record.vatOre,
+    grossOre: record.grossOre,
+    vatRate: record.vatRate,
+  },
+});
+
+/** Lägger i utkorgen. Demoläget skickar aldrig - raden visas bara i driften. */
+const queue = (
+  message: { recipient: string; subject: string; kind: string },
+  invoiceId: string | null,
+) => {
+  void invoiceId;
+  state.outbox.unshift({
+    id: uid(),
+    recipient: message.recipient,
+    subject: message.subject,
+    kind: message.kind,
+    status: "pending",
+    attempts: 0,
+    lastError: null,
+    createdAt: now(),
+    sentAt: null,
+  });
+};
 
 /** Stable per-address id that does not contain the address itself. */
 const demoUserId = (email: string): string => {
@@ -600,6 +641,12 @@ export const demoAdapter: DataPort = {
       };
       state.customerInvoices.unshift(invoice);
       if (state.billing) state.billing.dueAt = input.dueAt;
+      if (input.recipientEmail) {
+        queue(
+          invoiceEmail(demoInvoice(invoice, input.recipientEmail)),
+          invoice.id,
+        );
+      }
       save();
       return invoice;
     },
@@ -616,6 +663,15 @@ export const demoAdapter: DataPort = {
         state.billing.paidAt = input.paidAt;
         state.billing.closedAt = null;
       }
+      if (input.recipientEmail) {
+        queue(
+          receiptEmail(demoInvoice(invoice, input.recipientEmail), {
+            paidAt: input.paidAt,
+            receiptNumber: invoice.receiptNumber ?? `K-${invoice.invoiceNumber}`,
+          }),
+          invoice.id,
+        );
+      }
       save();
     },
     async closeAccount() {
@@ -623,6 +679,9 @@ export const demoAdapter: DataPort = {
         state.billing.closedAt = now();
         save();
       }
+    },
+    async listOutbox() {
+      return [...state.outbox];
     },
   },
 

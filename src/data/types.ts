@@ -338,3 +338,16 @@ export interface CustomerOverview {
   billing: AccountBillingRecord | null;
   invoices: CustomerInvoiceRecord[];
 }
+
+/** En rad i utkorgen. Skickas av arbetaren, inte av klienten. */
+export interface OutboundEmailRecord {
+  id: string;
+  recipient: string;
+  subject: string;
+  kind: string;
+  status: "pending" | "sent" | "failed";
+  attempts: number;
+  lastError: string | null;
+  createdAt: string;
+  sentAt: string | null;
+}

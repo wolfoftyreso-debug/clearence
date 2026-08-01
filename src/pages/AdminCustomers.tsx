@@ -8,8 +8,8 @@ import { data } from "@/data";
 import { billingState, TRIAL_DAYS } from "@/lib/billing";
 import { missingInvoiceFields } from "@/lib/company";
 import { formatOre, invoiceTotals, PAYMENT_TERMS_DAYS, VAT_RATE } from "@/lib/invoice";
-import type { CustomerOverview } from "@/data/types";
-import { AlertTriangle, Loader2, Lock, ShieldOff } from "lucide-react";
+import type { CustomerOverview, OutboundEmailRecord } from "@/data/types";
+import { AlertTriangle, Loader2, Lock, Mail, ShieldOff } from "lucide-react";
 
 /**
  * Drift: kunder, deras läge och deras fakturor.
@@ -74,6 +74,7 @@ const CustomerRow = ({ customer }: { customer: CustomerOverview }) => {
         vatOre: totals.vatOre,
         vatRate: VAT_RATE,
         dueAt: new Date(Date.now() + PAYMENT_TERMS_DAYS * DAY_MS).toISOString(),
+        recipientEmail: customer.email,
       });
     },
     onSuccess: () => {
@@ -89,6 +90,7 @@ const CustomerRow = ({ customer }: { customer: CustomerOverview }) => {
         invoiceId,
         paidAt: new Date().toISOString(),
         reference: reference.trim() || null,
+        recipientEmail: customer.email,
       }),
     onSuccess: () => {
       setReference("");
@@ -227,6 +229,73 @@ const CustomerRow = ({ customer }: { customer: CustomerOverview }) => {
   );
 };
 
+const OUTBOX_STATUS: Record<OutboundEmailRecord["status"], { label: string; tone: string }> = {
+  pending: { label: "Väntar", tone: "text-warning" },
+  sent: { label: "Skickat", tone: "text-success" },
+  failed: { label: "Misslyckat", tone: "text-destructive" },
+};
+
+/**
+ * Utkorgen, som drift ser den.
+ *
+ * Finns för att skillnaden mellan "skickat" och "misslyckat fem gånger"
+ * annars är osynlig tills kunden hör av sig - eller inte hör av sig, vilket
+ * för en faktura är värre.
+ */
+const OutboxPanel = () => {
+  const { data: outbox, isLoading } = useQuery({
+    queryKey: ["outbox"],
+    queryFn: () => data.billing.listOutbox(),
+  });
+
+  const failedCount = (outbox ?? []).filter((m) => m.status === "failed").length;
+
+  return (
+    <section className="mt-10">
+      <h2 className="flex items-center gap-2 font-display text-xl text-foreground">
+        <Mail className="h-5 w-5 text-accent" aria-hidden="true" />
+        Utgående e-post
+        {failedCount > 0 && (
+          <span className="rounded-full border border-destructive/40 bg-destructive/10 px-2 py-0.5 text-xs font-medium text-destructive">
+            {failedCount} kräver åtgärd
+          </span>
+        )}
+      </h2>
+      <p className="mt-1 text-sm text-muted-foreground">
+        Fakturor och kvitton köas här och skickas av e-postarbetaren. En rad som
+        misslyckats fem gånger stannar som misslyckad tills en människa tittar.
+      </p>
+      {isLoading ? (
+        <Loader2 className="mt-4 h-5 w-5 animate-spin text-accent" aria-hidden="true" />
+      ) : (outbox ?? []).length === 0 ? (
+        <p className="mt-4 rounded-md border border-border bg-secondary/40 p-4 text-sm text-muted-foreground">
+          Inget i utkorgen.
+        </p>
+      ) : (
+        <ul className="mt-4 divide-y divide-border rounded-md border border-border text-sm">
+          {(outbox ?? []).slice(0, 20).map((m) => (
+            <li key={m.id} className="flex flex-wrap items-center gap-3 p-3">
+              <span className="min-w-0 flex-1">
+                <span className="font-medium text-foreground">{m.recipient}</span>{" "}
+                <span className="text-muted-foreground">· {m.subject}</span>
+                {m.lastError && (
+                  <span className="mt-0.5 block break-words text-xs text-destructive">
+                    {m.lastError}
+                  </span>
+                )}
+              </span>
+              <span className={`flex-shrink-0 text-xs font-medium ${OUTBOX_STATUS[m.status].tone}`}>
+                {OUTBOX_STATUS[m.status].label}
+                {m.attempts > 1 && ` (försök ${m.attempts})`}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+};
+
 const AdminCustomers = () => {
   const { data: isAdmin, isLoading: checking } = useQuery({
     queryKey: ["am-i-admin"],
@@ -278,6 +347,7 @@ const AdminCustomers = () => {
               ))}
             </ul>
           )}
+          <OutboxPanel />
         </div>
       )}
     </DashboardShell>

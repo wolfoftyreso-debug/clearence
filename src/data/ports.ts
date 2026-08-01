@@ -7,6 +7,7 @@ import type {
   CompanyInfo,
   CustomerInvoiceRecord,
   CustomerOverview,
+  OutboundEmailRecord,
   UserProfile,
   UserRole,
   ContactMessageRecord,
@@ -201,6 +202,12 @@ export interface BillingPort {
     vatOre: number;
     vatRate: number;
     dueAt: string;
+    /**
+     * Vart momsfakturan mejlas. Null = ingen adress känd; fakturan skapas
+     * ändå och finns i kundens inloggning, och utkorgen visar att inget
+     * mejl gick ut. Att tyst hoppa över mejlet vore värre.
+     */
+    recipientEmail: string | null;
   }): Promise<CustomerInvoiceRecord>;
   /**
    * Registrerar en inbetalning. Skapar kvittonumret och öppnar kontot igen
@@ -210,9 +217,19 @@ export interface BillingPort {
     invoiceId: string;
     paidAt: string;
     reference: string | null;
+    /** Vart kvittot mejlas. Se noten på issueInvoice. */
+    recipientEmail: string | null;
   }): Promise<void>;
   /** Stänger ett konto vars faktura förfallit. Raderar ingenting. */
   closeAccount(userId: string): Promise<void>;
+  /**
+   * Utkorgen, för drift.
+   *
+   * Finns för att ett mejl som inte gått fram ska synas för en människa.
+   * Utan den vyn är skillnaden mellan "skickat" och "misslyckat fem gånger"
+   * osynlig tills kunden hör av sig - eller inte hör av sig.
+   */
+  listOutbox(): Promise<OutboundEmailRecord[]>;
 }
 
 export interface DataPort {

@@ -64,6 +64,18 @@ S3, privat bucket, SSE-KMS. Nyckelprefix är ärendets id, som idag.
 
 SES. Det är AWS, alltså innanför gränsen. Alternativet, egen SMTP-server, kostar leveransbarhet utan att köpa något i gengäld: e-post till borgenärer måste komma fram, och en egen avsändare utan uppvärmt rykte hamnar i skräpposten.
 
+**Byggt:** mejlen går genom en utkorg (`public.outbound_emails`), inte genom direktanrop. Raden skapas i samma transaktion som fakturan, så det kan inte finnas ett mejl om en faktura som inte finns, eller en faktura vars mejl tyst försvann. Arbetaren är `db/email-worker.mjs`:
+
+```
+# crontab i driftmiljön
+*/5 * * * *  node db/email-worker.mjs           # skicka det som väntar
+15 3 * * *   node db/email-worker.mjs --close   # stäng förfallna konton
+```
+
+`claim_outbound_emails()` låser med `for update skip locked`, så två arbetare skickar aldrig samma rad. Efter fem misslyckade försök blir raden `failed` och syns i driftvyn under Kunder - den plockas aldrig om automatiskt, för en adress som studsar studsar även försök sextio.
+
+Stängningsjobbet `close_overdue_accounts()` är idempotent, jämför svenska kalenderdagar (fristen ska inte bero på vilket klockslag fakturan råkade ställas ut), rör aldrig ett betalt konto och raderar ingenting. Testat i `supabase/tests/billingJob.sql`, i båda miljöerna.
+
 ## Externa beroenden, och varför
 
 | Beroende | Oundvikligt? | Motivering |
@@ -75,7 +87,7 @@ SES. Det är AWS, alltså innanför gränsen. Alternativet, egen SMTP-server, ko
 
 **Inget annat.** Ingen SaaS-analys, ingen extern felrapportering, ingen extern AI-tjänst — insiktsmotorn i `src/lib/financial/insights.ts` är deterministisk och anropar ingenting.
 
-**Inga CDN-typsnitt.** Det här påståendet var osant fram till att typsnitten lades i repot: `src/index.css` hämtade DM Sans från Googles CDN vid varje sidladdning. Det innebar att besökarens IP-adress gick till tredje part innan sidan ritades ut — och besökaren här är ett bolag som håller på att gå omkull. LG München I (3 O 17493/20) har slagit fast att just det upplägget kräver samtycke enligt GDPR. Typsnitten ligger nu i `src/assets/fonts/` (SIL OFL 1.1) och bygget gör noll externa anrop, vilket verifieras av `scripts/verify-no-external-requests`.
+**Inga CDN-typsnitt.** Det här påståendet var osant fram till att typsnitten lades i repot: `src/index.css` hämtade DM Sans från Googles CDN vid varje sidladdning. Det innebar att besökarens IP-adress gick till tredje part innan sidan ritades ut — och besökaren här är ett bolag som håller på att gå omkull. LG München I (3 O 17493/20) har slagit fast att just det upplägget kräver samtycke enligt GDPR. Typsnitten ligger nu i `src/assets/fonts/` (SIL OFL 1.1) och bygget gör noll externa anrop, vilket verifieras av `npm run test:external`.
 
 ## Datalagring
 

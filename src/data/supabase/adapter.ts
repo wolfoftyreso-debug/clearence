@@ -1,6 +1,8 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { Json } from "@/integrations/supabase/types";
 import { nextInvoiceNumber } from "@/lib/invoice";
+import { invoiceEmail, receiptEmail } from "@/lib/email/messages";
+import { COMPANY } from "@/lib/company";
 import type { DataPort } from "../ports";
 import type {
   AccountBillingRecord,
@@ -10,6 +12,7 @@ import type {
   ContactMessageRecord,
   CustomerInvoiceRecord,
   CustomerOverview,
+  OutboundEmailRecord,
   DocumentRecord,
   FixedPrice,
   InvoiceRecord,
@@ -104,6 +107,29 @@ const toCustomerInvoice = (row: {
   paymentReference: row.payment_reference,
   receiptNumber: row.receipt_number,
 });
+
+/**
+ * Lägger ett mejl i utkorgen.
+ *
+ * Anropas direkt efter att fakturan skrivits, så att raden hör ihop med det
+ * den handlar om. Går kön inte att skriva till kastas felet vidare - en
+ * faktura som skapats utan att mejlet köats är sämre än ingen faktura alls,
+ * eftersom kunden då aldrig får veta att den finns.
+ */
+const enqueueEmail = async (
+  message: { recipient: string; subject: string; bodyText: string; bodyHtml: string; kind: string },
+  invoiceId: string | null,
+) => {
+  const { error } = await supabase.from("outbound_emails").insert({
+    recipient: message.recipient,
+    subject: message.subject,
+    body_text: message.bodyText,
+    body_html: message.bodyHtml,
+    kind: message.kind,
+    related_invoice_id: invoiceId,
+  });
+  if (error) throw error;
+};
 
 const toContactMessage = (row: {
   id: string;
@@ -514,7 +540,44 @@ export const supabaseAdapter: DataPort = {
         .update({ due_at: input.dueAt })
         .eq("user_id", input.userId);
 
-      return toCustomerInvoice(data);
+      const invoice = toCustomerInvoice(data);
+
+      // Momsfakturan till kundens e-post. Adressen hämtas ur profilen; finns
+      // ingen går fakturan ändå att hämta i inloggningen, och drift ser i
+      // utkorgen att inget mejl köades.
+      const { data: profile } = await supabase
+        .from("user_profiles")
+        .select("display_name")
+        .eq("user_id", input.userId)
+        .maybeSingle();
+
+      if (input.recipientEmail) {
+        await enqueueEmail(
+          invoiceEmail({
+            invoiceNumber: invoice.invoiceNumber,
+            issuedAt: invoice.issuedAt,
+            dueAt: invoice.dueAt,
+            seller: COMPANY,
+            customer: {
+              name: profile?.display_name ?? input.recipientEmail,
+              orgNumber: null,
+              email: input.recipientEmail,
+              address: null,
+            },
+            lines: [{ description: invoice.description, quantity: 1, unitPriceOre: invoice.netOre }],
+            note: null,
+            totals: {
+              netOre: invoice.netOre,
+              vatOre: invoice.vatOre,
+              grossOre: invoice.grossOre,
+              vatRate: invoice.vatRate,
+            },
+          }),
+          invoice.id,
+        );
+      }
+
+      return invoice;
     },
     async registerPayment(input) {
       const { data: invoice, error: readError } = await supabase
@@ -542,6 +605,38 @@ export const supabaseAdapter: DataPort = {
         .update({ paid_at: input.paidAt, closed_at: null })
         .eq("user_id", invoice.user_id);
       if (billingError) throw billingError;
+
+      if (input.recipientEmail) {
+        const record = toCustomerInvoice(invoice);
+        await enqueueEmail(
+          receiptEmail(
+            {
+              invoiceNumber: record.invoiceNumber,
+              issuedAt: record.issuedAt,
+              dueAt: record.dueAt,
+              seller: COMPANY,
+              customer: {
+                name: input.recipientEmail,
+                orgNumber: null,
+                email: input.recipientEmail,
+                address: null,
+              },
+              lines: [
+                { description: record.description, quantity: 1, unitPriceOre: record.netOre },
+              ],
+              note: null,
+              totals: {
+                netOre: record.netOre,
+                vatOre: record.vatOre,
+                grossOre: record.grossOre,
+                vatRate: record.vatRate,
+              },
+            },
+            { paidAt: input.paidAt, receiptNumber: `K-${record.invoiceNumber}` },
+          ),
+          record.id,
+        );
+      }
     },
     async closeAccount(userId) {
       const { error } = await supabase
@@ -549,6 +644,27 @@ export const supabaseAdapter: DataPort = {
         .update({ closed_at: new Date().toISOString() })
         .eq("user_id", userId);
       if (error) throw error;
+    },
+    async listOutbox() {
+      const { data, error } = await supabase
+        .from("outbound_emails")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(100);
+      if (error) throw error;
+      return (data ?? []).map(
+        (row): OutboundEmailRecord => ({
+          id: row.id,
+          recipient: row.recipient,
+          subject: row.subject,
+          kind: row.kind,
+          status: row.status,
+          attempts: row.attempts,
+          lastError: row.last_error,
+          createdAt: row.created_at,
+          sentAt: row.sent_at,
+        }),
+      );
     },
   },
 

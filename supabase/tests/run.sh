@@ -14,3 +14,8 @@ for f in supabase/migrations/*.sql; do
 done
 
 $PSQL -d "$DB" -f supabase/tests/rls.sql 2>&1 | grep -E "^(NOTICE|ERROR|psql:)|ALL RLS" | sed 's/^NOTICE:  //'
+
+# Jobblogiken: stängning av förfallna konton och utkorgen. Körs i båda
+# miljöerna av samma skäl som RLS-sviten - en skillnad ska synas här,
+# inte i produktion.
+$PSQL -d "$DB" -f supabase/tests/billingJob.sql 2>&1 | grep -E "^(NOTICE|ERROR|psql:)|ALL BILLING" | sed 's/^NOTICE:  //'

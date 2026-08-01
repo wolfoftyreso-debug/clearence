@@ -119,6 +119,37 @@ export type Database = {
         }
         Relationships: []
       }
+      outbound_emails: {
+        Row: {
+          attempts: number
+          body_html: string
+          body_text: string
+          created_at: string
+          id: string
+          kind: string
+          last_error: string | null
+          recipient: string
+          related_invoice_id: string | null
+          sent_at: string | null
+          status: Database["public"]["Enums"]["outbound_email_status"]
+          subject: string
+        }
+        Insert: {
+          body_html: string
+          body_text: string
+          kind: string
+          recipient: string
+          related_invoice_id?: string | null
+          subject: string
+        }
+        // Skrivs av arbetaren via mark_email_sent / mark_email_failed.
+        Update: {
+          last_error?: string | null
+          sent_at?: string | null
+          status?: Database["public"]["Enums"]["outbound_email_status"]
+        }
+        Relationships: []
+      }
       contact_messages: {
         Row: {
           company: string | null
@@ -704,11 +735,16 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: Database["public"]["Enums"]["user_role"]
       }
+      close_overdue_accounts: {
+        Args: { p_now?: string }
+        Returns: number
+      }
     }
     Enums: {
       application_status: "pending" | "needs_info" | "approved" | "rejected"
       contact_status: "new" | "in_progress" | "answered" | "closed"
       customer_invoice_status: "issued" | "paid" | "cancelled"
+      outbound_email_status: "pending" | "sent" | "failed"
       user_role: "company" | "advisor"
       contact_topic:
         | "question"
