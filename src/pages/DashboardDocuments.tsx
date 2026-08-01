@@ -1,7 +1,8 @@
-import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { DashboardShell } from "@/components/dashboard/DashboardShell";
 import { CaseDocuments } from "@/components/documents/CaseDocuments";
+import { TaxAccountImport } from "@/components/documents/TaxAccountImport";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { data } from "@/data";
@@ -16,11 +17,34 @@ import { FolderOpen, Loader2 } from "lucide-react";
  */
 const DashboardDocuments = () => {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
 
   const { data: latestCase, isLoading } = useQuery({
     queryKey: ["latest-case", user?.id],
     queryFn: () => data.cases.getLatest(),
     enabled: !!user,
+  });
+
+  // Kommande skattedebiteringar in som betalningar. Kategorin är alltid
+  // skatt - det är hela poängen med källan - och statusen kritisk, eftersom
+  // en obetald skattedebitering är fristen som styr företrädaransvaret.
+  const importTaxCharges = useMutation({
+    mutationFn: (charges: { date: string; label: string; amount: number }[]) =>
+      data.payments.createMany(
+        charges.map((c) => ({
+          userId: user!.id,
+          caseId: latestCase!.id,
+          label: c.label,
+          amount: c.amount,
+          category: "tax" as const,
+          status: "critical" as const,
+          dueDate: c.date,
+          recurring: false,
+        })),
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["payments", latestCase?.id] });
+    },
   });
 
   return (
@@ -54,6 +78,19 @@ const DashboardDocuments = () => {
             </p>
           </div>
           <CaseDocuments caseId={latestCase.id} userId={user?.id ?? ""} />
+
+          <TaxAccountImport
+            onImport={(selection) => {
+              if (selection.charges.length > 0) {
+                importTaxCharges.mutate(selection.charges);
+              }
+            }}
+          />
+          {importTaxCharges.isError && (
+            <p className="text-sm text-destructive" role="alert">
+              Kunde inte lägga in betalningarna. Försök igen.
+            </p>
+          )}
         </div>
       )}
     </DashboardShell>

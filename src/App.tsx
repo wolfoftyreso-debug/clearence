@@ -31,6 +31,7 @@ const AdminApplications = lazy(() => import("./pages/AdminApplications"));
 const DashboardDocuments = lazy(() => import("./pages/DashboardDocuments"));
 const DashboardMessages = lazy(() => import("./pages/DashboardMessages"));
 const DashboardSettings = lazy(() => import("./pages/DashboardSettings"));
+const CreditDossierPage = lazy(() => import("./pages/CreditDossierPage"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 const queryClient = new QueryClient();
@@ -89,6 +90,14 @@ const App = () => (
                   element={
                     <ProtectedRoute>
                       <DashboardMessages />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/dashboard/kreditunderlag"
+                  element={
+                    <ProtectedRoute>
+                      <CreditDossierPage />
                     </ProtectedRoute>
                   }
                 />

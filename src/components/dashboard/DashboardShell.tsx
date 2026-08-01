@@ -8,6 +8,7 @@ import { billingMessage, billingState } from "@/lib/billing";
 import { paymentAccounts } from "@/lib/company";
 import type { UserRole } from "@/data/types";
 import {
+  Banknote,
   Briefcase,
   FileText,
   Inbox,
@@ -49,6 +50,7 @@ const COMPANY_NAV: NavItem[] = [
   { icon: FileText, label: "Dokument", href: "/dashboard/dokument" },
   { icon: MessageSquare, label: "Meddelanden", href: "/dashboard/meddelanden" },
   { icon: Users, label: "Rådgivare", href: "/marketplace" },
+  { icon: Banknote, label: "Kreditunderlag", href: "/dashboard/kreditunderlag" },
   { icon: Settings, label: "Inställningar", href: "/dashboard/installningar" },
 ];
 

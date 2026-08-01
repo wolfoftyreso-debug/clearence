@@ -21,7 +21,7 @@ const ROUTES = [
   "/", "/wizard", "/kbr", "/likviditetsplan", "/marketplace",
   "/for-radgivare", "/login", "/dashboard", "/dashboard/liquidity",
   "/mina-forfragningar", "/om", "/kontakt", "/admin/inkorg", "/admin/kunder", "/admin/ansokningar",
-  "/dashboard/dokument", "/dashboard/meddelanden", "/dashboard/installningar",
+  "/dashboard/dokument", "/dashboard/meddelanden", "/dashboard/installningar", "/dashboard/kreditunderlag",
 ];
 
 /** A couple of pixels of rounding is not a layout defect. */

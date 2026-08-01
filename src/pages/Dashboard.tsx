@@ -5,7 +5,9 @@ import { useQuery } from "@tanstack/react-query";
 import { CaseDocuments } from "@/components/documents/CaseDocuments";
 import { ReportButton } from "@/components/reports/ReportButton";
 import { buildCrisisReport } from "@/lib/reports/builders";
-import { analyseCrisis } from "@/lib/crisisAnalysis";
+import { analyseCrisis, type AnalysisInput } from "@/lib/crisisAnalysis";
+import { buildCaseBundle, timelineToIcs } from "@/lib/integrations/caseBundle";
+import { downloadTextFile } from "@/lib/integrations/download";
 import { InsightList } from "@/components/financial/InsightList";
 import { analyseSnapshot } from "@/lib/financial/insights";
 import { format } from "date-fns";
@@ -18,6 +20,8 @@ import {
   CheckCircle2,
   AlertTriangle,
   Calendar,
+  CalendarClock,
+  FolderDown,
   Plus,
   Loader2,
 } from "lucide-react";
@@ -97,6 +101,65 @@ const Dashboard = () => {
   }, [latestCase]);
 
   const totalDebt = latestCase ? parseAmount(latestCase.totalDebt) : 0;
+
+  // En enda analysinput för rapport, aktexport och fristkalender. Tre
+  // ställen som räknar var för sig är tre ställen som kan säga olika saker
+  // om samma ärende.
+  const analysisInput = (record: CaseRecord): AnalysisInput => ({
+    canPaySalary: record.canPaySalary,
+    canPayTax: record.canPayTax,
+    canPayRent: record.canPayRent,
+    canPaySuppliers: record.canPaySuppliers,
+    salaryAmount: parseAmount(record.salaryAmount),
+    salaryDay: record.salaryDay ?? 25,
+    taxAmount: parseAmount(record.taxAmount),
+    taxDay: record.taxDay ?? 12,
+    rentAmount: parseAmount(record.rentAmount),
+    rentDay: record.rentDay ?? 1,
+    totalDebt: parseAmount(record.totalDebt),
+    quickLiquidationValue: parseAmount(record.quickLiquidationValue),
+    employees: record.employees ?? "",
+  });
+
+  const slugName = (record: CaseRecord): string =>
+    (record.companyName ?? record.orgNumber).toLowerCase().replace(/[^a-z0-9åäö]+/gi, "-");
+
+  const exportIcs = async (record: CaseRecord) => {
+    const timeline = analyseCrisis(analysisInput(record)).timeline;
+    downloadTextFile(
+      timelineToIcs(timeline, {
+        companyName: record.companyName,
+        orgNumber: record.orgNumber,
+        generatedAt: new Date().toISOString(),
+      }),
+      `frister-${slugName(record)}.ics`,
+      "text/calendar;charset=utf-8",
+    );
+  };
+
+  const exportBundle = async (record: CaseRecord) => {
+    // Hämtas vid klicket, inte vid sidladdning: akten ska spegla ärendet i
+    // exportögonblicket, och översikten ska inte betala för frågorna i förväg.
+    const [payments, documents, messages] = await Promise.all([
+      data.payments.listByCase(record.id),
+      data.documents.listByCase(record.id),
+      data.messages.listByCase(record.id),
+    ]);
+    const bundle = buildCaseBundle({
+      caseRecord: record,
+      timeline: analyseCrisis(analysisInput(record)).timeline,
+      payments,
+      documents,
+      messages,
+      ownerUserId: user?.id ?? null,
+      exportedAt: new Date().toISOString(),
+    });
+    downloadTextFile(
+      JSON.stringify(bundle, null, 2),
+      `akt-${slugName(record)}.json`,
+      "application/json;charset=utf-8",
+    );
+  };
   const liquidationValue = latestCase ? parseAmount(latestCase.quickLiquidationValue) : 0;
   const coverageRatio = totalDebt > 0 ? Math.round((liquidationValue / totalDebt) * 100) : null;
 
@@ -306,25 +369,11 @@ const Dashboard = () => {
                   Hela ärendet i ett dokument: bedömningen, tidslinjen, riskerna med
                   lagrum och nästa steg. Ta med det till mötet med rådgivaren.
                 </p>
+                <div className="mt-4 flex flex-wrap gap-3">
                 <ReportButton
-                  className="mt-4"
                   build={() =>
                     buildCrisisReport({
-                      analysis: analyseCrisis({
-                        canPaySalary: latestCase.canPaySalary,
-                        canPayTax: latestCase.canPayTax,
-                        canPayRent: latestCase.canPayRent,
-                        canPaySuppliers: latestCase.canPaySuppliers,
-                        salaryAmount: parseAmount(latestCase.salaryAmount),
-                        salaryDay: latestCase.salaryDay ?? 25,
-                        taxAmount: parseAmount(latestCase.taxAmount),
-                        taxDay: latestCase.taxDay ?? 12,
-                        rentAmount: parseAmount(latestCase.rentAmount),
-                        rentDay: latestCase.rentDay ?? 1,
-                        totalDebt,
-                        quickLiquidationValue: liquidationValue,
-                        employees: latestCase.employees ?? "",
-                      }),
+                      analysis: analyseCrisis(analysisInput(latestCase)),
                       companyName: latestCase.companyName,
                       orgNumber: latestCase.orgNumber,
                       reference: latestCase.id,
@@ -335,6 +384,19 @@ const Dashboard = () => {
                     })
                   }
                 />
+                  {/* Fristkalendern: ärendets lagstadgade datum till Outlook,
+                      Google eller byråns system. Aktexporten: hela ärendet
+                      som strukturerad akt - även vägen UT ur plattformen,
+                      utan att fråga någon om lov. */}
+                  <Button variant="outline" onClick={() => void exportIcs(latestCase)}>
+                    <CalendarClock className="h-4 w-4" aria-hidden="true" />
+                    Fristkalender (.ics)
+                  </Button>
+                  <Button variant="outline" onClick={() => void exportBundle(latestCase)}>
+                    <FolderDown className="h-4 w-4" aria-hidden="true" />
+                    Exportera akt
+                  </Button>
+                </div>
               </div>
 
               {/* Documents */}

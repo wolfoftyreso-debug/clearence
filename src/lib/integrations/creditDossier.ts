@@ -225,3 +225,66 @@ export const buildCreditDossier = (input: CreditDossierInput): CreditDossierResu
     },
   };
 };
+
+/* -------------------------------------------------------------------------- */
+/* Likviditet ur ärendets betalningar                                         */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Härleder underlagets likviditetssiffror ur ärendets registrerade
+ * betalningar och fakturor, plus den kassa användaren anger.
+ *
+ * Ren funktion med "idag" som argument, som allt annat datumberoende.
+ * Enkel modell med flit: väntande utflöden och inflöden inom horisonten,
+ * dag för dag, tills saldot går under noll. Underlaget redovisar siffrorna
+ * som prognos ur registrerad data - inte som sanning.
+ */
+export const dossierLiquidityFromPayments = (input: {
+  openingBalance: number;
+  /** Väntande utbetalningar: belopp och förfallodatum (ISO). */
+  outflows: { amount: number; dueDate: string }[];
+  /** Väntande inbetalningar (kundfakturor): belopp och förfallodatum. */
+  inflows: { amount: number; dueDate: string }[];
+  today: Date;
+  horizonDays?: number;
+}): NonNullable<CreditDossierInput["liquidity"]> => {
+  const horizonDays = input.horizonDays ?? 90;
+  const todayIso = input.today.toISOString().slice(0, 10);
+  const horizonEnd = new Date(input.today.getTime() + horizonDays * 24 * 60 * 60 * 1000)
+    .toISOString()
+    .slice(0, 10);
+
+  const within = <T extends { dueDate: string }>(rows: T[]) =>
+    rows.filter((r) => r.dueDate >= todayIso && r.dueDate <= horizonEnd);
+
+  const outflows = within(input.outflows);
+  const inflows = within(input.inflows);
+
+  // Dag-för-dag-saldo. Första dagen saldot är negativt är svaret på
+  // finansiärens enda fråga.
+  const byDate = new Map<string, number>();
+  for (const o of outflows) byDate.set(o.dueDate, (byDate.get(o.dueDate) ?? 0) - o.amount);
+  for (const i of inflows) byDate.set(i.dueDate, (byDate.get(i.dueDate) ?? 0) + i.amount);
+
+  let balance = input.openingBalance;
+  let daysUntilNegative: number | null = null;
+  const dates = [...byDate.keys()].sort();
+  for (const date of dates) {
+    balance += byDate.get(date)!;
+    if (balance < 0 && daysUntilNegative === null) {
+      daysUntilNegative = Math.max(
+        0,
+        Math.round((new Date(date).getTime() - input.today.getTime()) / (24 * 60 * 60 * 1000)),
+      );
+    }
+  }
+
+  const monthsInHorizon = horizonDays / 30;
+  return {
+    openingBalance: input.openingBalance,
+    daysUntilNegative,
+    horizonDays,
+    monthlyIn: Math.round(inflows.reduce((s, r) => s + r.amount, 0) / monthsInHorizon),
+    monthlyOut: Math.round(outflows.reduce((s, r) => s + r.amount, 0) / monthsInHorizon),
+  };
+};

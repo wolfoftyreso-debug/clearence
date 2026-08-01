@@ -9,7 +9,7 @@
 
 import { parseSwedishAmount, parseSwedishDate, parseTaxAccount } from "../src/lib/integrations/skattekonto";
 import { buildCaseBundle, timelineToIcs } from "../src/lib/integrations/caseBundle";
-import { buildCreditDossier } from "../src/lib/integrations/creditDossier";
+import { buildCreditDossier, dossierLiquidityFromPayments } from "../src/lib/integrations/creditDossier";
 import { INTEGRATION_REGISTRY, availableNow, blocked } from "../src/lib/integrations/registry";
 import type { CaseRecord } from "../src/data/types";
 
@@ -239,6 +239,37 @@ check(
     return !r.ok && r.missing.some((m) => m.includes("ändamål"));
   })(),
   true,
+);
+
+/* -------------------------------------------------------------------------- */
+/* Likviditet ur ärendets betalningar                                         */
+/* -------------------------------------------------------------------------- */
+
+const liquidity = dossierLiquidityFromPayments({
+  openingBalance: 100000,
+  outflows: [
+    { amount: 60000, dueDate: "2026-08-10" },
+    { amount: 80000, dueDate: "2026-08-25" },
+    { amount: 50000, dueDate: "2026-12-24" }, // utanför horisonten
+  ],
+  inflows: [{ amount: 30000, dueDate: "2026-08-15" }],
+  today: new Date("2026-08-01T12:00:00Z"),
+});
+
+// 10 aug: 100000-60000=40000. 15 aug: +30000=70000. 25 aug: -80000=-10000.
+check("dag kassan tar slut räknas dag för dag", liquidity.daysUntilNegative, 24);
+check("utflöde utanför horisonten räknas inte", liquidity.monthlyOut, Math.round(140000 / 3));
+check("inflöden per månad", liquidity.monthlyIn, 10000);
+
+check(
+  "kassa som håller ger null, inte noll",
+  dossierLiquidityFromPayments({
+    openingBalance: 1000000,
+    outflows: [{ amount: 60000, dueDate: "2026-08-10" }],
+    inflows: [],
+    today: new Date("2026-08-01T12:00:00Z"),
+  }).daysUntilNegative,
+  null,
 );
 
 /* -------------------------------------------------------------------------- */
