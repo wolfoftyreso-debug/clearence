@@ -826,6 +826,58 @@ begin
   end;
 end $$;
 
+/* ========================================================================== */
+/* Utkorgen: omskick är driftens knapp, och bara för misslyckade rader        */
+/* ========================================================================== */
+
+reset role;
+-- Ägaren 1111 blir driftadministratör; en misslyckad och en skickad rad.
+insert into public.platform_admins (user_id) values ('11111111-1111-1111-1111-111111111111');
+insert into public.outbound_emails (id, recipient, subject, body_text, body_html, kind, status, attempts, last_error)
+values ('e1111111-0000-0000-0000-000000000001', 'studs@test.se', 'Faktura', 'x', '<p>x</p>', 'invoice', 'failed', 5, 'Mailbox unavailable');
+insert into public.outbound_emails (id, recipient, subject, body_text, body_html, kind, status, attempts, sent_at)
+values ('e2222222-0000-0000-0000-000000000002', 'ok@test.se', 'Kvitto', 'x', '<p>x</p>', 'receipt', 'sent', 1, now());
+
+set local role authenticated;
+select pg_temp.as_user('11111111-1111-1111-1111-111111111111');
+do $$
+declare v_row record;
+begin
+  perform public.retry_outbound_email('e1111111-0000-0000-0000-000000000001');
+  select status, attempts, last_error into v_row
+  from public.outbound_emails where id = 'e1111111-0000-0000-0000-000000000001';
+  if v_row.status <> 'pending' or v_row.attempts <> 0 then
+    raise exception 'FAIL  retry gav status % med % försök', v_row.status, v_row.attempts;
+  end if;
+  if v_row.last_error is null then
+    raise exception 'FAIL  retry raderade felhistoriken';
+  end if;
+  raise notice 'ok    a failed email can be requeued; the error stays visible';
+end $$;
+
+do $$
+begin
+  begin
+    perform public.retry_outbound_email('e2222222-0000-0000-0000-000000000002');
+    raise exception 'FAIL  a sent email could be requeued';
+  exception when others then
+    if sqlerrm like 'FAIL%' then raise; end if;
+    raise notice 'ok    a sent email can never be requeued';
+  end;
+end $$;
+
+select pg_temp.as_user('22222222-2222-2222-2222-222222222222');
+do $$
+begin
+  begin
+    perform public.retry_outbound_email('e1111111-0000-0000-0000-000000000001');
+    raise exception 'FAIL  a non-admin could requeue outbox rows';
+  exception when others then
+    if sqlerrm like 'FAIL%' then raise; end if;
+    raise notice 'ok    requeueing requires drift privileges';
+  end;
+end $$;
+
 reset role;
 select 'ALL RLS TESTS PASSED' as result;
 

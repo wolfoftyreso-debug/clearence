@@ -3,6 +3,7 @@ import type {
   AccountBillingRecord,
   ApplicationForReview,
   ApplicationRecord,
+  AuditEventRecord,
   AuthUser,
   CaseInvitationRecord,
   CaseMemberRecord,
@@ -301,6 +302,8 @@ export interface BillingPort {
    * osynlig tills kunden hör av sig - eller inte hör av sig.
    */
   listOutbox(): Promise<OutboundEmailRecord[]>;
+  /** Köar om ett misslyckat utskick. Endast drift; skickade rader rörs aldrig. */
+  retryEmail(id: string): Promise<void>;
 }
 
 export interface OpsPort {
@@ -321,6 +324,14 @@ export interface OpsPort {
    */
   listProfessionalTerms(): Promise<ProfessionalTerms[]>;
   setReferralFee(professionalId: string, feeSek: number | null): Promise<void>;
+}
+
+export interface AuditPort {
+  /**
+   * Händelseloggen, nyast först. Append-only i databasen - det här är
+   * läsfönstret mot ärendets svarta låda, och exporten av den.
+   */
+  listByCase(caseId: string): Promise<AuditEventRecord[]>;
 }
 
 export interface MembersPort {
@@ -349,6 +360,7 @@ export interface DataPort {
   messages: MessagesPort;
   tasks: TasksPort;
   members: MembersPort;
+  audit: AuditPort;
   billing: BillingPort;
   ops: OpsPort;
   cases: CasesPort;

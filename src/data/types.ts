@@ -482,3 +482,15 @@ export interface ProfessionalTerms {
   referralFeeSek: number | null;
   uninvoicedBillable: number;
 }
+
+/** En rad i händelseloggen - ärendets svarta låda. Bara läsning: loggen är append-only i databasen. */
+export interface AuditEventRecord {
+  id: number;
+  caseId: string | null;
+  actorUserId: string | null;
+  actorRole: CaseRole | null;
+  action: string;
+  objectType: string;
+  objectId: string | null;
+  occurredAt: string;
+}

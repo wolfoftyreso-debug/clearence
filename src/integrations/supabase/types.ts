@@ -35,6 +35,23 @@ export type Database = {
         }
         Relationships: []
       }
+      audit_events: {
+        Row: {
+          action: string
+          actor_role: Database["public"]["Enums"]["case_role"] | null
+          actor_user_id: string | null
+          after: Json | null
+          before: Json | null
+          case_id: string | null
+          id: number
+          object_id: string | null
+          object_type: string
+          occurred_at: string
+        }
+        Insert: never
+        Update: never
+        Relationships: []
+      }
       conversations: {
         Row: {
           case_id: string
@@ -923,6 +940,10 @@ export type Database = {
           created_at: string
           revoked_at: string | null
         }[]
+      }
+      retry_outbound_email: {
+        Args: { p_id: string }
+        Returns: undefined
       }
       set_referral_fee: {
         Args: { p_professional_id: string; p_fee_sek: number | null }

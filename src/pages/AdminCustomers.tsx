@@ -246,9 +246,17 @@ const OUTBOX_STATUS: Record<OutboundEmailRecord["status"], { label: string; tone
  * för en faktura är värre.
  */
 const OutboxPanel = () => {
+  const queryClient = useQueryClient();
   const { data: outbox, isLoading } = useQuery({
     queryKey: ["outbox"],
     queryFn: () => data.billing.listOutbox(),
+  });
+
+  // Omskicket nollställer räknaren men behåller felet i historiken tills
+  // nästa försök - beslutet "en människa tittar först" ligger i databasen.
+  const retry = useMutation({
+    mutationFn: (id: string) => data.billing.retryEmail(id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["outbox"] }),
   });
 
   const failedCount = (outbox ?? []).filter((m) => m.status === "failed").length;
@@ -291,6 +299,18 @@ const OutboxPanel = () => {
                 {OUTBOX_STATUS[m.status].label}
                 {m.attempts > 1 && ` (försök ${m.attempts})`}
               </span>
+              {m.status === "failed" && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 px-2 text-xs"
+                  disabled={retry.isPending}
+                  onClick={() => retry.mutate(m.id)}
+                >
+                  Skicka igen
+                </Button>
+              )}
             </li>
           ))}
         </ul>

@@ -18,6 +18,7 @@
 import type { DataPort } from "../ports";
 import type {
   AccountBillingRecord,
+  AuditEventRecord,
   ApplicationForReview,
   AuthUser,
   CaseInvitationRecord,
@@ -42,7 +43,7 @@ import type { FinancialSnapshot, OpenItem, Voucher } from "@/lib/financial/model
 import { nextInvoiceNumber } from "@/lib/invoice";
 import { accountClosedEmail, caseInvitationEmail, invoiceEmail, receiptEmail } from "@/lib/email/messages";
 import { COMPANY } from "@/lib/company";
-import { CASE_ROLE_DESCRIPTIONS, CASE_ROLE_LABELS } from "@/lib/caseRoles";
+import { CASE_ROLE_DESCRIPTIONS, CASE_ROLE_LABELS, type CaseRole } from "@/lib/caseRoles";
 
 const STORAGE_KEY = "clearance-demo-state";
 
@@ -871,6 +872,13 @@ export const demoAdapter: DataPort = {
     async listOutbox() {
       return [...state.outbox];
     },
+    async retryEmail(id) {
+      const row = state.outbox.find((m) => m.id === id);
+      if (!row || row.status !== "failed") throw new Error("Endast misslyckade utskick kan skickas om.");
+      row.status = "pending";
+      row.attempts = 0;
+      save();
+    },
   },
 
   ops: {
@@ -903,6 +911,36 @@ export const demoAdapter: DataPort = {
     async setReferralFee(professionalId, feeSek) {
       if (feeSek === null) demoFees.delete(professionalId);
       else demoFees.set(professionalId, feeSek);
+    },
+  },
+
+  audit: {
+    // Demon har ingen databas med triggrar; loggen härleds ur det som finns
+    // i sessionen. Poängen som visas är densamma: vem gjorde vad, när.
+    async listByCase(caseId) {
+      let seq = 1;
+      const events: AuditEventRecord[] = [];
+      const me = state.user?.id ?? null;
+      const push = (action: string, objectType: string, objectId: string | null, at: string, role: CaseRole | null = "owner") =>
+        events.push({ id: seq++, caseId, actorUserId: me, actorRole: role, action, objectType, objectId, occurredAt: at });
+      const c = state.cases.find((x) => x.id === caseId);
+      if (c) push("insert", "cases", c.id, c.createdAt);
+      for (const t of state.caseTasks.filter((t) => t.caseId === caseId)) {
+        push("insert", "case_tasks", t.id, t.createdAt);
+        if (t.doneAt) push("update", "case_tasks", t.id, t.doneAt);
+      }
+      for (const d of state.documents.filter((d) => d.caseId === caseId))
+        push("insert", "case_documents", d.id, d.createdAt);
+      for (const i of state.caseInvitations.filter((i) => i.caseId === caseId)) {
+        push("insert", "case_invitations", i.id, i.createdAt);
+        if (i.acceptedAt) push("update", "case_invitations", i.id, i.acceptedAt);
+        if (i.revokedAt) push("update", "case_invitations", i.id, i.revokedAt);
+      }
+      for (const m of state.caseMembers.filter((m) => m.caseId === caseId))
+        push("insert", "case_members", m.id, m.createdAt, m.role);
+      for (const conv of state.conversations.filter((x) => x.caseId === caseId))
+        push("insert", "conversations", conv.id, conv.createdAt);
+      return events.sort((a, b) => b.occurredAt.localeCompare(a.occurredAt));
     },
   },
 

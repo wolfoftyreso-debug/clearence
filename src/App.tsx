@@ -29,6 +29,7 @@ const AdminInbox = lazy(() => import("./pages/AdminInbox"));
 const AdminOverview = lazy(() => import("./pages/AdminOverview"));
 const DashboardParticipants = lazy(() => import("./pages/DashboardParticipants"));
 const InvitationAccept = lazy(() => import("./pages/InvitationAccept"));
+const DashboardAudit = lazy(() => import("./pages/DashboardAudit"));
 const AdminCustomers = lazy(() => import("./pages/AdminCustomers"));
 const AdminApplications = lazy(() => import("./pages/AdminApplications"));
 const DashboardDocuments = lazy(() => import("./pages/DashboardDocuments"));
@@ -117,6 +118,14 @@ const App = () => (
                   element={
                     <ProtectedRoute>
                       <DashboardParticipants />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/dashboard/handelser"
+                  element={
+                    <ProtectedRoute>
+                      <DashboardAudit />
                     </ProtectedRoute>
                   }
                 />

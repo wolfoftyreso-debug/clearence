@@ -13,6 +13,7 @@ import {
   Briefcase,
   FileText,
   Gauge,
+  History,
   Inbox,
   LayoutDashboard,
   Lock,
@@ -55,6 +56,7 @@ const COMPANY_NAV: NavItem[] = [
   { icon: UserPlus, label: "Deltagare", href: "/dashboard/deltagare" },
   { icon: Users, label: "Rådgivare", href: "/marketplace" },
   { icon: Banknote, label: "Kreditunderlag", href: "/dashboard/kreditunderlag" },
+  { icon: History, label: "Händelselogg", href: "/dashboard/handelser" },
   { icon: Settings, label: "Inställningar", href: "/dashboard/installningar" },
 ];
 

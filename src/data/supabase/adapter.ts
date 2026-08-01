@@ -526,6 +526,28 @@ export const supabaseAdapter: DataPort = {
     },
   },
 
+  audit: {
+    async listByCase(caseId) {
+      const { data, error } = await supabase
+        .from("audit_events")
+        .select("id, case_id, actor_user_id, actor_role, action, object_type, object_id, occurred_at")
+        .eq("case_id", caseId)
+        .order("occurred_at", { ascending: false })
+        .limit(500);
+      if (error) throw error;
+      return (data ?? []).map((row) => ({
+        id: row.id,
+        caseId: row.case_id,
+        actorUserId: row.actor_user_id,
+        actorRole: row.actor_role,
+        action: row.action,
+        objectType: row.object_type,
+        objectId: row.object_id,
+        occurredAt: row.occurred_at,
+      }));
+    },
+  },
+
   members: {
     // Medlemslistan går genom list_case_members: profiltabellen låter var
     // och en läsa bara sin egen rad, men i ett ärende man tillhör måste man
@@ -956,6 +978,10 @@ export const supabaseAdapter: DataPort = {
           sentAt: row.sent_at,
         }),
       );
+    },
+    async retryEmail(id) {
+      const { error } = await supabase.rpc("retry_outbound_email", { p_id: id });
+      if (error) throw error;
     },
   },
 
