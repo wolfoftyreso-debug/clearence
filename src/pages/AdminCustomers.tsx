@@ -59,6 +59,9 @@ const CustomerRow = ({ customer }: { customer: CustomerOverview }) => {
     queryClient.invalidateQueries({ queryKey: ["customers"] });
     queryClient.invalidateQueries({ queryKey: ["my-invoices"] });
     queryClient.invalidateQueries({ queryKey: ["my-billing"] });
+    // Fakturering och stängning köar mejl - utan den här raden ser panelen
+    // tom ut tills man laddar om sidan, och drift tror att inget gick ut.
+    queryClient.invalidateQueries({ queryKey: ["outbox"] });
   };
 
   const issue = useMutation({

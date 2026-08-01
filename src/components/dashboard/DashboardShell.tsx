@@ -5,12 +5,14 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { data } from "@/data";
 import { billingMessage, billingState } from "@/lib/billing";
+import { paymentAccounts } from "@/lib/company";
 import type { UserRole } from "@/data/types";
 import {
   Briefcase,
   FileText,
   Inbox,
   LayoutDashboard,
+  Lock,
   LogOut,
   type LucideIcon,
   Menu,
@@ -78,7 +80,7 @@ const BillingNotice = () => {
   if (!billing) return null;
   const state = billingState(billing, new Date());
   const message = billingMessage(state);
-  if (!message) return null;
+  if (!message || state.isLocked) return null;
 
   const tone =
     message.tone === "critical"
@@ -97,6 +99,70 @@ const BillingNotice = () => {
         </Button>
       </div>
     </div>
+  );
+};
+
+/**
+ * Stängningsvyn. Ersätter sidans innehåll när kontot är stängt.
+ *
+ * Det här är själva mekanismen bakom den beslutade modellen - fram tills den
+ * fanns var frysningen en text, inte en spärr. Tre saker vyn måste göra:
+ *
+ *  1. Säga exakt vad, vart och med vilken referens man betalar. Den som
+ *     vill låsa upp ska inte behöva leta.
+ *  2. Lova att ingenting är raderat, med samma ord som mejlet och
+ *     inställningssidan. Olika formuleringar om samma sak läses som
+ *     motstridiga besked.
+ *  3. Lämna fakturorna åtkomliga. Att låsa inne själva fakturan man ska
+ *     betala vore ett moment 22 - därför släpps inställningssidan igenom.
+ *
+ * Spärren är ett gränssnittsbeslut, inte en säkerhetsgräns: datan skyddas av
+ * radskyddet i databasen oavsett. Men betalmodellen upprätthålls här.
+ */
+const LockedAccountView = ({ signOut }: { signOut: () => void }) => {
+  const accounts = paymentAccounts();
+
+  return (
+    <main className="mx-auto max-w-xl p-4 py-16 lg:p-8">
+      <div className="rounded-md border border-destructive/40 bg-card p-8">
+        <Lock className="h-8 w-8 text-destructive" aria-hidden="true" />
+        <h1 className="mt-4 font-display text-2xl text-foreground">Kontot är stängt</h1>
+        <p className="mt-3 leading-relaxed text-muted-foreground">
+          Vi har inte fått in betalningen. Ditt material finns kvar och blir
+          tillgängligt igen så snart betalningen registreras – vi raderar
+          ingenting.
+        </p>
+
+        {accounts.length > 0 && (
+          <div className="mt-6 rounded-md bg-secondary/50 p-4">
+            <p className="text-sm font-semibold text-foreground">Så öppnar du kontot igen</p>
+            <ul className="mt-2 space-y-1 text-sm text-muted-foreground">
+              {accounts.map((a) => (
+                <li key={a.label}>
+                  {a.label}:{" "}
+                  <span className="font-medium tabular-nums text-foreground">{a.number}</span>
+                </li>
+              ))}
+            </ul>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Ange fakturanumret som referens. Fakturan hittar du nedan.
+            </p>
+          </div>
+        )}
+
+        <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+          <Button variant="accent" asChild>
+            <Link to="/dashboard/installningar">Se din faktura</Link>
+          </Button>
+          <Button variant="outline" asChild>
+            <Link to="/kontakt">Stämmer inte det här?</Link>
+          </Button>
+          <Button variant="ghost" onClick={signOut}>
+            Logga ut
+          </Button>
+        </div>
+      </div>
+    </main>
   );
 };
 
@@ -125,6 +191,23 @@ export const DashboardShell = ({ children, title, actions }: DashboardShellProps
     queryFn: () => data.contact.amIAdmin(),
     retry: false,
   });
+
+  const { data: billing } = useQuery({
+    queryKey: ["my-billing"],
+    queryFn: () => data.billing.getMine(),
+    retry: false,
+  });
+
+  // Låst konto: innehållet byts mot stängningsvyn. Två undantag:
+  //  - Inställningar, där fakturan man ska betala ligger. Att låsa inne den
+  //    vore ett moment 22.
+  //  - Driftvyerna (/admin/*): det är där betalningen som låser upp
+  //    registreras, så de får aldrig ligga bakom låset.
+  const locked =
+    billing !== undefined &&
+    billingState(billing, new Date()).isLocked &&
+    pathname !== "/dashboard/installningar" &&
+    !pathname.startsWith("/admin");
 
   const role: UserRole = profile?.role ?? "company";
   const items = navForRole(role);
@@ -257,7 +340,11 @@ export const DashboardShell = ({ children, title, actions }: DashboardShellProps
           {actions}
         </header>
 
-        <main className="p-4 lg:p-8">{children}</main>
+        {locked ? (
+          <LockedAccountView signOut={() => void handleSignOut()} />
+        ) : (
+          <main className="p-4 lg:p-8">{children}</main>
+        )}
       </div>
     </div>
   );

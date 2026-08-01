@@ -64,13 +64,16 @@ S3, privat bucket, SSE-KMS. Nyckelprefix är ärendets id, som idag.
 
 SES. Det är AWS, alltså innanför gränsen. Alternativet, egen SMTP-server, kostar leveransbarhet utan att köpa något i gengäld: e-post till borgenärer måste komma fram, och en egen avsändare utan uppvärmt rykte hamnar i skräpposten.
 
-**Byggt:** mejlen går genom en utkorg (`public.outbound_emails`), inte genom direktanrop. Raden skapas i samma transaktion som fakturan, så det kan inte finnas ett mejl om en faktura som inte finns, eller en faktura vars mejl tyst försvann. Arbetaren är `db/email-worker.mjs`:
+**Byggt:** mejlen går genom en utkorg (`public.outbound_emails`), inte genom direktanrop. Raden skapas i samma transaktion som fakturan, så det kan inte finnas ett mejl om en faktura som inte finns, eller en faktura vars mejl tyst försvann. Arbetaren:
 
 ```
-# crontab i driftmiljön
-*/5 * * * *  node db/email-worker.mjs           # skicka det som väntar
-15 3 * * *   node db/email-worker.mjs --close   # stäng förfallna konton
+# crontab i driftmiljön (bygg först: npm run build:worker)
+*/5 * * * *  node db/dist/email-worker.cjs            # skicka det som väntar
+0 * * * *    node db/dist/email-worker.cjs --remind   # köa påminnelser
+15 3 * * *   node db/dist/email-worker.cjs --close    # stäng + köa besked
 ```
+
+Arbetaren är TypeScript (`db/worker/email-worker.ts`) och bundlas med `npm run build:worker` — just för att innehållet ska komma från `src/lib/email/messages.ts`, samma byggare som testas i `tests/email.ts`. Påminnelsernas dubblettskydd bor i databasen (`reminder_candidates()`: högst en per mottagare och svensk kalenderdag), så `--remind` går att köra hur ofta som helst. `--close` returnerar vilka som stängdes och köar stängningsbeskedet i samma körning — en stängning utan besked är exakt den överraskning mejltexterna skrevs för att förhindra.
 
 `claim_outbound_emails()` låser med `for update skip locked`, så två arbetare skickar aldrig samma rad. Efter fem misslyckade försök blir raden `failed` och syns i driftvyn under Kunder - den plockas aldrig om automatiskt, för en adress som studsar studsar även försök sextio.
 

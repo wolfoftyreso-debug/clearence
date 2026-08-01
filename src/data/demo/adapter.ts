@@ -35,7 +35,7 @@ import type {
 } from "../types";
 import type { FinancialSnapshot, OpenItem, Voucher } from "@/lib/financial/model";
 import { nextInvoiceNumber } from "@/lib/invoice";
-import { invoiceEmail, receiptEmail } from "@/lib/email/messages";
+import { accountClosedEmail, invoiceEmail, receiptEmail } from "@/lib/email/messages";
 import { COMPANY } from "@/lib/company";
 
 const STORAGE_KEY = "clearance-demo-state";
@@ -677,6 +677,17 @@ export const demoAdapter: DataPort = {
     async closeAccount() {
       if (state.billing) {
         state.billing.closedAt = now();
+        if (state.user?.email) {
+          const open = state.customerInvoices.find((i) => i.status === "issued");
+          queue(
+            accountClosedEmail({
+              recipient: state.user.email,
+              customerName: state.profile?.displayName ?? state.user.email,
+              invoiceNumber: open?.invoiceNumber ?? null,
+            }),
+            open?.id ?? null,
+          );
+        }
         save();
       }
     },

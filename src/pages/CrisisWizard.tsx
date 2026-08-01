@@ -21,6 +21,8 @@ import { buildCrisisReport } from "@/lib/reports/builders";
 import { data } from "@/data";
 import { useAuth } from "@/hooks/useAuth";
 import { useScrollToTopOnChange } from "@/hooks/useScrollToTop";
+import { useAutosavedState } from "@/hooks/useAutosavedState";
+import { ResumeNotice } from "@/components/wizard/ResumeNotice";
 import { SaveWithAccountPrompt } from "@/components/SaveWithAccountPrompt";
 import { analyseCrisis, formatSwedishDate } from "@/lib/crisisAnalysis";
 
@@ -79,12 +81,35 @@ const initialFormData: FormData = {
 
 const CrisisWizard = () => {
   const navigate = useNavigate();
-  const [currentStep, setCurrentStep] = useState(0);
+  // Steg och svar sparas lokalt medan man fyller i. En siduppdatering mitt i
+  // steg tre ska inte kasta bort tio minuters arbete - se useAutosavedState.
+  const draft = useAutosavedState(
+    "clearance-wizard-draft",
+    { step: 0, form: initialFormData },
+    1,
+  );
+  const [resumeDismissed, setResumeDismissed] = useState(false);
+  const currentStep = draft.value.step;
+  const formData = draft.value.form;
+  const setCurrentStep = (next: number | ((prev: number) => number)) =>
+    draft.setValue((prev) => ({
+      ...prev,
+      step: typeof next === "function" ? next(prev.step) : next,
+    }));
+  const setFormData = (next: FormData | ((prev: FormData) => FormData)) =>
+    draft.setValue((prev) => ({
+      ...prev,
+      form: typeof next === "function" ? next(prev.form) : next,
+    }));
+  const resetDraft = () => {
+    draft.clear();
+    draft.setValue({ step: 0, form: initialFormData });
+    setResumeDismissed(true);
+  };
 
   // Varje steg börjar överst. Guiden byter steg i eget tillstånd,
   // inte i adressen, så ScrollToTop i App.tsx når aldrig hit.
   useScrollToTopOnChange(currentStep);
-  const [formData, setFormData] = useState<FormData>(initialFormData);
   const [caseCreated, setCaseCreated] = useState(false);
   const [caseId, setCaseId] = useState<string | null>(null);
   const [disclaimerAccepted, setDisclaimerAccepted] = useState(false);
@@ -222,6 +247,8 @@ const CrisisWizard = () => {
       setSaving(false);
       setCaseId(created.id);
       setCaseCreated(true);
+      // Sparat på riktigt - utkastet har gjort sitt.
+      draft.clear();
     } catch (err) {
       console.error('Failed to save case:', err);
       setSaving(false);
@@ -921,6 +948,9 @@ const CrisisWizard = () => {
       </header>
 
       <main className="container px-4 py-6 max-w-lg mx-auto">
+        {draft.restored && !resumeDismissed && !caseCreated && (
+          <ResumeNotice onReset={resetDraft} />
+        )}
         {/* Progress */}
         <div className="mb-6">
           <div className="flex items-center justify-between mb-3">

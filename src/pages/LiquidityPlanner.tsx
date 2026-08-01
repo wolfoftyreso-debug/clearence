@@ -14,6 +14,8 @@ import { buildLiquidityReport } from "@/lib/reports/builders";
 import { SaveWithAccountPrompt } from "@/components/SaveWithAccountPrompt";
 import { useAuth } from "@/hooks/useAuth";
 import { useScrollToTopOnChange } from "@/hooks/useScrollToTop";
+import { useAutosavedState } from "@/hooks/useAutosavedState";
+import { ResumeNotice } from "@/components/wizard/ResumeNotice";
 import { data } from "@/data";
 import {
   employerContribution,
@@ -135,20 +137,50 @@ const LiquidityPlanner = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
 
-  const [step, setStep] = useState(0);
-
-  // Varje steg börjar överst. Guiden byter steg i eget tillstånd,
-  // inte i adressen, så ScrollToTop i App.tsx når aldrig hit.
-  useScrollToTopOnChange(step);
-  const [openingBalance, setOpeningBalance] = useState("");
-  const [items, setItems] = useState<Record<Bucket, LineItemRow[]>>({
+  // Hela planen sparas lokalt medan den byggs. Det här är guiden med flest
+  // inmatade rader - att tappa den på en siduppdatering är att be användaren
+  // skriva om sin ekonomi från minnet. Se useAutosavedState.
+  const emptyItems: Record<Bucket, LineItemRow[]> = {
     income: [],
     salary: [],
     tax: [],
     fixed: [],
     supplier: [],
-  });
-  const [addEmployerFee, setAddEmployerFee] = useState(true);
+  };
+  const draft = useAutosavedState(
+    "clearance-liquidity-draft",
+    { step: 0, openingBalance: "", items: emptyItems, addEmployerFee: true },
+    1,
+  );
+  const [resumeDismissed, setResumeDismissed] = useState(false);
+  const { step, openingBalance, items, addEmployerFee } = draft.value;
+  const setStep = (next: number | ((prev: number) => number)) =>
+    draft.setValue((prev) => ({
+      ...prev,
+      step: typeof next === "function" ? next(prev.step) : next,
+    }));
+  const setOpeningBalance = (next: string) =>
+    draft.setValue((prev) => ({ ...prev, openingBalance: next }));
+  const setItems = (
+    next:
+      | Record<Bucket, LineItemRow[]>
+      | ((prev: Record<Bucket, LineItemRow[]>) => Record<Bucket, LineItemRow[]>),
+  ) =>
+    draft.setValue((prev) => ({
+      ...prev,
+      items: typeof next === "function" ? next(prev.items) : next,
+    }));
+  const setAddEmployerFee = (next: boolean) =>
+    draft.setValue((prev) => ({ ...prev, addEmployerFee: next }));
+  const resetDraft = () => {
+    draft.clear();
+    draft.setValue({ step: 0, openingBalance: "", items: emptyItems, addEmployerFee: true });
+    setResumeDismissed(true);
+  };
+
+  // Varje steg börjar överst. Guiden byter steg i eget tillstånd,
+  // inte i adressen, så ScrollToTop i App.tsx når aldrig hit.
+  useScrollToTopOnChange(step);
   const [showAuthPrompt, setShowAuthPrompt] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -287,6 +319,7 @@ const LiquidityPlanner = () => {
 
       setSaving(false);
       setSaved(true);
+      draft.clear();
     } catch (err) {
       console.error("Failed to save plan:", err);
       setSaving(false);
@@ -496,6 +529,9 @@ const LiquidityPlanner = () => {
       </div>
 
       <main className="container px-4 py-6 max-w-2xl mx-auto space-y-5 pb-32">
+        {draft.restored && !resumeDismissed && !saved && (
+          <ResumeNotice onReset={resetDraft} />
+        )}
         <WizardCard>
           <div className="flex items-start gap-4 mb-5">
             <div className="w-12 h-12 rounded-md bg-accent/10 flex items-center justify-center flex-shrink-0">

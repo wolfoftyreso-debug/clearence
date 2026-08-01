@@ -28,6 +28,8 @@ import { formatOrgNumber, validateOrgNumber, lookupCompany, CompanyInfo } from "
 import { data } from "@/data";
 import { useAuth } from "@/hooks/useAuth";
 import { useScrollToTopOnChange } from "@/hooks/useScrollToTop";
+import { useAutosavedState } from "@/hooks/useAutosavedState";
+import { ResumeNotice } from "@/components/wizard/ResumeNotice";
 import { SaveWithAccountPrompt } from "@/components/SaveWithAccountPrompt";
 
 // KBR Status types
@@ -99,12 +101,35 @@ const ambitionOptions: { value: AmbitionLevel; title: string; description: strin
 
 const KBRModule = () => {
   const navigate = useNavigate();
-  const [currentStep, setCurrentStep] = useState(0);
+  // Sparas lokalt medan man fyller i - en siduppdatering ska inte radera
+  // balansposterna. Se useAutosavedState.
+  const draft = useAutosavedState(
+    "clearance-kbr-draft",
+    { step: 0, form: initialFormData },
+    1,
+  );
+  const [resumeDismissed, setResumeDismissed] = useState(false);
+  const currentStep = draft.value.step;
+  const formData = draft.value.form;
+  const setCurrentStep = (next: number | ((prev: number) => number)) =>
+    draft.setValue((prev) => ({
+      ...prev,
+      step: typeof next === "function" ? next(prev.step) : next,
+    }));
+  const setFormData = (next: KBRFormData | ((prev: KBRFormData) => KBRFormData)) =>
+    draft.setValue((prev) => ({
+      ...prev,
+      form: typeof next === "function" ? next(prev.form) : next,
+    }));
+  const resetDraft = () => {
+    draft.clear();
+    draft.setValue({ step: 0, form: initialFormData });
+    setResumeDismissed(true);
+  };
 
   // Varje steg börjar överst. Guiden byter steg i eget tillstånd,
   // inte i adressen, så ScrollToTop i App.tsx når aldrig hit.
   useScrollToTopOnChange(currentStep);
-  const [formData, setFormData] = useState<KBRFormData>(initialFormData);
   const { user } = useAuth();
   const [showAuthPrompt, setShowAuthPrompt] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -204,6 +229,7 @@ const KBRModule = () => {
       });
       setSaving(false);
       setSaved(true);
+      draft.clear();
     } catch (err) {
       console.error('Failed to save KBR assessment:', err);
       setSaving(false);
@@ -826,6 +852,9 @@ const KBRModule = () => {
 
       {/* Content */}
       <main className="container px-4 py-6 pb-32">
+        {draft.restored && !resumeDismissed && !saved && (
+          <ResumeNotice onReset={resetDraft} />
+        )}
         {renderCurrentStep()}
       </main>
 

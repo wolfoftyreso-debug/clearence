@@ -20,19 +20,19 @@ begin
   -- password_hash sätts för att den självhostade auth.users kräver den
   -- (not null) - shimmen bryr sig inte. Samma fixtur måste ladda i båda.
   insert into auth.users (id, email, password_hash) values
-    (gen_random_uuid(), 'trial-active@test', 'x'),
-    (gen_random_uuid(), 'trial-expired@test', 'x'),
-    (gen_random_uuid(), 'invoiced-open@test', 'x'),
-    (gen_random_uuid(), 'invoiced-overdue@test', 'x'),
-    (gen_random_uuid(), 'paid-overdue@test', 'x'),
-    (gen_random_uuid(), 'already-closed@test', 'x');
+    (gen_random_uuid(), 'trial-active@test.se', 'x'),
+    (gen_random_uuid(), 'trial-expired@test.se', 'x'),
+    (gen_random_uuid(), 'invoiced-open@test.se', 'x'),
+    (gen_random_uuid(), 'invoiced-overdue@test.se', 'x'),
+    (gen_random_uuid(), 'paid-overdue@test.se', 'x'),
+    (gen_random_uuid(), 'already-closed@test.se', 'x');
 
-  select id into v_user_trial_active from auth.users where email = 'trial-active@test';
-  select id into v_user_trial_expired from auth.users where email = 'trial-expired@test';
-  select id into v_user_invoiced_open from auth.users where email = 'invoiced-open@test';
-  select id into v_user_invoiced_overdue from auth.users where email = 'invoiced-overdue@test';
-  select id into v_user_paid_overdue from auth.users where email = 'paid-overdue@test';
-  select id into v_user_already_closed from auth.users where email = 'already-closed@test';
+  select id into v_user_trial_active from auth.users where email = 'trial-active@test.se';
+  select id into v_user_trial_expired from auth.users where email = 'trial-expired@test.se';
+  select id into v_user_invoiced_open from auth.users where email = 'invoiced-open@test.se';
+  select id into v_user_invoiced_overdue from auth.users where email = 'invoiced-overdue@test.se';
+  select id into v_user_paid_overdue from auth.users where email = 'paid-overdue@test.se';
+  select id into v_user_already_closed from auth.users where email = 'already-closed@test.se';
 
   insert into public.account_billing (user_id, started_at, due_at, paid_at, closed_at) values
     -- Gratisveckan löper: startade 18 aug, "nu" är 20 aug. Ska inte röras.
@@ -50,7 +50,7 @@ begin
 
   /* ---------------------------------------------------------------------- */
 
-  select public.close_overdue_accounts(v_now) into v_closed;
+  select count(*) into v_closed from public.close_overdue_accounts(v_now);
   if v_closed <> 2 then
     raise exception 'FAIL: jobbet stängde % konton, förväntade 2 (trial-expired och invoiced-overdue)', v_closed;
   end if;
@@ -83,7 +83,7 @@ begin
   raise notice 'ok 6: redan stängt konto behåller sitt datum';
 
   -- Idempotens: en andra körning gör ingenting.
-  select public.close_overdue_accounts(v_now) into v_closed;
+  select count(*) into v_closed from public.close_overdue_accounts(v_now);
   if v_closed <> 0 then
     raise exception 'FAIL: andra körningen stängde % konton, förväntade 0', v_closed;
   end if;
@@ -95,7 +95,7 @@ begin
   -- fortfarande förfallodagen, inget stängs...
   update public.account_billing set closed_at = null, due_at = '2026-08-20T09:00:00Z'
   where user_id = v_user_invoiced_overdue;
-  select public.close_overdue_accounts('2026-08-20T21:59:59Z') into v_closed;
+  select count(*) into v_closed from public.close_overdue_accounts('2026-08-20T21:59:59Z');
   if v_closed <> 0 then
     raise exception 'FAIL: konto stängdes på förfallodagen - fristen ska gälla hela svenska dygnet';
   end if;
@@ -104,7 +104,7 @@ begin
   -- ...men 22:00:01Z är 00:00:01 den 21:e i Stockholm, och då stängs det.
   -- Klockslaget fakturan ställdes ut (09:00) ska inte spela någon roll -
   -- första versionen av jobbet hade det felet.
-  select public.close_overdue_accounts('2026-08-20T22:00:01Z') into v_closed;
+  select count(*) into v_closed from public.close_overdue_accounts('2026-08-20T22:00:01Z');
   if v_closed <> 1 then
     raise exception 'FAIL: konto stängdes inte dagen efter förfall (fick %)', v_closed;
   end if;
@@ -112,30 +112,69 @@ begin
 
   /* ---------------------------------------------------------------------- */
 
-  -- accounts_due_soon: samma varsel som gränssnittet, tre dagar.
+  -- reminder_candidates: samma varsel som gränssnittet, med dubblettskydd.
   update public.account_billing set closed_at = null, paid_at = null, due_at = '2026-08-22T09:00:00Z'
   where user_id = v_user_invoiced_overdue;
+  insert into public.customer_invoices
+    (user_id, invoice_number, due_at, net_ore, vat_ore, gross_ore, vat_rate, description)
+  values
+    (v_user_invoiced_overdue, '2026-0099', '2026-08-22T09:00:00Z', 200000, 50000, 250000, 0.25, 'Test');
 
-  select count(*) into v_count from public.accounts_due_soon('2026-08-20T12:00:00Z', 3)
+  select count(*) into v_count from public.reminder_candidates('2026-08-20T12:00:00Z')
   where user_id = v_user_invoiced_overdue;
   if v_count <> 1 then
-    raise exception 'FAIL: konto som förfaller om två dagar syns inte i påminnelselistan';
+    raise exception 'FAIL: konto som förfaller om två dagar syns inte bland påminnelserna';
   end if;
-  raise notice 'ok 10: påminnelselistan fångar konton inom varselfönstret';
+  raise notice 'ok 10: påminnelsen fångar konton inom varselfönstret';
 
-  select count(*) into v_count from public.accounts_due_soon('2026-08-10T12:00:00Z', 3)
+  select count(*) into v_count from public.reminder_candidates('2026-08-10T12:00:00Z')
   where user_id = v_user_invoiced_overdue;
   if v_count <> 0 then
-    raise exception 'FAIL: konto långt från förfall dök upp i påminnelselistan';
+    raise exception 'FAIL: konto långt från förfall dök upp bland påminnelserna';
   end if;
-  raise notice 'ok 11: påminnelselistan tjatar inte i förtid';
+  raise notice 'ok 11: påminnelsen tjatar inte i förtid';
 
-  select count(*) into v_count from public.accounts_due_soon('2026-08-20T12:00:00Z', 3)
+  select count(*) into v_count from public.reminder_candidates('2026-08-20T12:00:00Z')
   where user_id = v_user_paid_overdue;
   if v_count <> 0 then
     raise exception 'FAIL: betalt konto fick påminnelse';
   end if;
   raise notice 'ok 12: betalt konto får ingen påminnelse';
+
+  -- Dubblettskyddet: en köad påminnelse samma dag tystar kandidaten...
+  insert into public.outbound_emails
+    (recipient, subject, body_text, body_html, kind, related_user_id, created_at)
+  values
+    ('invoiced-overdue@test.se', 'Påminnelse', 'x', '<p>x</p>', 'payment_reminder',
+     v_user_invoiced_overdue, '2026-08-20T08:00:00Z');
+
+  select count(*) into v_count from public.reminder_candidates('2026-08-20T12:00:00Z')
+  where user_id = v_user_invoiced_overdue;
+  if v_count <> 0 then
+    raise exception 'FAIL: mottagare med dagsfärsk påminnelse fick en till';
+  end if;
+  raise notice 'ok 13: högst en påminnelse per mottagare och dag';
+
+  -- ...men nästa dag är kandidaten tillbaka.
+  select count(*) into v_count from public.reminder_candidates('2026-08-21T12:00:00Z')
+  where user_id = v_user_invoiced_overdue;
+  if v_count <> 1 then
+    raise exception 'FAIL: dubblettskyddet tystar även nästa dag';
+  end if;
+  raise notice 'ok 14: nästa dag påminns det igen';
+
+  -- Stängningen ska berätta vem, med adress och fakturanummer, så att
+  -- beskedet kan skickas. En stängning utan besked är den överraskning
+  -- texterna finns för att förhindra.
+  update public.account_billing set closed_at = null, due_at = '2026-08-15T09:00:00Z'
+  where user_id = v_user_invoiced_overdue;
+  if not exists (
+    select 1 from public.close_overdue_accounts('2026-08-20T12:00:00Z')
+    where email = 'invoiced-overdue@test.se' and invoice_number = '2026-0099'
+  ) then
+    raise exception 'FAIL: stängningen returnerar inte mottagare och fakturanummer';
+  end if;
+  raise notice 'ok 15: stängningen berättar vem som ska få beskedet';
 
   raise notice 'ALL BILLING JOB TESTS PASSED';
 end $$;

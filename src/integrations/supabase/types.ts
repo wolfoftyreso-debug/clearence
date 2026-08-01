@@ -130,6 +130,7 @@ export type Database = {
           last_error: string | null
           recipient: string
           related_invoice_id: string | null
+          related_user_id: string | null
           sent_at: string | null
           status: Database["public"]["Enums"]["outbound_email_status"]
           subject: string
@@ -140,6 +141,7 @@ export type Database = {
           kind: string
           recipient: string
           related_invoice_id?: string | null
+          related_user_id?: string | null
           subject: string
         }
         // Skrivs av arbetaren via mark_email_sent / mark_email_failed.
@@ -737,7 +739,12 @@ export type Database = {
       }
       close_overdue_accounts: {
         Args: { p_now?: string }
-        Returns: number
+        Returns: {
+          user_id: string
+          email: string
+          display_name: string | null
+          invoice_number: string | null
+        }[]
       }
     }
     Enums: {
