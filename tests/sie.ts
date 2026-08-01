@@ -63,6 +63,10 @@ const SIE = [
   "#UB 0 1930 -47000",
   "#UB 0 2081 -50000",
   "#UB 0 2091 -10000",
+  '#KONTO 1510 "Kundfordringar"',
+  "#UB 0 1510 80000",
+  '#KONTO 2440 "Leverantörsskulder"',
+  "#UB 0 2440 -95000",
   "#UB -1 1930 250000",
   "#RES 0 3010 -1200000",
   "#RES 0 7010 1150000",
@@ -103,6 +107,10 @@ if (!outcome.ok) {
   check("aktiekapital från 2081", summary.shareCapital, 50000);
   check("årets resultat tecknvänt (vinst positiv)", summary.result, 50000);
   check("kontona som användes redovisas", summary.accountsUsed.equity, [2081, 2091]);
+  // Tillgångar: 1510 (80000) + 1930 (-47000) = 33000. Skulder: -(-95000) = 95000.
+  check("totala tillgångar ur 1000-1999", summary.totalAssets, 33000);
+  check("totala skulder tecknvända ur 2100-2999", summary.totalLiabilities, 95000);
+  check("skuldkontona redovisas", summary.accountsUsed.liabilities, [2440]);
 }
 
 check(

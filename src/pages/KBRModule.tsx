@@ -28,6 +28,7 @@ import { formatOrgNumber, validateOrgNumber, lookupCompany, CompanyInfo } from "
 import { data } from "@/data";
 import { useAuth } from "@/hooks/useAuth";
 import { useScrollToTopOnChange } from "@/hooks/useScrollToTop";
+import { SiePrefill } from "@/components/documents/SiePrefill";
 import { useAutosavedState } from "@/hooks/useAutosavedState";
 import { ResumeNotice } from "@/components/wizard/ResumeNotice";
 import { SaveWithAccountPrompt } from "@/components/SaveWithAccountPrompt";
@@ -415,6 +416,18 @@ const KBRModule = () => {
   // Step 2: Balance Sheet Data
   const renderStep2 = () => (
     <div className="space-y-5">
+      {/* Bokföringen har redan siffrorna - erbjud dem som förslag, med
+          kontona redovisade. Manuell inmatning fungerar precis som förut. */}
+      <SiePrefill
+        onApply={(values) =>
+          setFormData((prev) => ({
+            ...prev,
+            shareCapital: String(values.shareCapital),
+            totalAssets: String(values.totalAssets),
+            totalLiabilities: String(values.totalLiabilities),
+          }))
+        }
+      />
       <WizardCard>
         <WizardCardHeader 
           title="Aktiekapital" 

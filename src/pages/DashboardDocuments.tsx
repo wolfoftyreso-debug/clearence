@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { DashboardShell } from "@/components/dashboard/DashboardShell";
 import { CaseDocuments } from "@/components/documents/CaseDocuments";
 import { TaxAccountImport } from "@/components/documents/TaxAccountImport";
+import { IntegrationStatus } from "@/components/integrations/IntegrationStatus";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
@@ -91,6 +92,8 @@ const DashboardDocuments = () => {
               Kunde inte lägga in betalningarna. Försök igen.
             </p>
           )}
+
+          <IntegrationStatus />
         </div>
       )}
     </DashboardShell>

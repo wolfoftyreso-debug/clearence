@@ -303,8 +303,18 @@ export interface SieSummary {
   shareCapital: number;
   /** Årets resultat enligt resultatkontona (3000-8999), tecknvänt: positivt = vinst. */
   result: number;
+  /** Totala tillgångar: UB på 1000-1999. Det KBR-beräkningen frågar efter. */
+  totalAssets: number;
+  /** Totala skulder: UB på 2100-2999 plus obeskattade reserver/avsättningar, tecknvänt. */
+  totalLiabilities: number;
   /** Vilka konton som ingick, för kontroll mot källan. */
-  accountsUsed: { cash: number[]; equity: number[]; shareCapital: number[] };
+  accountsUsed: {
+    cash: number[];
+    equity: number[];
+    shareCapital: number[];
+    assets: number[];
+    liabilities: number[];
+  };
 }
 
 /**
@@ -315,13 +325,31 @@ export interface SieSummary {
  * Nyckeltalen är UNDERLAG till KBR-bedömningen, inte bedömningen själv.
  */
 export const summariseSie = (sie: ParsedSie): SieSummary => {
-  const used = { cash: [] as number[], equity: [] as number[], shareCapital: [] as number[] };
+  const used = {
+    cash: [] as number[],
+    equity: [] as number[],
+    shareCapital: [] as number[],
+    assets: [] as number[],
+    liabilities: [] as number[],
+  };
   let cash = 0;
   let equityCredit = 0;
   let shareCapitalCredit = 0;
   let resultCredit = 0;
+  let assets = 0;
+  let liabilitiesCredit = 0;
 
   for (const a of sie.accounts) {
+    if (a.number >= 1000 && a.number <= 1999 && a.closingBalance !== null) {
+      assets += a.closingBalance;
+      used.assets.push(a.number);
+    }
+    // 2100-2999: obeskattade reserver, avsättningar och skulder enligt BAS.
+    // ANTAGANDE som allt annat här - kontona redovisas.
+    if (a.number >= 2100 && a.number <= 2999 && a.closingBalance !== null) {
+      liabilitiesCredit += a.closingBalance;
+      used.liabilities.push(a.number);
+    }
     if (a.number >= 1900 && a.number <= 1999 && a.closingBalance !== null) {
       cash += a.closingBalance;
       used.cash.push(a.number);
@@ -346,6 +374,8 @@ export const summariseSie = (sie: ParsedSie): SieSummary => {
     equity: -(equityCredit + resultCredit),
     shareCapital: -shareCapitalCredit,
     result: -resultCredit,
+    totalAssets: assets,
+    totalLiabilities: -liabilitiesCredit,
     accountsUsed: used,
   };
 };
