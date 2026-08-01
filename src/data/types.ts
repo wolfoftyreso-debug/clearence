@@ -1,0 +1,272 @@
+/**
+ * Domain types for CLEARANCE.
+ *
+ * Deliberately hand-written rather than re-exported from a backend's
+ * generated types: the application should describe its own data, so that
+ * swapping the backend is a change behind the data layer rather than a
+ * rename across every page.
+ */
+
+export type RecommendationType = "bankruptcy" | "reconstruction" | "stabilize";
+export type KbrStatus = "not_required" | "warning" | "required" | "critical";
+export type PaymentStatus = "pending" | "paid" | "postponed" | "critical";
+export type PaymentCategory = "salary" | "tax" | "rent" | "supplier" | "loan" | "other";
+export type InvoiceDirection = "in" | "out";
+export type InvoiceStatus = "unpaid" | "paid" | "overdue";
+export type ProfessionalCategory =
+  | "konkursforvaltare"
+  | "rekonstruktor"
+  | "revisor"
+  | "affarsjurist"
+  | "kreditbolag";
+export type ApplicationStatus = "pending" | "needs_info" | "approved" | "rejected";
+export type ReferralChannel = "email" | "phone" | "website";
+export type ReferralStatus = "initiated" | "accepted" | "declined" | "completed";
+
+export interface AuthUser {
+  id: string;
+  email: string | null;
+}
+
+export interface CaseRecord {
+  id: string;
+  orgNumber: string;
+  companyName: string | null;
+  employees: string | null;
+  canPaySalary: boolean | null;
+  salaryAmount: string | null;
+  salaryDay: number | null;
+  canPayTax: boolean | null;
+  taxAmount: string | null;
+  taxDay: number | null;
+  canPayRent: boolean | null;
+  rentAmount: string | null;
+  rentDay: number | null;
+  canPaySuppliers: boolean | null;
+  totalDebt: string | null;
+  quickLiquidationValue: string | null;
+  recommendationType: RecommendationType | null;
+  recommendationTitle: string | null;
+  recommendationDescription: string | null;
+  recommendationReasons: string[];
+  recommendationNextSteps: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type NewCase = Omit<CaseRecord, "id" | "createdAt" | "updatedAt">;
+
+export interface KbrAssessmentInput {
+  caseId?: string | null;
+  orgNumber: string | null;
+  companyName: string | null;
+  ambitionLevel: string | null;
+  hasRelatedCompanies: boolean | null;
+  isPartOfLargerStructure: boolean | null;
+  shareCapital: number;
+  totalAssets: number;
+  totalLiabilities: number;
+  status: KbrStatus;
+}
+
+export interface PaymentRecord {
+  id: string;
+  caseId: string;
+  label: string;
+  amount: number;
+  category: PaymentCategory;
+  status: PaymentStatus;
+  /** ISO date, yyyy-MM-dd */
+  dueDate: string;
+  recurring: boolean;
+}
+
+export type NewPayment = Omit<PaymentRecord, "id">;
+
+export interface InvoiceRecord {
+  id: string;
+  caseId: string;
+  label: string;
+  amount: number;
+  direction: InvoiceDirection;
+  status: InvoiceStatus;
+  /** ISO date, yyyy-MM-dd */
+  issueDate: string;
+  /** ISO date, yyyy-MM-dd */
+  dueDate: string;
+  counterpart: string | null;
+}
+
+export type NewInvoice = Omit<InvoiceRecord, "id">;
+
+export interface FixedPrice {
+  service: string;
+  price: number;
+}
+
+export interface ProfessionalRecord {
+  id: string;
+  name: string;
+  company: string | null;
+  category: string;
+  description: string | null;
+  location: string | null;
+  email: string | null;
+  phone: string | null;
+  website: string | null;
+  fixedPrices: FixedPrice[];
+  specializations: string[] | null;
+  verified: boolean | null;
+}
+
+export interface RatingRecord {
+  professionalId: string;
+  communicationScore: number | null;
+  expertiseScore: number | null;
+  priceTransparencyScore: number | null;
+  responseTimeScore: number | null;
+  overallScore: number | null;
+}
+
+export interface ApplicationRecord {
+  id: string;
+  category: ProfessionalCategory;
+  status: ApplicationStatus;
+  reviewNote: string | null;
+  createdAt: string;
+}
+
+export interface NewApplication {
+  contactName: string;
+  email: string;
+  phone: string | null;
+  company: string | null;
+  orgNumber: string | null;
+  category: ProfessionalCategory;
+  location: string | null;
+  description: string | null;
+  website: string | null;
+  specializations: string[];
+  fixedPrices: FixedPrice[];
+  credentialAuthority: string | null;
+  credentialReference: string | null;
+  credentialNote: string | null;
+  termsAcceptedAt: string;
+}
+
+export interface ReferralRecord {
+  id: string;
+  professionalId: string;
+  channel: ReferralChannel;
+  status: ReferralStatus;
+  feeAmount: number | null;
+  billableAt: string | null;
+  createdAt: string;
+}
+
+export interface NewReferral {
+  professionalId: string;
+  caseId: string | null;
+  channel: ReferralChannel;
+}
+
+export interface CompanyInfo {
+  name: string;
+  legalForm: string;
+  address: string;
+  sniCode: string;
+  sniDescription: string;
+}
+
+/**
+ * What a stored document is. Kept as a closed set rather than free text so
+ * the case view can group by kind and tell the user what is still missing.
+ */
+export type DocumentKind =
+  | "bank_statement"
+  | "balance_sheet"
+  | "income_statement"
+  | "annual_report"
+  | "tax_account"
+  | "debt_overview"
+  | "agreement"
+  | "correspondence"
+  | "other";
+
+/**
+ * Where the file came from. `manual` means the user uploaded it; the other
+ * values exist so an accounting-system import can be told apart from a file
+ * the user picked, both in the UI and in an audit trail.
+ */
+export type DocumentSource = "manual" | "fortnox" | "visma";
+
+export interface DocumentRecord {
+  id: string;
+  caseId: string;
+  kind: DocumentKind;
+  /** Name as the user's filesystem had it. */
+  fileName: string;
+  /** Bytes. */
+  fileSize: number;
+  mimeType: string;
+  /** Opaque key in whatever object store the adapter uses. */
+  storagePath: string;
+  source: DocumentSource;
+  note: string | null;
+  createdAt: string;
+}
+
+export interface NewDocument {
+  caseId: string;
+  kind: DocumentKind;
+  file: File;
+  source: DocumentSource;
+  note: string | null;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Kontaktmeddelanden                                                         */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Vad frågan gäller. En sluten uppsättning i stället för fritext, så att
+ * inkorgen går att sortera och så att brådskande ärenden – ett bolag i kris –
+ * går att skilja från en fakturafråga utan att någon läser allt först.
+ */
+export type ContactTopic =
+  | "question"
+  | "company"
+  | "advisor"
+  | "invoice"
+  | "privacy"
+  | "bug"
+  | "other";
+
+export type ContactStatus = "new" | "in_progress" | "answered" | "closed";
+
+/** Vad avsändaren fyller i. Allt annat sätts av databasen. */
+export interface NewContactMessage {
+  name: string;
+  email: string;
+  phone: string | null;
+  company: string | null;
+  topic: ContactTopic;
+  message: string;
+}
+
+export interface ContactMessageRecord {
+  id: string;
+  name: string;
+  email: string;
+  phone: string | null;
+  company: string | null;
+  topic: ContactTopic;
+  message: string;
+  /** Satt när avsändaren var inloggad, annars null. */
+  userId: string | null;
+  status: ContactStatus;
+  handledBy: string | null;
+  handledAt: string | null;
+  internalNote: string | null;
+  createdAt: string;
+}

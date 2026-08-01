@@ -1,0 +1,225 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Deep slate blue - trustworthy, professional */
+    --background: 40 30% 98%;
+    --foreground: 220 30% 15%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 220 30% 15%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 30% 15%;
+
+    /* Deep navy - primary actions */
+    --primary: 220 45% 20%;
+    --primary-foreground: 40 30% 98%;
+
+    /* Warm gray - secondary surfaces */
+    --secondary: 40 20% 94%;
+    --secondary-foreground: 220 30% 25%;
+
+    --muted: 40 15% 92%;
+    --muted-foreground: 220 15% 45%;
+
+    /* Teal accent - progress, positive. Deepened from the original 40%
+       lightness to 30% so text-accent and white-on-accent both clear
+       WCAG AA (4.5:1) against this theme's background. */
+    --accent: 175 60% 30%;
+    --accent-foreground: 0 0% 100%;
+
+    /* Amber - warnings, deadlines */
+    --warning: 38 92% 50%;
+    --warning-foreground: 220 30% 15%;
+
+    /* Soft red - destructive, critical */
+    --destructive: 0 65% 55%;
+    --destructive-foreground: 0 0% 100%;
+
+    /* Success green */
+    --success: 160 60% 40%;
+    --success-foreground: 0 0% 100%;
+
+    --border: 220 15% 88%;
+    --input: 220 15% 88%;
+    --ring: 175 60% 30%;
+
+    /* Small radius. Rounded corners read as consumer software; a public
+       information service should look closer to a printed form. */
+    --radius: 0.375rem;
+
+    /* Surfaces.
+       Flat rather than gradient: an authority-style interface should read as
+       plain, printed information, not as a marketing page. Structure comes
+       from rules and spacing, not from depth effects. Derived from the
+       tokens above so the surfaces can never drift out of sync with the
+       contrast-checked --primary / --accent values. */
+    --surface-brand: hsl(var(--primary));
+    --surface-accent: hsl(var(--accent));
+
+    /* Shadows are kept minimal and are used to separate overlays from the
+       page, not to make ordinary cards float. */
+    --shadow-soft: 0 1px 2px hsl(220 30% 15% / 0.05);
+    --shadow-card: 0 1px 3px hsl(220 30% 15% / 0.08);
+    --shadow-elevated: 0 4px 12px hsl(220 30% 15% / 0.1);
+
+    --sidebar-background: 220 45% 20%;
+    --sidebar-foreground: 40 30% 98%;
+    --sidebar-primary: 175 60% 30%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 220 35% 30%;
+    --sidebar-accent-foreground: 40 30% 98%;
+    --sidebar-border: 220 30% 30%;
+    --sidebar-ring: 175 60% 30%;
+  }
+
+  .dark {
+    --background: 220 30% 8%;
+    --foreground: 40 20% 95%;
+
+    --card: 220 30% 12%;
+    --card-foreground: 40 20% 95%;
+
+    --popover: 220 30% 12%;
+    --popover-foreground: 40 20% 95%;
+
+    --primary: 175 60% 45%;
+    --primary-foreground: 220 30% 8%;
+
+    --secondary: 220 25% 18%;
+    --secondary-foreground: 40 20% 90%;
+
+    --muted: 220 25% 15%;
+    --muted-foreground: 220 15% 60%;
+
+    --accent: 175 60% 45%;
+    --accent-foreground: 220 30% 8%;
+
+    --warning: 38 92% 50%;
+    --warning-foreground: 220 30% 8%;
+
+    --destructive: 0 65% 50%;
+    --destructive-foreground: 40 20% 95%;
+
+    --success: 160 60% 45%;
+    --success-foreground: 220 30% 8%;
+
+    --border: 220 25% 20%;
+    --input: 220 25% 20%;
+    --ring: 175 60% 45%;
+
+    --sidebar-background: 220 30% 6%;
+    --sidebar-foreground: 40 20% 95%;
+    --sidebar-primary: 175 60% 45%;
+    --sidebar-primary-foreground: 220 30% 8%;
+    --sidebar-accent: 220 25% 15%;
+    --sidebar-accent-foreground: 40 20% 95%;
+    --sidebar-border: 220 25% 15%;
+    --sidebar-ring: 175 60% 45%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-display font-semibold tracking-tight;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  .surface-brand {
+    background: var(--surface-brand);
+  }
+
+  .surface-accent {
+    background: var(--surface-accent);
+  }
+
+  .shadow-soft {
+    box-shadow: var(--shadow-soft);
+  }
+
+  .shadow-card {
+    box-shadow: var(--shadow-card);
+  }
+
+  .shadow-elevated {
+    box-shadow: var(--shadow-elevated);
+  }
+
+  .animate-fade-up {
+    animation: fadeIn 0.3s ease-out forwards;
+  }
+
+  .animate-fade-in {
+    animation: fadeIn 0.4s ease-out forwards;
+  }
+
+  .animate-scale-in {
+    animation: scaleIn 0.3s ease-out forwards;
+  }
+
+  .animate-slide-in-right {
+    animation: slideInRight 0.4s ease-out forwards;
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Anyone who has asked their system to reduce motion should get a still
+   interface, not a slower version of the animated one. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
