@@ -42,8 +42,8 @@ export interface CompanyIdentity {
   /** Bankgiro, format XXX-XXXX. */
   bankgiro: string;
   /**
-   * Vilket konto som anges på faktura. Två konton på samma faktura är den
-   * vanligaste orsaken till att betalningen bokförs fel eller uteblir.
+   * Vilket konto som står FÖRST på fakturan. Båda skrivs ut - det är
+   * beslutat - men ordningen säger vilket vi helst vill ha betalt till.
    */
   invoiceGiro: "plusgiro" | "bankgiro";
   /** För utländska betalningar. */
@@ -89,8 +89,10 @@ export const COMPANY: CompanyIdentity = {
   // Se vatRegistered ovan.
   vatNumber: "SE559141704201",
   plusgiro: "87 53 07-1",
-  // TOM MED FLIT: numret finns men jag har inte sett det. Ett bankgironummer
-  // jag gissar fram är ett konto pengarna inte kommer fram till.
+  // TOM I VÄNTAN PÅ NUMRET. Bankgirot ska skrivas ut bredvid plusgirot, men
+  // jag har inte sett numret. paymentAccounts() utelämnar det tills det
+  // fylls i - ett gissat bankgironummer är ett konto pengarna inte kommer
+  // fram till, och felet syns först när betalningen uteblir.
   bankgiro: "",
   invoiceGiro: "plusgiro",
   iban: "SE30 9500 0099 6026 0875 3071",
@@ -142,8 +144,9 @@ export const companyInfoIsComplete = (c: CompanyIdentity = COMPANY): boolean =>
 export const missingInvoiceFields = (c: CompanyIdentity = COMPANY): string[] => {
   const missing = missingCompanyFields(c);
   if (!c.vatNumber.trim()) missing.push("momsregistreringsnummer");
-  const giro = c.invoiceGiro === "bankgiro" ? c.bankgiro : c.plusgiro;
-  if (!giro.trim()) missing.push(c.invoiceGiro);
+  // Båda ska stå på fakturan, så båda måste finnas.
+  if (!c.plusgiro.trim()) missing.push("plusgiro");
+  if (!c.bankgiro.trim()) missing.push("bankgiro");
   if (!c.hasFSkatt) missing.push("bekräftat godkännande för F-skatt");
   if (!c.vatRegistered) missing.push("bekräftad momsregistrering");
   return missing;
@@ -155,17 +158,33 @@ export const formatAddress = (c: CompanyIdentity = COMPANY): string =>
     .join(", ");
 
 /**
- * Kontot som ska stå på fakturan, med rätt benämning.
+ * Betalkontona som ska skrivas ut, i den ordning de ska stå.
  *
- * Returnerar null när numret saknas. Anropande kod ska då inte skriva ut
- * något alls - en faktura utan betalningsuppgift är ett fel som syns, en
- * faktura med fel kontotyp är ett fel som inte syns förrän betalningen
- * uteblir.
+ * Båda anges - det är beslutat. Betalaren väljer det konto den egna banken
+ * hanterar enklast, och ett bolag som bara har bankgiro upplagt i sin
+ * leverantörsregister slipper lägga upp ett nytt.
+ *
+ * Ett konto vars nummer saknas tas bort ur listan i stället för att skrivas
+ * ut tomt. `invoiceGiro` styr vilket som står först, alltså vilket vi helst
+ * vill ha betalt till.
  */
-export const invoiceAccount = (
+export const paymentAccounts = (
   c: CompanyIdentity = COMPANY,
-): { label: string; number: string } | null => {
-  const number = c.invoiceGiro === "bankgiro" ? c.bankgiro : c.plusgiro;
-  if (!number.trim()) return null;
-  return { label: c.invoiceGiro === "bankgiro" ? "Bankgiro" : "Plusgiro", number };
+): { label: string; number: string }[] => {
+  const accounts = [
+    { key: "plusgiro" as const, label: "Plusgiro", number: c.plusgiro },
+    { key: "bankgiro" as const, label: "Bankgiro", number: c.bankgiro },
+  ].filter((a) => a.number.trim().length > 0);
+
+  return accounts
+    .sort((a, b) => (a.key === c.invoiceGiro ? -1 : b.key === c.invoiceGiro ? 1 : 0))
+    .map(({ label, number }) => ({ label, number }));
+};
+
+/** Kortform för löptext: "plusgiro 87 53 07-1 eller bankgiro 123-4567". */
+export const paymentAccountsSentence = (c: CompanyIdentity = COMPANY): string => {
+  const parts = paymentAccounts(c).map((a) => `${a.label.toLowerCase()} ${a.number}`);
+  if (parts.length === 0) return "";
+  if (parts.length === 1) return parts[0];
+  return `${parts.slice(0, -1).join(", ")} eller ${parts[parts.length - 1]}`;
 };

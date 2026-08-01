@@ -20,6 +20,7 @@ import { ReportButton } from "@/components/reports/ReportButton";
 import { buildCrisisReport } from "@/lib/reports/builders";
 import { data } from "@/data";
 import { useAuth } from "@/hooks/useAuth";
+import { useScrollToTopOnChange } from "@/hooks/useScrollToTop";
 import { SaveWithAccountPrompt } from "@/components/SaveWithAccountPrompt";
 import { analyseCrisis, formatSwedishDate } from "@/lib/crisisAnalysis";
 
@@ -79,6 +80,10 @@ const initialFormData: FormData = {
 const CrisisWizard = () => {
   const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState(0);
+
+  // Varje steg börjar överst. Guiden byter steg i eget tillstånd,
+  // inte i adressen, så ScrollToTop i App.tsx når aldrig hit.
+  useScrollToTopOnChange(currentStep);
   const [formData, setFormData] = useState<FormData>(initialFormData);
   const [caseCreated, setCaseCreated] = useState(false);
   const [caseId, setCaseId] = useState<string | null>(null);

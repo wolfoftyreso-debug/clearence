@@ -61,11 +61,23 @@
     --muted: 40 15% 92%;
     --muted-foreground: 220 15% 45%;
 
-    /* Teal accent - progress, positive. Deepened from the original 40%
-       lightness to 30% so text-accent and white-on-accent both clear
-       WCAG AA (4.5:1) against this theme's background. */
-    --accent: 175 60% 30%;
+    /* Registerblå. Ersatte en turkos accent som inte betydde något - den
+       var bara "förtroendeingivande mjukvara", vilket är den färg varje
+       liknande produkt råkar landa på. Den här är hämtad ur ämnets egen
+       värld: registerutdraget, domstolens sigill, myndighetsblanketten.
+       9,7:1 mot bakgrunden och 9,9:1 för vit text på fylld yta. */
+    --accent: 211 72% 27%;
     --accent-foreground: 0 0% 100%;
+
+    /* Fristfärg. Får BARA användas på lagstadgade datum och löpande
+       tidsfrister - förfallodagen för skatten, åttamånadersfristen i ABL
+       25 kap., återvinningsfristen, rekonstruktionens tremånadersfönster.
+       Aldrig som knappfyllnad, aldrig som dekoration.
+       Poängen är att en enda färg ska betyda exakt en sak, så att den som
+       skummar sidan kan lita på att rött = en klocka som går.
+       7,2:1 mot bakgrunden, 7,4:1 för vit text på fylld yta. */
+    --frist: 8 74% 36%;
+    --frist-foreground: 0 0% 100%;
 
     /* Amber - warnings, deadlines */
     --warning: 38 92% 50%;
@@ -81,7 +93,7 @@
 
     --border: 220 15% 88%;
     --input: 220 15% 88%;
-    --ring: 175 60% 30%;
+    --ring: 211 72% 27%;
 
     /* Small radius. Rounded corners read as consumer software; a public
        information service should look closer to a printed form. */
@@ -104,12 +116,12 @@
 
     --sidebar-background: 220 45% 20%;
     --sidebar-foreground: 40 30% 98%;
-    --sidebar-primary: 175 60% 30%;
+    --sidebar-primary: 211 72% 27%;
     --sidebar-primary-foreground: 0 0% 100%;
     --sidebar-accent: 220 35% 30%;
     --sidebar-accent-foreground: 40 30% 98%;
     --sidebar-border: 220 30% 30%;
-    --sidebar-ring: 175 60% 30%;
+    --sidebar-ring: 211 72% 27%;
   }
 
   .dark {
@@ -122,7 +134,7 @@
     --popover: 220 30% 12%;
     --popover-foreground: 40 20% 95%;
 
-    --primary: 175 60% 45%;
+    --primary: 211 70% 62%;
     --primary-foreground: 220 30% 8%;
 
     --secondary: 220 25% 18%;
@@ -131,8 +143,11 @@
     --muted: 220 25% 15%;
     --muted-foreground: 220 15% 60%;
 
-    --accent: 175 60% 45%;
+    --accent: 211 70% 62%;
     --accent-foreground: 220 30% 8%;
+
+    --frist: 8 78% 63%;
+    --frist-foreground: 220 30% 8%;
 
     --warning: 38 92% 50%;
     --warning-foreground: 220 30% 8%;
@@ -145,16 +160,16 @@
 
     --border: 220 25% 20%;
     --input: 220 25% 20%;
-    --ring: 175 60% 45%;
+    --ring: 211 70% 62%;
 
     --sidebar-background: 220 30% 6%;
     --sidebar-foreground: 40 20% 95%;
-    --sidebar-primary: 175 60% 45%;
+    --sidebar-primary: 211 70% 62%;
     --sidebar-primary-foreground: 220 30% 8%;
     --sidebar-accent: 220 25% 15%;
     --sidebar-accent-foreground: 40 20% 95%;
     --sidebar-border: 220 25% 15%;
-    --sidebar-ring: 175 60% 45%;
+    --sidebar-ring: 211 70% 62%;
   }
 }
 

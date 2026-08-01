@@ -2,7 +2,12 @@ import Header from "@/components/landing/Header";
 import Footer from "@/components/landing/Footer";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
-import { COMPANY, formatAddress, invoiceAccount, legalIdentityIsComplete } from "@/lib/company";
+import {
+  COMPANY,
+  formatAddress,
+  legalIdentityIsComplete,
+  paymentAccountsSentence,
+} from "@/lib/company";
 import { ArrowRight } from "lucide-react";
 
 /**
@@ -32,7 +37,7 @@ const PAID = [
 ];
 
 const About = () => {
-  const account = invoiceAccount();
+  const accounts = paymentAccountsSentence();
 
   return (
   <div className="min-h-screen bg-background">
@@ -117,10 +122,9 @@ const About = () => {
                 texten. Bolaget har både plusgiro och bankgiro, och vilket som
                 gäller ska stå på ett ställe. */}
             <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
-              Betalning sker mot faktura
-              {account ? ` till vårt ${account.label.toLowerCase()}` : ""}. Vi tar inte
-              kortuppgifter och använder ingen betaltjänst – det finns inget konto att
-              bli av med och inget abonnemang som förnyas av sig självt.
+              Betalning sker mot faktura{accounts ? ` till vårt ${accounts}` : ""}. Vi
+              tar inte kortuppgifter och använder ingen betaltjänst – det finns inget
+              konto att bli av med och inget abonnemang som förnyas av sig självt.
             </p>
           </div>
         </div>

@@ -13,6 +13,7 @@ import { ReportButton } from "@/components/reports/ReportButton";
 import { buildLiquidityReport } from "@/lib/reports/builders";
 import { SaveWithAccountPrompt } from "@/components/SaveWithAccountPrompt";
 import { useAuth } from "@/hooks/useAuth";
+import { useScrollToTopOnChange } from "@/hooks/useScrollToTop";
 import { data } from "@/data";
 import {
   employerContribution,
@@ -135,6 +136,10 @@ const LiquidityPlanner = () => {
   const { user } = useAuth();
 
   const [step, setStep] = useState(0);
+
+  // Varje steg börjar överst. Guiden byter steg i eget tillstånd,
+  // inte i adressen, så ScrollToTop i App.tsx når aldrig hit.
+  useScrollToTopOnChange(step);
   const [openingBalance, setOpeningBalance] = useState("");
   const [items, setItems] = useState<Record<Bucket, LineItemRow[]>>({
     income: [],

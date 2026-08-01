@@ -46,6 +46,12 @@ export default {
           DEFAULT: "hsl(var(--accent))",
           foreground: "hsl(var(--accent-foreground))",
         },
+        // Endast lagstadgade datum och löpande frister. Se noten i
+        // src/index.css innan du använder den till något annat.
+        frist: {
+          DEFAULT: "hsl(var(--frist))",
+          foreground: "hsl(var(--frist-foreground))",
+        },
         warning: {
           DEFAULT: "hsl(var(--warning))",
           foreground: "hsl(var(--warning-foreground))",

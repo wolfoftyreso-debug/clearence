@@ -8,6 +8,7 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { DemoBanner } from "@/components/DemoBanner";
 import { AuthProvider } from "@/hooks/useAuth";
+import { ScrollToTop } from "@/hooks/useScrollToTop";
 import { Loader2 } from "lucide-react";
 
 // Route-level code splitting keeps the initial bundle small — the landing
@@ -43,6 +44,10 @@ const App = () => (
         <Sonner />
         <BrowserRouter>
           <AuthProvider>
+            {/* Varje ny sida börjar överst. Ligger innanför routern,
+                utanför Suspense: den ska köra även när nästa sida
+                fortfarande laddar sin kodbit. */}
+            <ScrollToTop />
             <Suspense fallback={<RouteFallback />}>
               <Routes>
                 <Route path="/" element={<Index />} />

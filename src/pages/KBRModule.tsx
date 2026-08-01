@@ -27,6 +27,7 @@ import {
 import { formatOrgNumber, validateOrgNumber, lookupCompany, CompanyInfo } from "@/lib/orgNumber";
 import { data } from "@/data";
 import { useAuth } from "@/hooks/useAuth";
+import { useScrollToTopOnChange } from "@/hooks/useScrollToTop";
 import { SaveWithAccountPrompt } from "@/components/SaveWithAccountPrompt";
 
 // KBR Status types
@@ -99,6 +100,10 @@ const ambitionOptions: { value: AmbitionLevel; title: string; description: strin
 const KBRModule = () => {
   const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState(0);
+
+  // Varje steg börjar överst. Guiden byter steg i eget tillstånd,
+  // inte i adressen, så ScrollToTop i App.tsx når aldrig hit.
+  useScrollToTopOnChange(currentStep);
   const [formData, setFormData] = useState<KBRFormData>(initialFormData);
   const { user } = useAuth();
   const [showAuthPrompt, setShowAuthPrompt] = useState(false);
