@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { DashboardShell } from "@/components/dashboard/DashboardShell";
 import { CaseDocuments } from "@/components/documents/CaseDocuments";
 import { TaxAccountImport } from "@/components/documents/TaxAccountImport";
+import { DocumentTemplates } from "@/components/documents/DocumentTemplates";
 import { IntegrationStatus } from "@/components/integrations/IntegrationStatus";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -79,6 +80,8 @@ const DashboardDocuments = () => {
             </p>
           </div>
           <CaseDocuments caseId={latestCase.id} userId={user?.id ?? ""} />
+
+          <DocumentTemplates caseRecord={latestCase} />
 
           <TaxAccountImport
             onImport={(selection) => {
