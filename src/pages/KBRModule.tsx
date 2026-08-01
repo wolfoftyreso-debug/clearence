@@ -15,7 +15,7 @@ import {
   Loader2,
   Save
 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { WizardCard, WizardCardHeader } from "@/components/wizard/WizardCard";
 import { AmountInput } from "@/components/wizard/AmountInput";
 import { ReportButton } from "@/components/reports/ReportButton";
@@ -329,7 +329,11 @@ const KBRModule = () => {
       ) : (
         <div className="rounded-md border border-warning/40 bg-warning/10 p-4">
           <p className="text-sm font-semibold text-foreground">
-            Osäker på vilket alternativ som passar? Det är normalt.
+            Osäker på vilket alternativ som passar? Det är normalt.{" "}
+            <Link to="/kunskap/kontrollbalansrakning" className="font-medium text-accent underline underline-offset-4">
+              Läs vad kontrollbalansräkningen innebär
+            </Link>
+            .
           </p>
           <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
             Valet här förutsätter att du redan vet bolagets vägval – avveckla,

@@ -15,6 +15,7 @@ import { Loader2 } from "lucide-react";
 // page shouldn't have to download the recharts-heavy liquidity timeline.
 const Index = lazy(() => import("./pages/Index"));
 const About = lazy(() => import("./pages/About"));
+const Knowledge = lazy(() => import("./pages/Knowledge"));
 const Login = lazy(() => import("./pages/Login"));
 const CrisisWizard = lazy(() => import("./pages/CrisisWizard"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
@@ -63,6 +64,8 @@ const App = () => (
               <Routes>
                 <Route path="/" element={<Index />} />
                 <Route path="/om" element={<About />} />
+                <Route path="/kunskap" element={<Knowledge />} />
+                <Route path="/kunskap/:slug" element={<Knowledge />} />
                 <Route path="/login" element={<Login />} />
                 <Route path="/wizard" element={<CrisisWizard />} />
                 <Route path="/kbr" element={<KBRModule />} />

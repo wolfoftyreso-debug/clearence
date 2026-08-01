@@ -12,6 +12,7 @@ const toolLinks = [
 
 const serviceLinks = [
   { to: "/om", label: "Om Clearance" },
+  { to: "/kunskap", label: "Kunskap" },
   { to: "/marketplace", label: "Hitta rådgivare" },
   { to: "/kontakt", label: "Kontakta oss" },
   { to: "/login", label: "Logga in" },
