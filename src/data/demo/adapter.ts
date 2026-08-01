@@ -246,6 +246,9 @@ const DEMO_PROFESSIONALS: ProfessionalRecord[] = [
 
 const DEMO_RATINGS: RatingRecord[] = [];
 
+/** Avtalade avgifter i demon. Sessionsminne räcker - inget avtal är på riktigt. */
+const demoFees = new Map<string, number>();
+
 /** A case with figures that put the company in a recognisably tight spot. */
 const seedCase = (userId: string): CaseRecord => ({
   id: `demo-case-${userId}`,
@@ -885,6 +888,21 @@ export const demoAdapter: DataPort = {
     async deleteSecret(provider) {
       state.secrets = state.secrets.filter((s) => s.provider !== provider);
       save();
+    },
+    async listProfessionalTerms() {
+      // Demons rådgivare är påhittade; avgifterna lagras per session.
+      return DEMO_PROFESSIONALS.map((pro) => ({
+        professionalId: pro.id,
+        name: pro.name,
+        company: pro.company,
+        billingEmail: null,
+        referralFeeSek: demoFees.get(pro.id) ?? null,
+        uninvoicedBillable: state.referrals.filter((r) => r.professionalId === pro.id).length,
+      }));
+    },
+    async setReferralFee(professionalId, feeSek) {
+      if (feeSek === null) demoFees.delete(professionalId);
+      else demoFees.set(professionalId, feeSek);
     },
   },
 

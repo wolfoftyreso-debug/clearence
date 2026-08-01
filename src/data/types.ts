@@ -471,3 +471,14 @@ export interface InvitationPeek {
   acceptedAt: string | null;
   revokedAt: string | null;
 }
+
+/** Driftens vy över en rådgivares villkor och ofakturerade underlag. */
+export interface ProfessionalTerms {
+  professionalId: string;
+  name: string;
+  company: string | null;
+  billingEmail: string | null;
+  /** Avtalad avgift per förmedling, i kronor. Null = inte satt, faktureras ej. */
+  referralFeeSek: number | null;
+  uninvoicedBillable: number;
+}

@@ -6,9 +6,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { data } from "@/data";
 import { billingState } from "@/lib/billing";
-import type { SecretInfo } from "@/data/types";
+import type { ProfessionalTerms, SecretInfo } from "@/data/types";
 import {
   AlertTriangle,
+  Banknote,
   ArrowRight,
   CheckCircle2,
   KeyRound,
@@ -167,6 +168,97 @@ const ProviderRow = ({ provider, stored }: { provider: (typeof PROVIDERS)[number
   );
 };
 
+/**
+ * Rådgivarnas avgifter: kronor per förmedling, satt av drift.
+ *
+ * Avgiften är en avtalsuppgift - rådgivaren kan aldrig ställa in den själv,
+ * och en ändring gäller framåt: redan skapade förmedlingar behåller sin
+ * stämplade avgift, så en omförhandling inte skriver om ett fakturaunderlag
+ * i efterhand. Utan avgift faktureras rådgivaren inte alls - körningen
+ * rapporterar det som överhoppat i stället för att gissa ett belopp.
+ */
+const FeeRow = ({ terms }: { terms: ProfessionalTerms }) => {
+  const queryClient = useQueryClient();
+  const [value, setValue] = useState(
+    terms.referralFeeSek === null ? "" : String(terms.referralFeeSek),
+  );
+  const set = useMutation({
+    mutationFn: () => {
+      const parsed = value.trim() === "" ? null : Number(value.replace(",", "."));
+      if (parsed !== null && (!Number.isFinite(parsed) || parsed < 0)) {
+        throw new Error("Ogiltigt belopp");
+      }
+      return data.ops.setReferralFee(terms.professionalId, parsed);
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["professional-terms"] }),
+  });
+
+  return (
+    <li className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-md border border-border p-3">
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-medium text-foreground">{terms.company ?? terms.name}</p>
+        <p className="text-xs text-muted-foreground">
+          {terms.uninvoicedBillable === 0
+            ? "Inget ofakturerat underlag"
+            : `${terms.uninvoicedBillable} ofakturerade förmedlingar`}
+          {terms.referralFeeSek === null && " · faktureras inte förrän avgift satts"}
+        </p>
+      </div>
+      <div className="flex items-center gap-2">
+        <Input
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          inputMode="numeric"
+          placeholder="kr/förmedling"
+          aria-label={`Avgift per förmedling för ${terms.company ?? terms.name}`}
+          className="w-32 text-right tabular-nums"
+        />
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={set.isPending}
+          onClick={() => set.mutate()}
+        >
+          Spara
+        </Button>
+      </div>
+      {set.isError && (
+        <p className="w-full text-xs text-destructive" role="alert">
+          Kunde inte spara avgiften.
+        </p>
+      )}
+    </li>
+  );
+};
+
+const FeeSection = () => {
+  const { data: terms } = useQuery({
+    queryKey: ["professional-terms"],
+    queryFn: () => data.ops.listProfessionalTerms(),
+  });
+
+  if (!terms || terms.length === 0) return null;
+  return (
+    <section aria-labelledby="fees-heading">
+      <h2 id="fees-heading" className="flex items-center gap-2 text-lg font-semibold text-foreground">
+        <Banknote className="h-5 w-5 text-accent" aria-hidden="true" />
+        Rådgivarnas avgifter
+      </h2>
+      <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+        Kronor per förmedlad förfrågan. Faktureras den 1:a varje månad för
+        föregående månads accepterade förfrågningar. En ändring gäller framåt –
+        redan skapade förmedlingar behåller sin stämplade avgift.
+      </p>
+      <ul className="mt-3 space-y-2">
+        {terms.map((t) => (
+          <FeeRow key={t.professionalId} terms={t} />
+        ))}
+      </ul>
+    </section>
+  );
+};
+
 const AdminOverview = () => {
   const now = new Date();
 
@@ -242,6 +334,8 @@ const AdminOverview = () => {
             urgent={false}
           />
         </section>
+
+        <FeeSection />
 
         <section aria-labelledby="api-keys-heading">
           <h2

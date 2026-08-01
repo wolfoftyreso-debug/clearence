@@ -924,6 +924,21 @@ export type Database = {
           revoked_at: string | null
         }[]
       }
+      set_referral_fee: {
+        Args: { p_professional_id: string; p_fee_sek: number | null }
+        Returns: undefined
+      }
+      list_professional_terms: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          professional_id: string
+          name: string
+          company: string | null
+          billing_email: string | null
+          referral_fee: number | null
+          uninvoiced_billable: number
+        }[]
+      }
       set_integration_secret: {
         Args: { p_provider: string; p_secret: string }
         Returns: undefined

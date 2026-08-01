@@ -5,6 +5,7 @@
  *   node db/dist/email-worker.cjs --remind   per timme: köa påminnelser
  *   node db/dist/email-worker.cjs --close    per dygn: stäng + köa besked
  *   node db/dist/email-worker.cjs --credit   per dygn: kreditbevakning
+ *   node db/dist/email-worker.cjs --invoice-referrals   1:a varje månad
  *
  * Byggs med `npm run build:worker` - källan är TypeScript just för att
  * mejlens innehåll ska komma från src/lib/email/messages.ts, samma byggare
@@ -31,9 +32,11 @@ import { SESClient, SendEmailCommand } from "@aws-sdk/client-ses";
 import {
   accountClosedEmail,
   caseInvitationEmail,
+  invoiceEmail,
   paymentReminderEmail,
   type EmailMessage,
 } from "../../src/lib/email/messages";
+import { COMPANY, missingInvoiceFields } from "../../src/lib/company";
 import {
   CASE_ROLE_DESCRIPTIONS,
   CASE_ROLE_LABELS,
@@ -151,8 +154,67 @@ const runCreditChecks = async (): Promise<void> => {
   console.log(`kreditbevakning: kontrollerade ${checked}, misslyckade ${failedChecks}`);
 };
 
+/**
+ * Månadsfaktureringen av förmedlingar.
+ *
+ * Själva faktureringen bor i databasen (issue_referral_invoices):
+ * nummerserie, öresbelopp, moms och engångsmärkning sker i EN transaktion
+ * där. Här görs två saker: bolagsspärren prövas (samma regel som
+ * kundfakturorna - inga fakturor utan momsregistrering, F-skatt och
+ * betalkonto), och mejlen byggs ur samma byggare som allt annat.
+ */
+const runReferralInvoicing = async (): Promise<void> => {
+  const blockers = missingInvoiceFields();
+  if (blockers.length > 0) {
+    console.log(`förmedlingsfakturering blockerad: ${blockers.join("; ")}`);
+    return;
+  }
+
+  const { rows } = await db.query("select * from public.issue_referral_invoices()");
+  let issued = 0;
+  for (const row of rows) {
+    if (row.skipped_reason) {
+      console.log(`hoppade över ${row.customer_name}: ${row.skipped_reason} (${row.referral_count} förmedlingar väntar)`);
+      continue;
+    }
+    const netOre = Number(row.net_ore);
+    await enqueue(
+      invoiceEmail({
+        invoiceNumber: row.invoice_number,
+        issuedAt: row.issued_at.toISOString(),
+        dueAt: row.due_at.toISOString(),
+        seller: COMPANY,
+        customer: { name: row.customer_name, orgNumber: null, email: row.recipient, address: null },
+        lines: [
+          {
+            description: `Förmedlade förfrågningar ${row.period_start.toISOString().slice(0, 7)} (${row.referral_count} st)`,
+            quantity: 1,
+            unitPriceOre: netOre,
+          },
+        ],
+        note: null,
+        totals: {
+          netOre,
+          vatOre: Number(row.vat_ore),
+          grossOre: Number(row.gross_ore),
+          vatRate: 0.25,
+        },
+      }),
+      { userId: row.user_id, invoiceId: row.invoice_id },
+    );
+    issued += 1;
+  }
+  console.log(`förmedlingsfakturor: ${issued} utställda, ${rows.length - issued} överhoppade`);
+};
+
 const main = async () => {
   await db.connect();
+
+  if (process.argv.includes("--invoice-referrals")) {
+    await runReferralInvoicing();
+    await db.end();
+    return;
+  }
 
   if (process.argv.includes("--credit")) {
     await runCreditChecks();

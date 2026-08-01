@@ -984,6 +984,26 @@ export const supabaseAdapter: DataPort = {
       });
       if (error) throw error;
     },
+
+    async listProfessionalTerms() {
+      const { data, error } = await supabase.rpc("list_professional_terms");
+      if (error) throw error;
+      return (data ?? []).map((row) => ({
+        professionalId: row.professional_id,
+        name: row.name,
+        company: row.company,
+        billingEmail: row.billing_email,
+        referralFeeSek: row.referral_fee === null ? null : Number(row.referral_fee),
+        uninvoicedBillable: Number(row.uninvoiced_billable),
+      }));
+    },
+    async setReferralFee(professionalId, feeSek) {
+      const { error } = await supabase.rpc("set_referral_fee", {
+        p_professional_id: professionalId,
+        p_fee_sek: feeSek,
+      });
+      if (error) throw error;
+    },
   },
 
   cases: {

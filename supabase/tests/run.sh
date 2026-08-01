@@ -19,3 +19,5 @@ $PSQL -d "$DB" -f supabase/tests/rls.sql 2>&1 | grep -E "^(NOTICE|ERROR|psql:)|A
 # miljöerna av samma skäl som RLS-sviten - en skillnad ska synas här,
 # inte i produktion.
 $PSQL -d "$DB" -f supabase/tests/billingJob.sql 2>&1 | grep -E "^(NOTICE|ERROR|psql:)|ALL BILLING" | sed 's/^NOTICE:  //'
+
+$PSQL -d "$DB" -f supabase/tests/referralInvoicing.sql 2>&1 | grep -E "^(NOTICE|ERROR|psql:)|ALL REFERRAL" | sed 's/^NOTICE:  //'

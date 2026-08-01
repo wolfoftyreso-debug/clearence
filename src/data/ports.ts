@@ -16,6 +16,7 @@ import type {
   CustomerInvoiceRecord,
   CustomerOverview,
   OutboundEmailRecord,
+  ProfessionalTerms,
   SecretInfo,
   UserProfile,
   UserRole,
@@ -312,6 +313,14 @@ export interface OpsPort {
   listSecrets(): Promise<SecretInfo[]>;
   setSecret(provider: string, secret: string): Promise<void>;
   deleteSecret(provider: string): Promise<void>;
+
+  /**
+   * Rådgivarnas avgifter. Avgiften är en avtalsuppgift och sätts av drift,
+   * aldrig av rådgivaren. Ändringen gäller framåt: redan skapade
+   * förmedlingar behåller sin stämplade avgift.
+   */
+  listProfessionalTerms(): Promise<ProfessionalTerms[]>;
+  setReferralFee(professionalId: string, feeSek: number | null): Promise<void>;
 }
 
 export interface MembersPort {
