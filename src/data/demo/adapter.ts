@@ -20,8 +20,11 @@ import type {
   AccountBillingRecord,
   ApplicationForReview,
   AuthUser,
+  CaseInvitationRecord,
+  CaseMemberRecord,
   CaseMessage,
   CaseRecord,
+  ConversationRecord,
   CaseTask,
   ContactMessageRecord,
   CustomerInvoiceRecord,
@@ -37,8 +40,9 @@ import type {
 } from "../types";
 import type { FinancialSnapshot, OpenItem, Voucher } from "@/lib/financial/model";
 import { nextInvoiceNumber } from "@/lib/invoice";
-import { accountClosedEmail, invoiceEmail, receiptEmail } from "@/lib/email/messages";
+import { accountClosedEmail, caseInvitationEmail, invoiceEmail, receiptEmail } from "@/lib/email/messages";
 import { COMPANY } from "@/lib/company";
+import { CASE_ROLE_DESCRIPTIONS, CASE_ROLE_LABELS } from "@/lib/caseRoles";
 
 const STORAGE_KEY = "clearance-demo-state";
 
@@ -58,6 +62,9 @@ interface DemoState {
   customerInvoices: CustomerInvoiceRecord[];
   secrets: SecretInfo[];
   outbox: OutboundEmailRecord[];
+  caseMembers: CaseMemberRecord[];
+  caseInvitations: CaseInvitationRecord[];
+  conversations: ConversationRecord[];
 }
 
 const emptyState = (): DemoState => ({
@@ -76,6 +83,9 @@ const emptyState = (): DemoState => ({
   customerInvoices: [],
   secrets: [],
   outbox: [],
+  caseMembers: [],
+  caseInvitations: [],
+  conversations: [],
 });
 
 /** Files cannot go in localStorage, so they live for the session only. */
@@ -88,6 +98,13 @@ const load = () => {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) state = { ...emptyState(), ...(JSON.parse(raw) as DemoState) };
+    // Meddelanden sparade före utbyggnaden saknar de nya fälten.
+    for (const m of state.caseMessages) {
+      m.acks = m.acks ?? [];
+      m.conversationId = m.conversationId ?? null;
+      m.attachmentDocumentId = m.attachmentDocumentId ?? null;
+      m.expectsReplyFrom = m.expectsReplyFrom ?? null;
+    }
   } catch {
     state = emptyState();
   }
@@ -620,15 +637,24 @@ export const demoAdapter: DataPort = {
   messages: {
     async listByCase(caseId) {
       return state.caseMessages
-        .filter((m) => m.caseId === caseId)
+        .filter((m) => m.caseId === caseId && !m.conversationId)
         .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
     },
-    async send(caseId, body) {
+    async listByConversation(conversationId) {
+      return state.caseMessages
+        .filter((m) => m.conversationId === conversationId)
+        .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    },
+    async send(caseId, body, opts) {
       state.caseMessages.push({
         id: uid(),
         caseId,
+        conversationId: opts?.conversationId ?? null,
         authorUserId: state.user?.id ?? null,
         body,
+        attachmentDocumentId: opts?.attachmentDocumentId ?? null,
+        expectsReplyFrom: opts?.expectsReplyFrom ?? null,
+        acks: [],
         createdAt: now(),
         readAt: null,
       });
@@ -640,6 +666,96 @@ export const demoAdapter: DataPort = {
         m.readAt = now();
         save();
       }
+    },
+
+    async listConversations(caseId) {
+      return state.conversations.filter((c) => c.caseId === caseId);
+    },
+    async createDirect(caseId, otherUserId) {
+      const me = state.user?.id ?? "demo";
+      const other = state.caseMembers.find((m) => m.userId === otherUserId);
+      const conversation: ConversationRecord = {
+        id: uid(),
+        caseId,
+        kind: "direct",
+        title: null,
+        createdBy: me,
+        createdAt: now(),
+        mergedInto: null,
+        participants: [
+          { userId: me, displayName: state.profile?.displayName ?? "Du" },
+          { userId: otherUserId, displayName: other?.displayName ?? other?.email ?? "Deltagare" },
+        ],
+      };
+      state.conversations.push(conversation);
+      save();
+      return conversation.id;
+    },
+    async createGroup(caseId, title, participantUserIds) {
+      const me = state.user?.id ?? "demo";
+      const ids = Array.from(new Set([me, ...participantUserIds]));
+      const conversation: ConversationRecord = {
+        id: uid(),
+        caseId,
+        kind: "group",
+        title,
+        createdBy: me,
+        createdAt: now(),
+        mergedInto: null,
+        participants: ids.map((userId) => {
+          if (userId === me) return { userId, displayName: state.profile?.displayName ?? "Du" };
+          const member = state.caseMembers.find((m) => m.userId === userId);
+          return { userId, displayName: member?.displayName ?? member?.email ?? "Deltagare" };
+        }),
+      };
+      state.conversations.push(conversation);
+      save();
+      return conversation.id;
+    },
+    async merge(fromConversationId, toConversationId) {
+      const from = state.conversations.find((c) => c.id === fromConversationId);
+      const to = state.conversations.find((c) => c.id === toConversationId);
+      if (!from || !to || from.kind !== "group" || to.kind !== "group") {
+        throw new Error("Endast grupptrådar kan slås ihop.");
+      }
+      for (const m of state.caseMessages) {
+        if (m.conversationId === fromConversationId) m.conversationId = toConversationId;
+      }
+      for (const p of from.participants) {
+        if (!to.participants.some((x) => x.userId === p.userId)) to.participants.push(p);
+      }
+      from.mergedInto = toConversationId;
+      save();
+    },
+
+    async ack(messageId) {
+      const me = state.user?.id ?? "demo";
+      const m = state.caseMessages.find((x) => x.id === messageId);
+      if (m && !m.acks.some((a) => a.userId === me)) {
+        m.acks.push({ userId: me, ackedAt: now() });
+        save();
+      }
+    },
+    async myOpenMentions() {
+      const me = state.user?.id ?? "demo";
+      return state.caseMessages
+        .filter((m) => m.expectsReplyFrom === me && !m.acks.some((a) => a.userId === me))
+        .map((m) => {
+          const conversation = state.conversations.find((c) => c.id === m.conversationId);
+          return {
+            messageId: m.id,
+            caseId: m.caseId,
+            conversationId: m.conversationId,
+            conversationTitle: conversation?.title ?? null,
+            authorName:
+              m.authorUserId === me
+                ? (state.profile?.displayName ?? "Du")
+                : (state.caseMembers.find((x) => x.userId === m.authorUserId)?.displayName ?? null),
+            body: m.body,
+            createdAt: m.createdAt,
+          };
+        })
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
     },
   },
 
@@ -769,6 +885,121 @@ export const demoAdapter: DataPort = {
     async deleteSecret(provider) {
       state.secrets = state.secrets.filter((s) => s.provider !== provider);
       save();
+    },
+  },
+
+  members: {
+    async listMembers(caseId) {
+      // Demoanvändaren är alltid ärendets företrädare; raden sås vid första
+      // anblicken så listan aldrig är tom och obegriplig.
+      if (state.user && !state.caseMembers.some((m) => m.caseId === caseId)) {
+        state.caseMembers.push({
+          id: uid(),
+          caseId,
+          userId: state.user.id,
+          role: "owner",
+          displayName: state.profile?.displayName ?? "Du",
+          email: state.user.email,
+          createdAt: now(),
+          revokedAt: null,
+        });
+        save();
+      }
+      return state.caseMembers.filter((m) => m.caseId === caseId);
+    },
+    async listInvitations(caseId) {
+      return state.caseInvitations
+        .filter((i) => i.caseId === caseId)
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    },
+    async invite(caseId, email, role) {
+      const address = email.trim().toLowerCase();
+      if (
+        state.caseInvitations.some(
+          (i) => i.caseId === caseId && i.email === address && !i.acceptedAt && !i.revokedAt,
+        )
+      ) {
+        throw new Error("Adressen har redan en öppen inbjudan.");
+      }
+      const id = uid();
+      const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+      state.caseInvitations.push({
+        id,
+        caseId,
+        email: address,
+        role,
+        createdAt: now(),
+        expiresAt,
+        acceptedAt: null,
+        revokedAt: null,
+      });
+      // Som på riktigt: mejlet hamnar i utkorgen, synligt i driftpanelen.
+      const message = caseInvitationEmail({
+        recipient: address,
+        inviterName: state.profile?.displayName ?? state.user?.email ?? "En kollega",
+        companyName:
+          state.cases.find((c) => c.id === caseId)?.companyName ?? "bolaget",
+        roleLabel: CASE_ROLE_LABELS[role],
+        roleDescription: CASE_ROLE_DESCRIPTIONS[role],
+        acceptUrl: `${window.location.origin}${window.location.pathname}#/inbjudan/${id}`,
+        expiresAt,
+      });
+      state.outbox.unshift({
+        id: uid(),
+        recipient: message.recipient,
+        subject: message.subject,
+        kind: message.kind,
+        status: "sent",
+        attempts: 1,
+        lastError: null,
+        createdAt: now(),
+        sentAt: now(),
+      });
+      save();
+    },
+    async revokeInvitation(invitationId) {
+      const invitation = state.caseInvitations.find((i) => i.id === invitationId);
+      if (invitation && !invitation.acceptedAt && !invitation.revokedAt) {
+        invitation.revokedAt = now();
+        save();
+      }
+    },
+    async peekInvitation(invitationId) {
+      const invitation = state.caseInvitations.find((i) => i.id === invitationId);
+      if (!invitation) return null;
+      const caseRecord = state.cases.find((c) => c.id === invitation.caseId);
+      return {
+        id: invitation.id,
+        companyName: caseRecord?.companyName ?? null,
+        orgNumber: caseRecord?.orgNumber ?? "",
+        role: invitation.role,
+        inviterName: state.profile?.displayName ?? null,
+        expiresAt: invitation.expiresAt,
+        acceptedAt: invitation.acceptedAt,
+        revokedAt: invitation.revokedAt,
+      };
+    },
+    async acceptInvitation(invitationId) {
+      const invitation = state.caseInvitations.find((i) => i.id === invitationId);
+      if (!invitation) throw new Error("Inbjudan finns inte eller är ställd till en annan adress.");
+      if (invitation.revokedAt) throw new Error("Inbjudan är återkallad.");
+      if (invitation.acceptedAt) throw new Error("Inbjudan är redan använd.");
+      invitation.acceptedAt = now();
+      // I demon är det samma webbläsare som "tar emot" inbjudan, men
+      // medlemmen måste få ett EGET id - annars finns ingen motpart att
+      // starta direkta trådar med, och hela poängen med demot försvinner.
+      state.caseMembers.push({
+        id: uid(),
+        caseId: invitation.caseId,
+        userId: demoUserId(invitation.email),
+        role: invitation.role,
+        displayName: invitation.email,
+        email: invitation.email,
+        createdAt: now(),
+        revokedAt: null,
+      });
+      save();
+      return invitation.caseId;
     },
   },
 

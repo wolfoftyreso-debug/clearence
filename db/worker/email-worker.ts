@@ -30,13 +30,21 @@ import { Client } from "pg";
 import { SESClient, SendEmailCommand } from "@aws-sdk/client-ses";
 import {
   accountClosedEmail,
+  caseInvitationEmail,
   paymentReminderEmail,
   type EmailMessage,
 } from "../../src/lib/email/messages";
+import {
+  CASE_ROLE_DESCRIPTIONS,
+  CASE_ROLE_LABELS,
+  type CaseRole,
+} from "../../src/lib/caseRoles";
 
 const DATABASE_URL = process.env.DATABASE_URL;
 const SES_REGION = process.env.SES_REGION ?? "eu-north-1";
 const MAIL_FROM = process.env.MAIL_FROM;
+/** Bas för länkar i mejl, t.ex. inbjudans acceptlänk. */
+const APP_BASE_URL = (process.env.APP_BASE_URL ?? "https://clearance.se").replace(/\/$/, "");
 
 if (!DATABASE_URL || !MAIL_FROM) {
   console.error("DATABASE_URL och MAIL_FROM måste vara satta.");
@@ -192,6 +200,51 @@ const main = async () => {
       );
     }
     console.log(`påminnelser köade: ${rows.filter((r) => r.invoice_number).length}`);
+  }
+
+  // Inbjudningar som ännu inte mejlats. Klienten kan inte skriva i utkorgen
+  // (det vore en spamkanal med vårt avsändarrykte), så mejlet byggs här, ur
+  // samma byggare som allt annat, och bockas av i samma transaktion som det
+  // köas - kraschar något mellan stegen plockas inbjudan om, inte dubblas.
+  await db.query("begin");
+  try {
+    const { rows: invitations } = await db.query(
+      `select i.id, i.email, i.role, i.expires_at,
+              coalesce(c.company_name, 'bolaget') as company_name,
+              coalesce(p.display_name, 'En kollega') as inviter_name
+       from public.case_invitations i
+       join public.cases c on c.id = i.case_id
+       left join public.user_profiles p on p.user_id = i.invited_by
+       where i.email_enqueued_at is null
+         and i.accepted_at is null
+         and i.revoked_at is null
+         and i.expires_at > now()
+       for update of i skip locked`,
+    );
+    for (const invitation of invitations) {
+      const role = invitation.role as CaseRole;
+      await enqueue(
+        caseInvitationEmail({
+          recipient: invitation.email,
+          inviterName: invitation.inviter_name,
+          companyName: invitation.company_name,
+          roleLabel: CASE_ROLE_LABELS[role] ?? invitation.role,
+          roleDescription: CASE_ROLE_DESCRIPTIONS[role] ?? "",
+          acceptUrl: `${APP_BASE_URL}/inbjudan/${invitation.id}`,
+          expiresAt: invitation.expires_at.toISOString(),
+        }),
+        { userId: null, invoiceId: null },
+      );
+      await db.query(
+        "update public.case_invitations set email_enqueued_at = now() where id = $1",
+        [invitation.id],
+      );
+    }
+    await db.query("commit");
+    if (invitations.length > 0) console.log(`inbjudningar köade: ${invitations.length}`);
+  } catch (error) {
+    await db.query("rollback");
+    throw error;
   }
 
   const { rows: batch } = await db.query(

@@ -35,6 +35,87 @@ export type Database = {
         }
         Relationships: []
       }
+      conversations: {
+        Row: {
+          case_id: string
+          created_at: string
+          created_by: string | null
+          id: string
+          kind: string
+          merged_into: string | null
+          title: string | null
+        }
+        Insert: {
+          case_id: string
+          created_by: string
+          kind: string
+          title?: string | null
+        }
+        Update: never
+        Relationships: [
+          {
+            foreignKeyName: "conversations_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: false
+            referencedRelation: "cases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      conversation_participants: {
+        Row: {
+          added_by: string | null
+          conversation_id: string
+          created_at: string
+          user_id: string
+        }
+        Insert: {
+          added_by?: string | null
+          conversation_id: string
+          user_id: string
+        }
+        Update: never
+        Relationships: []
+      }
+      message_acks: {
+        Row: {
+          acked_at: string
+          message_id: string
+          user_id: string
+        }
+        Insert: {
+          message_id: string
+          user_id: string
+        }
+        Update: never
+        Relationships: []
+      }
+      case_invitations: {
+        Row: {
+          accepted_at: string | null
+          accepted_by: string | null
+          case_id: string
+          created_at: string
+          email: string
+          email_enqueued_at: string | null
+          expires_at: string
+          id: string
+          invited_by: string | null
+          revoked_at: string | null
+          role: Database["public"]["Enums"]["case_role"]
+        }
+        Insert: never
+        Update: never
+        Relationships: [
+          {
+            foreignKeyName: "case_invitations_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: false
+            referencedRelation: "cases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       case_tasks: {
         Row: {
           case_id: string
@@ -69,16 +150,22 @@ export type Database = {
       case_messages: {
         Row: {
           author_user_id: string | null
+          attachment_document_id: string | null
           body: string
           case_id: string
+          conversation_id: string | null
           created_at: string
+          expects_reply_from: string | null
           id: string
           read_at: string | null
         }
         Insert: {
           author_user_id?: string | null
+          attachment_document_id?: string | null
           body: string
           case_id: string
+          conversation_id?: string | null
+          expects_reply_from?: string | null
         }
         // Endast read_at. En skickad text kan inte ändras - se triggern
         // case_messages_no_edit i migrationen.
@@ -780,6 +867,63 @@ export type Database = {
         }
         Returns: undefined
       }
+      merge_conversations: {
+        Args: { p_from: string; p_to: string }
+        Returns: undefined
+      }
+      my_open_mentions: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          message_id: string
+          case_id: string
+          conversation_id: string | null
+          conversation_title: string | null
+          author_name: string | null
+          body: string
+          created_at: string
+        }[]
+      }
+      invite_to_case: {
+        Args: {
+          p_case_id: string
+          p_email: string
+          p_role: Database["public"]["Enums"]["case_role"]
+        }
+        Returns: string
+      }
+      revoke_case_invitation: {
+        Args: { p_invitation_id: string }
+        Returns: undefined
+      }
+      peek_case_invitation: {
+        Args: { p_invitation_id: string }
+        Returns: {
+          id: string
+          company_name: string | null
+          org_number: string
+          role: Database["public"]["Enums"]["case_role"]
+          inviter_name: string | null
+          expires_at: string
+          accepted_at: string | null
+          revoked_at: string | null
+        }[]
+      }
+      accept_case_invitation: {
+        Args: { p_invitation_id: string }
+        Returns: string
+      }
+      list_case_members: {
+        Args: { p_case_id: string }
+        Returns: {
+          id: string
+          user_id: string
+          role: Database["public"]["Enums"]["case_role"]
+          display_name: string | null
+          email: string | null
+          created_at: string
+          revoked_at: string | null
+        }[]
+      }
       set_integration_secret: {
         Args: { p_provider: string; p_secret: string }
         Returns: undefined
@@ -804,6 +948,16 @@ export type Database = {
     }
     Enums: {
       application_status: "pending" | "needs_info" | "approved" | "rejected"
+      case_role:
+        | "owner"
+        | "company_staff"
+        | "reconstructor"
+        | "trustee"
+        | "auditor"
+        | "legal_advisor"
+        | "board_member"
+        | "creditor"
+        | "observer"
       contact_status: "new" | "in_progress" | "answered" | "closed"
       customer_invoice_status: "issued" | "paid" | "cancelled"
       outbound_email_status: "pending" | "sent" | "failed"

@@ -423,6 +423,409 @@ begin
   raise notice 'ok    a case can be deleted and its audit trail survives';
 end $$;
 
+/* ========================================================================== */
+/* Inbjudningar: länken är inte nyckeln, adressen är                          */
+/* ========================================================================== */
+
+-- Ny mottagare utan konto i fixturen: 'styrelse@bolag-a.se'.
+reset role;
+insert into auth.users (id, email, password_hash) values
+  ('77777777-7777-7777-7777-777777777777', 'styrelse@bolag-a.se', 'x');
+
+-- Ägaren bjuder in en styrelseledamot till ärende A.
+set local role authenticated;
+select pg_temp.as_user('11111111-1111-1111-1111-111111111111');
+
+do $$
+declare
+  v_id uuid;
+begin
+  v_id := public.invite_to_case(
+    'aaaaaaaa-0000-0000-0000-000000000001', 'Styrelse@Bolag-A.se', 'board_member');
+  if v_id is null then
+    raise exception 'FAIL  invite_to_case returned null';
+  end if;
+  perform set_config('test.invitation_id', v_id::text, false);
+  raise notice 'ok    the owner can invite a board member';
+end $$;
+
+-- Adressen normaliseras till gemener redan vid inbjudan.
+do $$
+declare
+  v_email text;
+begin
+  select email into v_email from public.case_invitations
+  where id = current_setting('test.invitation_id')::uuid;
+  if v_email <> 'styrelse@bolag-a.se' then
+    raise exception 'FAIL  email stored as %, not lowercased', v_email;
+  end if;
+  raise notice 'ok    the invited address is stored lowercased';
+end $$;
+
+-- Utomstående kan varken bjuda in eller se inbjudningar.
+select pg_temp.as_user('66666666-6666-6666-6666-666666666666');
+do $$
+begin
+  begin
+    perform public.invite_to_case(
+      'aaaaaaaa-0000-0000-0000-000000000001', 'nagon@annan.se', 'observer');
+    raise exception 'FAIL  an outsider could invite into a foreign case';
+  exception when others then
+    if sqlerrm like 'FAIL%' then raise; end if;
+      raise notice 'ok    an outsider cannot invite into a foreign case';
+  end;
+end $$;
+do $$
+declare v_count int;
+begin
+  select count(*) into v_count from public.case_invitations;
+  if v_count <> 0 then
+    raise exception 'FAIL  an outsider sees % invitations', v_count;
+  end if;
+  raise notice 'ok    an outsider sees no invitations';
+end $$;
+
+-- Revisorn (medlem) ser ärendets inbjudan.
+select pg_temp.as_user('44444444-4444-4444-4444-444444444444');
+do $$
+declare v_count int;
+begin
+  select count(*) into v_count from public.case_invitations
+  where case_id = 'aaaaaaaa-0000-0000-0000-000000000001';
+  if v_count <> 1 then
+    raise exception 'FAIL  a member sees % invitations, expected 1', v_count;
+  end if;
+  raise notice 'ok    case members see the case''s invitations';
+end $$;
+
+-- Men revisorn (läsroll) kan inte bjuda in.
+do $$
+begin
+  begin
+    perform public.invite_to_case(
+      'aaaaaaaa-0000-0000-0000-000000000001', 'fler@personer.se', 'observer');
+    raise exception 'FAIL  a read-only member could invite';
+  exception when others then
+    if sqlerrm like 'FAIL%' then raise; end if;
+    raise notice 'ok    a read-only member cannot invite';
+  end;
+end $$;
+
+-- Fel adress: inbjudan är osynlig och accept nekas, trots känd länk.
+select pg_temp.as_user('66666666-6666-6666-6666-666666666666');
+do $$
+declare v_count int;
+begin
+  select count(*) into v_count from public.peek_case_invitation(
+    current_setting('test.invitation_id')::uuid);
+  if v_count <> 0 then
+    raise exception 'FAIL  peek leaked an invitation to the wrong address';
+  end if;
+  raise notice 'ok    peek is silent for the wrong address';
+end $$;
+do $$
+begin
+  begin
+    perform public.accept_case_invitation(current_setting('test.invitation_id')::uuid);
+    raise exception 'FAIL  the wrong address could accept the invitation';
+  exception when others then
+    if sqlerrm like 'FAIL%' then raise; end if;
+    raise notice 'ok    the link alone does not grant membership';
+  end;
+end $$;
+
+-- Rätt adress: peek visar bolaget, accept ger medlemskap.
+select pg_temp.as_user('77777777-7777-7777-7777-777777777777');
+do $$
+declare v_company text;
+begin
+  select company_name into v_company from public.peek_case_invitation(
+    current_setting('test.invitation_id')::uuid);
+  if v_company is distinct from 'Bolag A AB' then
+    raise exception 'FAIL  peek returned %, expected Bolag A AB', v_company;
+  end if;
+  raise notice 'ok    the invited address sees what it is invited to';
+end $$;
+do $$
+declare v_case uuid;
+begin
+  v_case := public.accept_case_invitation(current_setting('test.invitation_id')::uuid);
+  if v_case <> 'aaaaaaaa-0000-0000-0000-000000000001' then
+    raise exception 'FAIL  accept returned wrong case %', v_case;
+  end if;
+  if not public.has_case_access('aaaaaaaa-0000-0000-0000-000000000001') then
+    raise exception 'FAIL  accept did not grant case access';
+  end if;
+  raise notice 'ok    accepting with the right address grants membership';
+end $$;
+
+-- En inbjudan är engångs: andra accepten nekas.
+do $$
+begin
+  begin
+    perform public.accept_case_invitation(current_setting('test.invitation_id')::uuid);
+    raise exception 'FAIL  an invitation could be accepted twice';
+  exception when others then
+    if sqlerrm like 'FAIL%' then raise; end if;
+    raise notice 'ok    an invitation can only be used once';
+  end;
+end $$;
+
+-- Återkallad inbjudan kan inte användas.
+select pg_temp.as_user('11111111-1111-1111-1111-111111111111');
+do $$
+declare v_id uuid;
+begin
+  v_id := public.invite_to_case(
+    'aaaaaaaa-0000-0000-0000-000000000001', 'aterkallad@test.se', 'observer');
+  perform public.revoke_case_invitation(v_id);
+  perform set_config('test.revoked_id', v_id::text, false);
+  raise notice 'ok    the owner can revoke an open invitation';
+end $$;
+reset role;
+insert into auth.users (id, email, password_hash) values
+  ('88888888-8888-8888-8888-888888888888', 'aterkallad@test.se', 'x');
+set local role authenticated;
+select pg_temp.as_user('88888888-8888-8888-8888-888888888888');
+do $$
+begin
+  begin
+    perform public.accept_case_invitation(current_setting('test.revoked_id')::uuid);
+    raise exception 'FAIL  a revoked invitation could be accepted';
+  exception when others then
+    if sqlerrm like 'FAIL%' then raise; end if;
+    raise notice 'ok    a revoked invitation cannot be accepted';
+  end;
+end $$;
+
+-- Borgenärer och ägare kan inte bjudas in: databasens spärr, inte menyns.
+select pg_temp.as_user('11111111-1111-1111-1111-111111111111');
+do $$
+begin
+  begin
+    perform public.invite_to_case(
+      'aaaaaaaa-0000-0000-0000-000000000001', 'borgenar2@lev.se', 'creditor');
+    raise exception 'FAIL  a creditor could be invited into the case';
+  exception when others then
+    if sqlerrm like 'FAIL%' then raise; end if;
+    raise notice 'ok    creditors cannot be invited into the case';
+  end;
+  begin
+    perform public.invite_to_case(
+      'aaaaaaaa-0000-0000-0000-000000000001', 'kupp@test.se', 'owner');
+    raise exception 'FAIL  ownership could be handed out by mail';
+  exception when others then
+    if sqlerrm like 'FAIL%' then raise; end if;
+    raise notice 'ok    ownership cannot be handed out by mail';
+  end;
+end $$;
+
+-- Medlemslistan visar namn för ärendets medlemmar men inget för utomstående.
+select pg_temp.as_user('44444444-4444-4444-4444-444444444444');
+do $$
+declare v_count int;
+begin
+  select count(*) into v_count from public.list_case_members(
+    'aaaaaaaa-0000-0000-0000-000000000001');
+  if v_count < 4 then
+    raise exception 'FAIL  member list returned % rows', v_count;
+  end if;
+  raise notice 'ok    members can list who is on the case';
+end $$;
+select pg_temp.as_user('66666666-6666-6666-6666-666666666666');
+do $$
+declare v_count int;
+begin
+  select count(*) into v_count from public.list_case_members(
+    'aaaaaaaa-0000-0000-0000-000000000001');
+  if v_count <> 0 then
+    raise exception 'FAIL  an outsider listed % members', v_count;
+  end if;
+  raise notice 'ok    outsiders cannot list the members';
+end $$;
+
+/* ========================================================================== */
+/* Trådar: en direkt tråd är privat även inom ärendet                          */
+/* ========================================================================== */
+
+-- Ägaren (1111) startar en direkt tråd med styrelseledamoten (7777, medlem
+-- sedan inbjudningstesterna) och skickar ett taggat meddelande.
+set local role authenticated;
+select pg_temp.as_user('11111111-1111-1111-1111-111111111111');
+
+do $$
+declare
+  v_conv uuid;
+  v_msg uuid;
+begin
+  insert into public.conversations (case_id, kind, created_by)
+  values ('aaaaaaaa-0000-0000-0000-000000000001', 'direct',
+          '11111111-1111-1111-1111-111111111111')
+  returning id into v_conv;
+  insert into public.conversation_participants (conversation_id, user_id, added_by) values
+    (v_conv, '11111111-1111-1111-1111-111111111111', '11111111-1111-1111-1111-111111111111'),
+    (v_conv, '77777777-7777-7777-7777-777777777777', '11111111-1111-1111-1111-111111111111');
+  insert into public.case_messages
+    (case_id, conversation_id, author_user_id, body, expects_reply_from)
+  values ('aaaaaaaa-0000-0000-0000-000000000001', v_conv,
+          '11111111-1111-1111-1111-111111111111',
+          'Kan du bekräfta styrelsens beslut?',
+          '77777777-7777-7777-7777-777777777777')
+  returning id into v_msg;
+  perform set_config('test.conv_id', v_conv::text, false);
+  perform set_config('test.msg_id', v_msg::text, false);
+  raise notice 'ok    a member can open a direct thread and tag a participant';
+end $$;
+
+-- Revisorn är medlem i ärendet men INTE deltagare: tråden är osynlig.
+select pg_temp.as_user('44444444-4444-4444-4444-444444444444');
+do $$
+declare v_count int;
+begin
+  select count(*) into v_count from public.conversations
+  where id = current_setting('test.conv_id')::uuid;
+  if v_count <> 0 then
+    raise exception 'FAIL  a non-participant member sees the direct thread';
+  end if;
+  select count(*) into v_count from public.case_messages
+  where conversation_id = current_setting('test.conv_id')::uuid;
+  if v_count <> 0 then
+    raise exception 'FAIL  a non-participant member reads the direct messages';
+  end if;
+  raise notice 'ok    a direct thread is invisible to other case members';
+end $$;
+
+-- Och revisorn kan inte kvittera ett meddelande hen inte ser.
+do $$
+begin
+  begin
+    insert into public.message_acks (message_id, user_id)
+    values (current_setting('test.msg_id')::uuid, '44444444-4444-4444-4444-444444444444');
+    raise exception 'FAIL  a non-participant could ack an invisible message';
+  exception when others then
+    if sqlerrm like 'FAIL%' then raise; end if;
+    raise notice 'ok    acks require being able to see the message';
+  end;
+end $$;
+
+-- Den taggade ser notisen, kvitterar, och notisen släcks.
+select pg_temp.as_user('77777777-7777-7777-7777-777777777777');
+do $$
+declare v_count int;
+begin
+  select count(*) into v_count from public.my_open_mentions();
+  if v_count <> 1 then
+    raise exception 'FAIL  the tagged member has % open mentions, expected 1', v_count;
+  end if;
+  insert into public.message_acks (message_id, user_id)
+  values (current_setting('test.msg_id')::uuid, '77777777-7777-7777-7777-777777777777');
+  select count(*) into v_count from public.my_open_mentions();
+  if v_count <> 0 then
+    raise exception 'FAIL  the mention survived the ack';
+  end if;
+  raise notice 'ok    the tag shows as a mention and the ack clears it';
+end $$;
+
+-- Kvittensen är slutgiltig: utan delete-policy raderas noll rader, och
+-- skulle någon policy senare öppna vägen stoppar triggern med ett fel.
+do $$
+declare v_count int;
+begin
+  begin
+    delete from public.message_acks
+    where message_id = current_setting('test.msg_id')::uuid;
+  exception when others then
+    null; -- triggerns fel är också ett godkänt utfall
+  end;
+  select count(*) into v_count from public.message_acks
+  where message_id = current_setting('test.msg_id')::uuid;
+  if v_count <> 1 then
+    raise exception 'FAIL  the ack was deleted';
+  end if;
+  raise notice 'ok    an ack cannot be taken back';
+end $$;
+
+-- En utomstående kan inte tagga in sig eller läggas till i en tråd.
+select pg_temp.as_user('11111111-1111-1111-1111-111111111111');
+do $$
+begin
+  begin
+    insert into public.conversation_participants (conversation_id, user_id, added_by)
+    values (current_setting('test.conv_id')::uuid,
+            '66666666-6666-6666-6666-666666666666',
+            '11111111-1111-1111-1111-111111111111');
+    raise exception 'FAIL  a non-member was added to a thread';
+  exception when others then
+    if sqlerrm like 'FAIL%' then raise; end if;
+    raise notice 'ok    only case members can be thread participants';
+  end;
+end $$;
+
+/* ========================================================================== */
+/* Sammanslagning av dubblettgrupper                                          */
+/* ========================================================================== */
+
+select pg_temp.as_user('11111111-1111-1111-1111-111111111111');
+do $$
+declare
+  v_g1 uuid;
+  v_g2 uuid;
+  v_count int;
+begin
+  -- Samma grupp öppnad två gånger.
+  insert into public.conversations (case_id, kind, title, created_by)
+  values ('aaaaaaaa-0000-0000-0000-000000000001', 'group', 'Bankfrågor',
+          '11111111-1111-1111-1111-111111111111')
+  returning id into v_g1;
+  insert into public.conversation_participants (conversation_id, user_id) values
+    (v_g1, '11111111-1111-1111-1111-111111111111'),
+    (v_g1, '77777777-7777-7777-7777-777777777777');
+  insert into public.conversations (case_id, kind, title, created_by)
+  values ('aaaaaaaa-0000-0000-0000-000000000001', 'group', 'Bankfrågor',
+          '11111111-1111-1111-1111-111111111111')
+  returning id into v_g2;
+  insert into public.conversation_participants (conversation_id, user_id) values
+    (v_g2, '11111111-1111-1111-1111-111111111111'),
+    (v_g2, '44444444-4444-4444-4444-444444444444');
+
+  insert into public.case_messages (case_id, conversation_id, author_user_id, body)
+  values ('aaaaaaaa-0000-0000-0000-000000000001', v_g1,
+          '11111111-1111-1111-1111-111111111111', 'Meddelande i första gruppen');
+  insert into public.case_messages (case_id, conversation_id, author_user_id, body)
+  values ('aaaaaaaa-0000-0000-0000-000000000001', v_g2,
+          '11111111-1111-1111-1111-111111111111', 'Meddelande i dubbletten');
+
+  perform public.merge_conversations(v_g2, v_g1);
+
+  select count(*) into v_count from public.case_messages
+  where conversation_id = v_g1;
+  if v_count <> 2 then
+    raise exception 'FAIL  the merge left % messages in the target, expected 2', v_count;
+  end if;
+  select count(*) into v_count from public.conversation_participants
+  where conversation_id = v_g1;
+  if v_count <> 3 then
+    raise exception 'FAIL  the merge left % participants, expected 3', v_count;
+  end if;
+  if (select merged_into from public.conversations where id = v_g2) <> v_g1 then
+    raise exception 'FAIL  the source was not marked merged';
+  end if;
+  raise notice 'ok    duplicate groups merge: messages moved, participants united';
+end $$;
+
+-- Innehållet i ett skickat meddelande är orörligt även efter utbyggnaden.
+do $$
+begin
+  begin
+    update public.case_messages set body = 'Omskrivet'
+    where body = 'Meddelande i dubbletten';
+    raise exception 'FAIL  a sent message body could be rewritten';
+  exception when others then
+    if sqlerrm like 'FAIL%' then raise; end if;
+    raise notice 'ok    a sent message still cannot be rewritten';
+  end;
+end $$;
+
 reset role;
 select 'ALL RLS TESTS PASSED' as result;
 

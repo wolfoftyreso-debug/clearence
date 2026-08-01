@@ -9,6 +9,7 @@ import { paymentAccounts } from "@/lib/company";
 import type { UserRole } from "@/data/types";
 import {
   Banknote,
+  Bell,
   Briefcase,
   FileText,
   Gauge,
@@ -21,6 +22,7 @@ import {
   MessageSquare,
   Settings,
   TrendingDown,
+  UserPlus,
   Users,
   X,
 } from "lucide-react";
@@ -50,6 +52,7 @@ const COMPANY_NAV: NavItem[] = [
   { icon: TrendingDown, label: "Likviditet", href: "/dashboard/liquidity" },
   { icon: FileText, label: "Dokument", href: "/dashboard/dokument" },
   { icon: MessageSquare, label: "Meddelanden", href: "/dashboard/meddelanden" },
+  { icon: UserPlus, label: "Deltagare", href: "/dashboard/deltagare" },
   { icon: Users, label: "Rådgivare", href: "/marketplace" },
   { icon: Banknote, label: "Kreditunderlag", href: "/dashboard/kreditunderlag" },
   { icon: Settings, label: "Inställningar", href: "/dashboard/installningar" },
@@ -166,6 +169,85 @@ const LockedAccountView = ({ signOut }: { signOut: () => void }) => {
         </div>
       </div>
     </main>
+  );
+};
+
+/**
+ * Notiscentret.
+ *
+ * Innehållet är taggade meddelanden som väntar på DITT svar - inget annat.
+ * En notis släcks av din uppfattat-kvittens i tråden, inte av att du öppnat
+ * panelen: att ha sett klockan är inte att ha svarat rekonstruktören.
+ */
+const NotificationBell = () => {
+  const [open, setOpen] = useState(false);
+  const navigate = useNavigate();
+
+  const { data: mentions } = useQuery({
+    queryKey: ["open-mentions"],
+    queryFn: () => data.messages.myOpenMentions(),
+    retry: false,
+    refetchInterval: 60_000,
+  });
+
+  const count = (mentions ?? []).length;
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-label={
+          count > 0 ? `Notiser: ${count} meddelanden väntar på ditt svar` : "Notiser"
+        }
+        aria-expanded={open}
+        className="relative rounded-md p-2 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+      >
+        <Bell className="h-5 w-5" aria-hidden="true" />
+        {count > 0 && (
+          <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-frist px-1 text-[10px] font-semibold text-white">
+            {count}
+          </span>
+        )}
+      </button>
+
+      {open && (
+        <div className="absolute right-0 top-full z-50 mt-1 w-80 max-w-[calc(100vw-2rem)] rounded-md border border-border bg-card p-2 shadow-medium">
+          <p className="px-2 py-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            Väntar på ditt svar
+          </p>
+          {count === 0 ? (
+            <p className="px-2 py-3 text-sm text-muted-foreground">
+              Inget väntar på dig. Notiser dyker upp här när någon taggar dig
+              för svar i ett meddelande.
+            </p>
+          ) : (
+            <ul>
+              {(mentions ?? []).slice(0, 6).map((mention) => (
+                <li key={mention.messageId}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOpen(false);
+                      navigate("/dashboard/meddelanden");
+                    }}
+                    className="w-full rounded-md px-2 py-2 text-left transition-colors hover:bg-secondary"
+                  >
+                    <span className="block text-sm font-medium text-foreground">
+                      {mention.authorName ?? "Någon"} väntar på ditt svar
+                      {mention.conversationTitle ? ` i ${mention.conversationTitle}` : ""}
+                    </span>
+                    <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+                      {mention.body}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+    </div>
   );
 };
 
@@ -361,6 +443,7 @@ export const DashboardShell = ({ children, title, actions }: DashboardShellProps
             <Menu className="h-5 w-5" />
           </button>
           <h1 className="min-w-0 flex-1 truncate font-display text-lg text-foreground">{title}</h1>
+          <NotificationBell />
           {actions}
         </header>
 

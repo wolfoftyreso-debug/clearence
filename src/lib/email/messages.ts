@@ -28,7 +28,7 @@ export interface EmailMessage {
   bodyText: string;
   bodyHtml: string;
   /** Vad mejlet gäller. Lagras med raden så en rad går att spåra. */
-  kind: "invoice" | "receipt" | "payment_reminder" | "account_closed";
+  kind: "invoice" | "receipt" | "payment_reminder" | "account_closed" | "case_invitation";
 }
 
 const swedishDate = (iso: string): string => {
@@ -294,6 +294,79 @@ export const accountClosedEmail = (input: {
           "ligger kvar och blir tillgängliga igen så snart betalningen är registrerad.",
       ),
       ...(accounts.length > 0 ? [p(`Betala till ${accounts.join(" eller ")}.`)] : []),
+    ]),
+  };
+};
+
+/* -------------------------------------------------------------------------- */
+/* Inbjudan till ärendet                                                      */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Inbjudningsmejlet.
+ *
+ * Det viktigaste i texten är säkerhetsmodellen, uttryckt så att en icke-
+ * tekniker förstår den: länken fungerar bara tillsammans med ett konto på
+ * EXAKT den här adressen. Utan den meningen vidarebefordras länken "till
+ * rätt person" och slutar i ett obegripligt fel.
+ *
+ * Bolagsnamn och inbjudarens namn kommer från användare - de escapas i
+ * HTML-varianten som allt annat.
+ */
+export const caseInvitationEmail = (input: {
+  recipient: string;
+  inviterName: string;
+  companyName: string;
+  roleLabel: string;
+  roleDescription: string;
+  acceptUrl: string;
+  expiresAt: string;
+}): EmailMessage => {
+  const lines = [
+    `Hej,`,
+    ``,
+    `${input.inviterName} har bjudit in dig till ärendet för ${input.companyName}`,
+    `på Clearance, som ${input.roleLabel.toLowerCase()}.`,
+    ``,
+    `Rollen innebär: ${input.roleDescription}`,
+    ``,
+    `Så här tackar du ja:`,
+    ``,
+    `  ${input.acceptUrl}`,
+    ``,
+    `Länken fungerar bara tillsammans med ett konto på just den här`,
+    `e-postadressen (${input.recipient}). Har du inget konto skapar du ett`,
+    `med samma adress först - att skicka länken vidare till någon annan ger`,
+    `alltså ingen åtkomst.`,
+    ``,
+    `Inbjudan gäller till ${swedishDate(input.expiresAt)}. Känner du inte igen`,
+    `avsändaren kan du bortse från det här mejlet - ingenting händer om du`,
+    `inte klickar.`,
+    ``,
+    signature(),
+  ];
+
+  return {
+    recipient: input.recipient,
+    subject: `Inbjudan till ärendet för ${input.companyName}`,
+    kind: "case_invitation",
+    bodyText: lines.join("\n"),
+    bodyHtml: wrapHtml(`Inbjudan till ärendet för ${input.companyName}`, [
+      p(
+        `${input.inviterName} har bjudit in dig till ärendet för ` +
+          `${input.companyName} på Clearance, som ${input.roleLabel.toLowerCase()}.`,
+      ),
+      p(`Rollen innebär: ${input.roleDescription}`),
+      `<p style="margin:0 0 12px"><a href="${esc(input.acceptUrl)}">Tacka ja till inbjudan</a></p>`,
+      p(
+        `Länken fungerar bara tillsammans med ett konto på just den här ` +
+          `e-postadressen (${input.recipient}). Har du inget konto skapar du ett ` +
+          `med samma adress först.`,
+      ),
+      p(
+        `Inbjudan gäller till ${swedishDate(input.expiresAt)}. Känner du inte igen ` +
+          `avsändaren kan du bortse från det här mejlet.`,
+      ),
     ]),
   };
 };

@@ -1,11 +1,17 @@
+import type { CaseRole } from "@/lib/caseRoles";
 import type {
   AccountBillingRecord,
   ApplicationForReview,
   ApplicationRecord,
   AuthUser,
+  CaseInvitationRecord,
+  CaseMemberRecord,
   CaseMessage,
   CaseRecord,
   CaseTask,
+  ConversationRecord,
+  InvitationPeek,
+  OpenMention,
   CompanyInfo,
   CustomerInvoiceRecord,
   CustomerOverview,
@@ -213,9 +219,36 @@ export interface TasksPort {
 }
 
 export interface MessagesPort {
+  /**
+   * Meddelanden i ärendet.
+   *
+   * Grundtråden (conversationId null) ser alla medlemmar; en direkt- eller
+   * grupptråd bara deltagarna - det upprätthålls i databasen, inte här.
+   * Kvittensen ("uppfattat") är slutgiltig och släcker även taggnotisen.
+   */
   listByCase(caseId: string): Promise<CaseMessage[]>;
-  send(caseId: string, body: string): Promise<void>;
+  listByConversation(conversationId: string): Promise<CaseMessage[]>;
+  send(
+    caseId: string,
+    body: string,
+    opts?: {
+      conversationId?: string | null;
+      attachmentDocumentId?: string | null;
+      expectsReplyFrom?: string | null;
+    },
+  ): Promise<void>;
   markRead(id: string): Promise<void>;
+
+  listConversations(caseId: string): Promise<ConversationRecord[]>;
+  createDirect(caseId: string, otherUserId: string): Promise<string>;
+  createGroup(caseId: string, title: string, participantUserIds: string[]): Promise<string>;
+  /** Slår ihop två grupptrådar: meddelanden och deltagare flyttas till målet. */
+  merge(fromConversationId: string, toConversationId: string): Promise<void>;
+
+  /** Kvitterar "uppfattat". Kan inte tas tillbaka. */
+  ack(messageId: string): Promise<void>;
+  /** Notiscentret: meddelanden som väntar på den inloggades svar. */
+  myOpenMentions(): Promise<OpenMention[]>;
 }
 
 export interface BillingPort {
@@ -281,12 +314,32 @@ export interface OpsPort {
   deleteSecret(provider: string): Promise<void>;
 }
 
+export interface MembersPort {
+  /**
+   * Ärendets deltagare och inbjudningar.
+   *
+   * Säkerhetsmodellen (samma som i databasen): länken är inte nyckeln,
+   * adressen är. acceptInvitation lyckas bara när den inloggades adress
+   * matchar inbjudans, och peekInvitation svarar med samma neutrala
+   * tystnad som lösenordsåterställningen för alla andra.
+   */
+  listMembers(caseId: string): Promise<CaseMemberRecord[]>;
+  listInvitations(caseId: string): Promise<CaseInvitationRecord[]>;
+  invite(caseId: string, email: string, role: CaseRole): Promise<void>;
+  revokeInvitation(invitationId: string): Promise<void>;
+  /** null om inbjudan inte finns, är utgången eller ställd till annan adress. */
+  peekInvitation(invitationId: string): Promise<InvitationPeek | null>;
+  /** Returnerar ärendets id vid lyckad accept. */
+  acceptInvitation(invitationId: string): Promise<string>;
+}
+
 export interface DataPort {
   auth: AuthPort;
   contact: ContactPort;
   profile: ProfilePort;
   messages: MessagesPort;
   tasks: TasksPort;
+  members: MembersPort;
   billing: BillingPort;
   ops: OpsPort;
   cases: CasesPort;

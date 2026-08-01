@@ -46,6 +46,57 @@ const toJson = (value: unknown): Json => value as Json;
 
 const DOCUMENT_BUCKET = "case-documents";
 
+type MessageRow = {
+  id: string;
+  case_id: string;
+  conversation_id: string | null;
+  author_user_id: string | null;
+  body: string;
+  attachment_document_id: string | null;
+  expects_reply_from: string | null;
+  created_at: string;
+  read_at: string | null;
+};
+
+/** Hänger på kvittenserna. Två frågor i stället för en join per meddelande. */
+const withAcks = async (rows: MessageRow[]): Promise<CaseMessage[]> => {
+  const ids = rows.map((r) => r.id);
+  const acks =
+    ids.length === 0
+      ? []
+      : ((await supabase.from("message_acks").select("*").in("message_id", ids)).data ?? []);
+  return rows.map((row) => ({
+    id: row.id,
+    caseId: row.case_id,
+    conversationId: row.conversation_id,
+    authorUserId: row.author_user_id,
+    body: row.body,
+    attachmentDocumentId: row.attachment_document_id,
+    expectsReplyFrom: row.expects_reply_from,
+    acks: acks
+      .filter((a) => a.message_id === row.id)
+      .map((a) => ({ userId: a.user_id, ackedAt: a.acked_at })),
+    createdAt: row.created_at,
+    readAt: row.read_at,
+  }));
+};
+
+/** Medlemslistan, behörighetsprövad i databasen. Delas av members och messages. */
+const dataMembersList = async (caseId: string) => {
+  const { data, error } = await supabase.rpc("list_case_members", { p_case_id: caseId });
+  if (error) throw error;
+  return (data ?? []).map((row) => ({
+    id: row.id,
+    caseId,
+    userId: row.user_id,
+    role: row.role,
+    displayName: row.display_name,
+    email: row.email,
+    createdAt: row.created_at,
+    revokedAt: row.revoked_at,
+  }));
+};
+
 /**
  * Object keys are built from a user-supplied filename, so strip anything that
  * could climb out of the user's prefix or confuse the storage API. The
@@ -475,31 +526,104 @@ export const supabaseAdapter: DataPort = {
     },
   },
 
+  members: {
+    // Medlemslistan går genom list_case_members: profiltabellen låter var
+    // och en läsa bara sin egen rad, men i ett ärende man tillhör måste man
+    // kunna se vem de andra är. Funktionen lämnar ut namn och adress för
+    // ärendets medlemmar, inget mer.
+    async listMembers(caseId) {
+      return dataMembersList(caseId);
+    },
+    async listInvitations(caseId) {
+      const { data, error } = await supabase
+        .from("case_invitations")
+        .select("*")
+        .eq("case_id", caseId)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return (data ?? []).map((row) => ({
+        id: row.id,
+        caseId: row.case_id,
+        email: row.email,
+        role: row.role,
+        createdAt: row.created_at,
+        expiresAt: row.expires_at,
+        acceptedAt: row.accepted_at,
+        revokedAt: row.revoked_at,
+      }));
+    },
+    async invite(caseId, email, role) {
+      const { error } = await supabase.rpc("invite_to_case", {
+        p_case_id: caseId,
+        p_email: email,
+        p_role: role,
+      });
+      if (error) throw error;
+    },
+    async revokeInvitation(invitationId) {
+      const { error } = await supabase.rpc("revoke_case_invitation", {
+        p_invitation_id: invitationId,
+      });
+      if (error) throw error;
+    },
+    async peekInvitation(invitationId) {
+      const { data, error } = await supabase.rpc("peek_case_invitation", {
+        p_invitation_id: invitationId,
+      });
+      if (error) throw error;
+      const row = (data ?? [])[0];
+      if (!row) return null;
+      return {
+        id: row.id,
+        companyName: row.company_name,
+        orgNumber: row.org_number,
+        role: row.role,
+        inviterName: row.inviter_name,
+        expiresAt: row.expires_at,
+        acceptedAt: row.accepted_at,
+        revokedAt: row.revoked_at,
+      };
+    },
+    async acceptInvitation(invitationId) {
+      const { data, error } = await supabase.rpc("accept_case_invitation", {
+        p_invitation_id: invitationId,
+      });
+      if (error) throw error;
+      return data as string;
+    },
+  },
+
   messages: {
     async listByCase(caseId) {
+      // Grundtråden: meddelanden utan tråd-id. Trådade meddelanden hämtas
+      // per tråd - synligheten avgörs av radskyddet, inte av filtret här.
       const { data, error } = await supabase
         .from("case_messages")
         .select("*")
         .eq("case_id", caseId)
+        .is("conversation_id", null)
         .order("created_at", { ascending: true });
       if (error) throw error;
-      return (data ?? []).map(
-        (row): CaseMessage => ({
-          id: row.id,
-          caseId: row.case_id,
-          authorUserId: row.author_user_id,
-          body: row.body,
-          createdAt: row.created_at,
-          readAt: row.read_at,
-        }),
-      );
+      return withAcks(data ?? []);
     },
-    async send(caseId, body) {
+    async listByConversation(conversationId) {
+      const { data, error } = await supabase
+        .from("case_messages")
+        .select("*")
+        .eq("conversation_id", conversationId)
+        .order("created_at", { ascending: true });
+      if (error) throw error;
+      return withAcks(data ?? []);
+    },
+    async send(caseId, body, opts) {
       const { data: session } = await supabase.auth.getSession();
       const { error } = await supabase.from("case_messages").insert({
         case_id: caseId,
         author_user_id: session.session?.user.id ?? null,
         body,
+        conversation_id: opts?.conversationId ?? null,
+        attachment_document_id: opts?.attachmentDocumentId ?? null,
+        expects_reply_from: opts?.expectsReplyFrom ?? null,
       });
       if (error) throw error;
     },
@@ -510,6 +634,102 @@ export const supabaseAdapter: DataPort = {
         .eq("id", id)
         .is("read_at", null);
       if (error) throw error;
+    },
+
+    async listConversations(caseId) {
+      const { data, error } = await supabase
+        .from("conversations")
+        .select("*")
+        .eq("case_id", caseId)
+        .order("created_at", { ascending: true });
+      if (error) throw error;
+      const rows = data ?? [];
+      if (rows.length === 0) return [];
+      const { data: participants, error: pError } = await supabase
+        .from("conversation_participants")
+        .select("conversation_id, user_id")
+        .in("conversation_id", rows.map((r) => r.id));
+      if (pError) throw pError;
+      // Namnen kommer ur medlemslistan, som redan är behörighetsprövad.
+      const members = await dataMembersList(caseId);
+      const nameOf = new Map(members.map((m) => [m.userId, m.displayName ?? m.email]));
+      return rows.map((row) => ({
+        id: row.id,
+        caseId: row.case_id,
+        kind: row.kind as "direct" | "group",
+        title: row.title,
+        createdBy: row.created_by,
+        createdAt: row.created_at,
+        mergedInto: row.merged_into,
+        participants: (participants ?? [])
+          .filter((p) => p.conversation_id === row.id)
+          .map((p) => ({ userId: p.user_id, displayName: nameOf.get(p.user_id) ?? null })),
+      }));
+    },
+    async createDirect(caseId, otherUserId) {
+      const { data: session } = await supabase.auth.getSession();
+      const me = session.session?.user.id;
+      if (!me) throw new Error("Inte inloggad");
+      const { data, error } = await supabase
+        .from("conversations")
+        .insert({ case_id: caseId, kind: "direct", created_by: me })
+        .select("id")
+        .single();
+      if (error) throw error;
+      const { error: pError } = await supabase.from("conversation_participants").insert([
+        { conversation_id: data.id, user_id: me, added_by: me },
+        { conversation_id: data.id, user_id: otherUserId, added_by: me },
+      ]);
+      if (pError) throw pError;
+      return data.id;
+    },
+    async createGroup(caseId, title, participantUserIds) {
+      const { data: session } = await supabase.auth.getSession();
+      const me = session.session?.user.id;
+      if (!me) throw new Error("Inte inloggad");
+      const { data, error } = await supabase
+        .from("conversations")
+        .insert({ case_id: caseId, kind: "group", title, created_by: me })
+        .select("id")
+        .single();
+      if (error) throw error;
+      const ids = Array.from(new Set([me, ...participantUserIds]));
+      const { error: pError } = await supabase.from("conversation_participants").insert(
+        ids.map((userId) => ({ conversation_id: data.id, user_id: userId, added_by: me })),
+      );
+      if (pError) throw pError;
+      return data.id;
+    },
+    async merge(fromConversationId, toConversationId) {
+      const { error } = await supabase.rpc("merge_conversations", {
+        p_from: fromConversationId,
+        p_to: toConversationId,
+      });
+      if (error) throw error;
+    },
+
+    async ack(messageId) {
+      const { data: session } = await supabase.auth.getSession();
+      const me = session.session?.user.id;
+      if (!me) throw new Error("Inte inloggad");
+      const { error } = await supabase
+        .from("message_acks")
+        .insert({ message_id: messageId, user_id: me });
+      // Dubbelklick mot primärnyckeln är ingen nyhet att rapportera.
+      if (error && !error.message.includes("duplicate")) throw error;
+    },
+    async myOpenMentions() {
+      const { data, error } = await supabase.rpc("my_open_mentions");
+      if (error) throw error;
+      return (data ?? []).map((row) => ({
+        messageId: row.message_id,
+        caseId: row.case_id,
+        conversationId: row.conversation_id,
+        conversationTitle: row.conversation_title,
+        authorName: row.author_name,
+        body: row.body,
+        createdAt: row.created_at,
+      }));
     },
   },
 

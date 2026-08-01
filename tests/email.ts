@@ -9,6 +9,7 @@
 
 import {
   accountClosedEmail,
+  caseInvitationEmail,
   invoiceEmail,
   paymentReminderEmail,
   receiptEmail,
@@ -156,6 +157,36 @@ check("referensen står kvar ändå", bare.bodyText.includes("Ange 2026-0007 som
 
 (COMPANY as { plusgiro: string }).plusgiro = originalPlusgiro;
 (COMPANY as { bankgiro: string }).bankgiro = originalBankgiro;
+
+/* --- inbjudan till ärendet ------------------------------------------------ */
+
+const invitation = caseInvitationEmail({
+  recipient: "styrelse@bolaget.se",
+  inviterName: "Anna Andersson",
+  companyName: "Bolag & Söner AB",
+  roleLabel: "Styrelseledamot",
+  roleDescription: "Ser hela ärendet, ändrar ingenting.",
+  acceptUrl: "https://clearance.se/inbjudan/abc-123",
+  expiresAt: "2026-09-01T00:00:00.000Z",
+});
+
+check("inbjudans ämne bär bolagsnamnet",
+  invitation.subject, "Inbjudan till ärendet för Bolag & Söner AB");
+check("inbjudans kind", invitation.kind, "case_invitation");
+check("länken står i ren text", invitation.bodyText.includes("https://clearance.se/inbjudan/abc-123"), true);
+check("adressbindningen förklaras",
+  invitation.bodyText.includes("fungerar bara tillsammans med ett konto"), true);
+check("mottagaradressen namnges i texten",
+  invitation.bodyText.includes("styrelse@bolaget.se"), true);
+check("rollens innebörd står med",
+  invitation.bodyText.includes("Ser hela ärendet, ändrar ingenting."), true);
+check("sista giltighetsdag i klartext", invitation.bodyText.includes("1 september 2026"), true);
+check("lugnande rad för fel mottagare",
+  invitation.bodyText.includes("kan du bortse från det här mejlet"), true);
+check("bolagsnamnets &-tecken escapas i HTML",
+  invitation.bodyHtml.includes("Bolag &amp; Söner AB"), true);
+check("HTML-varianten saknar spårning och bilder",
+  /<img|http[^"']*\.(png|gif|jpg)/i.test(invitation.bodyHtml), false);
 
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

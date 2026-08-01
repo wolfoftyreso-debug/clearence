@@ -7,6 +7,8 @@
  * rename across every page.
  */
 
+import type { CaseRole } from "@/lib/caseRoles";
+
 export type RecommendationType = "bankruptcy" | "reconstruction" | "stabilize";
 export type KbrStatus = "not_required" | "warning" | "required" | "critical";
 export type PaymentStatus = "pending" | "paid" | "postponed" | "critical";
@@ -314,13 +316,50 @@ export interface UserProfile {
   phone: string | null;
 }
 
+export interface MessageAck {
+  userId: string;
+  ackedAt: string;
+}
+
 export interface CaseMessage {
   id: string;
   caseId: string;
+  /** null = grundtråden som alla medlemmar ser. Annars en direkt/grupptråd. */
+  conversationId: string | null;
   authorUserId: string | null;
   body: string;
+  /** Pekar på ett dokument i samma ärende. Bilagan är ett ärendedokument. */
+  attachmentDocumentId: string | null;
+  /** Den som förväntas svara. Notisen släcks av personens kvittens. */
+  expectsReplyFrom: string | null;
+  /** Uppfattat-kvittenser. Kan aldrig tas tillbaka. */
+  acks: MessageAck[];
   createdAt: string;
   readAt: string | null;
+}
+
+export interface ConversationRecord {
+  id: string;
+  caseId: string;
+  kind: "direct" | "group";
+  /** Gruppens namn. En direkt tråd heter det motparten heter. */
+  title: string | null;
+  createdBy: string | null;
+  createdAt: string;
+  /** Satt när tråden slagits ihop in i en annan - visas inte längre. */
+  mergedInto: string | null;
+  participants: { userId: string; displayName: string | null }[];
+}
+
+/** En rad i notiscentret: ett meddelande som väntar på DITT svar. */
+export interface OpenMention {
+  messageId: string;
+  caseId: string;
+  conversationId: string | null;
+  conversationTitle: string | null;
+  authorName: string | null;
+  body: string;
+  createdAt: string;
 }
 
 export interface AccountBillingRecord {
@@ -392,4 +431,43 @@ export interface SecretInfo {
   provider: string;
   last4: string;
   updatedAt: string;
+}
+
+/** En medlem i ärendet, med namn ur profilen. Återkallade visas överstrukna. */
+export interface CaseMemberRecord {
+  id: string;
+  caseId: string;
+  userId: string;
+  role: CaseRole;
+  displayName: string | null;
+  email: string | null;
+  createdAt: string;
+  revokedAt: string | null;
+}
+
+/** En inbjudan, som medlemmarna ser den. */
+export interface CaseInvitationRecord {
+  id: string;
+  caseId: string;
+  email: string;
+  role: CaseRole;
+  createdAt: string;
+  expiresAt: string;
+  acceptedAt: string | null;
+  revokedAt: string | null;
+}
+
+/**
+ * Vad den inbjudna ser INNAN accept. Returneras bara när den inloggades
+ * adress matchar inbjudans - för alla andra finns inbjudan inte.
+ */
+export interface InvitationPeek {
+  id: string;
+  companyName: string | null;
+  orgNumber: string;
+  role: CaseRole;
+  inviterName: string | null;
+  expiresAt: string;
+  acceptedAt: string | null;
+  revokedAt: string | null;
 }

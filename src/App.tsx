@@ -27,6 +27,8 @@ const KBRModule = lazy(() => import("./pages/KBRModule"));
 const Contact = lazy(() => import("./pages/Contact"));
 const AdminInbox = lazy(() => import("./pages/AdminInbox"));
 const AdminOverview = lazy(() => import("./pages/AdminOverview"));
+const DashboardParticipants = lazy(() => import("./pages/DashboardParticipants"));
+const InvitationAccept = lazy(() => import("./pages/InvitationAccept"));
 const AdminCustomers = lazy(() => import("./pages/AdminCustomers"));
 const AdminApplications = lazy(() => import("./pages/AdminApplications"));
 const DashboardDocuments = lazy(() => import("./pages/DashboardDocuments"));
@@ -110,6 +112,17 @@ const App = () => (
                     </ProtectedRoute>
                   }
                 />
+                <Route
+                  path="/dashboard/deltagare"
+                  element={
+                    <ProtectedRoute>
+                      <DashboardParticipants />
+                    </ProtectedRoute>
+                  }
+                />
+                {/* Acceptsidan är publik: den ska kunna förklara läget för en
+                    utloggad mottagare i stället för att studsa till login. */}
+                <Route path="/inbjudan/:id" element={<InvitationAccept />} />
                 <Route path="/likviditetsplan" element={<LiquidityPlanner />} />
                 <Route path="/marketplace" element={<Marketplace />} />
                 <Route path="/for-radgivare" element={<ForAdvisors />} />
