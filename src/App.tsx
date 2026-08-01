@@ -26,6 +26,7 @@ const LiquidityPlanner = lazy(() => import("./pages/LiquidityPlanner"));
 const KBRModule = lazy(() => import("./pages/KBRModule"));
 const Contact = lazy(() => import("./pages/Contact"));
 const AdminInbox = lazy(() => import("./pages/AdminInbox"));
+const AdminOverview = lazy(() => import("./pages/AdminOverview"));
 const AdminCustomers = lazy(() => import("./pages/AdminCustomers"));
 const AdminApplications = lazy(() => import("./pages/AdminApplications"));
 const DashboardDocuments = lazy(() => import("./pages/DashboardDocuments"));
@@ -117,6 +118,14 @@ const App = () => (
                 {/* Driftinkorgen. ProtectedRoute kräver bara inloggning -
                     behörighetsprövningen görs i sidan och, det som räknas, av
                     RLS på public.contact_messages. */}
+                <Route
+                  path="/admin"
+                  element={
+                    <ProtectedRoute>
+                      <AdminOverview />
+                    </ProtectedRoute>
+                  }
+                />
                 <Route
                   path="/admin/inkorg"
                   element={

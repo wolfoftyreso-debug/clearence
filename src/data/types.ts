@@ -386,3 +386,10 @@ export interface CaseTask {
   source: "recommendation" | "manual";
   createdAt: string;
 }
+
+/** Vad driftpanelen får veta om en sparad API-nyckel. Aldrig mer. */
+export interface SecretInfo {
+  provider: string;
+  last4: string;
+  updatedAt: string;
+}

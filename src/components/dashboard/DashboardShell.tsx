@@ -11,6 +11,7 @@ import {
   Banknote,
   Briefcase,
   FileText,
+  Gauge,
   Inbox,
   LayoutDashboard,
   Lock,
@@ -281,6 +282,19 @@ export const DashboardShell = ({ children, title, actions }: DashboardShellProps
                 <p className="px-4 pb-1 pt-6 text-xs font-semibold uppercase tracking-wider text-sidebar-foreground/40">
                   Drift
                 </p>
+                <Link
+                  to="/admin"
+                  onClick={() => setSidebarOpen(false)}
+                  aria-current={pathname === "/admin" ? "page" : undefined}
+                  className={`flex w-full items-center gap-3 rounded-md px-4 py-3 text-sm font-medium transition-colors ${
+                    pathname === "/admin"
+                      ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                      : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                  }`}
+                >
+                  <Gauge className="h-5 w-5 flex-shrink-0" aria-hidden="true" />
+                  <span className="min-w-0 flex-1 text-left">Driftpanel</span>
+                </Link>
                 <Link
                   to="/admin/inkorg"
                   onClick={() => setSidebarOpen(false)}

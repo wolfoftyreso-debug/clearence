@@ -164,6 +164,30 @@ export const INTEGRATION_REGISTRY: IntegrationTarget[] = [
       "rekommendera kredit. Beslut och dokumentation: se docs/VISION.md.",
   },
 
+  {
+    id: "creditsafe",
+    name: "Creditsafe – kreditbevakning",
+    category: "kreditgivare",
+    status: "avtal",
+    value:
+      "Daglig kreditstatus på det egna bolaget, in i ärendet. Ett sänkt " +
+      "kreditbetyg är ofta den första yttre signalen på att läget uppfattas " +
+      "utifrån - den ska synas här före den syns hos leverantörerna.",
+    builtToday:
+      "Tabellen (credit_monitoring), dygnskandidaterna " +
+      "(credit_check_candidates, högst en slagning per bolag och dygn - " +
+      "varje slagning kostar) och arbetarens --credit-läge finns. " +
+      "API-anropet aktiveras när nyckeln lagts in i driftpanelen.",
+    nextStep:
+      "Kundavtal med Creditsafe och API-uppgifter, som läggs in under " +
+      "Drift > Driftpanel. Ägare: Landvex.",
+    assumptions: [
+      "ANTAGANDE: anropsformatet i arbetaren är skrivet mot Creditsafe " +
+        "Connect enligt publik dokumentation och MÅSTE verifieras mot " +
+        "riktiga uppgifter innan skarp körning.",
+    ],
+  },
+
   /* ------------------------------ Bokföring ------------------------------ */
   {
     id: "fortnox",

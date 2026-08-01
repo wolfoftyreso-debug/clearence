@@ -71,9 +71,12 @@ SES. Det är AWS, alltså innanför gränsen. Alternativet, egen SMTP-server, ko
 */5 * * * *  node db/dist/email-worker.cjs            # skicka det som väntar
 0 * * * *    node db/dist/email-worker.cjs --remind   # köa påminnelser
 15 3 * * *   node db/dist/email-worker.cjs --close    # stäng + köa besked
+30 5 * * *   node db/dist/email-worker.cjs --credit   # daglig kreditbevakning
 ```
 
 Arbetaren är TypeScript (`db/worker/email-worker.ts`) och bundlas med `npm run build:worker` — just för att innehållet ska komma från `src/lib/email/messages.ts`, samma byggare som testas i `tests/email.ts`. Påminnelsernas dubblettskydd bor i databasen (`reminder_candidates()`: högst en per mottagare och svensk kalenderdag), så `--remind` går att köra hur ofta som helst. `--close` returnerar vilka som stängdes och köar stängningsbeskedet i samma körning — en stängning utan besked är exakt den överraskning mejltexterna skrevs för att förhindra.
+
+`--credit` är kreditbevakningen: den hämtar dagens kandidater ur `credit_check_candidates()` (högst en slagning per bolag och dygn — varje slagning kostar hos leverantören), läser Creditsafe-nyckeln ur `integration_secrets` med arbetarens databasroll och skriver resultatet till `credit_monitoring`. Saknas nyckel i driftpanelen loggas det och körningen avslutas lugnt. Klienten kan aldrig skriva kreditstatus — en kreditstatus användaren kan skriva själv är ingen kreditstatus.
 
 `claim_outbound_emails()` låser med `for update skip locked`, så två arbetare skickar aldrig samma rad. Efter fem misslyckade försök blir raden `failed` och syns i driftvyn under Kunder - den plockas aldrig om automatiskt, för en adress som studsar studsar även försök sextio.
 

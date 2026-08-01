@@ -780,6 +780,18 @@ export type Database = {
         }
         Returns: undefined
       }
+      set_integration_secret: {
+        Args: { p_provider: string; p_secret: string }
+        Returns: undefined
+      }
+      list_integration_secrets: {
+        Args: Record<PropertyKey, never>
+        Returns: { provider: string; last4: string; updated_at: string }[]
+      }
+      delete_integration_secret: {
+        Args: { p_provider: string }
+        Returns: undefined
+      }
       close_overdue_accounts: {
         Args: { p_now?: string }
         Returns: {

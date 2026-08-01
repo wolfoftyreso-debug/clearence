@@ -22,6 +22,7 @@ import type {
   ProfessionalRecord,
   RatingRecord,
   ReferralRecord,
+  SecretInfo,
 } from "../types";
 
 /**
@@ -735,6 +736,33 @@ export const supabaseAdapter: DataPort = {
           sentAt: row.sent_at,
         }),
       );
+    },
+  },
+
+  ops: {
+    async listSecrets() {
+      const { data, error } = await supabase.rpc("list_integration_secrets");
+      if (error) throw error;
+      return (data ?? []).map(
+        (row: { provider: string; last4: string; updated_at: string }): SecretInfo => ({
+          provider: row.provider,
+          last4: row.last4,
+          updatedAt: row.updated_at,
+        }),
+      );
+    },
+    async setSecret(provider, secret) {
+      const { error } = await supabase.rpc("set_integration_secret", {
+        p_provider: provider,
+        p_secret: secret,
+      });
+      if (error) throw error;
+    },
+    async deleteSecret(provider) {
+      const { error } = await supabase.rpc("delete_integration_secret", {
+        p_provider: provider,
+      });
+      if (error) throw error;
     },
   },
 

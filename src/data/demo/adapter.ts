@@ -25,6 +25,7 @@ import type {
   CaseTask,
   ContactMessageRecord,
   CustomerInvoiceRecord,
+  SecretInfo,
   OutboundEmailRecord,
   DocumentRecord,
   UserProfile,
@@ -55,6 +56,7 @@ interface DemoState {
   caseTasks: CaseTask[];
   billing: AccountBillingRecord | null;
   customerInvoices: CustomerInvoiceRecord[];
+  secrets: SecretInfo[];
   outbox: OutboundEmailRecord[];
 }
 
@@ -72,6 +74,7 @@ const emptyState = (): DemoState => ({
   caseTasks: [],
   billing: null,
   customerInvoices: [],
+  secrets: [],
   outbox: [],
 });
 
@@ -751,6 +754,24 @@ export const demoAdapter: DataPort = {
     },
   },
 
+  ops: {
+    async listSecrets() {
+      return [...state.secrets];
+    },
+    async setSecret(provider, secret) {
+      // Samma regel som på riktigt: bara fyra sista tecknen sparas synligt.
+      // Demons localStorage ska inte bära hela nycklar någon klistrar in.
+      state.secrets = state.secrets.filter((s) => s.provider !== provider);
+      state.secrets.push({ provider, last4: secret.slice(-4), updatedAt: now() });
+      state.secrets.sort((a, b) => a.provider.localeCompare(b.provider));
+      save();
+    },
+    async deleteSecret(provider) {
+      state.secrets = state.secrets.filter((s) => s.provider !== provider);
+      save();
+    },
+  },
+
   cases: {
     async getLatest() {
       return state.cases[0] ?? null;
@@ -956,9 +977,21 @@ export const demoAdapter: DataPort = {
   },
 
   companyLookup: {
-    async lookup() {
-      // Same contract as the real adapter: no register to ask, so no answer.
-      // Inventing a company here would be exactly the bug removed earlier.
+    async lookup(orgNumber) {
+      // Ett (1) uppslagbart testbolag, med samma nummer som demodatan, så
+      // att flödena går att prova i väntan på Bolagsverkets API. Skillnaden
+      // mot buggen som togs bort tidigare: detta är demoläget, där ALLT är
+      // bannerförklarat påhittat - den skarpa adaptern hittar fortfarande
+      // aldrig på något.
+      if (orgNumber.replace(/\D/g, "") === "5560123456") {
+        return {
+          name: "Demobolaget AB",
+          legalForm: "Aktiebolag",
+          address: "Exempelgatan 1, 111 22 Stockholm",
+          sniCode: "62010",
+          sniDescription: "Dataprogrammering",
+        };
+      }
       return null;
     },
   },

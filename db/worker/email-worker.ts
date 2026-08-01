@@ -4,6 +4,7 @@
  *   node db/dist/email-worker.cjs            var 5:e minut: skicka kön
  *   node db/dist/email-worker.cjs --remind   per timme: köa påminnelser
  *   node db/dist/email-worker.cjs --close    per dygn: stäng + köa besked
+ *   node db/dist/email-worker.cjs --credit   per dygn: kreditbevakning
  *
  * Byggs med `npm run build:worker` - källan är TypeScript just för att
  * mejlens innehåll ska komma från src/lib/email/messages.ts, samma byggare
@@ -65,8 +66,91 @@ const enqueue = async (
   );
 };
 
+/**
+ * Kreditbevakningen: hämtar dagens kandidater, slår mot Creditsafe och
+ * skriver resultatet till credit_monitoring. Körs som eget läge - inga mejl
+ * skickas härifrån.
+ *
+ * Två regler ärvda från databasen:
+ *  - Dubblettskyddet bor i credit_check_candidates(): bolag kontrollerade
+ *    det senaste dygnet kommer inte med. Läget går att köra hur ofta som
+ *    helst utan att elda upplysningar i onödan - varje slagning kostar.
+ *  - Nyckeln läses ur integration_secrets med arbetarens databasroll.
+ *    Saknas nyckel loggas det och läget avslutas lugnt: att panelen inte
+ *    fått en nyckel än är ett normalläge, inte ett fel.
+ */
+const runCreditChecks = async (): Promise<void> => {
+  const { rows: keyRows } = await db.query(
+    "select secret from public.integration_secrets where provider = 'creditsafe'",
+  );
+  if (keyRows.length === 0) {
+    console.log("kreditbevakning: ingen Creditsafe-nyckel sparad i driftpanelen, hoppar över.");
+    return;
+  }
+  const apiKey: string = keyRows[0].secret;
+
+  const { rows: candidates } = await db.query(
+    "select case_id, org_number from public.credit_check_candidates()",
+  );
+  if (candidates.length === 0) {
+    console.log("kreditbevakning: alla bolag kontrollerade det senaste dygnet.");
+    return;
+  }
+
+  let checked = 0;
+  let failedChecks = 0;
+  for (const candidate of candidates) {
+    try {
+      // ANTAGANDE: Connect-API:ets svarsform (rating/score/creditLimit) är
+      // modellerad efter dokumentationen, inte verifierad mot ett riktigt
+      // konto - avtalet med Creditsafe är inte tecknat än. Fältet raw sparar
+      // hela svaret, så det vi inte modellerat rätt går att läsa ut i
+      // efterhand utan ny slagning.
+      const response = await fetch(
+        `https://connect.creditsafe.com/v1/companies/SE/${encodeURIComponent(candidate.org_number)}/creditreport`,
+        { headers: { Authorization: `Bearer ${apiKey}`, Accept: "application/json" } },
+      );
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      const report = (await response.json()) as {
+        rating?: { value?: string };
+        score?: number;
+        creditLimit?: { value?: number };
+      };
+      await db.query(
+        `insert into public.credit_monitoring
+           (case_id, org_number, provider, rating, score, credit_limit_sek, raw)
+         values ($1, $2, 'creditsafe', $3, $4, $5, $6)`,
+        [
+          candidate.case_id,
+          candidate.org_number,
+          report.rating?.value ?? null,
+          typeof report.score === "number" ? report.score : null,
+          typeof report.creditLimit?.value === "number" ? Math.round(report.creditLimit.value) : null,
+          JSON.stringify(report),
+        ],
+      );
+      checked += 1;
+    } catch (error) {
+      // Ett misslyckat bolag stoppar inte de övriga; det förblir kandidat
+      // och plockas upp igen vid nästa körning.
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(`kreditbevakning ${candidate.org_number}: ${message}`);
+      failedChecks += 1;
+    }
+  }
+  console.log(`kreditbevakning: kontrollerade ${checked}, misslyckade ${failedChecks}`);
+};
+
 const main = async () => {
   await db.connect();
+
+  if (process.argv.includes("--credit")) {
+    await runCreditChecks();
+    await db.end();
+    return;
+  }
 
   if (process.argv.includes("--close")) {
     const { rows } = await db.query(

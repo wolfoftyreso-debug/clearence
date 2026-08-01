@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import {
   ArrowRight,
@@ -27,6 +27,7 @@ import {
 import { formatOrgNumber, validateOrgNumber, lookupCompany, CompanyInfo } from "@/lib/orgNumber";
 import { data } from "@/data";
 import { useAuth } from "@/hooks/useAuth";
+import { useQuery } from "@tanstack/react-query";
 import { useScrollToTopOnChange } from "@/hooks/useScrollToTop";
 import { SiePrefill } from "@/components/documents/SiePrefill";
 import { useAutosavedState } from "@/hooks/useAutosavedState";
@@ -132,6 +133,41 @@ const KBRModule = () => {
   // inte i adressen, så ScrollToTop i App.tsx når aldrig hit.
   useScrollToTopOnChange(currentStep);
   const { user } = useAuth();
+
+  /**
+   * Vägvalet ska inte vara en gissning. Utvärderingen har redan svarat på
+   * frågan "vilken väg passar min situation" - så har den gjorts föreslås
+   * motsvarande alternativ här, förvalt men fritt att ändra. Har den inte
+   * gjorts pekas man dit FÖRST, i stället för att lämnas ensam med fem
+   * rubriker som alla låter rimliga.
+   */
+  const { data: latestCase } = useQuery({
+    queryKey: ["latest-case", user?.id],
+    queryFn: () => data.cases.getLatest(),
+    enabled: !!user,
+  });
+
+  const suggestedAmbition: AmbitionLevel | null =
+    latestCase?.recommendationType === "stabilize"
+      ? "stabilize"
+      : latestCase?.recommendationType === "reconstruction"
+        ? "prepare_reconstruction"
+        : latestCase?.recommendationType === "bankruptcy"
+          // Vid konkursläge är styrelsens personliga ansvar den brännande
+          // KBR-frågan - inte avvecklingslogistiken.
+          ? "investigate_liability"
+          : null;
+
+  // Förvalet sätts bara när användaren inte redan valt själv (t.ex. i ett
+  // återupptaget utkast).
+  useEffect(() => {
+    if (suggestedAmbition && formData.ambitionLevel === null) {
+      setFormData((prev) =>
+        prev.ambitionLevel === null ? { ...prev, ambitionLevel: suggestedAmbition } : prev,
+      );
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [suggestedAmbition]);
   const [showAuthPrompt, setShowAuthPrompt] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -276,13 +312,55 @@ const KBRModule = () => {
   // Step 0: Ambition Level Selection
   const renderStep0 = () => (
     <div className="space-y-5">
+      {suggestedAmbition ? (
+        <div className="rounded-md border border-accent/40 bg-accent/5 p-4">
+          <p className="flex items-start gap-2 text-sm leading-relaxed text-foreground">
+            <CheckCircle2 className="mt-0.5 h-4 w-4 flex-shrink-0 text-accent" aria-hidden="true" />
+            <span>
+              <span className="font-semibold">Förvalt utifrån din utvärdering:</span>{" "}
+              {ambitionOptions.find((o) => o.value === suggestedAmbition)?.title}.
+              {latestCase?.recommendationTitle && (
+                <> Bedömningen var "{latestCase.recommendationTitle}".</>
+              )}{" "}
+              Stämmer det inte längre kan du välja fritt nedan.
+            </span>
+          </p>
+        </div>
+      ) : (
+        <div className="rounded-md border border-warning/40 bg-warning/10 p-4">
+          <p className="text-sm font-semibold text-foreground">
+            Osäker på vilket alternativ som passar? Det är normalt.
+          </p>
+          <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+            Valet här förutsätter att du redan vet bolagets vägval – avveckla,
+            stabilisera eller rekonstruera. Det är precis den frågan
+            utvärderingen besvarar, på fem till tio minuter. Gör den först, så
+            är rätt alternativ förvalt när du kommer tillbaka hit.
+          </p>
+          <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+            <Button variant="accent" size="sm" onClick={() => navigate("/wizard")}>
+              Gör utvärderingen först
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() =>
+                document.getElementById("ambition-list")?.scrollIntoView({ block: "start" })
+              }
+            >
+              Jag vet redan mitt vägval
+            </Button>
+          </div>
+        </div>
+      )}
+
       <WizardCard>
         <WizardCardHeader 
           title="Vad är målet med denna analys?" 
           description="Ditt val avgör djupet på analysen och vilka moduler som aktiveras"
         />
         
-        <div className="space-y-3">
+        <div className="space-y-3" id="ambition-list">
           {ambitionOptions.map((option) => (
             <button
               key={option.value}
@@ -302,7 +380,14 @@ const KBRModule = () => {
                   {option.icon}
                 </div>
                 <div>
-                  <h4 className="font-medium text-foreground">{option.title}</h4>
+                  <h4 className="font-medium text-foreground">
+                    {option.title}
+                    {option.value === suggestedAmbition && (
+                      <span className="ml-2 rounded-full border border-accent/40 bg-accent/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-accent">
+                        Föreslås för dig
+                      </span>
+                    )}
+                  </h4>
                   <p className="text-sm text-muted-foreground mt-0.5">{option.description}</p>
                 </div>
               </div>

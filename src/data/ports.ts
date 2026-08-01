@@ -10,6 +10,7 @@ import type {
   CustomerInvoiceRecord,
   CustomerOverview,
   OutboundEmailRecord,
+  SecretInfo,
   UserProfile,
   UserRole,
   ContactMessageRecord,
@@ -268,6 +269,18 @@ export interface BillingPort {
   listOutbox(): Promise<OutboundEmailRecord[]>;
 }
 
+export interface OpsPort {
+  /**
+   * API-nyckelhanteringen. Grundregeln bor i databasen, inte här: en sparad
+   * nyckel kan ALDRIG läsas tillbaka av klienten - listan visar bara de
+   * fyra sista tecknen och bytesdatum. Kapas en driftsession är byte av
+   * nycklar det värsta som kan hända, inte utläsning.
+   */
+  listSecrets(): Promise<SecretInfo[]>;
+  setSecret(provider: string, secret: string): Promise<void>;
+  deleteSecret(provider: string): Promise<void>;
+}
+
 export interface DataPort {
   auth: AuthPort;
   contact: ContactPort;
@@ -275,6 +288,7 @@ export interface DataPort {
   messages: MessagesPort;
   tasks: TasksPort;
   billing: BillingPort;
+  ops: OpsPort;
   cases: CasesPort;
   kbr: KbrPort;
   payments: PaymentsPort;
