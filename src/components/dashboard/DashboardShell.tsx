@@ -304,8 +304,15 @@ const NotificationBell = () => {
                       // En notis vars mål är sidan man redan står på måste
                       // ändå göra något synligt: ankaret rullar till rätt
                       // sektion, efter navigering om en sådan behövs.
+                      // Sidjämförelsen måste vara EXAKT: en prefixmatchning
+                      // gjorde att "/dashboard/handelser" räknades som
+                      // "/dashboard" i hash-läget, navigeringen hoppades
+                      // över och klicket blev osynligt.
                       const [path, anchor] = n.href.split("#");
-                      const samePage = window.location.pathname === path || window.location.hash.startsWith(`#${path}`);
+                      const currentPath = window.location.hash.startsWith("#/")
+                        ? window.location.hash.slice(1)
+                        : window.location.pathname;
+                      const samePage = currentPath === path;
                       if (!samePage) navigate(path);
                       if (anchor) {
                         window.setTimeout(
