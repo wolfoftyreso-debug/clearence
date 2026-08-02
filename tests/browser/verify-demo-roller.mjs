@@ -61,6 +61,29 @@ check("statusar visas",
 check("risknivåer visas", /Risk: Kritisk/.test(body) && /Risk:/.test(body));
 check("nästa aktivitet visas", /Nästa aktivitet:/.test(body));
 
+// Klientfältets kort är knappar: Åtgärder fäller ut alla öppna uppgifter,
+// och en rad leder in i rätt ärende.
+await page.click('button[aria-expanded]:has-text("Åtgärder")');
+await page.waitForTimeout(600);
+body = await page.innerText("body");
+check("åtgärdskortet fäller ut uppgiftslistan",
+  /Ring företrädaren om konkursansökan/.test(body) && /Skicka yttrande till Skatteverket/.test(body));
+await page.click('button:has-text("Förbered borgenärsmöte")');
+await page.waitForTimeout(1500);
+body = await page.innerText("body");
+check("uppgiftsraden öppnar rätt ärende",
+  page.url().includes("/dashboard") && /Demo Bygg AB/.test(body), page.url());
+await page.goto(`${BASE}/arenden`, { waitUntil: "domcontentloaded" });
+await page.waitForTimeout(1500);
+
+// Kritiska-kortet visar bara bolagen i kritiskt läge.
+await page.click('button[aria-expanded]:has-text("Kritiska")');
+await page.waitForTimeout(600);
+const panel = await page.locator("div.border-accent\\/40").innerText();
+check("kritiska-kortet fördjupar med rätt bolag",
+  /Restaurang Milano Demo AB/.test(panel), panel.slice(0, 200));
+check("fördjupningen visar risk och nästa frist", /Risk:/.test(panel) && /Nästa frist/.test(panel));
+
 // Klick in i en klient ger företagsvyn för det bolaget.
 await page.click('article:has-text("Demo Bygg AB") button:has-text("Öppna")');
 await page.waitForTimeout(1500);

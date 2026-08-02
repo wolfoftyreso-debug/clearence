@@ -19,6 +19,7 @@ import {
   Briefcase,
   CalendarClock,
   CalendarPlus,
+  ChevronDown,
   FolderDown,
   Loader2,
   Plug,
@@ -133,6 +134,23 @@ const PractitionerCases = () => {
     openTasks: portfolioCases.reduce((sum, pc) => sum + pc.openTasks, 0),
     waiting: (mentions ?? []).length,
   };
+
+  // Varje kort i klientfältet fäller ut sin fördjupning: siffran är
+  // rubriken, listan under är svaret på "vilka?". Raderna leder in i
+  // ärendet - ett tal man inte kan agera på är bara dekoration.
+  type StatDetail = "active" | "critical" | "tasks" | "waiting";
+  const [statDetail, setStatDetail] = useState<StatDetail | null>(null);
+
+  // Alla öppna uppgifter på tvärs, närmast förfallodag först.
+  const allOpenTasks = (cases ?? [])
+    .flatMap((c, index) =>
+      (taskQueries[index]?.data ?? [])
+        .filter((t) => !t.doneAt)
+        .map((t) => ({ task: t, record: c })),
+    )
+    .sort((a, b) => (a.task.dueDate ?? "9999").localeCompare(b.task.dueDate ?? "9999"));
+
+  const caseById = new Map((cases ?? []).map((c) => [c.id, c]));
 
   /** Risknivån per klient, ur samma bedömning som prioritetsordningen. */
   const RISK_BADGE: Record<string, { label: string; tone: string }> = {
@@ -258,9 +276,9 @@ const PractitionerCases = () => {
     );
   };
 
-  const openCase = (record: CaseRecord) => {
+  const openCase = (record: CaseRecord, path = "/dashboard") => {
     data.cases.select(record.id);
-    navigate("/dashboard");
+    navigate(path);
   };
 
   return (
@@ -288,31 +306,162 @@ const PractitionerCases = () => {
           </div>
         ) : (
           <>
-            {/* Klientfältet: dagen i fyra tal, före all analys. */}
-            <section aria-label="Mina klienter" className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              {[
-                { label: "Aktiva", value: clientStats.active, tone: "text-foreground" },
-                {
-                  label: "Kritiska",
-                  value: clientStats.critical,
-                  tone: clientStats.critical > 0 ? "text-frist" : "text-foreground",
-                },
-                { label: "Åtgärder", value: clientStats.openTasks, tone: "text-foreground" },
-                {
-                  label: "Väntar på svar",
-                  value: clientStats.waiting,
-                  tone: clientStats.waiting > 0 ? "text-warning" : "text-foreground",
-                },
-              ].map((stat) => (
-                <div key={stat.label} className="rounded-md border border-border bg-card p-3">
-                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    {stat.label}
-                  </p>
-                  <p className={`mt-0.5 text-2xl font-semibold tabular-nums ${stat.tone}`}>
-                    {stat.value}
-                  </p>
+            {/* Klientfältet: dagen i fyra tal, före all analys. Varje kort
+                fäller ut sin fördjupning med klickbara rader in i ärendet. */}
+            <section aria-label="Mina klienter">
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                {(
+                  [
+                    { key: "active", label: "Aktiva", value: clientStats.active, tone: "text-foreground" },
+                    {
+                      key: "critical",
+                      label: "Kritiska",
+                      value: clientStats.critical,
+                      tone: clientStats.critical > 0 ? "text-frist" : "text-foreground",
+                    },
+                    { key: "tasks", label: "Åtgärder", value: clientStats.openTasks, tone: "text-foreground" },
+                    {
+                      key: "waiting",
+                      label: "Väntar på svar",
+                      value: clientStats.waiting,
+                      tone: clientStats.waiting > 0 ? "text-warning" : "text-foreground",
+                    },
+                  ] as { key: StatDetail; label: string; value: number; tone: string }[]
+                ).map((stat) => {
+                  const open = statDetail === stat.key;
+                  return (
+                    <button
+                      key={stat.key}
+                      type="button"
+                      aria-expanded={open}
+                      onClick={() => setStatDetail(open ? null : stat.key)}
+                      className={`rounded-md border p-3 text-left transition-colors ${
+                        open
+                          ? "border-accent bg-accent/5"
+                          : "border-border bg-card hover:border-accent/60"
+                      }`}
+                    >
+                      <p className="flex items-center justify-between gap-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                        {stat.label}
+                        <ChevronDown
+                          className={`h-3.5 w-3.5 flex-shrink-0 transition-transform ${open ? "rotate-180" : ""}`}
+                          aria-hidden="true"
+                        />
+                      </p>
+                      <p className={`mt-0.5 text-2xl font-semibold tabular-nums ${stat.tone}`}>
+                        {stat.value}
+                      </p>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {statDetail && (
+                <div className="mt-2 rounded-md border border-accent/40 bg-card p-1">
+                  {statDetail === "active" || statDetail === "critical" ? (
+                    (() => {
+                      const rows = portfolioCases.filter((pc) =>
+                        statDetail === "critical"
+                          ? pc.severity === "critical"
+                          : !pc.caseRecord.closedAt || pc.caseRecord.healthMode,
+                      );
+                      return rows.length === 0 ? (
+                        <p className="p-3 text-sm text-muted-foreground">
+                          {statDetail === "critical"
+                            ? "Inget bolag är i kritiskt läge just nu."
+                            : "Inga aktiva ärenden."}
+                        </p>
+                      ) : (
+                        <ul className="divide-y divide-border">
+                          {rows.map((pc) => (
+                            <li key={pc.caseRecord.id}>
+                              <button
+                                type="button"
+                                onClick={() => openCase(pc.caseRecord)}
+                                className="flex w-full items-center justify-between gap-3 p-3 text-left transition-colors hover:bg-secondary/50"
+                              >
+                                <span className="min-w-0">
+                                  <span className="block text-sm font-medium text-foreground">
+                                    {pc.caseRecord.companyName ?? pc.caseRecord.orgNumber}
+                                  </span>
+                                  <span className="block text-xs text-muted-foreground">
+                                    {caseStatus(pc.caseRecord)} · Risk:{" "}
+                                    {RISK_BADGE[pc.severity]?.label ?? "Låg"}
+                                    {pc.timeline[0] &&
+                                      ` · Nästa frist ${countdownTo(pc.timeline[0].iso, now).label}`}
+                                  </span>
+                                </span>
+                                <ArrowRight className="h-4 w-4 flex-shrink-0 text-accent" aria-hidden="true" />
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      );
+                    })()
+                  ) : statDetail === "tasks" ? (
+                    allOpenTasks.length === 0 ? (
+                      <p className="p-3 text-sm text-muted-foreground">
+                        Inga öppna uppgifter i ärendena.
+                      </p>
+                    ) : (
+                      <ul className="divide-y divide-border">
+                        {allOpenTasks.map(({ task, record }) => (
+                          <li key={task.id}>
+                            <button
+                              type="button"
+                              onClick={() => openCase(record)}
+                              className="flex w-full items-center justify-between gap-3 p-3 text-left transition-colors hover:bg-secondary/50"
+                            >
+                              <span className="min-w-0">
+                                <span className="block text-sm font-medium text-foreground">
+                                  {task.label}
+                                </span>
+                                <span className="block text-xs text-muted-foreground">
+                                  {record.companyName ?? record.orgNumber}
+                                  {task.dueDate &&
+                                    ` · ${countdownTo(task.dueDate, now).label}`}
+                                </span>
+                              </span>
+                              <ArrowRight className="h-4 w-4 flex-shrink-0 text-accent" aria-hidden="true" />
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )
+                  ) : (mentions ?? []).length === 0 ? (
+                    <p className="p-3 text-sm text-muted-foreground">
+                      Ingen väntar på ditt svar just nu.
+                    </p>
+                  ) : (
+                    <ul className="divide-y divide-border">
+                      {(mentions ?? []).map((mention) => {
+                        const record = caseById.get(mention.caseId);
+                        if (!record) return null;
+                        return (
+                          <li key={mention.messageId}>
+                            <button
+                              type="button"
+                              onClick={() => openCase(record, "/dashboard/meddelanden")}
+                              className="flex w-full items-center justify-between gap-3 p-3 text-left transition-colors hover:bg-secondary/50"
+                            >
+                              <span className="min-w-0">
+                                <span className="block truncate text-sm font-medium text-foreground">
+                                  {mention.body}
+                                </span>
+                                <span className="block text-xs text-muted-foreground">
+                                  {record.companyName ?? record.orgNumber}
+                                  {mention.authorName && ` · ${mention.authorName}`}
+                                </span>
+                              </span>
+                              <ArrowRight className="h-4 w-4 flex-shrink-0 text-accent" aria-hidden="true" />
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
                 </div>
-              ))}
+              )}
             </section>
 
             {/* Portföljrapporten */}
