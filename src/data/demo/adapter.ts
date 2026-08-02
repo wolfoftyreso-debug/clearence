@@ -36,8 +36,10 @@ import type {
   UserProfile,
   InvoiceRecord,
   PaymentRecord,
+  ContactRequestRecord,
   ProfessionalRecord,
   ProfileClaimRecord,
+  UsageChargeRecord,
   RatingRecord,
   ReferralRecord,
 } from "../types";
@@ -75,6 +77,8 @@ interface DemoState {
     motivation: string;
     contact: string;
   })[];
+  contactRequests: (ContactRequestRecord & { preview: unknown; summary: unknown })[];
+  usageCharges: UsageChargeRecord[];
 }
 
 const emptyState = (): DemoState => ({
@@ -98,6 +102,8 @@ const emptyState = (): DemoState => ({
   conversations: [],
   kbrAssessments: [],
   profileClaims: [],
+  contactRequests: [],
+  usageCharges: [],
 });
 
 /** Files cannot go in localStorage, so they live for the session only. */
@@ -281,6 +287,21 @@ const DEMO_RATINGS: RatingRecord[] = [];
 
 /** Avtalade avgifter i demon. Sessionsminne räcker - inget avtal är på riktigt. */
 const demoFees = new Map<string, number>();
+
+/**
+ * Prisplaner i demon: per-ärende-avgift som exempeldata (samma slags
+ * påhittade siffror som byråernas fasta priser ovan). Driftpanelen kan
+ * ändra dem under sessionen.
+ */
+const demoPlans = new Map<
+  string,
+  { planKind: "per_case" | "subscription" | "usage" | "enterprise"; unlockFeeSek: number | null; monthlyFeeSek: number | null }
+>([
+  ["demo-pro-1", { planKind: "per_case", unlockFeeSek: 995, monthlyFeeSek: null }],
+  ["demo-pro-2", { planKind: "per_case", unlockFeeSek: 995, monthlyFeeSek: null }],
+  ["demo-pro-3", { planKind: "subscription", unlockFeeSek: null, monthlyFeeSek: 4900 }],
+]);
+const demoHolds = new Map<string, string>();
 
 /** A case with figures that put the company in a recognisably tight spot. */
 const seedCase = (userId: string): CaseRecord => ({
@@ -944,6 +965,19 @@ export const demoAdapter: DataPort = {
       if (feeSek === null) demoFees.delete(professionalId);
       else demoFees.set(professionalId, feeSek);
     },
+    async listBillingPlans() {
+      return [...demoPlans.entries()].map(([professionalId, plan]) => ({
+        professionalId,
+        ...plan,
+      }));
+    },
+    async setBillingPlan({ professionalId, planKind, unlockFeeSek, monthlyFeeSek }) {
+      demoPlans.set(professionalId, { planKind, unlockFeeSek, monthlyFeeSek });
+    },
+    async setBillingHold(professionalId, hold, reason) {
+      if (hold) demoHolds.set(professionalId, reason?.trim() || "spärrad i demon");
+      else demoHolds.delete(professionalId);
+    },
   },
 
   audit: {
@@ -1275,6 +1309,122 @@ export const demoAdapter: DataPort = {
         return c;
       });
       save();
+    },
+  },
+
+  /**
+   * Demoläget spelar båda sidor: samma inloggning är företrädaren som
+   * skickar förfrågan OCH byrån som ser den i sin inkorg. Det gör hela
+   * kedjan förfrågan → förhandsvisning → upplåsning → debitering körbar
+   * i webbläsaren utan server.
+   */
+  leads: {
+    async create({ caseId, professionalId, preview, summary }) {
+      if (!state.user) throw new Error("Kräver inloggning");
+      if (
+        state.contactRequests.some(
+          (r) =>
+            r.caseId === caseId &&
+            r.professionalId === professionalId &&
+            (r.status === "sent" || r.status === "unlocked"),
+        )
+      ) {
+        throw new Error("Rådgivaren är redan kontaktad i det här ärendet");
+      }
+      state.contactRequests = [
+        ...state.contactRequests,
+        {
+          id: uid(),
+          caseId,
+          professionalId,
+          status: "sent",
+          createdAt: now(),
+          consentAt: now(),
+          unlockedAt: null,
+          declinedAt: null,
+          declineNote: null,
+          preview,
+          summary,
+        },
+      ];
+      save();
+    },
+    async listForCase(caseId) {
+      return state.contactRequests
+        .filter((r) => r.caseId === caseId)
+        .map(({ preview: _p, summary: _s, ...rest }) => rest)
+        .reverse();
+    },
+    async listMyLeads() {
+      return [...state.contactRequests]
+        .filter((r) => r.status !== "withdrawn")
+        .sort((a, b) => Number(b.status === "sent") - Number(a.status === "sent"))
+        .map((r) => {
+          const plan = demoPlans.get(r.professionalId);
+          return {
+            id: r.id,
+            professionalId: r.professionalId,
+            status: r.status,
+            createdAt: r.createdAt,
+            unlockedAt: r.unlockedAt,
+            preview: r.preview,
+            planKind: plan?.planKind ?? "per_case",
+            unlockFeeSek: plan?.unlockFeeSek ?? null,
+          };
+        });
+    },
+    async unlock(requestId, termsVersion) {
+      const request = state.contactRequests.find((r) => r.id === requestId);
+      if (!request) throw new Error("Förfrågan finns inte");
+      if (request.status !== "sent") throw new Error("Förfrågan är redan hanterad");
+      if (!termsVersion.trim()) throw new Error("Villkoren måste accepteras");
+      const hold = demoHolds.get(request.professionalId);
+      if (hold) throw new Error(`Kontot är spärrat för nya köp. Kontakta driften: ${hold}`);
+
+      state.contactRequests = state.contactRequests.map((r) =>
+        r.id === requestId ? { ...r, status: "unlocked", unlockedAt: now() } : r,
+      );
+      const plan = demoPlans.get(request.professionalId);
+      const fee = plan && ["per_case", "usage"].includes(plan.planKind) ? plan.unlockFeeSek : null;
+      if (fee && fee > 0) {
+        const caseRecord = state.cases.find((c) => c.id === request.caseId);
+        state.usageCharges = [
+          {
+            id: uid(),
+            serviceCode: "case_unlock",
+            serviceLabel: "Ärende upplåst",
+            caseType: caseRecord?.recommendationType ?? null,
+            companyName: caseRecord?.companyName ?? null,
+            orgNumber: caseRecord?.orgNumber ?? null,
+            amountOre: Math.round(fee * 100),
+            vatRate: 0.25,
+            createdAt: now(),
+            invoiceId: null,
+            contactRequestId: requestId,
+          },
+          ...state.usageCharges,
+        ];
+      }
+      save();
+      return request.summary;
+    },
+    async getUnlocked(requestId) {
+      const request = state.contactRequests.find((r) => r.id === requestId);
+      if (!request || request.status !== "unlocked") throw new Error("Ärendet är inte upplåst");
+      return request.summary;
+    },
+    async decline(requestId, note) {
+      const request = state.contactRequests.find((r) => r.id === requestId);
+      if (!request || request.status !== "sent") throw new Error("Förfrågan är redan hanterad");
+      state.contactRequests = state.contactRequests.map((r) =>
+        r.id === requestId
+          ? { ...r, status: "declined", declinedAt: now(), declineNote: note?.trim() || null }
+          : r,
+      );
+      save();
+    },
+    async listMyCharges() {
+      return state.usageCharges;
     },
   },
 

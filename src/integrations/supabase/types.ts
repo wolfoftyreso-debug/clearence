@@ -862,6 +862,132 @@ export type Database = {
         }
         Relationships: []
       }
+      billing_plans: {
+        Row: {
+          included_cases: number | null
+          monthly_fee_sek: number | null
+          plan_kind: string
+          professional_id: string
+          unlock_fee_sek: number | null
+          updated_at: string
+        }
+        Insert: {
+          included_cases?: number | null
+          monthly_fee_sek?: number | null
+          plan_kind?: string
+          professional_id: string
+          unlock_fee_sek?: number | null
+          updated_at?: string
+        }
+        Update: {
+          included_cases?: number | null
+          monthly_fee_sek?: number | null
+          plan_kind?: string
+          professional_id?: string
+          unlock_fee_sek?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      contact_requests: {
+        Row: {
+          case_id: string
+          consent_at: string
+          created_at: string
+          created_by: string
+          decline_note: string | null
+          declined_at: string | null
+          id: string
+          preview: Json
+          professional_id: string
+          status: string
+          summary: Json
+          unlocked_at: string | null
+          unlocked_terms_version: string | null
+        }
+        Insert: {
+          case_id: string
+          consent_at?: string
+          created_at?: string
+          created_by: string
+          decline_note?: string | null
+          declined_at?: string | null
+          id?: string
+          preview: Json
+          professional_id: string
+          status?: string
+          summary: Json
+          unlocked_at?: string | null
+          unlocked_terms_version?: string | null
+        }
+        Update: {
+          case_id?: string
+          consent_at?: string
+          created_at?: string
+          created_by?: string
+          decline_note?: string | null
+          declined_at?: string | null
+          id?: string
+          preview?: Json
+          professional_id?: string
+          status?: string
+          summary?: Json
+          unlocked_at?: string | null
+          unlocked_terms_version?: string | null
+        }
+        Relationships: []
+      }
+      usage_charges: {
+        Row: {
+          amount_ore: number
+          case_type: string | null
+          company_name: string | null
+          contact_request_id: string | null
+          created_at: string
+          id: string
+          invoice_id: string | null
+          org_number: string | null
+          period_start: string | null
+          professional_id: string
+          service_code: string
+          service_label: string
+          user_id: string
+          vat_rate: number
+        }
+        Insert: {
+          amount_ore: number
+          case_type?: string | null
+          company_name?: string | null
+          contact_request_id?: string | null
+          created_at?: string
+          id?: string
+          invoice_id?: string | null
+          org_number?: string | null
+          period_start?: string | null
+          professional_id: string
+          service_code: string
+          service_label: string
+          user_id: string
+          vat_rate?: number
+        }
+        Update: {
+          amount_ore?: number
+          case_type?: string | null
+          company_name?: string | null
+          contact_request_id?: string | null
+          created_at?: string
+          id?: string
+          invoice_id?: string | null
+          org_number?: string | null
+          period_start?: string | null
+          professional_id?: string
+          service_code?: string
+          service_label?: string
+          user_id?: string
+          vat_rate?: number
+        }
+        Relationships: []
+      }
       profile_claims: {
         Row: {
           contact: string
@@ -1007,6 +1133,49 @@ export type Database = {
       }
       review_profile_claim: {
         Args: { p_claim_id: string; p_approve: boolean; p_note?: string | null }
+        Returns: undefined
+      }
+      create_contact_request: {
+        Args: { p_case_id: string; p_professional_id: string; p_preview: Json; p_summary: Json }
+        Returns: string
+      }
+      list_lead_previews: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          id: string
+          professional_id: string
+          status: string
+          created_at: string
+          unlocked_at: string | null
+          preview: Json
+          plan_kind: string
+          unlock_fee_sek: number | null
+        }[]
+      }
+      unlock_case_lead: {
+        Args: { p_request_id: string; p_terms_version: string }
+        Returns: Json
+      }
+      decline_case_lead: {
+        Args: { p_request_id: string; p_note?: string | null }
+        Returns: undefined
+      }
+      get_unlocked_lead: {
+        Args: { p_request_id: string }
+        Returns: Json
+      }
+      set_billing_plan: {
+        Args: {
+          p_professional_id: string
+          p_plan_kind: string
+          p_unlock_fee_sek?: number | null
+          p_monthly_fee_sek?: number | null
+          p_included_cases?: number | null
+        }
+        Returns: undefined
+      }
+      set_billing_hold: {
+        Args: { p_professional_id: string; p_hold: boolean; p_reason?: string | null }
         Returns: undefined
       }
       set_referral_fee: {

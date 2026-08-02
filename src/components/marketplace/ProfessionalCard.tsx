@@ -9,13 +9,18 @@ import { Star, MapPin, CheckCircle2, Mail, Phone, ExternalLink, Loader2, ShieldQ
 import { useRecordReferral } from "@/hooks/useRecordReferral";
 import { useAuth } from "@/hooks/useAuth";
 import { data } from "@/data";
-import type { ProfessionalRecord, ProfileClaimRecord } from "@/data/types";
+import { ContactRequestSection } from "@/components/marketplace/ContactRequestSection";
+import type { CaseRecord, ProfessionalRecord, ProfileClaimRecord } from "@/data/types";
 
 interface ProfessionalCardProps {
   professional: ProfessionalRecord;
   rating: { average: number; count: number } | null;
   /** Den inloggades eget anspråk på just den här profilen, om något. */
   myClaim?: ProfileClaimRecord | null;
+  /** Aktivt ärende för "Kontakta via CLEARANCE"; null utan ärende. */
+  caseRecord?: CaseRecord | null;
+  /** Sant när ärendet redan har en förfrågan till den här rådgivaren. */
+  alreadyContacted?: boolean;
 }
 
 /**
@@ -146,7 +151,13 @@ const formatPrice = (price: number) => {
   return new Intl.NumberFormat('sv-SE', { style: 'currency', currency: 'SEK', maximumFractionDigits: 0 }).format(price);
 };
 
-const ProfessionalCard = ({ professional, rating, myClaim = null }: ProfessionalCardProps) => {
+const ProfessionalCard = ({
+  professional,
+  rating,
+  myClaim = null,
+  caseRecord = null,
+  alreadyContacted = false,
+}: ProfessionalCardProps) => {
   const recordReferral = useRecordReferral();
 
   return (
@@ -293,6 +304,17 @@ const ProfessionalCard = ({ professional, rating, myClaim = null }: Professional
             </Button>
           )}
         </div>
+
+        {/* Den strukturerade vägen: förfrågan med samtycke och underlag.
+            Bara verifierade profiler - en förfrågan till en obekräftad
+            kontaktväg vore att skicka ärendedata ut i tomma luften. */}
+        {professional.verified && (
+          <ContactRequestSection
+            professional={professional}
+            caseRecord={caseRecord}
+            alreadyContacted={alreadyContacted}
+          />
+        )}
 
         {/* Förifyllda profiler kan tas i anspråk av sin rättmätiga ägare. */}
         {!professional.verified && (

@@ -57,6 +57,21 @@ const Marketplace = () => {
     retry: false,
   });
 
+  // Ärendet driver "Kontakta via CLEARANCE": förfrågan byggs på det, och
+  // redan kontaktade rådgivare markeras i stället för att kontaktas igen.
+  const { data: latestCase } = useQuery({
+    queryKey: ["latest-case-marketplace"],
+    queryFn: () => data.cases.getLatest(),
+    enabled: !!user,
+    retry: false,
+  });
+  const { data: caseShares } = useQuery({
+    queryKey: ["case-shares", latestCase?.id],
+    queryFn: () => data.leads.listForCase(latestCase?.id as string),
+    enabled: !!latestCase,
+    retry: false,
+  });
+
   // Calculate average ratings per professional
   const getAverageRating = (professionalId: string) => {
     const professionalRatings = ratings?.filter(r => r.professionalId === professionalId) || [];
@@ -196,6 +211,12 @@ const Marketplace = () => {
                     key={professional.id}
                     professional={professional}
                     rating={getAverageRating(professional.id)}
+                    caseRecord={latestCase ?? null}
+                    alreadyContacted={(caseShares ?? []).some(
+                      (s) =>
+                        s.professionalId === professional.id &&
+                        (s.status === "sent" || s.status === "unlocked"),
+                    )}
                     myClaim={
                       // Ett väntande anspråk trumfar ett gammalt avslag.
                       (myClaims ?? [])

@@ -38,8 +38,11 @@ import type {
   PaymentRecord,
   PaymentStatus,
   ProfessionalRecord,
+  ContactRequestRecord,
+  LeadPreviewRecord,
   ProfileClaimForReview,
   ProfileClaimRecord,
+  UsageChargeRecord,
   RatingRecord,
   ReferralRecord,
   ReferralStatus,
@@ -133,6 +136,39 @@ export interface ProfessionalsPort {
   listClaims(): Promise<ProfileClaimForReview[]>;
   /** Avgör: godkännande kopplar profilen till kontot och sätter Verifierad. */
   reviewClaim(id: string, approve: boolean, note?: string): Promise<void>;
+}
+
+/**
+ * Kontaktförfrågan → förhandsvisning → "Lås upp ärendet".
+ *
+ * Företaget väljer rådgivare och godkänner delningen; rådgivaren ser en
+ * avidentifierad förhandsvisning och låser upp mot villkor. Avgiften
+ * registreras vid upplåsningen enligt byråns plan och samlas på en
+ * månadsfaktura. Vem som får se vad avgörs i databasen, inte här.
+ */
+export interface LeadsPort {
+  /** Företagets förfrågan. Samtycket stämplas i databasen. */
+  create(input: {
+    caseId: string;
+    professionalId: string;
+    preview: unknown;
+    summary: unknown;
+  }): Promise<void>;
+  /** Företagets insyn: vad som delats med vem i ärendet. */
+  listForCase(caseId: string): Promise<ContactRequestRecord[]>;
+
+  /* Rådgivarsidan. */
+
+  /** Inkorgen: avidentifierade förhandsvisningar med priset synligt. */
+  listMyLeads(): Promise<LeadPreviewRecord[]>;
+  /** Accepterar villkoren och låser upp. Returnerar sammanfattningen. */
+  unlock(requestId: string, termsVersion: string): Promise<unknown>;
+  /** Den upplåsta sammanfattningen vid återbesök. */
+  getUnlocked(requestId: string): Promise<unknown>;
+  /** Avböj - kostar ingenting, företaget ser beskedet. */
+  decline(requestId: string, note?: string): Promise<void>;
+  /** Den löpande debiteringsöversikten: alla egna avgifter, nyast först. */
+  listMyCharges(): Promise<UsageChargeRecord[]>;
 }
 
 export interface ApplicationsPort {
@@ -352,6 +388,30 @@ export interface OpsPort {
    */
   listProfessionalTerms(): Promise<ProfessionalTerms[]>;
   setReferralFee(professionalId: string, feeSek: number | null): Promise<void>;
+
+  /**
+   * Prisplanen per byrå: per-ärende, abonnemang, användning eller licens.
+   * Parametrar, inte kod - inga belopp är hårdkodade i produkten.
+   */
+  listBillingPlans(): Promise<
+    {
+      professionalId: string;
+      planKind: "per_case" | "subscription" | "usage" | "enterprise";
+      unlockFeeSek: number | null;
+      monthlyFeeSek: number | null;
+    }[]
+  >;
+  setBillingPlan(input: {
+    professionalId: string;
+    planKind: "per_case" | "subscription" | "usage" | "enterprise";
+    unlockFeeSek: number | null;
+    monthlyFeeSek: number | null;
+  }): Promise<void>;
+  /**
+   * Kreditspärren: byggd från dag ett, avstängd som standard. Prövas vid
+   * nästa avgiftsbelagda köp - pågående arbete påverkas aldrig.
+   */
+  setBillingHold(professionalId: string, hold: boolean, reason?: string): Promise<void>;
 }
 
 export interface AuditPort {
@@ -396,6 +456,7 @@ export interface DataPort {
   payments: PaymentsPort;
   invoices: InvoicesPort;
   professionals: ProfessionalsPort;
+  leads: LeadsPort;
   applications: ApplicationsPort;
   referrals: ReferralsPort;
   documents: DocumentsPort;

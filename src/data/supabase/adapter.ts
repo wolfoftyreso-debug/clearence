@@ -20,8 +20,11 @@ import type {
   FixedPrice,
   InvoiceRecord,
   PaymentRecord,
+  ContactRequestRecord,
+  LeadPreviewRecord,
   ProfessionalRecord,
   ProfileClaimRecord,
+  UsageChargeRecord,
   RatingRecord,
   ReferralRecord,
   SecretInfo,
@@ -1041,6 +1044,33 @@ export const supabaseAdapter: DataPort = {
       });
       if (error) throw error;
     },
+    async listBillingPlans() {
+      const { data, error } = await supabase.from("billing_plans").select("*");
+      if (error) throw error;
+      return (data ?? []).map((row) => ({
+        professionalId: row.professional_id,
+        planKind: row.plan_kind as "per_case" | "subscription" | "usage" | "enterprise",
+        unlockFeeSek: row.unlock_fee_sek === null ? null : Number(row.unlock_fee_sek),
+        monthlyFeeSek: row.monthly_fee_sek === null ? null : Number(row.monthly_fee_sek),
+      }));
+    },
+    async setBillingPlan({ professionalId, planKind, unlockFeeSek, monthlyFeeSek }) {
+      const { error } = await supabase.rpc("set_billing_plan", {
+        p_professional_id: professionalId,
+        p_plan_kind: planKind,
+        p_unlock_fee_sek: unlockFeeSek,
+        p_monthly_fee_sek: monthlyFeeSek,
+      });
+      if (error) throw error;
+    },
+    async setBillingHold(professionalId, hold, reason) {
+      const { error } = await supabase.rpc("set_billing_hold", {
+        p_professional_id: professionalId,
+        p_hold: hold,
+        p_reason: reason ?? null,
+      });
+      if (error) throw error;
+    },
   },
 
   cases: {
@@ -1307,6 +1337,97 @@ export const supabaseAdapter: DataPort = {
         p_note: note ?? null,
       });
       if (error) throw error;
+    },
+  },
+
+  leads: {
+    async create({ caseId, professionalId, preview, summary }) {
+      const { error } = await supabase.rpc("create_contact_request", {
+        p_case_id: caseId,
+        p_professional_id: professionalId,
+        p_preview: preview as Json,
+        p_summary: summary as Json,
+      });
+      if (error) throw error;
+    },
+    async listForCase(caseId) {
+      const { data, error } = await supabase
+        .from("contact_requests")
+        .select("id, case_id, professional_id, status, created_at, consent_at, unlocked_at, declined_at, decline_note")
+        .eq("case_id", caseId)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return (data ?? []).map((row) => ({
+        id: row.id,
+        caseId: row.case_id,
+        professionalId: row.professional_id,
+        status: row.status as ContactRequestRecord["status"],
+        createdAt: row.created_at,
+        consentAt: row.consent_at,
+        unlockedAt: row.unlocked_at,
+        declinedAt: row.declined_at,
+        declineNote: row.decline_note,
+      }));
+    },
+    async listMyLeads() {
+      const { data, error } = await supabase.rpc("list_lead_previews");
+      if (error) throw error;
+      return (data ?? []).map((row) => ({
+        id: row.id,
+        professionalId: row.professional_id,
+        status: row.status as ContactRequestRecord["status"],
+        createdAt: row.created_at,
+        unlockedAt: row.unlocked_at,
+        preview: row.preview,
+        planKind: (row.plan_kind ?? "per_case") as LeadPreviewRecord["planKind"],
+        unlockFeeSek: row.unlock_fee_sek === null ? null : Number(row.unlock_fee_sek),
+      }));
+    },
+    async unlock(requestId, termsVersion) {
+      const { data, error } = await supabase.rpc("unlock_case_lead", {
+        p_request_id: requestId,
+        p_terms_version: termsVersion,
+      });
+      if (error) throw error;
+      return data;
+    },
+    async getUnlocked(requestId) {
+      const { data, error } = await supabase.rpc("get_unlocked_lead", {
+        p_request_id: requestId,
+      });
+      if (error) throw error;
+      return data;
+    },
+    async decline(requestId, note) {
+      const { error } = await supabase.rpc("decline_case_lead", {
+        p_request_id: requestId,
+        p_note: note ?? null,
+      });
+      if (error) throw error;
+    },
+    async listMyCharges() {
+      const { data: session } = await supabase.auth.getSession();
+      const userId = session.session?.user.id;
+      if (!userId) return [];
+      const { data, error } = await supabase
+        .from("usage_charges")
+        .select("*")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return (data ?? []).map((row) => ({
+        id: row.id,
+        serviceCode: row.service_code as UsageChargeRecord["serviceCode"],
+        serviceLabel: row.service_label,
+        caseType: row.case_type,
+        companyName: row.company_name,
+        orgNumber: row.org_number,
+        amountOre: Number(row.amount_ore),
+        vatRate: Number(row.vat_rate),
+        createdAt: row.created_at,
+        invoiceId: row.invoice_id,
+        contactRequestId: row.contact_request_id,
+      }));
     },
   },
 

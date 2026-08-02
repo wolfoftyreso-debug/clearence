@@ -374,6 +374,127 @@ const ClaimsSection = () => {
   );
 };
 
+const PLAN_LABELS: Record<string, string> = {
+  per_case: "Per upplåst ärende",
+  subscription: "Abonnemang",
+  usage: "Användningsbaserad",
+  enterprise: "Företagslicens",
+};
+
+/**
+ * Prisplanen per byrå: affärsmodellen är parametrar som driften sätter,
+ * aldrig belopp i koden. Utan avtalad avgift är upplåsningen kostnadsfri
+ * och syns som det - systemet gissar aldrig ett pris.
+ */
+const PlanRow = ({
+  terms,
+  plan,
+}: {
+  terms: ProfessionalTerms;
+  plan: { planKind: string; unlockFeeSek: number | null; monthlyFeeSek: number | null } | undefined;
+}) => {
+  const queryClient = useQueryClient();
+  const [kind, setKind] = useState(plan?.planKind ?? "per_case");
+  const [unlockFee, setUnlockFee] = useState(plan?.unlockFeeSek === null || plan?.unlockFeeSek === undefined ? "" : String(plan.unlockFeeSek));
+  const [monthlyFee, setMonthlyFee] = useState(plan?.monthlyFeeSek === null || plan?.monthlyFeeSek === undefined ? "" : String(plan.monthlyFeeSek));
+
+  const parse = (value: string): number | null => {
+    if (value.trim() === "") return null;
+    const parsed = Number(value.replace(",", "."));
+    if (!Number.isFinite(parsed) || parsed < 0) throw new Error("Ogiltigt belopp");
+    return parsed;
+  };
+  const save = useMutation({
+    mutationFn: () =>
+      data.ops.setBillingPlan({
+        professionalId: terms.professionalId,
+        planKind: kind as "per_case" | "subscription" | "usage" | "enterprise",
+        unlockFeeSek: parse(unlockFee),
+        monthlyFeeSek: parse(monthlyFee),
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["billing-plans"] }),
+  });
+
+  return (
+    <li className="rounded-md border border-border p-3">
+      <p className="text-sm font-medium text-foreground">{terms.company ?? terms.name}</p>
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <select
+          value={kind}
+          onChange={(e) => setKind(e.target.value)}
+          aria-label={`Prismodell för ${terms.company ?? terms.name}`}
+          className="rounded-md border border-border bg-card px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+        >
+          {Object.entries(PLAN_LABELS).map(([value, label]) => (
+            <option key={value} value={value}>{label}</option>
+          ))}
+        </select>
+        <Input
+          value={unlockFee}
+          onChange={(e) => setUnlockFee(e.target.value)}
+          inputMode="numeric"
+          placeholder="kr/ärende"
+          aria-label={`Avgift per upplåst ärende för ${terms.company ?? terms.name}`}
+          className="w-28 text-right tabular-nums"
+        />
+        <Input
+          value={monthlyFee}
+          onChange={(e) => setMonthlyFee(e.target.value)}
+          inputMode="numeric"
+          placeholder="kr/månad"
+          aria-label={`Månadsavgift för ${terms.company ?? terms.name}`}
+          className="w-28 text-right tabular-nums"
+        />
+        <Button type="button" variant="outline" size="sm" disabled={save.isPending} onClick={() => save.mutate()}>
+          Spara
+        </Button>
+        {save.isSuccess && <CheckCircle2 className="h-4 w-4 text-success" aria-hidden="true" />}
+      </div>
+      {save.isError && (
+        <p className="mt-1 text-xs text-destructive" role="alert">Kunde inte spara planen.</p>
+      )}
+    </li>
+  );
+};
+
+const PlanSection = () => {
+  const { data: terms } = useQuery({
+    queryKey: ["professional-terms"],
+    queryFn: () => data.ops.listProfessionalTerms(),
+  });
+  const { data: plans } = useQuery({
+    queryKey: ["billing-plans"],
+    queryFn: () => data.ops.listBillingPlans(),
+  });
+
+  if (!terms || terms.length === 0) return null;
+  return (
+    <section aria-labelledby="plans-heading">
+      <h2 id="plans-heading" className="flex items-center gap-2 text-lg font-semibold text-foreground">
+        <Banknote className="h-5 w-5 text-accent" aria-hidden="true" />
+        Prisplaner för upplåsta ärenden
+      </h2>
+      <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+        Per byrå: prismodell, avgift per upplåst ärende och eventuell
+        månadsavgift. Utan avtalad avgift är upplåsningen kostnadsfri – byrån
+        ser det, och ingen debitering gissas. Alla avgifter samlas på en
+        månadsfaktura med full specifikation.
+      </p>
+      <ul className="mt-3 space-y-2">
+        {terms.map((t) => (
+          // Nyckeln byts när planerna laddats, så raden monteras om med de
+          // sparade värdena i stället för att visa tomma fält.
+          <PlanRow
+            key={`${t.professionalId}-${plans ? "laddad" : "laddar"}`}
+            terms={t}
+            plan={(plans ?? []).find((p) => p.professionalId === t.professionalId)}
+          />
+        ))}
+      </ul>
+    </section>
+  );
+};
+
 const AdminOverview = () => {
   const now = new Date();
 
@@ -451,6 +572,8 @@ const AdminOverview = () => {
         </section>
 
         <ClaimsSection />
+
+        <PlanSection />
 
         <FeeSection />
 

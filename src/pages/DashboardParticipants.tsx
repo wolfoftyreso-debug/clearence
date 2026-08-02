@@ -35,6 +35,63 @@ const swedishDate = (iso: string) =>
 
 const EMAIL_SHAPE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
+const SHARE_STATUS: Record<string, string> = {
+  sent: "Väntar på rådgivaren – ser bara en avidentifierad förhandsvisning",
+  unlocked: "Upplåst – rådgivaren ser sammanfattningen och dina kontaktuppgifter",
+  declined: "Avböjd – ingen information utöver förhandsvisningen delades",
+  withdrawn: "Återkallad",
+};
+
+/**
+ * Delningsinsynen: vilka rådgivare som kontaktats i ärendet, vad de kan se
+ * i det här ögonblicket och när samtycket gavs. Transparensen är löftet -
+ * ingen delning utan godkännande, och ingen delning utan det här kvittot.
+ */
+const SharesSection = ({ caseId }: { caseId: string }) => {
+  const { data: shares } = useQuery({
+    queryKey: ["case-shares", caseId],
+    queryFn: () => data.leads.listForCase(caseId),
+    retry: false,
+  });
+  const { data: professionals } = useQuery({
+    queryKey: ["professionals"],
+    queryFn: () => data.professionals.listActive(),
+    enabled: (shares ?? []).length > 0,
+  });
+
+  if (!shares || shares.length === 0) return null;
+  const nameOf = (professionalId: string) => {
+    const pro = (professionals ?? []).find((p) => p.id === professionalId);
+    return pro ? pro.company ?? pro.name : "Rådgivare";
+  };
+
+  return (
+    <section aria-labelledby="shares-heading" className="rounded-md border border-border bg-card p-5">
+      <h2 id="shares-heading" className="flex items-center gap-2 text-lg font-semibold text-foreground">
+        <ShieldQuestion className="h-5 w-5 text-accent" aria-hidden="true" />
+        Delat med rådgivare
+      </h2>
+      <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+        Rådgivare du kontaktat via CLEARANCE, och exakt vad de kan se just nu.
+        Ingen information delas utan ditt godkännande – och varje delning
+        redovisas här.
+      </p>
+      <ul className="mt-3 space-y-2">
+        {shares.map((share) => (
+          <li key={share.id} className="rounded-md border border-border p-3">
+            <p className="text-sm font-medium text-foreground">{nameOf(share.professionalId)}</p>
+            <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
+              {SHARE_STATUS[share.status] ?? share.status} · samtycke lämnat{" "}
+              {swedishDate(share.consentAt)}
+              {share.unlockedAt && ` · upplåst ${swedishDate(share.unlockedAt)}`}
+            </p>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+};
+
 const DashboardParticipants = () => {
   const queryClient = useQueryClient();
   const [email, setEmail] = useState("");
@@ -276,6 +333,11 @@ const DashboardParticipants = () => {
                 </span>
               </p>
             </section>
+
+            {/* Delningen med rådgivare: full insyn i vem som kontaktats,
+                vad de ser och när samtycket gavs. Ingen rad utan samtycke -
+                det är databasens regel, det här är fönstret mot den. */}
+            <SharesSection caseId={caseRecord.id} />
 
             {/* Historik */}
             {settledInvitations.length > 0 && (

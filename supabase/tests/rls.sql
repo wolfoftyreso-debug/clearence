@@ -1009,6 +1009,202 @@ begin
   end;
 end $$;
 
+/* ========================================================================== */
+/* Kontaktförfrågan, förhandsvisning och "Lås upp ärendet"                    */
+/* ========================================================================== */
+
+reset role;
+-- Rådgivarprofil kopplad till användare 4444, med per-ärende-plan.
+insert into public.professionals (id, name, category, verified, user_id)
+values ('f0000000-0000-0000-0000-000000000002', 'Upplåsningsbyrån', 'rekonstruktor', true,
+        '44444444-4444-4444-4444-444444444444');
+insert into public.billing_plans (professional_id, plan_kind, unlock_fee_sek)
+values ('f0000000-0000-0000-0000-000000000002', 'per_case', 995);
+
+set local role authenticated;
+
+-- Företrädaren för ärende A skickar förfrågan; borgenären 5555 kan inte.
+select pg_temp.as_user('55555555-5555-5555-5555-555555555555');
+do $$
+begin
+  begin
+    perform public.create_contact_request(
+      'aaaaaaaa-0000-0000-0000-000000000001',
+      'f0000000-0000-0000-0000-000000000002',
+      '{"problemType": "likviditet"}'::jsonb, '{"companyName": "Bolag A AB"}'::jsonb);
+    raise exception 'FAIL  en borgenär kunde dela ärendet';
+  exception when others then
+    if sqlerrm like 'FAIL%' then raise; end if;
+    raise notice 'ok    sharing a case requires representative write access';
+  end;
+end $$;
+
+select pg_temp.as_user('11111111-1111-1111-1111-111111111111');
+do $$
+declare v_id uuid;
+begin
+  v_id := public.create_contact_request(
+    'aaaaaaaa-0000-0000-0000-000000000001',
+    'f0000000-0000-0000-0000-000000000002',
+    '{"problemType": "likviditet", "sizeBand": "6-10"}'::jsonb,
+    '{"companyName": "Bolag A AB", "orgNumber": "556000-0001", "contactEmail": "agnes@bolag-a.se"}'::jsonb);
+  if v_id is null then raise exception 'FAIL  förfrågan gav inget id'; end if;
+  raise notice 'ok    a representative can send a contact request with consent';
+end $$;
+
+do $$
+begin
+  begin
+    perform public.create_contact_request(
+      'aaaaaaaa-0000-0000-0000-000000000001',
+      'f0000000-0000-0000-0000-000000000002',
+      '{}'::jsonb, '{}'::jsonb);
+    raise exception 'FAIL  dubbel förfrågan till samma rådgivare accepterades';
+  exception when others then
+    if sqlerrm like 'FAIL%' then raise; end if;
+    raise notice 'ok    the same advisor cannot be contacted twice for one case';
+  end;
+end $$;
+
+select pg_temp.check('the company follows its own requests',
+  (select count(*) from public.contact_requests where case_id = 'aaaaaaaa-0000-0000-0000-000000000001'), 1::bigint);
+
+-- Rådgivaren (4444) ser förhandsvisningen med pris, men aldrig tabellraden.
+select pg_temp.as_user('44444444-4444-4444-4444-444444444444');
+do $$
+declare v_row record;
+begin
+  select * into v_row from public.list_lead_previews() limit 1;
+  if v_row.id is null then raise exception 'FAIL  förhandsvisningen är tom'; end if;
+  if v_row.preview->>'problemType' <> 'likviditet' then
+    raise exception 'FAIL  förhandsvisningen saknar innehållet';
+  end if;
+  if v_row.unlock_fee_sek <> 995 then
+    raise exception 'FAIL  avgiften följer inte med förhandsvisningen (%)', v_row.unlock_fee_sek;
+  end if;
+  if v_row.preview::text like '%Bolag A%' or v_row.preview::text like '%556000%' then
+    raise exception 'FAIL  förhandsvisningen läcker identiteten';
+  end if;
+  raise notice 'ok    the advisor sees an anonymised preview with the fee';
+end $$;
+
+-- 4444 har ärendeåtkomst som revisor i ärende A, men tabellens summary får
+-- ändå inte läsas i förväg av NÅGON annan väg än upplåsningen; en
+-- utomstående (6666) ser ingenting alls.
+select pg_temp.as_user('66666666-6666-6666-6666-666666666666');
+select pg_temp.check('outsiders see no contact requests',
+  (select count(*) from public.contact_requests), 0::bigint);
+select pg_temp.check('outsiders see no lead previews',
+  (select count(*) from public.list_lead_previews()), 0::bigint);
+
+-- Upplåsningen: fel användare nekas, rätt användare får sammanfattningen
+-- och avgiften registreras.
+do $$
+begin
+  begin
+    perform public.unlock_case_lead(
+      (select id from public.contact_requests limit 1), 'v1');
+    raise exception 'FAIL  fel användare kunde låsa upp';
+  exception when others then
+    if sqlerrm like 'FAIL%' then raise; end if;
+    raise notice 'ok    only the targeted advisor can unlock';
+  end;
+end $$;
+
+select pg_temp.as_user('44444444-4444-4444-4444-444444444444');
+do $$
+declare v_summary jsonb; v_id uuid;
+begin
+  select id into v_id from public.list_lead_previews() limit 1;
+  begin
+    perform public.unlock_case_lead(v_id, '  ');
+    raise exception 'FAIL  upplåsning utan villkorsaccept gick igenom';
+  exception when others then
+    if sqlerrm like 'FAIL%' then raise; end if;
+    raise notice 'ok    unlocking requires accepting the terms';
+  end;
+  v_summary := public.unlock_case_lead(v_id, 'v1-2026');
+  if v_summary->>'companyName' <> 'Bolag A AB' then
+    raise exception 'FAIL  upplåsningen gav inte sammanfattningen';
+  end if;
+  if public.get_unlocked_lead(v_id)->>'contactEmail' <> 'agnes@bolag-a.se' then
+    raise exception 'FAIL  den upplåsta sammanfattningen kan inte återbesökas';
+  end if;
+  raise notice 'ok    unlocking reveals the full summary against terms';
+end $$;
+
+do $$
+declare v_charge record;
+begin
+  select service_code, amount_ore, company_name, org_number, invoice_id
+  into v_charge from public.usage_charges where user_id = auth.uid();
+  if v_charge.service_code <> 'case_unlock' or v_charge.amount_ore <> 99500 then
+    raise exception 'FAIL  avgiften registrerades fel (% öre)', v_charge.amount_ore;
+  end if;
+  if v_charge.company_name <> 'Bolag A AB' or v_charge.org_number <> '556000-0001' then
+    raise exception 'FAIL  fakturaraden saknar sammanhanget';
+  end if;
+  if v_charge.invoice_id is not null then
+    raise exception 'FAIL  avgiften är redan fakturerad';
+  end if;
+  raise notice 'ok    the unlock charge lands in the running statement';
+end $$;
+
+do $$
+begin
+  begin
+    perform public.unlock_case_lead(
+      (select id from public.contact_requests limit 1), 'v1');
+    raise exception 'FAIL  samma förfrågan kunde låsas upp två gånger';
+  exception when others then
+    if sqlerrm like 'FAIL%' then raise; end if;
+    raise notice 'ok    a lead can only be unlocked once';
+  end;
+end $$;
+
+select pg_temp.as_user('66666666-6666-6666-6666-666666666666');
+select pg_temp.check('charges are invisible to other users',
+  (select count(*) from public.usage_charges), 0::bigint);
+
+-- Spärrlagret: byggt men avstängt. Aktiveras det stoppas nästa köp.
+select pg_temp.as_user('11111111-1111-1111-1111-111111111111');
+do $$
+begin
+  perform public.set_billing_hold('f0000000-0000-0000-0000-000000000002', true, 'Upprepade sena betalningar');
+  raise notice 'ok    drift can arm the credit hold';
+end $$;
+do $$
+declare v_id uuid;
+begin
+  v_id := public.create_contact_request(
+    'aaaaaaaa-0000-0000-0000-000000000001',
+    'f0000000-0000-0000-0000-000000000001',
+    '{"problemType": "skatt"}'::jsonb, '{"companyName": "Bolag A AB"}'::jsonb);
+  raise notice 'ok    a second advisor can be contacted for the same case';
+end $$;
+
+-- Spärren prövas med en ny förfrågan till den spärrade byrån. Ett färskt
+-- ärende seedas som tabellägare (bolag B raderades i GDPR-testet ovan).
+reset role;
+insert into public.cases (id, user_id, org_number, company_name) values
+  ('cccccccc-0000-0000-0000-000000000003', '22222222-2222-2222-2222-222222222222', '556000-0003', 'Bolag C AB');
+insert into public.contact_requests (case_id, professional_id, created_by, preview, summary)
+values ('cccccccc-0000-0000-0000-000000000003', 'f0000000-0000-0000-0000-000000000002',
+        '22222222-2222-2222-2222-222222222222', '{"problemType": "skuld"}'::jsonb, '{"companyName": "Bolag C AB"}'::jsonb);
+set local role authenticated;
+select pg_temp.as_user('44444444-4444-4444-4444-444444444444');
+do $$
+begin
+  begin
+    perform public.unlock_case_lead(
+      (select l.id from public.list_lead_previews() l where l.status = 'sent' limit 1), 'v1');
+    raise exception 'FAIL  en spärrad byrå kunde låsa upp';
+  exception when others then
+    if sqlerrm like 'FAIL%' then raise; end if;
+    raise notice 'ok    the armed credit hold blocks new purchases';
+  end;
+end $$;
+
 reset role;
 select 'ALL RLS TESTS PASSED' as result;
 

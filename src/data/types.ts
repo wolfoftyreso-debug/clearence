@@ -148,6 +148,51 @@ export interface ProfileClaimForReview extends ProfileClaimRecord {
   contact: string;
 }
 
+/* --- kontaktförfrågan och upplåsning ------------------------------------- */
+
+export type ContactRequestStatus = "sent" | "unlocked" | "declined" | "withdrawn";
+
+/** Företagets bild av en förfrågan: full insyn i vad som delats med vem. */
+export interface ContactRequestRecord {
+  id: string;
+  caseId: string;
+  professionalId: string;
+  status: ContactRequestStatus;
+  createdAt: string;
+  consentAt: string;
+  unlockedAt: string | null;
+  declinedAt: string | null;
+  declineNote: string | null;
+}
+
+/** Rådgivarens bild FÖRE upplåsning: avidentifierad, med priset synligt. */
+export interface LeadPreviewRecord {
+  id: string;
+  professionalId: string;
+  status: ContactRequestStatus;
+  createdAt: string;
+  unlockedAt: string | null;
+  /** LeadPreview från src/lib/leadSummary.ts, lagrad som json. */
+  preview: unknown;
+  planKind: "per_case" | "subscription" | "usage" | "enterprise";
+  unlockFeeSek: number | null;
+}
+
+/** En rad i den löpande debiteringsöversikten och på samlingsfakturan. */
+export interface UsageChargeRecord {
+  id: string;
+  serviceCode: "case_unlock" | "subscription";
+  serviceLabel: string;
+  caseType: string | null;
+  companyName: string | null;
+  orgNumber: string | null;
+  amountOre: number;
+  vatRate: number;
+  createdAt: string;
+  invoiceId: string | null;
+  contactRequestId: string | null;
+}
+
 export interface RatingRecord {
   professionalId: string;
   communicationScore: number | null;

@@ -6,6 +6,7 @@
  *   node db/dist/email-worker.cjs --close    per dygn: stäng + köa besked
  *   node db/dist/email-worker.cjs --credit   per dygn: kreditbevakning
  *   node db/dist/email-worker.cjs --invoice-referrals   1:a varje månad
+ *   node db/dist/email-worker.cjs --invoice-usage       1:a varje månad
  *
  * Byggs med `npm run build:worker` - källan är TypeScript just för att
  * mejlens innehåll ska komma från src/lib/email/messages.ts, samma byggare
@@ -207,11 +208,67 @@ const runReferralInvoicing = async (): Promise<void> => {
   console.log(`förmedlingsfakturor: ${issued} utställda, ${rows.length - issued} överhoppade`);
 };
 
+/**
+ * Samlingsfakturan för användningsavgifter: en faktura per byrå för
+ * föregående månads upplåsta ärenden och abonnemang. Specifikationen bor i
+ * usage_charges (kopplade via invoice_id) och visas rad för rad i byråns
+ * fakturacentral - mejlet bär summan, systemet bär detaljerna.
+ */
+const runUsageInvoicing = async (): Promise<void> => {
+  const blockers = missingInvoiceFields();
+  if (blockers.length > 0) {
+    console.log(`användningsfakturering blockerad: ${blockers.join("; ")}`);
+    return;
+  }
+
+  const { rows } = await db.query("select * from public.issue_usage_invoices()");
+  let issued = 0;
+  for (const row of rows) {
+    if (row.skipped_reason) {
+      console.log(`hoppade över ${row.customer_name}: ${row.skipped_reason} (${row.charge_count} poster väntar)`);
+      continue;
+    }
+    const netOre = Number(row.net_ore);
+    await enqueue(
+      invoiceEmail({
+        invoiceNumber: row.invoice_number,
+        issuedAt: row.issued_at.toISOString(),
+        dueAt: row.due_at.toISOString(),
+        seller: COMPANY,
+        customer: { name: row.customer_name, orgNumber: null, email: row.recipient, address: null },
+        lines: [
+          {
+            description: `Användningsavgifter ${row.period_start.toISOString().slice(0, 7)} (${row.charge_count} poster, specifikation i fakturacentralen)`,
+            quantity: 1,
+            unitPriceOre: netOre,
+          },
+        ],
+        note: null,
+        totals: {
+          netOre,
+          vatOre: Number(row.vat_ore),
+          grossOre: Number(row.gross_ore),
+          vatRate: 0.25,
+        },
+      }),
+      { userId: row.user_id, invoiceId: row.invoice_id },
+    );
+    issued += 1;
+  }
+  console.log(`samlingsfakturor: ${issued} utställda, ${rows.length - issued} överhoppade`);
+};
+
 const main = async () => {
   await db.connect();
 
   if (process.argv.includes("--invoice-referrals")) {
     await runReferralInvoicing();
+    await db.end();
+    return;
+  }
+
+  if (process.argv.includes("--invoice-usage")) {
+    await runUsageInvoicing();
     await db.end();
     return;
   }
