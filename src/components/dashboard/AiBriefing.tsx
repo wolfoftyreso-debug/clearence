@@ -7,7 +7,7 @@ import type { TimelineEvent } from "@/lib/crisisAnalysis";
 import { ArrowRight, Compass, Sparkles } from "lucide-react";
 
 /**
- * Din AI-lägesrapport: det första som möter användaren efter inloggning.
+ * Systemanalysen: det första som möter användaren efter inloggning.
  *
  * Ingen lista, ingen chatbot - en ledningssammanfattning skriven som om en
  * erfaren rekonstruktör just satt sig in i bolaget. Innehållet byggs av
@@ -91,7 +91,7 @@ export const AiBriefing = ({ caseRecord, timeline }: AiBriefingProps) => {
       <div className="flex flex-wrap items-center gap-2">
         <h2 className="flex items-center gap-2 text-lg font-semibold text-foreground">
           <Sparkles className="h-5 w-5 text-accent" aria-hidden="true" />
-          Din AI-lägesrapport
+          Systemanalys
         </h2>
         <span
           className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold ${SEVERITY_TONE[summary.severity]}`}

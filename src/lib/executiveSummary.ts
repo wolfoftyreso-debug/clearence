@@ -1,5 +1,5 @@
 /**
- * AI-lägesrapporten: ledningssammanfattningen som möter användaren vid
+ * Systemanalysen: ledningssammanfattningen som möter användaren vid
  * inloggning.
  *
  * Rapporten ska kännas som om en erfaren rekonstruktör just satt sig in i

@@ -1,5 +1,5 @@
 /**
- * AI-portföljrapporten: praktikerns personliga arbetsledare.
+ * Portföljanalysen: praktikerns personliga arbetsledare.
  *
  * Juristen, rekonstruktören eller förvaltaren ska aldrig behöva fundera på
  * "vad ska jag göra nu?". Rapporten svarar på arbetsledarens frågor: hur

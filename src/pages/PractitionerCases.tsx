@@ -253,7 +253,7 @@ const PractitionerCases = () => {
             <section className="rounded-md border border-border bg-card p-5 shadow-soft">
               <h2 className="flex items-center gap-2 text-lg font-semibold text-foreground">
                 <Sparkles className="h-5 w-5 text-accent" aria-hidden="true" />
-                Din AI-portföljrapport
+                Portföljanalys
               </h2>
               <p className="mt-1 text-xs text-muted-foreground">
                 Bygger på samtliga öppna ärenden och uppdateras automatiskt när
