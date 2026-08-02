@@ -17,6 +17,7 @@ import {
   type DialogAssessment,
   type DialogFlow,
 } from "@/lib/advisor/dialog";
+import { OPTIONS_STANCE } from "@/lib/advisor/options";
 import type { AdvisorSessionRecord } from "@/data/types";
 import { ArrowRight, Compass, Gavel, RotateCcw, Send } from "lucide-react";
 
@@ -233,9 +234,24 @@ const DashboardSamtal = () => {
     ]);
   };
 
+  /* "Vilka alternativ har jag?" är ingen frågeserie - det är en vy.
+     Clara svarar med hållningen och öppnar handlingsalternativen själv:
+     användaren ska aldrig behöva tänka "var ska jag klicka?". */
+  const openOptions = (userText: string) => {
+    say([
+      { who: "user", text: userText },
+      { who: "radgivare", text: `${OPTIONS_STANCE} Jag öppnar nu handlingsalternativen.` },
+    ]);
+    window.setTimeout(() => navigate("/dashboard/alternativ"), 1600);
+  };
+
   const handleFreeText = (text: string) => {
     const trimmed = text.trim();
     if (!trimmed) return;
+    if (/alternativ|vägar framåt|vad kan jag göra/i.test(trimmed)) {
+      openOptions(trimmed);
+      return;
+    }
     const matched = matchFlow(trimmed);
     if (matched) {
       startFlow(matched, trimmed);
@@ -405,6 +421,13 @@ const DashboardSamtal = () => {
                       {f.chip}
                     </button>
                   ))}
+                  <button
+                    type="button"
+                    onClick={() => openOptions("Vilka alternativ har jag?")}
+                    className="rounded-full border border-border bg-card px-3.5 py-1.5 text-sm font-medium text-foreground transition-colors hover:border-accent"
+                  >
+                    Vilka alternativ har jag?
+                  </button>
                 </div>
               )}
 

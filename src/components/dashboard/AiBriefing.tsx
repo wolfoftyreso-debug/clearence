@@ -216,13 +216,22 @@ export const AiBriefing = ({ caseRecord, timeline }: AiBriefingProps) => {
               </li>
             ))}
           </ul>
-          <button
-            type="button"
-            onClick={() => chooseCompact(false)}
-            className="mt-3 text-sm font-medium text-accent underline-offset-4 hover:underline"
-          >
-            Visa hela analysen
-          </button>
+          <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1">
+            <button
+              type="button"
+              onClick={() => chooseCompact(false)}
+              className="text-sm font-medium text-accent underline-offset-4 hover:underline"
+            >
+              Visa hela analysen
+            </button>
+            {/* Vägen till "hur illa är det egentligen?" - alternativvyn. */}
+            <Link
+              to="/dashboard/alternativ"
+              className="text-sm font-medium text-accent underline-offset-4 hover:underline"
+            >
+              Se handlingsalternativen
+            </Link>
+          </div>
         </>
       )}
 

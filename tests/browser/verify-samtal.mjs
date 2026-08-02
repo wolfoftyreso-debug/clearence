@@ -107,6 +107,21 @@ body = await page.innerText("body");
 check("fallbacken pekar på nulägesanalysen", /nulägesanalys/i.test(body));
 check("snabbvalen finns för nästa försök", /Kan inte betala skatten/i.test(body) || /Brev från Kronofogden/i.test(body));
 
+// 7b. Handlingsalternativen: Clara svarar med hållningen och navigerar själv.
+await page.goto(`${BASE}/dashboard/samtal`, { waitUntil: "domcontentloaded" });
+await page.waitForTimeout(1200);
+await page.click('button:has-text("Vilka alternativ har jag?")');
+await page.waitForTimeout(800);
+body = await page.innerText("body");
+check("Clara svarar med hållningen", /flera vägar framåt/i.test(body));
+await page.waitForTimeout(2000);
+check("alternativvyn öppnades", page.url().includes("/dashboard/alternativ"));
+body = await page.innerText("body");
+check("vägarna visas med status", /Företagsrekonstruktion/i.test(body) && /Konkurs/i.test(body) && /Brådskande|Öppen|Smalnar/i.test(body));
+check("katalogens fyra kategorier", /Kassaflöde/i.test(body) && /Intäkter/i.test(body) && /Finansiering/i.test(body) && /Kostnader/i.test(body));
+check("ingen förutbestämd utgång", /aktivt val/i.test(body));
+check("rådgivningsgränsen står på sidan", /stäms av med revisor/i.test(body));
+
 // 8. Onboardingen: en ny användare möts av Clara, inte av ett dashboard.
 await page.goto(`${BASE}/login`, { waitUntil: "domcontentloaded" });
 await page.waitForTimeout(800);
