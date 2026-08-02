@@ -236,6 +236,10 @@ const toDocument = (row: {
   source: DocumentRecord["source"];
   note: string | null;
   created_at: string;
+  review_status?: string | null;
+  review_requested_at?: string | null;
+  reviewed_by?: string | null;
+  reviewed_at?: string | null;
 }): DocumentRecord => ({
   id: row.id,
   caseId: row.case_id,
@@ -247,6 +251,13 @@ const toDocument = (row: {
   source: row.source,
   note: row.note,
   createdAt: row.created_at,
+  reviewStatus:
+    row.review_status === "in_review" || row.review_status === "approved"
+      ? row.review_status
+      : "draft",
+  reviewRequestedAt: row.review_requested_at ?? null,
+  reviewedBy: row.reviewed_by ?? null,
+  reviewedAt: row.reviewed_at ?? null,
 });
 
 const asStringArray = (value: unknown): string[] =>
@@ -1973,6 +1984,14 @@ export const supabaseAdapter: DataPort = {
       if (signError || !signed) return null;
 
       return signed.signedUrl;
+    },
+    async setReview(id, action) {
+      // Rollprövningen bor i funktionen: godkännande kräver rådgivarroll.
+      const { error } = await supabase.rpc("set_document_review", {
+        p_document_id: id,
+        p_action: action,
+      });
+      if (error) throw error;
     },
   },
 

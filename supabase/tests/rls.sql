@@ -1786,6 +1786,86 @@ select pg_temp.check('journal sessions cannot be deleted',
   (select count(*) from public.advisor_sessions), 1::bigint);
 
 /* ========================================================================== */
+/* Dokumentgranskningen: Utkast -> För granskning -> Godkänt                  */
+/* ========================================================================== */
+
+set local role authenticated;
+
+-- Företrädaren (1111) laddar upp ett dokument och skickar det för granskning.
+select pg_temp.as_user('11111111-1111-1111-1111-111111111111');
+insert into public.case_documents (id, case_id, user_id, kind, file_name, file_size, mime_type, storage_path, source)
+values ('d0c00000-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000001',
+        '11111111-1111-1111-1111-111111111111',
+        'other', 'likviditetsprognos.pdf', 1000, 'application/pdf',
+        'aaaaaaaa-0000-0000-0000-000000000001/likviditetsprognos.pdf', 'manual');
+select public.set_document_review('d0c00000-0000-0000-0000-000000000001', 'request');
+select pg_temp.check('the owner sends a document for review',
+  (select review_status from public.case_documents where id = 'd0c00000-0000-0000-0000-000000000001'),
+  'in_review'::text);
+
+-- Företrädaren kan INTE godkänna sitt eget underlag.
+do $$
+begin
+  begin
+    perform public.set_document_review('d0c00000-0000-0000-0000-000000000001', 'approve');
+    raise exception 'FAIL  företrädaren kunde godkänna sitt eget dokument';
+  exception when others then
+    if sqlerrm like 'FAIL%' then raise; end if;
+    raise notice 'ok    the owner cannot approve their own document';
+  end;
+end $$;
+
+-- Borgenären (5555) kan inte heller.
+select pg_temp.as_user('55555555-5555-5555-5555-555555555555');
+do $$
+begin
+  begin
+    perform public.set_document_review('d0c00000-0000-0000-0000-000000000001', 'approve');
+    raise exception 'FAIL  en borgenär kunde godkänna dokument';
+  exception when others then
+    if sqlerrm like 'FAIL%' then raise; end if;
+    raise notice 'ok    a creditor cannot approve documents';
+  end;
+end $$;
+
+-- Revisorn (4444, rådgivarroll) godkänner: vem och när stämplas.
+select pg_temp.as_user('44444444-4444-4444-4444-444444444444');
+select public.set_document_review('d0c00000-0000-0000-0000-000000000001', 'approve');
+select pg_temp.check('an advisor role approves and the stamp records who',
+  (select count(*) from public.case_documents
+   where id = 'd0c00000-0000-0000-0000-000000000001'
+     and review_status = 'approved'
+     and reviewed_by = '44444444-4444-4444-4444-444444444444'
+     and reviewed_at is not null), 1::bigint);
+
+-- Ett godkänt dokument kan inte godkännas igen (det är inte i granskning).
+do $$
+begin
+  begin
+    perform public.set_document_review('d0c00000-0000-0000-0000-000000000001', 'approve');
+    raise exception 'FAIL  ett redan godkänt dokument kunde godkännas om';
+  exception when others then
+    if sqlerrm like 'FAIL%' then raise; end if;
+    raise notice 'ok    approval requires the document to be in review';
+  end;
+end $$;
+
+-- Övergången journalfördes automatiskt av audit-triggern.
+select pg_temp.as_user('11111111-1111-1111-1111-111111111111');
+select pg_temp.check('the review transitions are in the journal',
+  (select count(*) >= 2 from public.audit_events
+   where object_type = 'case_documents'
+     and object_id = 'd0c00000-0000-0000-0000-000000000001'
+     and action = 'update'), true);
+
+-- Företrädaren återställer till utkast; stämpeln nollas, journalen består.
+select public.set_document_review('d0c00000-0000-0000-0000-000000000001', 'reset');
+select pg_temp.check('reset clears the stamp',
+  (select count(*) from public.case_documents
+   where id = 'd0c00000-0000-0000-0000-000000000001'
+     and review_status = 'draft' and reviewed_by is null), 1::bigint);
+
+/* ========================================================================== */
 /* Driftparametrarna: företagsplanens pris                                    */
 /* ========================================================================== */
 

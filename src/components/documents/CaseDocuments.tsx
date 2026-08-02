@@ -84,6 +84,20 @@ export const CaseDocuments = ({ caseId, userId }: CaseDocumentsProps) => {
     },
   });
 
+  const review = useMutation({
+    mutationFn: ({ id, action }: { id: string; action: "request" | "approve" | "reset" }) =>
+      data.documents.setReview(id, action),
+    onSuccess: () => {
+      setError(null);
+      void queryClient.invalidateQueries({ queryKey: ["case-documents", caseId] });
+    },
+    // Rollfelen visas som de är: "endast en rådgivarroll kan godkänna"
+    // är information, inte ett tekniskt fel.
+    onError: (e) => {
+      setError(e instanceof Error ? e.message : "Statusen kunde inte uppdateras.");
+    },
+  });
+
   const remove = useMutation({
     mutationFn: (id: string) => data.documents.remove(id),
     onSuccess: () => {
@@ -220,6 +234,55 @@ export const CaseDocuments = ({ caseId, userId }: CaseDocumentsProps) => {
                   {KIND_LABEL[document_.kind]} · {formatSize(document_.fileSize)} ·{" "}
                   {format(new Date(document_.createdAt), "d MMM yyyy", { locale: sv })}
                 </p>
+                {/* Granskningsflödet: statusen är dokumentets, stämpeln är
+                    rådgivarens. Företrädaren begär; rådgivarrollen godkänner. */}
+                <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                  <span
+                    className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${
+                      document_.reviewStatus === "approved"
+                        ? "border-success/40 bg-success/10 text-foreground"
+                        : document_.reviewStatus === "in_review"
+                          ? "border-warning/50 bg-warning/10 text-foreground"
+                          : "border-border bg-secondary/40 text-muted-foreground"
+                    }`}
+                  >
+                    {document_.reviewStatus === "approved"
+                      ? "Godkänt"
+                      : document_.reviewStatus === "in_review"
+                        ? "För granskning"
+                        : "Utkast"}
+                  </span>
+                  {document_.reviewStatus === "draft" && (
+                    <button
+                      type="button"
+                      onClick={() => review.mutate({ id: document_.id, action: "request" })}
+                      disabled={review.isPending}
+                      className="text-xs font-medium text-accent underline-offset-4 hover:underline"
+                    >
+                      Skicka för granskning
+                    </button>
+                  )}
+                  {document_.reviewStatus === "in_review" && (
+                    <button
+                      type="button"
+                      onClick={() => review.mutate({ id: document_.id, action: "approve" })}
+                      disabled={review.isPending}
+                      className="text-xs font-medium text-accent underline-offset-4 hover:underline"
+                    >
+                      Godkänn (rådgivarroll)
+                    </button>
+                  )}
+                  {document_.reviewStatus === "approved" && (
+                    <button
+                      type="button"
+                      onClick={() => review.mutate({ id: document_.id, action: "reset" })}
+                      disabled={review.isPending}
+                      className="text-xs font-medium text-muted-foreground underline-offset-4 hover:underline"
+                    >
+                      Återställ till utkast
+                    </button>
+                  )}
+                </div>
               </div>
               <div className="flex flex-shrink-0 gap-1">
                 <Button

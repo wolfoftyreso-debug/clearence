@@ -265,6 +265,12 @@ export interface DocumentsPort {
    * are a company's bank statements and annual accounts.
    */
   getDownloadUrl(id: string, expiresInSeconds: number): Promise<string | null>;
+  /**
+   * Granskningsflödet: request (skrivroll), approve (ENDAST rådgivarroll
+   * - företrädaren stämplar aldrig sitt eget underlag), reset (skrivroll).
+   * Rollprövningen sker i backend; varje övergång journalförs.
+   */
+  setReview(id: string, action: "request" | "approve" | "reset"): Promise<void>;
 }
 
 export interface FinancialPort {

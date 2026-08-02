@@ -128,7 +128,13 @@ export const buildWorkingModel = (input: {
  * läsbara rader; det egna samtalet räknas inte som nyhet.
  */
 const EVENT_LABEL: Record<string, (e: AuditEventRecord) => string | null> = {
-  case_documents: (e) => (e.action === "insert" ? `Nytt dokument: ${e.detail ?? "utan namn"}` : null),
+  case_documents: (e) => {
+    if (e.action === "insert") return `Nytt dokument: ${e.detail ?? "utan namn"}`;
+    // Granskningsflödet: godkännandet är nyheten användaren väntar på.
+    if (e.detail?.includes("godkändes")) return `Dokument godkänt: ${e.detail.replace(" godkändes", "")}`;
+    if (e.detail?.includes("för granskning")) return e.detail;
+    return null;
+  },
   case_decisions: (e) =>
     e.action === "insert" ? `Beslut protokollfört: ${e.detail?.replace(/^beslut: /, "") ?? ""}` : `Ett beslut omprövades`,
   case_tasks: (e) =>

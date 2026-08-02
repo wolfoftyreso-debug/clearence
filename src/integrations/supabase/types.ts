@@ -339,6 +339,10 @@ export type Database = {
       }
       case_documents: {
         Row: {
+          review_status: string
+          review_requested_at: string | null
+          reviewed_by: string | null
+          reviewed_at: string | null
           case_id: string
           created_at: string
           file_name: string
@@ -365,6 +369,10 @@ export type Database = {
           user_id: string
         }
         Update: {
+          review_status?: string
+          review_requested_at?: string | null
+          reviewed_by?: string | null
+          reviewed_at?: string | null
           case_id?: string
           created_at?: string
           file_name?: string
@@ -1303,6 +1311,10 @@ export type Database = {
       }
       set_plan_approval: {
         Args: { p_case_id: string; p_approved: boolean }
+        Returns: undefined
+      }
+      set_document_review: {
+        Args: { p_document_id: string; p_action: string }
         Returns: undefined
       }
       north_star_counts: {

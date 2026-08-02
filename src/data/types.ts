@@ -376,6 +376,11 @@ export interface DocumentRecord {
   source: DocumentSource;
   note: string | null;
   createdAt: string;
+  /** Utkast -> För granskning -> Godkänt. Godkännandet är en rådgivarstämpel. */
+  reviewStatus: "draft" | "in_review" | "approved";
+  reviewRequestedAt: string | null;
+  reviewedBy: string | null;
+  reviewedAt: string | null;
 }
 
 export interface NewDocument {

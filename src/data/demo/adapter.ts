@@ -153,6 +153,13 @@ const load = () => {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) state = { ...emptyState(), ...(JSON.parse(raw) as DemoState) };
+    // Dokument sparade före granskningsflödet saknar statusfälten.
+    for (const d of state.documents) {
+      d.reviewStatus = d.reviewStatus ?? "draft";
+      d.reviewRequestedAt = d.reviewRequestedAt ?? null;
+      d.reviewedBy = d.reviewedBy ?? null;
+      d.reviewedAt = d.reviewedAt ?? null;
+    }
     // Meddelanden sparade före utbyggnaden saknar de nya fälten.
     for (const m of state.caseMessages) {
       m.acks = m.acks ?? [];
@@ -1579,8 +1586,13 @@ export const demoAdapter: DataPort = {
         push("insert", "case_tasks", t.id, t.createdAt, `"${t.label}"`);
         if (t.doneAt) push("update", "case_tasks", t.id, t.doneAt, `"${t.label}" bockades av`);
       }
-      for (const d of state.documents.filter((d) => d.caseId === caseId))
+      for (const d of state.documents.filter((d) => d.caseId === caseId)) {
         push("insert", "case_documents", d.id, d.createdAt, d.note ? `${d.fileName} (${d.note.toLowerCase()})` : d.fileName);
+        if (d.reviewRequestedAt)
+          push("update", "case_documents", d.id, d.reviewRequestedAt, `${d.fileName} skickades för granskning`);
+        if (d.reviewedAt)
+          push("update", "case_documents", d.id, d.reviewedAt, `${d.fileName} godkändes`);
+      }
       for (const i of state.caseInvitations.filter((i) => i.caseId === caseId)) {
         push("insert", "case_invitations", i.id, i.createdAt, `${i.email} som ${CASE_ROLE_LABELS[i.role].toLowerCase()}`);
         if (i.acceptedAt) push("update", "case_invitations", i.id, i.acceptedAt, `${i.email} tackade ja`);
@@ -2325,6 +2337,10 @@ export const demoAdapter: DataPort = {
         source: input.source,
         note: input.note,
         createdAt: now(),
+        reviewStatus: "draft",
+        reviewRequestedAt: null,
+        reviewedBy: null,
+        reviewedAt: null,
       };
       fileStore.set(id, input.file);
       state.documents = [record, ...state.documents];
@@ -2341,6 +2357,34 @@ export const demoAdapter: DataPort = {
       // Uploaded before a reload: the metadata survived, the bytes did not.
       if (!file) return null;
       return URL.createObjectURL(file);
+    },
+    async setReview(id, action) {
+      const doc = state.documents.find((d) => d.id === id);
+      if (!doc) throw new Error("Dokumentet finns inte");
+      if (action === "request") {
+        doc.reviewStatus = "in_review";
+        doc.reviewRequestedAt = now();
+        doc.reviewedBy = null;
+        doc.reviewedAt = null;
+      } else if (action === "approve") {
+        // Rådgivarstämpeln: i demon approximeras rollprövningen med
+        // kontots roll - i produktion prövas den i databasen.
+        if (state.profile?.role !== "advisor") {
+          throw new Error("Endast en rådgivarroll i ärendet kan godkänna dokument");
+        }
+        if (doc.reviewStatus !== "in_review") {
+          throw new Error("Dokumentet är inte skickat för granskning");
+        }
+        doc.reviewStatus = "approved";
+        doc.reviewedBy = state.user?.id ?? null;
+        doc.reviewedAt = now();
+      } else {
+        doc.reviewStatus = "draft";
+        doc.reviewRequestedAt = null;
+        doc.reviewedBy = null;
+        doc.reviewedAt = null;
+      }
+      save();
     },
   },
 
