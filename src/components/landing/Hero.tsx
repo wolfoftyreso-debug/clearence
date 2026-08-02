@@ -56,8 +56,9 @@ const Hero = () => {
       <div className="container px-4 pb-14 pt-8 md:pb-20 md:pt-12">
         {/* Avsändaren och taglinen, som referensen: vem talar, till vem. */}
         <p className="max-w-2xl text-lg leading-relaxed text-accent">
-          Sambandscentralen vid företagskris – för ägare, VD, styrelse,
-          revisor och jurist i samma ärende
+          Sambandscentralen vid företagskris – ägare, VD, styrelse, revisor
+          och jurist i samma ärende, vid behov även rekonstruktör,
+          konkursförvaltare eller finansiär
         </p>
 
         {/* Bildblocket: organiska former i våra färger kring kompassrosen. */}

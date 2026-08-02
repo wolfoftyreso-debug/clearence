@@ -54,8 +54,9 @@ const HowItWorks = () => {
           <p className="mt-4 text-lg text-muted-foreground">
             Gratis första analys. Sedan ett operativt ledningssystem som håller
             ihop processen – en sambandscentral för hela kretsen kring bolaget:
-            styrelse, VD och ägare tillsammans med revisor, jurist och
-            rekonstruktör, i samma ärende.
+            styrelse, VD och ägare tillsammans med revisor och jurist, och vid
+            behov rekonstruktör, konkursförvaltare eller finansiär. Alla i
+            samma ärende.
           </p>
         </div>
 

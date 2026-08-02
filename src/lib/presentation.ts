@@ -55,9 +55,11 @@ export const setPresentationMode = (mode: PresentationMode): void => {
 
 export const getCompactScope = (): boolean => {
   try {
-    return localStorage.getItem(SCOPE_KEY) === "compact";
+    // Kort version är DEFAULT (Product Excellence rond 2): analysen ska
+    // svara först och fördjupa på begäran. Den som valt full behåller full.
+    return localStorage.getItem(SCOPE_KEY) !== "full";
   } catch {
-    return false;
+    return true;
   }
 };
 

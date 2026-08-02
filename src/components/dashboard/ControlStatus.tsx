@@ -1,9 +1,8 @@
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { data } from "@/data";
-import { countdownTo } from "@/lib/actionPlan";
+import { parseAmount } from "@/lib/caseAnalysis";
 import type { CaseRecord } from "@/data/types";
-import type { TimelineEvent } from "@/lib/crisisAnalysis";
 import { ArrowRight, CheckCircle2, ShieldCheck, TriangleAlert } from "lucide-react";
 
 /**
@@ -36,12 +35,9 @@ interface MissingStep {
 
 interface ControlStatusProps {
   caseRecord: CaseRecord;
-  timeline: TimelineEvent[];
 }
 
-export const ControlStatus = ({ caseRecord, timeline }: ControlStatusProps) => {
-  const now = new Date();
-
+export const ControlStatus = ({ caseRecord }: ControlStatusProps) => {
   const { data: kbr } = useQuery({
     queryKey: ["kbr-latest", caseRecord.id],
     queryFn: () => data.kbr.getLatestByCase(caseRecord.id),
@@ -63,7 +59,11 @@ export const ControlStatus = ({ caseRecord, timeline }: ControlStatusProps) => {
     retry: false,
   });
 
-  const next = [...timeline].sort((a, b) => a.iso.localeCompare(b.iso))[0] ?? null;
+  // Ekonomiraden bor här sedan rond 2: kontrolläget ÄR lägesbilden, och
+  // tre fristående nyckeltalskort var en yta till som sa samma sak.
+  const totalDebt = parseAmount(caseRecord.totalDebt);
+  const liquidationValue = parseAmount(caseRecord.quickLiquidationValue);
+  const coverageRatio = totalDebt > 0 ? Math.round((liquidationValue / totalDebt) * 100) : null;
 
   const missing: MissingStep[] = [];
 
@@ -113,17 +113,23 @@ export const ControlStatus = ({ caseRecord, timeline }: ControlStatusProps) => {
         beslut eller att inte agera i tid. Det här bevakas åt dig:
       </p>
 
+      {/* Fristerna bor i handlingsplanen ("Datum som räknas ned") och INGEN
+          annanstans - samma regel som fällde "Kommande deadlines" i rond 1.
+          Cellen som sammanfattade dem här var en dubblett. */}
       <dl className="mt-4 grid gap-3 sm:grid-cols-2">
-        <div className="rounded-md bg-secondary/40 p-3">
+        <div className="rounded-md bg-secondary/40 p-3 sm:col-span-2">
           <dt className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Frister under bevakning
+            Ekonomiskt läge
           </dt>
           <dd className="mt-1 text-sm text-foreground">
-            {timeline.length === 0
-              ? "Inga kommande frister i underlaget."
-              : next
-                ? `${timeline.length} datum bevakas – närmast: ${next.label.toLowerCase()} ${countdownTo(next.iso, now).label}.`
-                : `${timeline.length} datum bevakas.`}
+            Skulder{" "}
+            <span className="font-medium tabular-nums">{totalDebt.toLocaleString("sv-SE")} kr</span>
+            {" · "}snabbt avyttringsvärde{" "}
+            <span className="font-medium tabular-nums">{liquidationValue.toLocaleString("sv-SE")} kr</span>
+            {" · "}täckningsgrad{" "}
+            <span className={`font-medium tabular-nums ${coverageRatio !== null && coverageRatio < 30 ? "text-destructive" : ""}`}>
+              {coverageRatio !== null ? `${coverageRatio} %` : "–"}
+            </span>
           </dd>
         </div>
         <div className="rounded-md bg-secondary/40 p-3">

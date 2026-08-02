@@ -100,5 +100,49 @@ Att ta bort substans för att få en kortare sida vore att lura gaten.
 
 ---
 
-*Rond 2 bokförs i detta dokument med nya betyg. Gaten stänger först när
-samtliga kategorier står i 10 - utan tillförd komplexitet.*
+# ROND 2 – enkelhetskraven 1–5
+
+**Mätning:** översikten (företagsvyn, 390 px) gick från 7 732 px efter
+rond 1 till **3 719 px = 4 mobilskärmar** (ursprungligen 8 758 px).
+Företagsmenyn gick från 9 till **7 menyval**. Ingen uppgift raderades -
+varje borttagen yta ersattes av en länk eller finns kvar en nivå ned.
+
+## Åtgärdat i rond 2 (verifierat i kod och mätning)
+
+| Krav | Åtgärd |
+|---|---|
+| 1. Systemanalys ihopfälld | Kort version är default: rubrik, allvarsgrad, huvudbudskap, de tre viktigaste åtgärderna + "Visa hela analysen". Språk-/formreglage och strategiblocket visas först när hela analysen begärts - den som valt utförligt behåller utförligt |
+| 2. EN lägesrad | "Ekonomiskt läge" (skulder · snabbt avyttringsvärde · täckningsgrad) bor i Kontrolläget; den fristående nyckeltalsgriden är död. Kontrolläget släppte samtidigt sin fristcell - fristerna bor i handlingsplanen och INGEN annanstans (samma regel som fällde "Kommande deadlines" i rond 1) |
+| 3. Tre insikter + Visa alla | "Vad siffrorna säger" visar tre insikter med "Visa alla N insikter"-knapp; varje insikts radunderlag ligger bakom "Visa underlaget (N poster)" - antalet står på länken, inget döljs tyst |
+| 4. Menyprövning | Kreditunderlag flyttade in under Dokument (eget kort), rådgivarkatalogen under Deltagare ("Hitta rådgivare"-kort). Företagsmenyn: Översikt, Likviditet, Dokument, Meddelanden, Deltagare, Händelselogg, Inställningar = 7 |
+| 5. Mätkravet | 3 719 px = 4 mobilskärmar, mätt efter varje ändring med cporeview-skriptet. Dubbletten "Handlingar" på översikten dog också - Dokument-sidan är ytan (i avslutade ärenden visas akten fortfarande på översikten, för då ÄR översikten arkivet) |
+
+Dessutom i ronden: positioneringen breddad i Hero, "Så fungerar tjänsten"
+och sidfoten - kretsen är ägare, VD, styrelse, revisor och jurist, vid
+behov även rekonstruktör, konkursförvaltare eller finansiär.
+
+Verifiering: 20 enhetssviter, 16 browsersviter (mobilvakten 93/93,
+designvakten 31/31) - allt grönt efter ändringarna.
+
+## Betyg (rond 2)
+
+| Kategori | Rond 1 | Rond 2 | Domskäl |
+|---|---|---|---|
+| Enkelhet | 6 | **9** | Kraven 1–5 uppfyllda och mätta. Kvar till 10: första skärmen ska bära det ENDA viktigaste nästa steget överst (hänger ihop med UX-krav 8) - först då "svarar översikten på en skärm" fullt ut |
+| Elegans | 7 | 7 | Orörd denna rond (krav 6–7 väntar) |
+| UX | 7 | **8** | Mindre scrollvilja krävs och färre konkurrerande ytor, men krav 8–9 (första sekunden, degraderad "Ny utvärdering") återstår |
+| Innovation | 9 | 9 | Oförändrad |
+| Konsekvens | 8 | 8 | Orörd (krav 10 väntar) |
+| Prestanda | 8 | 8 | Orörd (krav 11–12 väntar) |
+| Förtroende | 9 | 9 | Inget löfte rubbat: allt borttaget är ett klick bort, och insiktsunderlagets länk redovisar sitt antal |
+| Premiumkänsla | 7 | 7 | Orörd (krav 13–14 väntar) |
+| Skalbarhet | 8 | 8 | Orörd (krav 15 är medvetet vilande) |
+| Affärsvärde | 8 | 8 | Oförändrad |
+
+**Sammanvägt: INTE GODKÄND ÄN** - sex kategorier under 10. Rond 3 tar
+elegans- och UX-kraven (6–9), rond 4 konsekvens/prestanda/premium (10–14).
+
+---
+
+*Gaten stänger först när samtliga kategorier står i 10 - utan tillförd
+komplexitet.*

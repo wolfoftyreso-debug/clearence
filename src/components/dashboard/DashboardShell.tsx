@@ -11,7 +11,6 @@ import { analysisInputFromCase } from "@/lib/caseAnalysis";
 import { analyseCrisis } from "@/lib/crisisAnalysis";
 import type { UserRole } from "@/data/types";
 import {
-  Banknote,
   BarChart3,
   Bell,
   Briefcase,
@@ -60,8 +59,9 @@ const COMPANY_NAV: NavItem[] = [
   { icon: FileText, label: "Dokument", href: "/dashboard/dokument" },
   { icon: MessageSquare, label: "Meddelanden", href: "/dashboard/meddelanden" },
   { icon: UserPlus, label: "Deltagare", href: "/dashboard/deltagare" },
-  { icon: Users, label: "Rådgivare", href: "/marketplace" },
-  { icon: Banknote, label: "Kreditunderlag", href: "/dashboard/kreditunderlag" },
+  /* Max 7 menyval (Excellence rond 2). Kreditunderlag nås från Dokument,
+     rådgivarkatalogen från Deltagare - handlingar och bemanning är delar av
+     ärendet, inte egna arbetsytor. Lägg inte tillbaka dem här. */
   { icon: History, label: "Händelselogg", href: "/dashboard/handelser" },
   { icon: Settings, label: "Inställningar", href: "/dashboard/installningar" },
 ];

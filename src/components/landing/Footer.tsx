@@ -65,7 +65,7 @@ const Footer = () => {
               <span className="font-display text-xl tracking-tight">CLEARANCE</span>
             </Link>
             <p className="mt-4 max-w-xs text-sm leading-relaxed text-primary-foreground/70">
-              Sambandscentralen för svenska aktiebolag i ekonomisk kris: ett operativt ledningssystem där ägare, VD, styrelse, revisor och jurist arbetar i samma ärende – juridik, frister, dokumentation och samverkan på ett ställe. Tjänsten
+              Sambandscentralen för svenska aktiebolag i ekonomisk kris: ett operativt ledningssystem där ägare, VD, styrelse, revisor och jurist – och vid behov rekonstruktör, konkursförvaltare eller finansiär – arbetar i samma ärende. Juridik, frister, dokumentation och samverkan på ett ställe. Tjänsten
               hjälper dig strukturera underlaget och förstå vilka alternativ som finns
               – den ersätter inte juridisk eller ekonomisk rådgivning.
             </p>

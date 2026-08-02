@@ -64,24 +64,36 @@ export const InsightList = ({ insights, emptyText }: InsightListProps) => {
                   {insight.detail}
                 </p>
 
-                {/* Values are usually amounts, but not always: the
+                {/* The claim and its key number live in the title/detail;
+                    the row-by-row evidence sits one tap away behind a native
+                    disclosure that says how many rows it holds (Excellence
+                    rond 2: links replace expanded text, nothing is hidden
+                    silently). Values are usually amounts, but not always: the
                     "missing datasets" insight puts a whole sentence here. A
                     non-shrinking value blew the layout past the viewport on a
                     phone, so the row stacks when there is no room and long
                     values wrap rather than push. */}
-                <dl className="mt-3 grid grid-cols-1 gap-x-6 gap-y-2 border-t border-border pt-3 text-sm sm:grid-cols-2">
-                  {insight.evidence.map((row) => (
-                    <div
-                      key={row.label}
-                      className="flex min-w-0 flex-col gap-0.5 sm:flex-row sm:justify-between sm:gap-4"
-                    >
-                      <dt className="min-w-0 break-words text-muted-foreground">{row.label}</dt>
-                      <dd className="min-w-0 break-words font-medium tabular-nums text-foreground sm:text-right">
-                        {row.value}
-                      </dd>
-                    </div>
-                  ))}
-                </dl>
+                {insight.evidence.length > 0 && (
+                  <details className="mt-3 border-t border-border pt-3">
+                    <summary className="cursor-pointer list-none text-sm font-medium text-accent underline-offset-4 hover:underline">
+                      Visa underlaget ({insight.evidence.length}{" "}
+                      {insight.evidence.length === 1 ? "post" : "poster"})
+                    </summary>
+                    <dl className="mt-2 grid grid-cols-1 gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
+                      {insight.evidence.map((row) => (
+                        <div
+                          key={row.label}
+                          className="flex min-w-0 flex-col gap-0.5 sm:flex-row sm:justify-between sm:gap-4"
+                        >
+                          <dt className="min-w-0 break-words text-muted-foreground">{row.label}</dt>
+                          <dd className="min-w-0 break-words font-medium tabular-nums text-foreground sm:text-right">
+                            {row.value}
+                          </dd>
+                        </div>
+                      ))}
+                    </dl>
+                  </details>
+                )}
 
                 {insight.action && (
                   <Link

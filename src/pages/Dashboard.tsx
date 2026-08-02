@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Link, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -69,6 +69,9 @@ const Dashboard = () => {
     () => (snapshot ? analyseSnapshot(snapshot, { now: new Date() }) : []),
     [snapshot],
   );
+  // Tre insikter räcker som lägesbild; resten på begäran (Excellence rond 2).
+  const [allInsights, setAllInsights] = useState(false);
+  const visibleInsights = allInsights ? insights : insights.slice(0, 3);
 
   const totalDebt = latestCase ? parseAmount(latestCase.totalDebt) : 0;
 
@@ -117,7 +120,6 @@ const Dashboard = () => {
     );
   };
   const liquidationValue = latestCase ? parseAmount(latestCase.quickLiquidationValue) : 0;
-  const coverageRatio = totalDebt > 0 ? Math.round((liquidationValue / totalDebt) * 100) : null;
 
 
 
@@ -194,41 +196,11 @@ const Dashboard = () => {
                   caseRecord={latestCase}
                   timeline={analyseCrisis(analysisInput(latestCase)).timeline}
                 />
-                <ControlStatus
-                  caseRecord={latestCase}
-                  timeline={analyseCrisis(analysisInput(latestCase)).timeline}
-                />
+                <ControlStatus caseRecord={latestCase} />
                 <ActionPlan
                   caseRecord={latestCase}
                   timeline={analyseCrisis(analysisInput(latestCase)).timeline}
                 />
-              </div>
-
-              {/* Nyckeltalen: en kompakt rad, inte tre fullbreddskort som
-                  trycker ner resten av sidan på mobil. Täckningsgraden får
-                  dubbelbredd på småskärm - dess etikett är kortast men dess
-                  färgsignal viktigast. */}
-              <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
-                <div className="rounded-md border border-border bg-card p-4 shadow-soft">
-                  <p className="text-xs text-muted-foreground sm:text-sm">Totala skulder</p>
-                  <p className="mt-0.5 font-display text-xl font-semibold text-foreground sm:text-2xl">
-                    {totalDebt.toLocaleString("sv-SE")} kr
-                  </p>
-                </div>
-                <div className="rounded-md border border-border bg-card p-4 shadow-soft">
-                  <p className="text-xs text-muted-foreground sm:text-sm">Snabbt avyttringsvärde</p>
-                  <p className="mt-0.5 font-display text-xl font-semibold text-foreground sm:text-2xl">
-                    {liquidationValue.toLocaleString("sv-SE")} kr
-                  </p>
-                </div>
-                <div className="col-span-2 rounded-md border border-border bg-card p-4 shadow-soft sm:col-span-1">
-                  <p className="text-xs text-muted-foreground sm:text-sm">Täckningsgrad</p>
-                  <p className={`mt-0.5 font-display text-xl font-semibold sm:text-2xl ${
-                    coverageRatio !== null && coverageRatio < 30 ? "text-destructive" : "text-foreground"
-                  }`}>
-                    {coverageRatio !== null ? `${coverageRatio}%` : "–"}
-                  </p>
-                </div>
               </div>
 
               {/* Fristerna bor i handlingsplanen ("Datum som räknas ned")
@@ -249,7 +221,18 @@ const Dashboard = () => {
                   )}
                 </div>
                 {snapshot ? (
-                  <InsightList insights={insights} />
+                  <>
+                    <InsightList insights={visibleInsights} />
+                    {insights.length > 3 && !allInsights && (
+                      <button
+                        type="button"
+                        onClick={() => setAllInsights(true)}
+                        className="mt-2 text-sm font-medium text-accent underline-offset-4 hover:underline"
+                      >
+                        Visa alla {insights.length} insikter
+                      </button>
+                    )}
+                  </>
                 ) : (
                   <div className="rounded-md border border-border bg-card p-5">
                     <p className="text-sm leading-relaxed text-muted-foreground">
@@ -266,8 +249,7 @@ const Dashboard = () => {
               <div className="mt-6 rounded-md border border-border bg-card p-5 shadow-soft">
                 <h2 className="font-semibold text-foreground">Rapport</h2>
                 <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
-                  Hela ärendet i ett dokument: bedömningen, tidslinjen, riskerna med
-                  lagrum och nästa steg. Ta med det till mötet med rådgivaren.
+                  Hela ärendet i ett dokument – ta med till mötet med rådgivaren.
                 </p>
                 <div className="mt-4 flex flex-wrap gap-3">
                 <ReportButton
@@ -299,12 +281,10 @@ const Dashboard = () => {
                 </div>
               </div>
 
-              {/* Documents */}
-              {user && (
-                <div className="mt-6">
-                  <CaseDocuments caseId={latestCase.id} userId={user.id} />
-                </div>
-              )}
+              {/* Handlingarna bor på Dokument-sidan - menyvalet är vägen.
+                  Samma regel som för snabbknapparna: en yta, en väg.
+                  (I avslutade ärenden visas akten här, för då är översikten
+                  arkivet.) */}
 
               {/* Klientverktygen: bara för rådgivarrollen - komponenten
                   gatear sig själv. */}

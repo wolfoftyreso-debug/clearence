@@ -12,7 +12,7 @@ import {
   INVITABLE_ROLES,
   type CaseRole,
 } from "@/lib/caseRoles";
-import { Loader2, Mail, ShieldQuestion, UserPlus, Users, X } from "lucide-react";
+import { ArrowRight, Loader2, Mail, ShieldQuestion, UserPlus, Users, X } from "lucide-react";
 
 /**
  * Deltagare: vilka som är inne i ärendet, och vägen in för nästa person.
@@ -390,6 +390,26 @@ const DashboardParticipants = () => {
                 </span>
               </p>
             </section>
+
+            {/* Vägen till NY kompetens: katalogen. Menyvalet "Rådgivare"
+                flyttade hit i Excellence rond 2 - att hitta en rådgivare är
+                en del av att bemanna ärendet, inte en egen arbetsyta. */}
+            <Link
+              to="/marketplace"
+              className="flex items-center gap-4 rounded-md border border-border bg-card p-5 shadow-soft transition-colors hover:border-accent/50"
+            >
+              <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-md bg-accent/10">
+                <Users className="h-5 w-5 text-accent" aria-hidden="true" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h2 className="font-semibold text-foreground">Hitta rådgivare</h2>
+                <p className="text-sm leading-relaxed text-muted-foreground">
+                  Sök rekonstruktörer, jurister och revisorer på område och
+                  region – och skicka en förfrågan med ditt underlag.
+                </p>
+              </div>
+              <ArrowRight className="h-4 w-4 flex-shrink-0 text-muted-foreground" aria-hidden="true" />
+            </Link>
 
             {/* Delningen med rådgivare: full insyn i vem som kontaktats,
                 vad de ser och när samtycket gavs. Ingen rad utan samtycke -

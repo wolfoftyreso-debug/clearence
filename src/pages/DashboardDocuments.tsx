@@ -8,7 +8,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { data } from "@/data";
-import { FolderOpen, Loader2 } from "lucide-react";
+import { ArrowRight, Banknote, FolderOpen, Loader2 } from "lucide-react";
 
 /**
  * Ärendets handlingar.
@@ -82,6 +82,25 @@ const DashboardDocuments = () => {
           <CaseDocuments caseId={latestCase.id} userId={user?.id ?? ""} />
 
           <DocumentTemplates caseRecord={latestCase} />
+
+          {/* Kreditunderlaget bor här och inte i menyn: det är en handling
+              man tar fram ur ärendet, inte en yta man arbetar i dagligen. */}
+          <Link
+            to="/dashboard/kreditunderlag"
+            className="flex items-center gap-4 rounded-md border border-border bg-card p-5 shadow-soft transition-colors hover:border-accent/50"
+          >
+            <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-md bg-accent/10">
+              <Banknote className="h-5 w-5 text-accent" aria-hidden="true" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <h3 className="font-semibold text-foreground">Kreditunderlag</h3>
+              <p className="text-sm leading-relaxed text-muted-foreground">
+                Sammanställ ärendet till ett underlag för bank eller finansiär –
+                siffror, säkerheter och plan i ett dokument.
+              </p>
+            </div>
+            <ArrowRight className="h-4 w-4 flex-shrink-0 text-muted-foreground" aria-hidden="true" />
+          </Link>
 
           <TaxAccountImport
             onImport={(selection) => {

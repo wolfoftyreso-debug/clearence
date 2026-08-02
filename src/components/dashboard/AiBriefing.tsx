@@ -130,6 +130,10 @@ export const AiBriefing = ({ caseRecord, timeline }: AiBriefingProps) => {
           {summary.severityLabel}
         </span>
       </div>
+      {/* Ihopfälld (default): analysen svarar först och fördjupar på
+          begäran - inga reglage förrän läsaren bett om hela rapporten. */}
+      {!compact && (
+      <>
       <p className="mt-1 text-xs text-muted-foreground">
         Rapporten uppdaterades nyss och bygger på all information som finns
         registrerad i ditt ärende. Den uppdateras automatiskt när nya uppgifter
@@ -190,6 +194,8 @@ export const AiBriefing = ({ caseRecord, timeline }: AiBriefingProps) => {
       <div className="mt-3">
         <SimplerLanguageSuggestion />
       </div>
+      </>
+      )}
 
       <GlossaryText
         text={summary.headline}
@@ -199,16 +205,25 @@ export const AiBriefing = ({ caseRecord, timeline }: AiBriefingProps) => {
       {/* Kort version: de tre viktigaste åtgärderna. En delmängd av
           rapporten, aldrig en omskrivning. */}
       {compact && (
-        <ul className="mt-4 space-y-1.5">
-          {toCompact(summary).topActions.map((action) => (
-            <li key={`kort-${action.label}`} className="flex items-start gap-3 rounded-md border border-border p-2.5">
-              <span className="mt-0.5 w-16 flex-shrink-0 break-words text-[11px] font-bold uppercase leading-tight tracking-wide text-muted-foreground sm:w-24">
-                {action.horizon}
-              </span>
-              <GlossaryText as="span" text={action.label} className="min-w-0 flex-1 text-sm font-medium text-foreground" />
-            </li>
-          ))}
-        </ul>
+        <>
+          <ul className="mt-4 space-y-1.5">
+            {toCompact(summary).topActions.map((action) => (
+              <li key={`kort-${action.label}`} className="flex items-start gap-3 rounded-md border border-border p-2.5">
+                <span className="mt-0.5 w-16 flex-shrink-0 break-words text-[11px] font-bold uppercase leading-tight tracking-wide text-muted-foreground sm:w-24">
+                  {action.horizon}
+                </span>
+                <GlossaryText as="span" text={action.label} className="min-w-0 flex-1 text-sm font-medium text-foreground" />
+              </li>
+            ))}
+          </ul>
+          <button
+            type="button"
+            onClick={() => chooseCompact(false)}
+            className="mt-3 text-sm font-medium text-accent underline-offset-4 hover:underline"
+          >
+            Visa hela analysen
+          </button>
+        </>
       )}
 
       {!compact && mode === "text" &&
@@ -305,14 +320,17 @@ export const AiBriefing = ({ caseRecord, timeline }: AiBriefingProps) => {
         </div>
       )}
 
-      {/* Rekommenderad strategi */}
-      <div className="mt-5 rounded-md border border-accent/30 bg-accent/5 p-4">
-        <h3 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-accent">
-          <Compass className="h-3.5 w-3.5" aria-hidden="true" />
-          Rekommenderad strategi
-        </h3>
-        <GlossaryText text={summary.strategy} className="mt-2 text-sm leading-relaxed text-foreground" />
-      </div>
+      {/* Rekommenderad strategi. I korta versionen ligger den bakom
+          "Visa hela analysen" - länken ersätter utfälld text, inget raderas. */}
+      {!compact && (
+        <div className="mt-5 rounded-md border border-accent/30 bg-accent/5 p-4">
+          <h3 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-accent">
+            <Compass className="h-3.5 w-3.5" aria-hidden="true" />
+            Rekommenderad strategi
+          </h3>
+          <GlossaryText text={summary.strategy} className="mt-2 text-sm leading-relaxed text-foreground" />
+        </div>
+      )}
 
       <p className="mt-4 text-xs leading-relaxed text-muted-foreground">
         Rapporten är systemets analys av ärendets registrerade uppgifter –
