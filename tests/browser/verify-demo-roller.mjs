@@ -45,7 +45,7 @@ await page.click('button:has-text("Demo – Företag")');
 await page.waitForTimeout(1800);
 body = await page.innerText("body");
 check("företag landar på översikten", page.url().includes("/dashboard"), page.url());
-check("företagets ärende visas", /Kommande deadlines/i.test(body));
+check("företagets ärende visas", /Nästa steg/i.test(body));
 
 // 2. Jurist → klientlistan.
 await login("Demo – Jurist/Revisor");

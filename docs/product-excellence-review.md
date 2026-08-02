@@ -1,0 +1,104 @@
+# PRODUCT EXCELLENCE REVIEW – ROND 1
+
+**Gate:** Product Excellence Control Prompt v1.0 · **Granskare:** CPO/Design Reviewer
+**Regel:** under 9/10 i någon kategori = inte godkänd. Detta dokument uppdateras per rond tills alla står i 10.
+
+---
+
+## Domen i en mening
+
+Produkten är djup, konsekvent och tekniskt hederlig - men den **berättar
+för mycket samtidigt**, och det är enkelhetens dödssynd. Företagets
+översikt mätte 10 mobilskärmar med 26 rubriker före denna rond. En
+människa i sitt livs värsta vecka ska mötas av EN fråga: "vad gör jag
+nu?" - inte av ett kontrolltorn.
+
+---
+
+## Åtgärdat i rond 1 (verifierat i kod)
+
+| Fynd | Princip | Åtgärd |
+|---|---|---|
+| Fristerna visades TVÅ gånger på översikten ("Datum som räknas ned" + "Kommande deadlines") | 1, 8, 11 | Dubbletten dödad. Fristerna bor i handlingsplanen, ingen annanstans |
+| "Senaste aktivitet" (skapades/uppdaterades) - filler; Händelseloggen är loggen | 1, 8 | Dödad |
+| Snabbknappsrutan (Likviditetsplan/KBR/Rådgivare) dubblerade menyn | 1, 8 | Dödad. En yta, en väg |
+| Driftsektionen visades för alla roller och dränkte rollmenyerna | 11 | Åtgärdat i föregående rond (rollrena menyer) |
+
+Effekt: översikten −1 000 px och −4 rubriker, utan att en enda uppgift,
+frist eller siffra försvann.
+
+---
+
+## Betyg (rond 1)
+
+| Kategori | Betyg | Domskäl |
+|---|---|---|
+| Enkelhet | **6/10** | Fortfarande ~9 mobilskärmar på översikten. Systemanalysens åtta underrubriker står alltid utfällda trots att kort/utförlig-läget finns. Företagsmenyn har 9 val; Kreditunderlag förtjänar knappast toppnivån |
+| Elegans | **7/10** | Enhetligt formspråk, egen kompassros, verksamt-lugnet håller. Men täthetsvariation mellan sidor och vissa kort är staplade snarare än komponerade |
+| UX | **7/10** | Rätt ordning (handling före statistik), notiser som navigerar, glossary. Men första mötet efter inloggning kräver scrollvilja, och "Ny utvärdering" konkurrerar med "fortsätt där du är" |
+| Innovation | **9/10** | Deterministisk analys utan extern AI, avidentifierad förhandsvisning→upplåsning, skuggdebitering, G6, analysövervakning som kör motorbevis i webbläsaren - detta är på riktigt nytt i kategorin |
+| Konsekvens | **8/10** | Ett designsystem, samma toner, samma radspråk. Kvar: uppercase-etiketter används olika, vissa sidor h1 i shell + h1 i innehåll, blandning av "kort"-varianter |
+| Prestanda | **8/10** | Ingen extern AI = inga svansminuter; lazy routes; byggena små. Men 550 kB huvudchunk och AreaChart-chunken på 380 kB laddas ivrigt på likviditetssidor; ingen skeleton vid långsam första målning |
+| Förtroende | **9/10** | Radskydd bevisat i test, append-only-logg, samtyckesspår, "faktureras inte"-ärlighet, inga knappar som ljuger. Näst högsta betyget är förtjänat |
+| Premiumkänsla | **7/10** | Lugnt och sakligt, men laddstater är en ensam spinner, tomma sidor är text utan omsorg, och övergångar saknas nästan helt (medvetet avskalat - men premium kräver några exakta rörelser) |
+| Skalbarhet | **8/10** | Ports-and-adapters, två DB-miljöer testade, parametriserad prissättning. Kvar: klientlistan är byggd för ~10 ärenden, inte 200 (ingen paginering/sök) |
+| Affärsvärde | **8/10** | Hela intäktsmaskineriet byggt och testat, North Star mätbar, pilot startklar. Blockeras externt av F1–F4 - inte av produkten |
+
+**Sammanvägt: INTE GODKÄND.** Fem kategorier under 9.
+
+---
+
+## Krav för 10/10 (rond 2+, i prioritetsordning)
+
+### Enkelhet 6→10
+1. **Översikten ska svara på en skärm.** Systemanalysen fälls ihop till
+   sina tre första rader + "Visa hela analysen"; kort-läget blir default.
+2. Kontrolläge + nyckeltalsraden slås ihop till EN lägesrad.
+3. "Vad siffrorna säger" visar tre insikter + "Visa alla".
+4. Menyprövning: Kreditunderlag flyttar in under Dokument/Rapport;
+   målet är max 7 menyval för företaget.
+5. Mät efter varje ändring: översikten ≤ 4 mobilskärmar utan
+   informationsförlust (länkar ersätter utfälld text).
+
+### Elegans 7→10
+6. En spacing-skala, dokumenterad och lintad (4/8/12/16/24/32) - inga
+   frihandsvärden i nya kort.
+7. Kortkomposition: max två korttyper per sida.
+
+### UX 7→10
+8. Första sekunden efter inloggning: det viktigaste ENDA nästa steget
+   överst ("NÄRMAST"-fristen eller översta uppgiften), resten under.
+9. "Ny utvärdering"-knappen degraderas när ett ärende pågår.
+
+### Konsekvens 8→10
+10. Typografirevision: en regel för uppercase-etiketter, en för
+    h1-hantering i shellen; efterlevs av designvakten (utöka guarden).
+
+### Prestanda 8→10
+11. AreaChart-chunken lazy-laddas bakom interaktion; huvudchunk < 400 kB.
+12. Skeletonkort på översikten och klientlistan i stället för spinner.
+
+### Premiumkänsla 7→10
+13. Tre exakta övergångar och inte fler: panelutfällning, notislistan,
+    rapportvisarens intåg (120–160 ms, samma easing).
+14. Tomma lägen får samma omsorg som fyllda: en rad som säger vad som
+    kommer att synas här och EN handling.
+
+### Skalbarhet 8→10
+15. Klientlistan: sök + "visa fler" vid >20 ärenden (byggs när en pilot-
+    byrå närmar sig gränsen, inte förr - YAGNI gäller åt båda hållen).
+
+---
+
+## Vad som INTE ska göras
+
+Gaten kräver enkelhet - inte utarmning. Följande står kvar orörda:
+systemanalysens fulla djup (ett klick bort, aldrig raderat), händelse-
+loggens detaljer, exportvägarna (akt, ICS, SIE), språknivåerna och
+gränserna (borgenärsisolering, team-utan-ärendeåtkomst, skuggärlighet).
+Att ta bort substans för att få en kortare sida vore att lura gaten.
+
+---
+
+*Rond 2 bokförs i detta dokument med nya betyg. Gaten stänger först när
+samtliga kategorier står i 10 - utan tillförd komplexitet.*

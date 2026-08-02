@@ -13,13 +13,9 @@ import { analyseSnapshot } from "@/lib/financial/insights";
 import { format } from "date-fns";
 import { sv } from "date-fns/locale";
 import {
-  TrendingDown,
-  Scale,
-  Users,
   AlertCircle,
   CheckCircle2,
   AlertTriangle,
-  Calendar,
   CalendarClock,
   FolderDown,
   Plus,
@@ -41,15 +37,6 @@ import { AdvisorTools } from "@/components/dashboard/AdvisorTools";
 import { analysisInputFromCase, parseAmount } from "@/lib/caseAnalysis";
 
 
-
-const nextOccurrence = (day: number): Date => {
-  const today = new Date();
-  const candidate = new Date(today.getFullYear(), today.getMonth(), day);
-  if (candidate < today) {
-    candidate.setMonth(candidate.getMonth() + 1);
-  }
-  return candidate;
-};
 
 const recommendationCopy: Record<
   NonNullable<CaseRecord["recommendationType"]>,
@@ -82,30 +69,6 @@ const Dashboard = () => {
     () => (snapshot ? analyseSnapshot(snapshot, { now: new Date() }) : []),
     [snapshot],
   );
-
-  const deadlines = useMemo(() => {
-    if (!latestCase) return [];
-    const items: { key: string; date: Date; label: string; amount: number; status: "critical" | "warning" | "normal" }[] = [];
-    const pushIfPresent = (
-      day: number | null,
-      amount: string | null,
-      label: string,
-      canPay: boolean | null,
-    ) => {
-      if (!day || !amount) return;
-      items.push({
-        key: label,
-        date: nextOccurrence(day),
-        label,
-        amount: parseAmount(amount),
-        status: canPay === false ? "critical" : canPay === true ? "normal" : "warning",
-      });
-    };
-    pushIfPresent(latestCase.salaryDay, latestCase.salaryAmount, "Lön", latestCase.canPaySalary);
-    pushIfPresent(latestCase.taxDay, latestCase.taxAmount, "Skatt/moms", latestCase.canPayTax);
-    pushIfPresent(latestCase.rentDay, latestCase.rentAmount, "Hyra", latestCase.canPayRent);
-    return items.sort((a, b) => a.date.getTime() - b.date.getTime());
-  }, [latestCase]);
 
   const totalDebt = latestCase ? parseAmount(latestCase.totalDebt) : 0;
 
@@ -268,98 +231,11 @@ const Dashboard = () => {
                 </div>
               </div>
 
-              {/* Two column layout */}
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Upcoming deadlines */}
-                <div className="lg:col-span-2 rounded-md bg-card border border-border shadow-soft">
-                  <div className="p-5 border-b border-border flex items-center justify-between">
-                    <h2 className="font-semibold text-foreground flex items-center gap-2">
-                      <Calendar className="w-5 h-5 text-accent" />
-                      Kommande deadlines
-                    </h2>
-                  </div>
-                  {deadlines.length === 0 ? (
-                    <p className="p-4 text-sm text-muted-foreground">
-                      Inga deadlines registrerade för det här ärendet.
-                    </p>
-                  ) : (
-                    <div className="divide-y divide-border">
-                      {deadlines.map((deadline) => (
-                        <div
-                          key={deadline.key}
-                          className="p-4 flex items-center justify-between hover:bg-secondary/50 transition-colors"
-                        >
-                          <div className="flex items-center gap-4">
-                            <div
-                              className={`w-12 h-12 rounded-md flex items-center justify-center ${
-                                deadline.status === "critical"
-                                  ? "bg-destructive/10 text-destructive"
-                                  : deadline.status === "warning"
-                                  ? "bg-warning/10 text-warning"
-                                  : "bg-secondary text-foreground"
-                              }`}
-                            >
-                              <span className="text-xs font-semibold">
-                                {format(deadline.date, "d MMM", { locale: sv })}
-                              </span>
-                            </div>
-                            <div>
-                              <p className="font-medium text-foreground">{deadline.label}</p>
-                              <p className="text-sm text-muted-foreground">
-                                {deadline.amount.toLocaleString("sv-SE")} kr
-                              </p>
-                            </div>
-                          </div>
-                          <div
-                            className={`px-3 py-1 rounded-full text-xs font-medium ${
-                              deadline.status === "critical"
-                                ? "bg-destructive/10 text-destructive"
-                                : deadline.status === "warning"
-                                ? "bg-warning/10 text-warning"
-                                : "bg-secondary text-muted-foreground"
-                            }`}
-                          >
-                            {deadline.status === "critical"
-                              ? "Kritiskt"
-                              : deadline.status === "warning"
-                              ? "Osäkert"
-                              : "Planerad"}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* Recent activity */}
-                <div className="rounded-md bg-card border border-border shadow-soft">
-                  <div className="p-5 border-b border-border">
-                    <h2 className="font-semibold text-foreground">Senaste aktivitet</h2>
-                  </div>
-                  <div className="p-4 space-y-4">
-                    <div className="flex gap-3">
-                      <div className="w-2 h-2 rounded-full bg-accent mt-2 flex-shrink-0" />
-                      <div>
-                        <p className="text-sm text-foreground">Ärendet skapades</p>
-                        <p className="text-xs text-muted-foreground">
-                          {format(new Date(latestCase.createdAt), "d MMMM yyyy, HH:mm", { locale: sv })}
-                        </p>
-                      </div>
-                    </div>
-                    {latestCase.updatedAt !== latestCase.createdAt && (
-                      <div className="flex gap-3">
-                        <div className="w-2 h-2 rounded-full bg-accent mt-2 flex-shrink-0" />
-                        <div>
-                          <p className="text-sm text-foreground">Ärendet uppdaterades</p>
-                          <p className="text-xs text-muted-foreground">
-                            {format(new Date(latestCase.updatedAt), "d MMMM yyyy, HH:mm", { locale: sv })}
-                          </p>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
+              {/* Fristerna bor i handlingsplanen ("Datum som räknas ned")
+                  och INGEN annanstans - översikten sa samma sak två gånger
+                  och blev tio mobilskärmar hög. Samma regel för "senaste
+                  aktivitet": Händelseloggen är loggen. Återinför inte
+                  dubbletterna. */}
 
               {/* Financial insights */}
               <div className="mt-6">
@@ -434,35 +310,8 @@ const Dashboard = () => {
                   gatear sig själv. */}
               <AdvisorTools caseRecord={latestCase} />
 
-              {/* Quick actions */}
-              <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
-                {([
-                  { icon: TrendingDown, label: "Likviditetsplan", description: "Bygg en plan steg för steg", href: "/likviditetsplan" },
-                  { icon: Scale, label: "Kontrollbalansräkning", description: "Räkna på om en KBR krävs", href: "/kbr" },
-                  { icon: Users, label: "Hitta rådgivare", description: "Sök i katalogen", href: "/marketplace" },
-                ] as { icon: typeof TrendingDown; label: string; description: string; href?: string; comingSoon?: boolean }[]).map((action) => {
-                  const Icon = action.icon;
-                  return (
-                    <button
-                      key={action.label}
-                      onClick={() => action.href && navigate(action.href)}
-                      disabled={action.comingSoon}
-                      title={action.comingSoon ? "Kommer snart" : undefined}
-                      className={`p-5 rounded-md bg-card border border-border shadow-soft transition-colors text-left group ${
-                        action.comingSoon
-                          ? "opacity-50 cursor-not-allowed"
-                          : "hover:border-accent/50 hover:shadow-card"
-                      }`}
-                    >
-                      <div className="w-10 h-10 rounded-md bg-accent/10 flex items-center justify-center mb-3 group-hover:bg-accent/20 transition-colors">
-                        <Icon className="w-5 h-5 text-accent" />
-                      </div>
-                      <h3 className="font-medium text-foreground mb-1">{action.label}</h3>
-                      <p className="text-sm text-muted-foreground">{action.description}</p>
-                    </button>
-                  );
-                })}
-              </div>
+              {/* Snabbknapparna som dubblerade menyn är borttagna -
+                  menyn ÄR vägen till guiderna. En yta, en väg. */}
 
               {/* Krisfasens slut: en stillsam väg ut, med orsak. */}
               <CaseExitSection caseRecord={latestCase} />

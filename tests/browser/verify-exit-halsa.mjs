@@ -28,7 +28,7 @@ await page.waitForTimeout(1500);
 
 // 1. Hopfälld avslutslänk längst ner - inte en skrikande sektion.
 let body = await page.innerText("body");
-check("krisvyn visas", /Kommande deadlines/i.test(body));
+check("krisvyn visas", /Nästa steg/i.test(body));
 check("avslutslänken finns", /Avsluta ärendet/i.test(body));
 check("avslutsformuläret är hopfällt", !/Stabiliserat/.test(body));
 
@@ -59,7 +59,7 @@ body = await page.innerText("body");
 check("hälsovyn visas", /är i hälsoläget/.test(body), body.slice(0, 300));
 check("bevakning finns", /Bevakning/.test(body) && /Kreditbevakning/.test(body));
 check("årshjulet finns", /Årshjul/.test(body) && /Årsstämma/.test(body));
-check("krislarmen är borta", !/Kommande deadlines/.test(body));
+check("krislarmen är borta", !/Datum som räknas ned/.test(body));
 
 // 4. North Star i driftpanelen.
 await page.goto(`${BASE}/admin`, { waitUntil: "domcontentloaded" });
@@ -79,7 +79,7 @@ await page.waitForTimeout(1200);
 await page.click('button:has-text("Tillbaka till krisläget")');
 await page.waitForTimeout(1500);
 body = await page.innerText("body");
-check("krisvyn är tillbaka", /Kommande deadlines/i.test(body));
+check("krisvyn är tillbaka", /Nästa steg/i.test(body));
 
 // 6. Helt avslut (likviderat) → banderoll → återuppta.
 await page.click('button:has-text("Avsluta ärendet")');
@@ -95,7 +95,7 @@ check("akten består i avslutad vy", /dokument/i.test(body));
 await page.click('button:has-text("Återuppta ärendet")');
 await page.waitForTimeout(1500);
 body = await page.innerText("body");
-check("återupptaget ärende visar krisvyn", /Kommande deadlines/i.test(body));
+check("återupptaget ärende visar krisvyn", /Nästa steg/i.test(body));
 
 await browser.close();
 console.log(`\n${passed} passed, ${failed} failed`);
