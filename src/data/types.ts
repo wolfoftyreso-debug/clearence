@@ -714,6 +714,48 @@ export interface ProfessionalTerms {
 }
 
 /** En rad i händelseloggen - ärendets svarta låda. Bara läsning: loggen är append-only i databasen. */
+/** En live ärendelänk: scopad läsning, tidsbegränsad, återkallbar, loggad. */
+export interface CaseShareLinkRecord {
+  id: string;
+  caseId: string;
+  scope: "overview" | "full";
+  label: string | null;
+  createdAt: string;
+  expiresAt: string;
+  revokedAt: string | null;
+  /** Antal loggade öppningar - varje läsning lämnar spår. */
+  accessCount: number;
+}
+
+/**
+ * Det en live-länk visar: ärendets NULÄGE, scopat. Data - aldrig
+ * bedömningar; mottagarens system drar sina egna slutsatser.
+ */
+export interface SharedCaseView {
+  scope: "overview" | "full";
+  expiresAt: string;
+  companyName: string | null;
+  orgNumber: string;
+  recommendationType: RecommendationType | null;
+  recommendationTitle: string | null;
+  totalDebt: string | null;
+  quickLiquidationValue: string | null;
+  canPaySalary: boolean | null;
+  canPayTax: boolean | null;
+  canPayRent: boolean | null;
+  canPaySuppliers: boolean | null;
+  salaryAmount: string | null;
+  salaryDay: number | null;
+  taxAmount: string | null;
+  taxDay: number | null;
+  rentAmount: string | null;
+  rentDay: number | null;
+  closedAt: string | null;
+  healthMode: boolean;
+  updatedAt: string;
+  documents: { fileName: string; kind: string; reviewStatus: string; createdAt: string }[] | null;
+}
+
 export interface AuditEventRecord {
   id: number;
   caseId: string | null;

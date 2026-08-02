@@ -1908,6 +1908,73 @@ where key = 'company_plan';
 select pg_temp.check('the admin updates the plan and it takes effect',
   (select (value->>'monthly_ex_vat_sek')::int from public.app_settings where key = 'company_plan'), 1200);
 
+/* ========================================================================== */
+/* Live ärendelänken: scopad, tidsbegränsad, återkallbar, loggad             */
+/* ========================================================================== */
+
+set local role authenticated;
+
+-- Företrädaren (1111) skapar en översiktslänk.
+select pg_temp.as_user('11111111-1111-1111-1111-111111111111');
+insert into public.case_share_links (id, case_id, scope, expires_at)
+values ('11ee0000-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000001',
+        'overview', now() + interval '30 days');
+select pg_temp.check('the owner creates a live link',
+  (select count(*) from public.case_share_links), 1::bigint);
+
+-- Borgenären (5555) kan inte skapa länkar.
+select pg_temp.as_user('55555555-5555-5555-5555-555555555555');
+do $$
+begin
+  begin
+    insert into public.case_share_links (case_id, scope, expires_at)
+    values ('aaaaaaaa-0000-0000-0000-000000000001', 'full', now() + interval '30 days');
+    raise exception 'FAIL  en borgenär kunde skapa live-länkar';
+  exception when others then
+    if sqlerrm like 'FAIL%' then raise; end if;
+    raise notice 'ok    a creditor cannot create live links';
+  end;
+end $$;
+
+-- En ANONYM mottagare hämtar nuläget via länken - utan konto.
+set local role anon;
+select set_config('request.jwt.claims', '', true);
+select pg_temp.check('an anonymous recipient reads the live view',
+  (select public.fetch_shared_case('11ee0000-0000-0000-0000-000000000001') ->> 'org_number'),
+  '556000-0001'::text);
+select pg_temp.check('the overview scope carries no documents',
+  (select public.fetch_shared_case('11ee0000-0000-0000-0000-000000000001') -> 'documents')::text,
+  'null'::text);
+select pg_temp.check('an unknown token gets the same silence',
+  (select public.fetch_shared_case('99999999-9999-9999-9999-999999999999') is null), true);
+
+-- Öppningarna loggades (två läsningar ovan).
+set local role authenticated;
+select pg_temp.as_user('11111111-1111-1111-1111-111111111111');
+select pg_temp.check('every access is logged',
+  (select count(*) from public.share_link_access
+   where link_id = '11ee0000-0000-0000-0000-000000000001'), 2::bigint);
+
+-- Återkallelsen är omedelbar.
+update public.case_share_links set revoked_at = now()
+where id = '11ee0000-0000-0000-0000-000000000001';
+set local role anon;
+select set_config('request.jwt.claims', '', true);
+select pg_temp.check('a revoked link is silent',
+  (select public.fetch_shared_case('11ee0000-0000-0000-0000-000000000001') is null), true);
+
+-- En utgången länk är också tyst.
+set local role authenticated;
+select pg_temp.as_user('11111111-1111-1111-1111-111111111111');
+insert into public.case_share_links (id, case_id, scope, expires_at)
+values ('11ee0000-0000-0000-0000-000000000002', 'aaaaaaaa-0000-0000-0000-000000000001',
+        'full', now() - interval '1 minute');
+set local role anon;
+select set_config('request.jwt.claims', '', true);
+select pg_temp.check('an expired link is silent',
+  (select public.fetch_shared_case('11ee0000-0000-0000-0000-000000000002') is null), true);
+set local role authenticated;
+
 reset role;
 select 'ALL RLS TESTS PASSED' as result;
 

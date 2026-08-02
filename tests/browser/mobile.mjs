@@ -22,7 +22,7 @@ const ROUTES = [
   "/for-radgivare", "/login", "/dashboard", "/dashboard/liquidity",
   "/mina-forfragningar", "/om", "/kontakt", "/admin", "/admin/inkorg", "/admin/kunder", "/admin/ansokningar", "/admin/foretag", "/admin/radgivare", "/admin/statistik", "/admin/analys", "/admin/loggar",
   "/dashboard/dokument", "/dashboard/meddelanden", "/dashboard/installningar", "/dashboard/kreditunderlag",
-  "/dashboard/deltagare", "/dashboard/handelser", "/dashboard/samtal", "/dashboard/alternativ", "/arenden", "/kunskap", "/kunskap/kontrollbalansrakning", "/byraprofil",
+  "/dashboard/deltagare", "/dashboard/handelser", "/dashboard/samtal", "/dashboard/alternativ", "/lank/ogiltig-lank", "/arenden", "/kunskap", "/kunskap/kontrollbalansrakning", "/byraprofil",
 ];
 
 /** A couple of pixels of rounding is not a layout defect. */

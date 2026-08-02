@@ -447,6 +447,38 @@ export type Database = {
         }
         Relationships: []
       }
+      case_share_links: {
+        Row: {
+          id: string
+          case_id: string
+          created_by: string
+          scope: string
+          label: string | null
+          created_at: string
+          expires_at: string
+          revoked_at: string | null
+        }
+        Insert: {
+          case_id: string
+          scope: string
+          label?: string | null
+          expires_at: string
+        }
+        Update: {
+          revoked_at?: string | null
+        }
+        Relationships: []
+      }
+      share_link_access: {
+        Row: {
+          id: number
+          link_id: string
+          accessed_at: string
+        }
+        Insert: never
+        Update: never
+        Relationships: []
+      }
       app_settings: {
         Row: {
           key: string
@@ -1316,6 +1348,10 @@ export type Database = {
       set_document_review: {
         Args: { p_document_id: string; p_action: string }
         Returns: undefined
+      }
+      fetch_shared_case: {
+        Args: { p_token: string }
+        Returns: Json
       }
       north_star_counts: {
         Args: Record<PropertyKey, never>

@@ -8,6 +8,7 @@ import type { DataPort } from "../ports";
 import type {
   AccountBillingRecord,
   AdvisorSessionRecord,
+  SharedCaseView,
   ApplicationForReview,
   ApplicationRecord,
   CaseExitReason,
@@ -618,6 +619,100 @@ export const supabaseAdapter: DataPort = {
     async removeTime(id) {
       const { error } = await supabase.from("time_entries").delete().eq("id", id);
       if (error) throw error;
+    },
+  },
+
+  shares: {
+    async list(caseId) {
+      const { data: links, error } = await supabase
+        .from("case_share_links")
+        .select("*")
+        .eq("case_id", caseId)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      const ids = (links ?? []).map((l) => l.id);
+      const { data: accesses } = ids.length
+        ? await supabase.from("share_link_access").select("link_id").in("link_id", ids)
+        : { data: [] as { link_id: string }[] };
+      return (links ?? []).map((l) => ({
+        id: l.id,
+        caseId: l.case_id,
+        scope: l.scope === "full" ? ("full" as const) : ("overview" as const),
+        label: l.label,
+        createdAt: l.created_at,
+        expiresAt: l.expires_at,
+        revokedAt: l.revoked_at,
+        accessCount: (accesses ?? []).filter((a) => a.link_id === l.id).length,
+      }));
+    },
+    async create({ caseId, scope, label, validDays }) {
+      const days = Math.min(Math.max(Math.round(validDays), 1), 365);
+      const { data: row, error } = await supabase
+        .from("case_share_links")
+        .insert({
+          case_id: caseId,
+          scope,
+          label: label?.trim() || null,
+          expires_at: new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString(),
+        })
+        .select("*")
+        .single();
+      if (error) throw error;
+      return {
+        id: row.id,
+        caseId: row.case_id,
+        scope: row.scope === "full" ? ("full" as const) : ("overview" as const),
+        label: row.label,
+        createdAt: row.created_at,
+        expiresAt: row.expires_at,
+        revokedAt: row.revoked_at,
+        accessCount: 0,
+      };
+    },
+    async revoke(id) {
+      const { error } = await supabase
+        .from("case_share_links")
+        .update({ revoked_at: new Date().toISOString() })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    async fetch(token) {
+      const { data: payload, error } = await supabase.rpc("fetch_shared_case", {
+        p_token: token,
+      });
+      if (error || !payload) return null;
+      const raw = payload as Record<string, unknown>;
+      return {
+        scope: raw.scope === "full" ? ("full" as const) : ("overview" as const),
+        expiresAt: String(raw.expires_at),
+        companyName: (raw.company_name as string | null) ?? null,
+        orgNumber: String(raw.org_number ?? ""),
+        recommendationType: (raw.recommendation_type as SharedCaseView["recommendationType"]) ?? null,
+        recommendationTitle: (raw.recommendation_title as string | null) ?? null,
+        totalDebt: (raw.total_debt as string | null) ?? null,
+        quickLiquidationValue: (raw.quick_liquidation_value as string | null) ?? null,
+        canPaySalary: (raw.can_pay_salary as boolean | null) ?? null,
+        canPayTax: (raw.can_pay_tax as boolean | null) ?? null,
+        canPayRent: (raw.can_pay_rent as boolean | null) ?? null,
+        canPaySuppliers: (raw.can_pay_suppliers as boolean | null) ?? null,
+        salaryAmount: (raw.salary_amount as string | null) ?? null,
+        salaryDay: (raw.salary_day as number | null) ?? null,
+        taxAmount: (raw.tax_amount as string | null) ?? null,
+        taxDay: (raw.tax_day as number | null) ?? null,
+        rentAmount: (raw.rent_amount as string | null) ?? null,
+        rentDay: (raw.rent_day as number | null) ?? null,
+        closedAt: (raw.closed_at as string | null) ?? null,
+        healthMode: Boolean(raw.health_mode),
+        updatedAt: String(raw.updated_at ?? ""),
+        documents: Array.isArray(raw.documents)
+          ? (raw.documents as { file_name: string; kind: string; review_status: string; created_at: string }[]).map((d) => ({
+              fileName: d.file_name,
+              kind: d.kind,
+              reviewStatus: d.review_status,
+              createdAt: d.created_at,
+            }))
+          : null,
+      };
     },
   },
 

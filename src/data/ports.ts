@@ -11,6 +11,8 @@ import type {
   CaseInvitationRecord,
   CaseMemberRecord,
   CaseNoteRecord,
+  CaseShareLinkRecord,
+  SharedCaseView,
   FirmInvitationRecord,
   FirmMemberRecord,
   MyFirmInvitation,
@@ -549,6 +551,25 @@ export interface OpsPort {
   }>;
 }
 
+/**
+ * Live ärendelänken: länken ÄR ärendet, alltid aktuell. Skiljer sig
+ * MEDVETET från inbjudningarna (medlemskap via adress): en länk ger
+ * scopad LÄSNING - tidsbegränsad, återkallbar, och varje öppning
+ * loggas. fetch är publik (även utloggad mottagare) och svarar med
+ * samma tystnad för okända, utgångna och återkallade länkar.
+ */
+export interface SharesPort {
+  list(caseId: string): Promise<CaseShareLinkRecord[]>;
+  create(input: {
+    caseId: string;
+    scope: "overview" | "full";
+    label?: string | null;
+    validDays: number;
+  }): Promise<CaseShareLinkRecord>;
+  revoke(id: string): Promise<void>;
+  fetch(token: string): Promise<SharedCaseView | null>;
+}
+
 export interface AuditPort {
   /**
    * Händelseloggen, nyast först. Append-only i databasen - det här är
@@ -586,6 +607,7 @@ export interface DataPort {
   dialogue: DialoguePort;
   members: MembersPort;
   audit: AuditPort;
+  shares: SharesPort;
   billing: BillingPort;
   ops: OpsPort;
   cases: CasesPort;

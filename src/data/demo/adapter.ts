@@ -27,6 +27,7 @@ import type {
   AdvisorSessionRecord,
   CaseDecisionRecord,
   CaseNoteRecord,
+  CaseShareLinkRecord,
   CaseRecord,
   FirmMemberRecord,
   ConversationRecord,
@@ -104,6 +105,7 @@ interface DemoState {
   caseDecisions: CaseDecisionRecord[];
   /** Företagsplanernas månadsavgifter (exkl. moms) - driftparametrar, aldrig kod. */
   companyPlanMonthlyExVatSek: number | null;
+  shareLinks: (CaseShareLinkRecord & { accessLog: string[] })[];
   companyPlanBusinessExVatSek: number | null;
   companyPlanEnterpriseExVatSek: number | null;
 }
@@ -139,6 +141,7 @@ const emptyState = (): DemoState => ({
   advisorSessions: [],
   caseDecisions: [],
   companyPlanMonthlyExVatSek: null,
+  shareLinks: [],
   companyPlanBusinessExVatSek: null,
   companyPlanEnterpriseExVatSek: null,
 });
@@ -1520,6 +1523,85 @@ export const demoAdapter: DataPort = {
     },
   },
 
+  shares: {
+    async list(caseId) {
+      return state.shareLinks
+        .filter((l) => l.caseId === caseId)
+        .map(({ accessLog, ...link }) => ({ ...link, accessCount: accessLog.length }))
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    },
+    async create({ caseId, scope, label, validDays }) {
+      if (!state.user) throw new Error("Inte inloggad");
+      const days = Math.min(Math.max(Math.round(validDays), 1), 365);
+      const link = {
+        id: uid(),
+        caseId,
+        scope,
+        label: label?.trim() || null,
+        createdAt: now(),
+        expiresAt: new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString(),
+        revokedAt: null,
+        accessCount: 0,
+        accessLog: [] as string[],
+      };
+      state.shareLinks.push(link);
+      save();
+      const { accessLog, ...record } = link;
+      return record;
+    },
+    // Återkallelsen är omedelbar: nästa öppning möts av samma tystnad
+    // som en okänd länk.
+    async revoke(id) {
+      const link = state.shareLinks.find((l) => l.id === id);
+      if (link && !link.revokedAt) {
+        link.revokedAt = now();
+        save();
+      }
+    },
+    async fetch(token) {
+      const link = state.shareLinks.find((l) => l.id === token);
+      if (!link || link.revokedAt || link.expiresAt <= now()) return null;
+      const record = state.cases.find((c) => c.id === link.caseId);
+      if (!record) return null;
+      link.accessLog.push(now());
+      save();
+      return {
+        scope: link.scope,
+        expiresAt: link.expiresAt,
+        companyName: record.companyName,
+        orgNumber: record.orgNumber,
+        recommendationType: record.recommendationType,
+        recommendationTitle: record.recommendationTitle,
+        totalDebt: record.totalDebt,
+        quickLiquidationValue: record.quickLiquidationValue,
+        canPaySalary: record.canPaySalary,
+        canPayTax: record.canPayTax,
+        canPayRent: record.canPayRent,
+        canPaySuppliers: record.canPaySuppliers,
+        salaryAmount: record.salaryAmount,
+        salaryDay: record.salaryDay,
+        taxAmount: record.taxAmount,
+        taxDay: record.taxDay,
+        rentAmount: record.rentAmount,
+        rentDay: record.rentDay,
+        closedAt: record.closedAt,
+        healthMode: record.healthMode,
+        updatedAt: record.updatedAt,
+        documents:
+          link.scope === "full"
+            ? state.documents
+                .filter((d) => d.caseId === link.caseId)
+                .map((d) => ({
+                  fileName: d.fileName,
+                  kind: d.kind,
+                  reviewStatus: d.reviewStatus,
+                  createdAt: d.createdAt,
+                }))
+            : null,
+      };
+    },
+  },
+
   dialogue: {
     async listSessions(caseId) {
       return state.advisorSessions
@@ -1609,6 +1691,10 @@ export const demoAdapter: DataPort = {
       for (const s of state.advisorSessions.filter((x) => x.caseId === caseId)) {
         push("insert", "advisor_sessions", s.id, s.startedAt, `samtal med rådgivaren: ${s.flowTitle.toLowerCase()}`);
         if (s.closedAt) push("update", "advisor_sessions", s.id, s.closedAt, `bedömning lämnad: ${s.flowTitle.toLowerCase()}`);
+      }
+      for (const l of state.shareLinks.filter((x) => x.caseId === caseId)) {
+        push("insert", "case_share_links", l.id, l.createdAt, `live-länk skapades (${l.scope === "full" ? "fullständig" : "översikt"})`);
+        if (l.revokedAt) push("update", "case_share_links", l.id, l.revokedAt, "live-länken återkallades");
       }
       for (const d of state.caseDecisions.filter((x) => x.caseId === caseId)) {
         push("insert", "case_decisions", d.id, d.decidedAt, `beslut: "${d.title}"`);

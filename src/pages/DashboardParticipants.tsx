@@ -45,6 +45,96 @@ const SHARE_STATUS: Record<string, string> = {
 };
 
 /**
+ * Live ärendelänken: länken ÄR ärendet, alltid aktuell - för mottagare
+ * UTANFÖR ärendet (bank, försäkringsbolag, finansiär) som ska följa
+ * läget utan medlemskap. Tidsbegränsad, återkallbar, åtkomstloggad,
+ * och med nivåval: översikt eller fullständig. Data, inte bedömningar.
+ */
+const ShareLinksSection = ({ caseId }: { caseId: string }) => {
+  const queryClient = useQueryClient();
+  const [scope, setScope] = useState<"overview" | "full">("overview");
+  const { data: links } = useQuery({
+    queryKey: ["share-links", caseId],
+    queryFn: () => data.shares.list(caseId),
+    retry: false,
+  });
+  const create = useMutation({
+    mutationFn: () => data.shares.create({ caseId, scope, validDays: 30 }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["share-links", caseId] }),
+  });
+  const revoke = useMutation({
+    mutationFn: (id: string) => data.shares.revoke(id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["share-links", caseId] }),
+  });
+  const linkUrl = (id: string): string => {
+    const base = `${window.location.origin}${window.location.pathname}`;
+    return window.location.hash ? `${base}#/lank/${id}` : `${window.location.origin}/lank/${id}`;
+  };
+
+  return (
+    <section aria-labelledby="share-links-heading" className="rounded-md border border-border bg-card p-5">
+      <h2 id="share-links-heading" className="flex items-center gap-2 text-lg font-semibold text-foreground">
+        <ArrowRight className="h-5 w-5 text-accent" aria-hidden="true" />
+        Live ärendelänk
+      </h2>
+      <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+        En säker länk som visar ärendets nuläge varje gång den öppnas – för
+        bank, försäkringsbolag eller finansiär som ska följa läget utan att
+        vara deltagare. Länken är giltig i 30 dagar, kan återkallas när som
+        helst, och varje öppning loggas. Den visar data – bedömningarna gör
+        mottagaren själv.
+      </p>
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <select
+          value={scope}
+          onChange={(e) => setScope(e.target.value === "full" ? "full" : "overview")}
+          aria-label="Länkens nivå"
+          className="h-9 rounded-md border border-border bg-card px-2 text-sm text-foreground"
+        >
+          <option value="overview">Översikt – läge och frister</option>
+          <option value="full">Fullständig – även handlingarna</option>
+        </select>
+        <Button size="sm" variant="outline" disabled={create.isPending} onClick={() => create.mutate()}>
+          Skapa länk
+        </Button>
+      </div>
+      {(links ?? []).length > 0 && (
+        <ul className="mt-3 space-y-2">
+          {(links ?? []).map((link) => (
+            <li key={link.id} className="rounded-md border border-border p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                <span className="font-medium text-foreground">
+                  {link.scope === "full" ? "Fullständig vy" : "Översiktsvy"}
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  {link.revokedAt
+                    ? "Återkallad"
+                    : `giltig till ${link.expiresAt.slice(0, 10)} · öppnad ${link.accessCount} ${link.accessCount === 1 ? "gång" : "gånger"}`}
+                </span>
+              </div>
+              {!link.revokedAt && (
+                <p className="mt-1.5 break-all rounded-md bg-secondary/40 p-2 font-mono text-xs text-foreground" data-share-url>
+                  {linkUrl(link.id)}
+                </p>
+              )}
+              {!link.revokedAt && (
+                <button
+                  type="button"
+                  onClick={() => revoke.mutate(link.id)}
+                  className="mt-1.5 text-xs font-medium text-destructive underline-offset-4 hover:underline"
+                >
+                  Återkalla länken
+                </button>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+};
+
+/**
  * Delningsinsynen: vilka rådgivare som kontaktats i ärendet, vad de kan se
  * i det här ögonblicket och när samtycket gavs. Transparensen är löftet -
  * ingen delning utan godkännande, och ingen delning utan det här kvittot.
@@ -418,6 +508,14 @@ const DashboardParticipants = () => {
               </div>
               <ArrowRight className="h-4 w-4 flex-shrink-0 text-muted-foreground" aria-hidden="true" />
             </Link>
+
+            {/* Live ärendelänken - också delning, alltså bakom samma
+                betalvägg som inbjudningarna. */}
+            {inviteEntitled ? (
+              <ShareLinksSection caseId={caseRecord.id} />
+            ) : (
+              <LockedFeature title="Live ärendelänk till bank och finansiär" />
+            )}
 
             {/* Delningen med rådgivare: full insyn i vem som kontaktats,
                 vad de ser och när samtycket gavs. Ingen rad utan samtycke -

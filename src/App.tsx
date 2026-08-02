@@ -43,6 +43,7 @@ const AdminLogs = lazy(() => import("./pages/AdminLogs"));
 const DashboardDocuments = lazy(() => import("./pages/DashboardDocuments"));
 const DashboardSamtal = lazy(() => import("./pages/DashboardSamtal"));
 const DashboardAlternativ = lazy(() => import("./pages/DashboardAlternativ"));
+const SharedCase = lazy(() => import("./pages/SharedCase"));
 const DashboardMessages = lazy(() => import("./pages/DashboardMessages"));
 const DashboardSettings = lazy(() => import("./pages/DashboardSettings"));
 const CreditDossierPage = lazy(() => import("./pages/CreditDossierPage"));
@@ -117,6 +118,9 @@ const App = () => (
                     </ProtectedRoute>
                   }
                 />
+                {/* Live ärendelänken: publik - skyddet ligger i länken
+                    (tidsbegränsad, återkallbar, loggad), inte i inloggningen. */}
+                <Route path="/lank/:token" element={<SharedCase />} />
                 <Route
                   path="/dashboard/meddelanden"
                   element={
