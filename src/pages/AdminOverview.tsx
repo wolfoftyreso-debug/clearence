@@ -16,6 +16,7 @@ import {
   CheckCircle2,
   KeyRound,
   Loader2,
+  TrendingUp,
   Trash2,
 } from "lucide-react";
 
@@ -495,6 +496,66 @@ const PlanSection = () => {
   );
 };
 
+/**
+ * North Star-raden: antal företag som återgått till ekonomisk stabilitet
+ * med hjälp av plattformen. Det är det här driften styr mot - inte antal
+ * konton, inte antal upplåsningar. Bredvid: hälsoläget (bolag som stannat
+ * kvar efter lyckad kris), dålig churn (konkurs/likvidation) och öppna
+ * ärenden. Siffrorna kommer ur exitorsakerna, aldrig ur gissningar.
+ */
+const NorthStarSection = () => {
+  const { data: counts } = useQuery({
+    queryKey: ["north-star"],
+    queryFn: () => data.ops.northStarCounts(),
+  });
+
+  const tiles: { label: string; value: number | undefined; note: string; highlight?: boolean }[] = [
+    {
+      label: "Återhämtade bolag",
+      value: counts?.recovered,
+      note: "Stabiliserade eller genomförd rekonstruktion.",
+      highlight: true,
+    },
+    { label: "I hälsoläget", value: counts?.inHealth, note: "Stannade kvar efter lyckad krisfas." },
+    { label: "Dålig churn", value: counts?.badChurn, note: "Konkurs eller likvidation." },
+    { label: "Öppna ärenden", value: counts?.openCases, note: "Pågående krisfaser just nu." },
+  ];
+
+  return (
+    <section aria-labelledby="north-star-heading">
+      <h2
+        id="north-star-heading"
+        className="flex items-center gap-2 text-lg font-semibold text-foreground"
+      >
+        <TrendingUp className="h-5 w-5 text-accent" aria-hidden="true" />
+        North Star: återhämtning
+      </h2>
+      <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+        Antal företag som återgått till ekonomisk stabilitet med hjälp av
+        plattformen. Mäts ur registrerade exitorsaker vid avslut.
+      </p>
+      <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {tiles.map((tile) => (
+          <div
+            key={tile.label}
+            className={`flex flex-col rounded-md border p-4 ${
+              tile.highlight ? "border-success/40 bg-success/5" : "border-border bg-card"
+            }`}
+          >
+            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              {tile.label}
+            </span>
+            <span className="mt-1 text-3xl font-semibold tabular-nums text-foreground">
+              {tile.value ?? "–"}
+            </span>
+            <span className="mt-1 text-sm text-muted-foreground">{tile.note}</span>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+};
+
 const AdminOverview = () => {
   const now = new Date();
 
@@ -570,6 +631,8 @@ const AdminOverview = () => {
             urgent={false}
           />
         </section>
+
+        <NorthStarSection />
 
         <ClaimsSection />
 

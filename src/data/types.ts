@@ -30,6 +30,17 @@ export interface AuthUser {
   email: string | null;
 }
 
+/**
+ * Krisfasens utfall. stabilized/reconstruction_completed är North
+ * Star-utfallen (bra churn). Sätts endast genom cases.close().
+ */
+export type CaseExitReason =
+  | "stabilized"
+  | "reconstruction_completed"
+  | "bankruptcy"
+  | "liquidated"
+  | "other";
+
 export interface CaseRecord {
   id: string;
   orgNumber: string;
@@ -54,9 +65,17 @@ export interface CaseRecord {
   recommendationNextSteps: string[];
   createdAt: string;
   updatedAt: string;
+  /** Krisfasens slut. Null = pågående kris (eller hälsoläge, se healthMode). */
+  closedAt: string | null;
+  exitReason: CaseExitReason | null;
+  /** Ärendet lever vidare i hälsoläget efter en lyckad krisfas. */
+  healthMode: boolean;
 }
 
-export type NewCase = Omit<CaseRecord, "id" | "createdAt" | "updatedAt">;
+export type NewCase = Omit<
+  CaseRecord,
+  "id" | "createdAt" | "updatedAt" | "closedAt" | "exitReason" | "healthMode"
+>;
 
 export interface KbrAssessmentInput {
   caseId?: string | null;

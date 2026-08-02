@@ -32,6 +32,11 @@ import { DashboardShell } from "@/components/dashboard/DashboardShell";
 import { ActionPlan } from "@/components/dashboard/ActionPlan";
 import { ControlStatus } from "@/components/dashboard/ControlStatus";
 import { AiBriefing } from "@/components/dashboard/AiBriefing";
+import {
+  CaseExitSection,
+  ClosedCaseBanner,
+  HealthDashboard,
+} from "@/components/dashboard/CaseExit";
 import { analysisInputFromCase, parseAmount } from "@/lib/caseAnalysis";
 
 
@@ -181,6 +186,17 @@ const Dashboard = () => {
                 Starta utvärdering
               </Button>
             </div>
+          ) : latestCase.healthMode ? (
+            /* Hälsoläget: krisen är över men ärendet lever vidare - lugn
+               bevakning i stället för frister och larm. */
+            <HealthDashboard caseRecord={latestCase} />
+          ) : latestCase.closedAt ? (
+            /* Helt avslutat: banderollen med utfallet, och akten under -
+               frysning, aldrig radering. */
+            <>
+              <ClosedCaseBanner caseRecord={latestCase} />
+              {user && <CaseDocuments caseId={latestCase.id} userId={user.id} />}
+            </>
           ) : (
             <>
               {/* Status banner */}
@@ -442,6 +458,9 @@ const Dashboard = () => {
                   );
                 })}
               </div>
+
+              {/* Krisfasens slut: en stillsam väg ut, med orsak. */}
+              <CaseExitSection caseRecord={latestCase} />
             </>
           )}
       </div>

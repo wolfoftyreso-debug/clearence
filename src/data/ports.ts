@@ -5,6 +5,7 @@ import type {
   ApplicationRecord,
   AuditEventRecord,
   AuthUser,
+  CaseExitReason,
   CaseInvitationRecord,
   CaseMemberRecord,
   CaseMessage,
@@ -96,6 +97,18 @@ export interface CasesPort {
   getLatest(): Promise<CaseRecord | null>;
   /** Alla ärenden den inloggade har åtkomst till, senast uppdaterat först. */
   listMine(): Promise<CaseRecord[]>;
+  /**
+   * Avslutar krisfasen med orsak (North Star-mätningen). Lyckade utfall
+   * kan fortsätta i hälsoläget. Ingenting raderas - akten består.
+   */
+  close(input: {
+    caseId: string;
+    reason: CaseExitReason;
+    note?: string;
+    enterHealth?: boolean;
+  }): Promise<void>;
+  /** Tillbaka till krisläget, från avslut eller hälsoläge. */
+  reopen(caseId: string): Promise<void>;
   /** Väljer aktivt ärende. null återgår till senaste. Rent klientval - åtkomsten prövas i databasen. */
   select(caseId: string | null): void;
   create(input: NewCase & { userId: string }): Promise<CaseRecord>;
@@ -419,6 +432,14 @@ export interface OpsPort {
    * nästa avgiftsbelagda köp - pågående arbete påverkas aldrig.
    */
   setBillingHold(professionalId: string, hold: boolean, reason?: string): Promise<void>;
+
+  /** North Star och churn: återhämtade, i hälsoläge, dålig churn, öppna. */
+  northStarCounts(): Promise<{
+    recovered: number;
+    inHealth: number;
+    badChurn: number;
+    openCases: number;
+  }>;
 }
 
 export interface AuditPort {

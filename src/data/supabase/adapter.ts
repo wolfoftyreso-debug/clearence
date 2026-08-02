@@ -9,6 +9,7 @@ import type {
   AccountBillingRecord,
   ApplicationForReview,
   ApplicationRecord,
+  CaseExitReason,
   CaseMessage,
   CaseRecord,
   CaseTask,
@@ -274,6 +275,9 @@ type CaseRow = {
   recommendation_next_steps: unknown;
   created_at: string;
   updated_at: string;
+  closed_at: string | null;
+  exit_reason: string | null;
+  health_mode: boolean;
 };
 
 const toCase = (row: CaseRow): CaseRecord => ({
@@ -300,6 +304,9 @@ const toCase = (row: CaseRow): CaseRecord => ({
   recommendationNextSteps: asStringArray(row.recommendation_next_steps),
   createdAt: row.created_at,
   updatedAt: row.updated_at,
+  closedAt: row.closed_at,
+  exitReason: (row.exit_reason as CaseExitReason | null) ?? null,
+  healthMode: row.health_mode,
 });
 
 const toPayment = (row: {
@@ -1071,6 +1078,17 @@ export const supabaseAdapter: DataPort = {
       });
       if (error) throw error;
     },
+    async northStarCounts() {
+      const { data, error } = await supabase.rpc("north_star_counts");
+      if (error) throw error;
+      const row = (data ?? [])[0];
+      return {
+        recovered: Number(row?.recovered ?? 0),
+        inHealth: Number(row?.in_health ?? 0),
+        badChurn: Number(row?.bad_churn ?? 0),
+        openCases: Number(row?.open_cases ?? 0),
+      };
+    },
   },
 
   cases: {
@@ -1085,6 +1103,18 @@ export const supabaseAdapter: DataPort = {
         if (data) return toCase(data as CaseRow);
         localStorage.removeItem(ACTIVE_CASE_KEY);
       }
+      // Helt avslutade ärenden (stängda utan hälsoläge) ska inte tränga sig
+      // före ett pågående - men finns inget annat visas det senaste ändå,
+      // så att avslutsbanderollen och "Återuppta" är nåbara.
+      const active = await supabase
+        .from("cases")
+        .select("*")
+        .or("closed_at.is.null,health_mode.eq.true")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (active.error) throw active.error;
+      if (active.data) return toCase(active.data as CaseRow);
       const latest = await supabase
         .from("cases")
         .select("*")
@@ -1145,6 +1175,19 @@ export const supabaseAdapter: DataPort = {
         .single();
       if (error) throw error;
       return toCase(data as CaseRow);
+    },
+    async close({ caseId, reason, note, enterHealth }) {
+      const { error } = await supabase.rpc("close_case", {
+        p_case_id: caseId,
+        p_reason: reason,
+        p_note: note ?? null,
+        p_enter_health: enterHealth ?? false,
+      });
+      if (error) throw error;
+    },
+    async reopen(caseId) {
+      const { error } = await supabase.rpc("reopen_case", { p_case_id: caseId });
+      if (error) throw error;
     },
   },
 

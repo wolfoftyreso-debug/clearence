@@ -1291,6 +1291,92 @@ begin
   end;
 end $$;
 
+/* ========================================================================== */
+/* Exitorsak och hälsoläget                                                   */
+/* ========================================================================== */
+
+set local role authenticated;
+
+-- Borgenären kan inte avsluta ärendet.
+select pg_temp.as_user('55555555-5555-5555-5555-555555555555');
+do $$
+begin
+  begin
+    perform public.close_case('aaaaaaaa-0000-0000-0000-000000000001', 'stabilized');
+    raise exception 'FAIL  en borgenär kunde avsluta ärendet';
+  exception when others then
+    if sqlerrm like 'FAIL%' then raise; end if;
+    raise notice 'ok    closing a case requires representative write access';
+  end;
+end $$;
+
+select pg_temp.as_user('11111111-1111-1111-1111-111111111111');
+do $$
+begin
+  begin
+    perform public.close_case('aaaaaaaa-0000-0000-0000-000000000001', 'felorsak');
+    raise exception 'FAIL  ogiltig orsak accepterades';
+  exception when others then
+    if sqlerrm like 'FAIL%' then raise; end if;
+    raise notice 'ok    an invalid exit reason is refused';
+  end;
+  begin
+    perform public.close_case('aaaaaaaa-0000-0000-0000-000000000001', 'bankruptcy', null, true);
+    raise exception 'FAIL  konkurs kunde gå till hälsoläget';
+  exception when others then
+    if sqlerrm like 'FAIL%' then raise; end if;
+    raise notice 'ok    only successful outcomes may enter health mode';
+  end;
+end $$;
+
+do $$
+declare v_case record;
+begin
+  perform public.close_case('aaaaaaaa-0000-0000-0000-000000000001', 'stabilized', 'Lönerna betalas igen.', true);
+  select closed_at, exit_reason, health_mode into v_case
+  from public.cases where id = 'aaaaaaaa-0000-0000-0000-000000000001';
+  if v_case.closed_at is null or v_case.exit_reason <> 'stabilized' or not v_case.health_mode then
+    raise exception 'FAIL  avslutet stämplades fel (%, %)', v_case.exit_reason, v_case.health_mode;
+  end if;
+  raise notice 'ok    a successful close stamps reason and enters health mode';
+  begin
+    perform public.close_case('aaaaaaaa-0000-0000-0000-000000000001', 'stabilized');
+    raise exception 'FAIL  ett avslutat ärende kunde avslutas igen';
+  exception when others then
+    if sqlerrm like 'FAIL%' then raise; end if;
+    raise notice 'ok    a closed case cannot be closed twice';
+  end;
+end $$;
+
+do $$
+declare v_case record;
+begin
+  perform public.reopen_case('aaaaaaaa-0000-0000-0000-000000000001');
+  select closed_at, exit_reason, health_mode into v_case
+  from public.cases where id = 'aaaaaaaa-0000-0000-0000-000000000001';
+  if v_case.closed_at is not null or v_case.exit_reason is not null or v_case.health_mode then
+    raise exception 'FAIL  återupptagandet nollade inte läget';
+  end if;
+  raise notice 'ok    reopening returns the case to crisis mode';
+end $$;
+
+-- North Star-räkningen: nollor utan drift, riktiga tal med.
+select pg_temp.as_user('22222222-2222-2222-2222-222222222222');
+select pg_temp.check('north star is zeroed for non-admins',
+  (select recovered from public.north_star_counts()), 0::bigint);
+
+select pg_temp.as_user('11111111-1111-1111-1111-111111111111');
+do $$
+declare v_row record;
+begin
+  perform public.close_case('aaaaaaaa-0000-0000-0000-000000000001', 'reconstruction_completed', null, false);
+  select * into v_row from public.north_star_counts();
+  if v_row.recovered < 1 then
+    raise exception 'FAIL  North Star räknar inte det återhämtade bolaget (%)', v_row.recovered;
+  end if;
+  raise notice 'ok    the north star counts recovered companies for drift';
+end $$;
+
 reset role;
 select 'ALL RLS TESTS PASSED' as result;
 

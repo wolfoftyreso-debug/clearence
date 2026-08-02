@@ -340,6 +340,9 @@ const seedCase = (userId: string): CaseRecord => ({
   ],
   createdAt: now(),
   updatedAt: now(),
+  closedAt: null,
+  exitReason: null,
+  healthMode: false,
 });
 
 const seedPayments = (caseId: string): PaymentRecord[] => [
@@ -983,6 +986,19 @@ export const demoAdapter: DataPort = {
       if (hold) demoHolds.set(professionalId, reason?.trim() || "spärrad i demon");
       else demoHolds.delete(professionalId);
     },
+    async northStarCounts() {
+      const cases = state.cases;
+      return {
+        recovered: cases.filter(
+          (c) => c.exitReason === "stabilized" || c.exitReason === "reconstruction_completed",
+        ).length,
+        inHealth: cases.filter((c) => c.healthMode).length,
+        badChurn: cases.filter(
+          (c) => c.exitReason === "bankruptcy" || c.exitReason === "liquidated",
+        ).length,
+        openCases: cases.filter((c) => !c.closedAt).length,
+      };
+    },
   },
 
   audit: {
@@ -1147,7 +1163,11 @@ export const demoAdapter: DataPort = {
         if (found) return found;
         localStorage.removeItem("clearance-active-case");
       }
-      return state.cases[0] ?? null;
+      // Ett helt avslutat ärende trängs inte före ett pågående, men visas
+      // om det är allt som finns - avslutsbanderollen ska vara nåbar.
+      return (
+        state.cases.find((c) => !c.closedAt || c.healthMode) ?? state.cases[0] ?? null
+      );
     },
     async listMine() {
       return [...state.cases];
@@ -1162,6 +1182,9 @@ export const demoAdapter: DataPort = {
         id: uid(),
         createdAt: now(),
         updatedAt: now(),
+        closedAt: null,
+        exitReason: null,
+        healthMode: false,
       };
       state.cases = [record, ...state.cases];
       save();
@@ -1172,6 +1195,32 @@ export const demoAdapter: DataPort = {
       state.cases = [record, ...state.cases];
       save();
       return record;
+    },
+    // Samma regler som close_case() i databasen: bara lyckade utfall får gå
+    // vidare till hälsoläget, och ett redan avslutat ärende avslutas inte om.
+    async close({ caseId, reason, note, enterHealth }) {
+      const record = state.cases.find((c) => c.id === caseId);
+      if (!record) throw new Error("Ärendet finns inte");
+      if (record.closedAt) throw new Error("Ärendet är redan avslutat");
+      const health = Boolean(enterHealth);
+      if (health && reason !== "stabilized" && reason !== "reconstruction_completed") {
+        throw new Error("Hälsoläget är för lyckade utfall");
+      }
+      record.closedAt = now();
+      record.exitReason = reason;
+      record.healthMode = health;
+      record.updatedAt = now();
+      void note;
+      save();
+    },
+    async reopen(caseId) {
+      const record = state.cases.find((c) => c.id === caseId);
+      if (!record) throw new Error("Ärendet finns inte");
+      record.closedAt = null;
+      record.exitReason = null;
+      record.healthMode = false;
+      record.updatedAt = now();
+      save();
     },
   },
 

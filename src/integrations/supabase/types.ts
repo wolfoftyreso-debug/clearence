@@ -390,9 +390,13 @@ export type Database = {
           can_pay_salary: boolean | null
           can_pay_suppliers: boolean | null
           can_pay_tax: boolean | null
+          closed_at: string | null
           company_name: string | null
           created_at: string
           employees: string | null
+          exit_note: string | null
+          exit_reason: string | null
+          health_mode: boolean
           id: string
           org_number: string
           quick_liquidation_value: string | null
@@ -418,9 +422,13 @@ export type Database = {
           can_pay_salary?: boolean | null
           can_pay_suppliers?: boolean | null
           can_pay_tax?: boolean | null
+          closed_at?: string | null
           company_name?: string | null
           created_at?: string
           employees?: string | null
+          exit_note?: string | null
+          exit_reason?: string | null
+          health_mode?: boolean
           id?: string
           org_number: string
           quick_liquidation_value?: string | null
@@ -446,9 +454,13 @@ export type Database = {
           can_pay_salary?: boolean | null
           can_pay_suppliers?: boolean | null
           can_pay_tax?: boolean | null
+          closed_at?: string | null
           company_name?: string | null
           created_at?: string
           employees?: string | null
+          exit_note?: string | null
+          exit_reason?: string | null
+          health_mode?: boolean
           id?: string
           org_number?: string
           quick_liquidation_value?: string | null
@@ -1035,6 +1047,28 @@ export type Database = {
       is_platform_admin: {
         Args: Record<PropertyKey, never>
         Returns: boolean
+      }
+      close_case: {
+        Args: {
+          p_case_id: string
+          p_reason: string
+          p_note?: string | null
+          p_enter_health?: boolean
+        }
+        Returns: undefined
+      }
+      reopen_case: {
+        Args: { p_case_id: string }
+        Returns: undefined
+      }
+      north_star_counts: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          recovered: number
+          in_health: number
+          bad_churn: number
+          open_cases: number
+        }[]
       }
       current_user_role: {
         Args: Record<PropertyKey, never>
