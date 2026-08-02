@@ -492,5 +492,7 @@ export interface AuditEventRecord {
   action: string;
   objectType: string;
   objectId: string | null;
+  /** Vad händelsen gällde, läsbart: uppgiftens text, filnamnet, deltagarens roll. */
+  detail: string | null;
   occurredAt: string;
 }

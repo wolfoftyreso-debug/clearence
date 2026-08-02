@@ -6,8 +6,9 @@ import { data } from "@/data";
 import { useAuth } from "@/hooks/useAuth";
 import { CASE_ROLE_LABELS } from "@/lib/caseRoles";
 import { downloadTextFile } from "@/lib/integrations/download";
+import { summarizeAuditTrail } from "@/lib/auditDetail";
 import type { AuditEventRecord } from "@/data/types";
-import { Download, History, Loader2 } from "lucide-react";
+import { Download, History, Loader2, Sparkles } from "lucide-react";
 
 /**
  * Händelseloggen - ärendets svarta låda, som läsfönster.
@@ -58,11 +59,11 @@ const formatWhen = (iso: string) =>
 const toCsv = (events: AuditEventRecord[]): string => {
   const esc = (v: string | null) => `"${String(v ?? "").replace(/"/g, '""')}"`;
   const rows = events.map((e) =>
-    [e.occurredAt, e.action, e.objectType, e.objectId, e.actorRole, e.actorUserId]
+    [e.occurredAt, e.action, e.objectType, e.detail, e.objectId, e.actorRole, e.actorUserId]
       .map((v) => esc(v as string | null))
       .join(";"),
   );
-  return ["tidpunkt;handling;objekt;objekt_id;roll;anvandare", ...rows].join("\r\n");
+  return ["tidpunkt;handling;objekt;detalj;objekt_id;roll;anvandare", ...rows].join("\r\n");
 };
 
 const DashboardAudit = () => {
@@ -105,6 +106,20 @@ const DashboardAudit = () => {
             och kan inte ändras i efterhand – av någon, inklusive oss. Det är
             det som gör den användbar som underlag.
           </p>
+
+          <section className="mt-4 rounded-md border border-border bg-card p-4">
+            <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+              <Sparkles className="h-4 w-4 text-accent" aria-hidden="true" />
+              Systemsammanfattning
+            </h2>
+            <ul className="mt-2 space-y-1">
+              {summarizeAuditTrail(events ?? [], new Date()).map((line) => (
+                <li key={line} className="text-sm leading-relaxed text-foreground/90">
+                  {line}
+                </li>
+              ))}
+            </ul>
+          </section>
 
           <div className="mt-4 flex flex-wrap gap-2">
             <Button
@@ -153,7 +168,12 @@ const DashboardAudit = () => {
                     className="absolute -left-[1.35rem] top-1.5 h-2.5 w-2.5 rounded-full border-2 border-background bg-accent"
                     aria-hidden="true"
                   />
-                  <p className="text-sm font-medium text-foreground">{describe(event)}</p>
+                  <p className="text-sm font-medium text-foreground">
+                    {describe(event)}
+                    {event.detail && (
+                      <span className="font-normal text-muted-foreground"> – {event.detail}</span>
+                    )}
+                  </p>
                   <p className="text-xs text-muted-foreground">
                     {formatWhen(event.occurredAt)}
                     {event.actorRole && ` · ${CASE_ROLE_LABELS[event.actorRole]}`}

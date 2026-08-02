@@ -924,25 +924,34 @@ export const demoAdapter: DataPort = {
       let seq = 1;
       const events: AuditEventRecord[] = [];
       const me = state.user?.id ?? null;
-      const push = (action: string, objectType: string, objectId: string | null, at: string, role: CaseRole | null = "owner") =>
-        events.push({ id: seq++, caseId, actorUserId: me, actorRole: role, action, objectType, objectId, occurredAt: at });
+      const push = (
+        action: string,
+        objectType: string,
+        objectId: string | null,
+        at: string,
+        detail: string | null,
+        role: CaseRole | null = "owner",
+      ) =>
+        events.push({ id: seq++, caseId, actorUserId: me, actorRole: role, action, objectType, objectId, detail, occurredAt: at });
       const c = state.cases.find((x) => x.id === caseId);
-      if (c) push("insert", "cases", c.id, c.createdAt);
+      if (c) push("insert", "cases", c.id, c.createdAt, c.companyName ? `${c.companyName} (${c.orgNumber})` : c.orgNumber);
       for (const t of state.caseTasks.filter((t) => t.caseId === caseId)) {
-        push("insert", "case_tasks", t.id, t.createdAt);
-        if (t.doneAt) push("update", "case_tasks", t.id, t.doneAt);
+        push("insert", "case_tasks", t.id, t.createdAt, `"${t.label}"`);
+        if (t.doneAt) push("update", "case_tasks", t.id, t.doneAt, `"${t.label}" bockades av`);
       }
       for (const d of state.documents.filter((d) => d.caseId === caseId))
-        push("insert", "case_documents", d.id, d.createdAt);
+        push("insert", "case_documents", d.id, d.createdAt, d.note ? `${d.fileName} (${d.note.toLowerCase()})` : d.fileName);
       for (const i of state.caseInvitations.filter((i) => i.caseId === caseId)) {
-        push("insert", "case_invitations", i.id, i.createdAt);
-        if (i.acceptedAt) push("update", "case_invitations", i.id, i.acceptedAt);
-        if (i.revokedAt) push("update", "case_invitations", i.id, i.revokedAt);
+        push("insert", "case_invitations", i.id, i.createdAt, `${i.email} som ${CASE_ROLE_LABELS[i.role].toLowerCase()}`);
+        if (i.acceptedAt) push("update", "case_invitations", i.id, i.acceptedAt, `${i.email} tackade ja`);
+        if (i.revokedAt) push("update", "case_invitations", i.id, i.revokedAt, `inbjudan till ${i.email} återkallades`);
       }
       for (const m of state.caseMembers.filter((m) => m.caseId === caseId))
-        push("insert", "case_members", m.id, m.createdAt, m.role);
+        push("insert", "case_members", m.id, m.createdAt, `roll: ${CASE_ROLE_LABELS[m.role].toLowerCase()}`, m.role);
       for (const conv of state.conversations.filter((x) => x.caseId === caseId))
-        push("insert", "conversations", conv.id, conv.createdAt);
+        push("insert", "conversations", conv.id, conv.createdAt, conv.title ? `gruppen "${conv.title}"` : "direkt tråd");
+      for (const k of state.kbrAssessments.filter((k) => k.caseId === caseId))
+        push("insert", "kbr_assessments", null, k.createdAt, `bedömning: ${k.status}`);
       return events.sort((a, b) => b.occurredAt.localeCompare(a.occurredAt));
     },
   },

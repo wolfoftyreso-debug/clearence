@@ -3,6 +3,7 @@ import type { Json } from "@/integrations/supabase/types";
 import { nextInvoiceNumber } from "@/lib/invoice";
 import { invoiceEmail, receiptEmail } from "@/lib/email/messages";
 import { COMPANY } from "@/lib/company";
+import { deriveAuditDetail } from "@/lib/auditDetail";
 import type { DataPort } from "../ports";
 import type {
   AccountBillingRecord,
@@ -533,7 +534,7 @@ export const supabaseAdapter: DataPort = {
     async listByCase(caseId) {
       const { data, error } = await supabase
         .from("audit_events")
-        .select("id, case_id, actor_user_id, actor_role, action, object_type, object_id, occurred_at")
+        .select("id, case_id, actor_user_id, actor_role, action, object_type, object_id, before, after, occurred_at")
         .eq("case_id", caseId)
         .order("occurred_at", { ascending: false })
         .limit(500);
@@ -546,6 +547,12 @@ export const supabaseAdapter: DataPort = {
         action: row.action,
         objectType: row.object_type,
         objectId: row.object_id,
+        detail: deriveAuditDetail(
+          row.object_type,
+          row.action,
+          row.before as Record<string, unknown> | null,
+          row.after as Record<string, unknown> | null,
+        ),
         occurredAt: row.occurred_at,
       }));
     },

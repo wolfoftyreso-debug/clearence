@@ -9,7 +9,7 @@
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.node.json",
-    "test": "npm run test:bank && npm run test:reports && npm run test:financial && npm run test:crisis && npm run test:billing && npm run test:email && npm run test:integrations && npm run test:sie && npm run test:actionplan && npm run test:templates && npm run test:knowledge && npm run test:summary && npm run test:portfolio",
+    "test": "npm run test:bank && npm run test:reports && npm run test:financial && npm run test:crisis && npm run test:billing && npm run test:email && npm run test:integrations && npm run test:sie && npm run test:actionplan && npm run test:templates && npm run test:knowledge && npm run test:summary && npm run test:portfolio && npm run test:audit",
     "test:crisis": "esbuild tests/crisisAnalysis.ts --bundle --platform=node --format=cjs --outfile=node_modules/.cache/test-crisis.cjs --log-level=error && node node_modules/.cache/test-crisis.cjs",
     "test:rls": "bash supabase/tests/run.sh",
     "test:selfhosted": "bash db/tests/run.sh",
@@ -28,7 +28,8 @@
     "test:templates": "esbuild tests/templates.ts --bundle --platform=node --format=cjs --outfile=node_modules/.cache/test-templates.cjs --log-level=error && node node_modules/.cache/test-templates.cjs",
     "test:knowledge": "esbuild tests/knowledge.ts --bundle --platform=node --format=cjs --outfile=node_modules/.cache/test-knowledge.cjs --log-level=error && node node_modules/.cache/test-knowledge.cjs",
     "test:summary": "esbuild tests/executiveSummary.ts --bundle --platform=node --format=cjs --outfile=node_modules/.cache/test-summary.cjs --log-level=error && node node_modules/.cache/test-summary.cjs",
-    "test:portfolio": "esbuild tests/portfolioSummary.ts --bundle --platform=node --format=cjs --outfile=node_modules/.cache/test-portfolio.cjs --log-level=error && node node_modules/.cache/test-portfolio.cjs"
+    "test:portfolio": "esbuild tests/portfolioSummary.ts --bundle --platform=node --format=cjs --outfile=node_modules/.cache/test-portfolio.cjs --log-level=error && node node_modules/.cache/test-portfolio.cjs",
+    "test:audit": "esbuild tests/auditDetail.ts --bundle --platform=node --format=cjs --outfile=node_modules/.cache/test-audit.cjs --log-level=error && node node_modules/.cache/test-audit.cjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
