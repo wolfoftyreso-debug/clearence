@@ -6,6 +6,7 @@ import {
   KNOWLEDGE_DISCLAIMER,
   findArticle,
 } from "@/lib/knowledge";
+import { GlossaryText, SimplerLanguageSuggestion } from "@/components/language/GlossaryText";
 import { ArrowRight, BookOpen, Scale } from "lucide-react";
 
 /**
@@ -86,13 +87,21 @@ const KnowledgeArticlePage = ({ slug }: { slug: string }) => {
       </h1>
       <p className="mt-3 text-lg leading-relaxed text-muted-foreground">{article.summary}</p>
 
+      {/* Klickar läsaren på många begreppsförklaringar föreslås enklare
+          språk - EN gång, och ett nej respekteras. */}
+      <div className="mt-4">
+        <SimplerLanguageSuggestion />
+      </div>
+
       {article.sections.map((section) => (
         <section key={section.heading} className="mt-8">
           <h2 className="text-xl font-semibold text-foreground">{section.heading}</h2>
           {section.paragraphs.map((paragraph) => (
-            <p key={paragraph.slice(0, 40)} className="mt-3 leading-relaxed text-foreground/90">
-              {paragraph}
-            </p>
+            <GlossaryText
+              key={paragraph.slice(0, 40)}
+              text={paragraph}
+              className="mt-3 leading-relaxed text-foreground/90"
+            />
           ))}
         </section>
       ))}

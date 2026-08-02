@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import { IS_DEMO } from "@/data";
 import { useAuth } from "@/hooks/useAuth";
@@ -14,19 +14,30 @@ import { AlertTriangle } from "lucide-react";
  */
 export const DemoBanner = () => {
   const { user } = useAuth();
+  const bannerRef = useRef<HTMLDivElement>(null);
 
   // The banner is fixed, so it sits on top of whatever is at the bottom of
-  // the page - including the wizards' fixed action bars, whose primary button
-  // it made unclickable. Padding the body is not enough: a fixed element does
-  // not move for it. So publish the height as a variable that fixed bars
-  // offset themselves by, and pad the document for ordinary content.
+  // the page - including the wizards' fixed action bars and the landing
+  // page's bottom navigation, whose buttons it made unclickable. Padding
+  // the body is not enough: a fixed element does not move for it. So
+  // publish the banner's MEASURED height as a variable that fixed bars
+  // offset themselves by, and pad the document for ordinary content. A
+  // hardcoded height broke on narrow phones where the text wraps taller -
+  // hence the ResizeObserver.
   useEffect(() => {
-    if (!IS_DEMO) return;
+    if (!IS_DEMO || !bannerRef.current) return;
     const root = document.documentElement;
     const previousPadding = document.body.style.paddingBottom;
-    root.style.setProperty("--app-bottom-inset", "5.5rem");
-    document.body.style.paddingBottom = "5.5rem";
+    const apply = () => {
+      const height = bannerRef.current?.offsetHeight ?? 0;
+      root.style.setProperty("--app-bottom-inset", `${height}px`);
+      document.body.style.paddingBottom = `${height}px`;
+    };
+    apply();
+    const observer = new ResizeObserver(apply);
+    observer.observe(bannerRef.current);
     return () => {
+      observer.disconnect();
       root.style.removeProperty("--app-bottom-inset");
       document.body.style.paddingBottom = previousPadding;
     };
@@ -36,6 +47,7 @@ export const DemoBanner = () => {
 
   return (
     <div
+      ref={bannerRef}
       role="status"
       className="fixed inset-x-0 bottom-0 z-[100] border-t border-warning/40 bg-warning/95 px-4 py-2.5 text-warning-foreground"
     >

@@ -11,6 +11,7 @@ import { COMPANY, paymentAccounts } from "@/lib/company";
 import { formatOre, VAT_RATE } from "@/lib/invoice";
 import { buildInvoiceDocument, buildReceiptDocument } from "@/lib/reports/invoiceDocuments";
 import { useInlineReport } from "@/components/reports/useInlineReport";
+import { LanguageLevelPicker } from "@/components/language/GlossaryText";
 import type { CustomerInvoiceRecord } from "@/data/types";
 import { CheckCircle2, Download, Loader2, Receipt } from "lucide-react";
 
@@ -134,6 +135,14 @@ const DashboardSettings = () => {
   return (
     <DashboardShell title="Inställningar">
       <div className="max-w-3xl space-y-6">
+        <WizardCard>
+          <WizardCardHeader
+            title="Språkprofil"
+            description="Hur CLEARANCE skriver till dig – i rapporter, analyser och kunskapsbanken. Om en text är svår att förstå är det systemet som ska anpassa sig, inte du."
+          />
+          <LanguageLevelPicker />
+        </WizardCard>
+
         <WizardCard>
           <WizardCardHeader
             title="Dina uppgifter"

@@ -2,6 +2,8 @@ import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { data } from "@/data";
 import { buildExecutiveSummary, type ActionHorizon } from "@/lib/executiveSummary";
+import { GlossaryText, SimplerLanguageSuggestion, useLanguageLevel } from "@/components/language/GlossaryText";
+import { LANGUAGE_LEVELS, setLanguageLevel } from "@/lib/language";
 import type { CaseRecord } from "@/data/types";
 import type { TimelineEvent } from "@/lib/crisisAnalysis";
 import { ArrowRight, Compass, Activity } from "lucide-react";
@@ -38,6 +40,10 @@ interface AiBriefingProps {
 }
 
 export const AiBriefing = ({ caseRecord, timeline }: AiBriefingProps) => {
+  // Läsarens språknivå styr presentationen av HELA rapporten. Innehållet
+  // är detsamma - motorn i src/lib/language.ts anpassar bara språket, och
+  // begreppen förblir klickbara på alla nivåer.
+  const level = useLanguageLevel();
   const { data: tasks } = useQuery({
     queryKey: ["case-tasks", caseRecord.id],
     queryFn: () => data.tasks.listByCase(caseRecord.id),
@@ -105,9 +111,33 @@ export const AiBriefing = ({ caseRecord, timeline }: AiBriefingProps) => {
         tillkommer.
       </p>
 
-      <p className="mt-4 text-base font-medium leading-relaxed text-foreground">
-        {summary.headline}
-      </p>
+      {/* Språkväxlingen: samma rapport, fyra språknivåer. */}
+      <div className="mt-3 flex flex-wrap gap-1.5" role="group" aria-label="Språknivå för rapporten">
+        {LANGUAGE_LEVELS.map((option) => (
+          <button
+            key={option.id}
+            type="button"
+            onClick={() => setLanguageLevel(option.id)}
+            aria-pressed={level === option.id}
+            className={`rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
+              level === option.id
+                ? "border-accent bg-accent text-accent-foreground"
+                : "border-border bg-card text-muted-foreground hover:border-accent/50"
+            }`}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="mt-3">
+        <SimplerLanguageSuggestion />
+      </div>
+
+      <GlossaryText
+        text={summary.headline}
+        className="mt-4 text-base font-medium leading-relaxed text-foreground"
+      />
 
       {summary.sections.map((section) => (
         <div key={section.id} className="mt-5">
@@ -115,12 +145,11 @@ export const AiBriefing = ({ caseRecord, timeline }: AiBriefingProps) => {
             {section.title}
           </h3>
           {section.paragraphs.map((paragraph) => (
-            <p
+            <GlossaryText
               key={paragraph.slice(0, 48)}
+              text={paragraph}
               className="mt-2 text-sm leading-relaxed text-foreground/90"
-            >
-              {paragraph}
-            </p>
+            />
           ))}
         </div>
       ))}
@@ -170,7 +199,7 @@ export const AiBriefing = ({ caseRecord, timeline }: AiBriefingProps) => {
           <Compass className="h-3.5 w-3.5" aria-hidden="true" />
           Rekommenderad strategi
         </h3>
-        <p className="mt-2 text-sm leading-relaxed text-foreground">{summary.strategy}</p>
+        <GlossaryText text={summary.strategy} className="mt-2 text-sm leading-relaxed text-foreground" />
       </div>
 
       <p className="mt-4 text-xs leading-relaxed text-muted-foreground">
