@@ -387,6 +387,58 @@ export type Database = {
           },
         ]
       }
+      professional_members: {
+        Row: {
+          id: string
+          professional_id: string
+          user_id: string
+          role: string
+          created_at: string
+          revoked_at: string | null
+        }
+        Insert: {
+          id?: string
+          professional_id: string
+          user_id?: string
+          role?: string
+          created_at?: string
+          revoked_at?: string | null
+        }
+        Update: {
+          revoked_at?: string | null
+          role?: string
+        }
+        Relationships: []
+      }
+      professional_invitations: {
+        Row: {
+          id: string
+          professional_id: string
+          email: string
+          role: string
+          invited_by: string
+          created_at: string
+          expires_at: string
+          accepted_at: string | null
+          accepted_by: string | null
+          revoked_at: string | null
+        }
+        Insert: {
+          id?: string
+          professional_id: string
+          email: string
+          role?: string
+          invited_by?: string
+          created_at?: string
+          expires_at?: string
+        }
+        Update: {
+          accepted_at?: string | null
+          accepted_by?: string | null
+          revoked_at?: string | null
+        }
+        Relationships: []
+      }
       case_notes: {
         Row: {
           id: string
@@ -1123,6 +1175,42 @@ export type Database = {
       reopen_case: {
         Args: { p_case_id: string }
         Returns: undefined
+      }
+      invite_firm_member: {
+        Args: { p_professional_id: string; p_email: string; p_role?: string }
+        Returns: string
+      }
+      revoke_firm_invitation: {
+        Args: { p_invitation_id: string }
+        Returns: undefined
+      }
+      my_firm_invitations: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          id: string
+          professional_id: string
+          firm_name: string
+          role: string
+          created_at: string
+        }[]
+      }
+      accept_firm_invitation: {
+        Args: { p_invitation_id: string }
+        Returns: string
+      }
+      remove_firm_member: {
+        Args: { p_member_id: string }
+        Returns: undefined
+      }
+      list_firm_team: {
+        Args: { p_professional_id: string }
+        Returns: {
+          id: string | null
+          user_id: string
+          email: string | null
+          role: string
+          created_at: string
+        }[]
       }
       set_plan_approval: {
         Args: { p_case_id: string; p_approved: boolean }

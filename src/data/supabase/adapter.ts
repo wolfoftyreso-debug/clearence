@@ -1467,6 +1467,70 @@ export const supabaseAdapter: DataPort = {
         createdAt: row.created_at,
       }));
     },
+    async listTeam(professionalId) {
+      const { data, error } = await supabase.rpc("list_firm_team", {
+        p_professional_id: professionalId,
+      });
+      if (error) throw error;
+      return (data ?? []).map((row) => ({
+        id: row.id,
+        userId: row.user_id,
+        email: row.email,
+        role: row.role as "admin" | "member",
+        createdAt: row.created_at,
+      }));
+    },
+    async listTeamInvitations(professionalId) {
+      const { data, error } = await supabase
+        .from("professional_invitations")
+        .select("*")
+        .eq("professional_id", professionalId)
+        .is("accepted_at", null)
+        .is("revoked_at", null)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return (data ?? []).map((row) => ({
+        id: row.id,
+        email: row.email,
+        role: row.role as "admin" | "member",
+        createdAt: row.created_at,
+      }));
+    },
+    async inviteTeamMember(professionalId, email, role) {
+      const { error } = await supabase.rpc("invite_firm_member", {
+        p_professional_id: professionalId,
+        p_email: email,
+        p_role: role,
+      });
+      if (error) throw error;
+    },
+    async revokeTeamInvitation(invitationId) {
+      const { error } = await supabase.rpc("revoke_firm_invitation", {
+        p_invitation_id: invitationId,
+      });
+      if (error) throw error;
+    },
+    async removeTeamMember(memberId) {
+      const { error } = await supabase.rpc("remove_firm_member", { p_member_id: memberId });
+      if (error) throw error;
+    },
+    async myFirmInvitations() {
+      const { data, error } = await supabase.rpc("my_firm_invitations");
+      if (error) throw error;
+      return (data ?? []).map((row) => ({
+        id: row.id,
+        professionalId: row.professional_id,
+        firmName: row.firm_name,
+        role: row.role as "admin" | "member",
+        createdAt: row.created_at,
+      }));
+    },
+    async acceptFirmInvitation(invitationId) {
+      const { error } = await supabase.rpc("accept_firm_invitation", {
+        p_invitation_id: invitationId,
+      });
+      if (error) throw error;
+    },
     async listClaims() {
       const { data, error } = await supabase.rpc("list_profile_claims");
       if (error) throw error;

@@ -5,6 +5,7 @@ import { DashboardShell } from "@/components/dashboard/DashboardShell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { data } from "@/data";
+import { useAuth } from "@/hooks/useAuth";
 import {
   CASE_ROLE_DESCRIPTIONS,
   CASE_ROLE_LABELS,
@@ -89,6 +90,58 @@ const SharesSection = ({ caseId }: { caseId: string }) => {
         ))}
       </ul>
     </section>
+  );
+};
+
+/**
+ * Kollega-genvägen: om den inloggade hör till en byrå med team visas
+ * kollegorna som snabbval under adressfältet. Ett klick fyller i adressen
+ * - inget mer. Teamet ger ALDRIG åtkomst i sig; inbjudan är per ärende
+ * och går genom exakt samma flöde som en manuellt ifylld adress.
+ */
+const TeamQuickPick = ({
+  current,
+  onPick,
+}: {
+  current: string;
+  onPick: (email: string) => void;
+}) => {
+  const { user } = useAuth();
+  const { data: myProfile } = useQuery({
+    queryKey: ["my-professional-profile"],
+    queryFn: () => data.professionals.getMyProfile(),
+    retry: false,
+  });
+  const { data: team } = useQuery({
+    queryKey: ["firm-team", myProfile?.id],
+    queryFn: () => data.professionals.listTeam(myProfile!.id),
+    enabled: !!myProfile,
+    retry: false,
+  });
+
+  const colleagues = (team ?? []).filter(
+    (m) => m.email && m.email !== user?.email?.toLowerCase(),
+  );
+  if (colleagues.length === 0) return null;
+
+  return (
+    <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+      <span className="text-xs text-muted-foreground">Från teamet:</span>
+      {colleagues.map((member) => (
+        <button
+          key={member.userId}
+          type="button"
+          onClick={() => onPick(member.email!)}
+          className={`rounded-full border px-2 py-0.5 text-xs transition-colors ${
+            current === member.email
+              ? "border-accent bg-accent/10 text-foreground"
+              : "border-border text-muted-foreground hover:border-accent hover:text-foreground"
+          }`}
+        >
+          {member.email}
+        </button>
+      ))}
+    </div>
   );
 };
 
@@ -270,6 +323,10 @@ const DashboardParticipants = () => {
                     placeholder="namn@bolaget.se"
                     className="mt-1"
                   />
+                  {/* Kollega-genvägen: byråns team ett klick bort. Teamet
+                      ger ingen automatisk åtkomst - genvägen fyller bara i
+                      adressen, inbjudan är fortfarande per ärende. */}
+                  <TeamQuickPick current={email} onPick={setEmail} />
                 </div>
                 <fieldset>
                   <legend className="text-sm font-medium text-foreground">

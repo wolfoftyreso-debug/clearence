@@ -575,6 +575,36 @@ export interface CaseNoteRecord {
   createdAt: string;
 }
 
+/**
+ * En rad i byråns team. id är null för den kopplade administratören - den
+ * raden är byråns ägarkoppling och kan inte tas bort som en vanlig medlem.
+ * Teammedlemskap ger ALDRIG ärendeåtkomst; den är per ärende via deltagarna.
+ */
+export interface FirmMemberRecord {
+  id: string | null;
+  userId: string;
+  email: string | null;
+  role: "admin" | "member";
+  createdAt: string;
+}
+
+/** En öppen teaminbjudan, som byrån ser den. */
+export interface FirmInvitationRecord {
+  id: string;
+  email: string;
+  role: "admin" | "member";
+  createdAt: string;
+}
+
+/** En inbjudan ställd till den inloggade, med byråns namn. */
+export interface MyFirmInvitation {
+  id: string;
+  professionalId: string;
+  firmName: string;
+  role: "admin" | "member";
+  createdAt: string;
+}
+
 /** Nedlagd tid i ett ärende. Den inloggades egna poster, aldrig andras. */
 export interface TimeEntryRecord {
   id: string;

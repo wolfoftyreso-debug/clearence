@@ -1544,6 +1544,115 @@ begin
   raise notice 'ok    withdrawing the approval clears both fields together';
 end $$;
 
+/* ========================================================================== */
+/* Byråteamet: flera inloggningar per byrå                                    */
+/* ========================================================================== */
+
+reset role;
+-- En byrå med 4444 som kopplad administratör (som efter ett godkänt anspråk).
+insert into public.professionals (id, name, category, verified, source, user_id)
+values ('f0000000-0000-0000-0000-000000000099', 'Teambyrån Demo', 'affarsjurist', true,
+        'application', '44444444-4444-4444-4444-444444444444');
+set local role authenticated;
+
+-- Administratören ser sitt team: en rad, hen själv.
+select pg_temp.as_user('44444444-4444-4444-4444-444444444444');
+select pg_temp.check('the linked account is the implicit admin',
+  (select count(*) from public.list_firm_team('f0000000-0000-0000-0000-000000000099')), 1::bigint);
+
+-- Utanförstående ser ingenting och kan inte bjuda in.
+select pg_temp.as_user('22222222-2222-2222-2222-222222222222');
+select pg_temp.check('an outsider sees no team',
+  (select count(*) from public.list_firm_team('f0000000-0000-0000-0000-000000000099')), 0::bigint);
+do $$
+begin
+  begin
+    perform public.invite_firm_member('f0000000-0000-0000-0000-000000000099', 'ingen@utanfor.se');
+    raise exception 'FAIL  en utomstående kunde bjuda in till byrån';
+  exception when others then
+    if sqlerrm like 'FAIL%' then raise; end if;
+    raise notice 'ok    only the firm admin can invite colleagues';
+  end;
+  begin
+    insert into public.professional_members (professional_id, user_id)
+    values ('f0000000-0000-0000-0000-000000000099', '22222222-2222-2222-2222-222222222222');
+    raise exception 'FAIL  rå insert i teamet gick igenom';
+  exception when others then
+    if sqlerrm like 'FAIL%' then raise; end if;
+    raise notice 'ok    team rows cannot be written directly';
+  end;
+end $$;
+
+-- Administratören bjuder in; dubblettinbjudan avvisas.
+select pg_temp.as_user('44444444-4444-4444-4444-444444444444');
+select public.invite_firm_member('f0000000-0000-0000-0000-000000000099', 'Ingen@Utanfor.se');
+do $$
+begin
+  begin
+    perform public.invite_firm_member('f0000000-0000-0000-0000-000000000099', 'ingen@utanfor.se');
+    raise exception 'FAIL  en dubblettinbjudan accepterades';
+  exception when others then
+    if sqlerrm like 'FAIL%' then raise; end if;
+    raise notice 'ok    a duplicate open invitation is refused';
+  end;
+end $$;
+
+-- Bara adressaten ser inbjudan.
+select pg_temp.as_user('55555555-5555-5555-5555-555555555555');
+select pg_temp.check('other users see no firm invitations',
+  (select count(*) from public.my_firm_invitations()), 0::bigint);
+select pg_temp.as_user('66666666-6666-6666-6666-666666666666');
+select pg_temp.check('the invitee sees their invitation',
+  (select count(*) from public.my_firm_invitations()), 1::bigint);
+
+-- Accept: medlem i teamet; dubbelaccept avvisas.
+do $$
+declare v_id uuid;
+begin
+  select id into v_id from public.my_firm_invitations() limit 1;
+  perform public.accept_firm_invitation(v_id);
+  raise notice 'ok    the invitee joins the team';
+  begin
+    perform public.accept_firm_invitation(v_id);
+    raise exception 'FAIL  inbjudan kunde användas två gånger';
+  exception when others then
+    if sqlerrm like 'FAIL%' then raise; end if;
+    raise notice 'ok    an invitation can only be used once';
+  end;
+end $$;
+select pg_temp.check('the team now has two active members',
+  (select count(*) from public.list_firm_team('f0000000-0000-0000-0000-000000000099')), 2::bigint);
+
+-- En vanlig medlem kan inte bjuda in.
+do $$
+begin
+  begin
+    perform public.invite_firm_member('f0000000-0000-0000-0000-000000000099', 'agnes@bolag-a.se');
+    raise exception 'FAIL  en medlem utan adminroll kunde bjuda in';
+  exception when others then
+    if sqlerrm like 'FAIL%' then raise; end if;
+    raise notice 'ok    a plain member cannot invite';
+  end;
+end $$;
+
+-- Teammedlemskap ger INTE ärendeåtkomst: 6666 är nu med i byrån men ser
+-- fortfarande inga ärenden. Detta är hela poängen med gränsen.
+select pg_temp.check('firm membership grants NO case access',
+  (select count(*) from public.cases), 0::bigint);
+
+-- Administratören tar bort medlemmen.
+select pg_temp.as_user('44444444-4444-4444-4444-444444444444');
+do $$
+declare v_member uuid;
+begin
+  select id into v_member from public.professional_members
+  where professional_id = 'f0000000-0000-0000-0000-000000000099'
+    and user_id = '66666666-6666-6666-6666-666666666666';
+  perform public.remove_firm_member(v_member);
+end $$;
+select pg_temp.check('a removed member leaves the team',
+  (select count(*) from public.list_firm_team('f0000000-0000-0000-0000-000000000099')), 1::bigint);
+
 reset role;
 select 'ALL RLS TESTS PASSED' as result;
 

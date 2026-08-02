@@ -248,6 +248,194 @@ const ProfileForm = ({ profile }: { profile: MyProfessionalProfile }) => {
   );
 };
 
+/**
+ * Inbjudningar till MIG: kollegan som fått en teaminbjudan ser den här och
+ * tackar ja - utan egen profil, utan länkmagi. Adressen är nyckeln, precis
+ * som i ärendeinbjudningarna.
+ */
+const MyFirmInvitations = () => {
+  const queryClient = useQueryClient();
+  const { data: invitations } = useQuery({
+    queryKey: ["my-firm-invitations"],
+    queryFn: () => data.professionals.myFirmInvitations(),
+    retry: false,
+  });
+  const accept = useMutation({
+    mutationFn: (id: string) => data.professionals.acceptFirmInvitation(id),
+    onSuccess: () => queryClient.invalidateQueries(),
+  });
+
+  if (!invitations || invitations.length === 0) return null;
+  return (
+    <div className="mb-6 rounded-md border border-accent/40 bg-accent/5 p-4">
+      {invitations.map((invitation) => (
+        <div key={invitation.id} className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-medium text-foreground">
+              Du är inbjuden till {invitation.firmName}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Som {invitation.role === "admin" ? "administratör" : "teammedlem"}. Teamet ger
+              inte åtkomst till klienters ärenden – den bjuds du in till per ärende.
+            </p>
+          </div>
+          <Button
+            variant="accent"
+            size="sm"
+            disabled={accept.isPending}
+            onClick={() => accept.mutate(invitation.id)}
+          >
+            Gå med i teamet
+          </Button>
+        </div>
+      ))}
+      {accept.isError && (
+        <p className="mt-2 text-sm text-destructive" role="alert">
+          Inbjudan kunde inte användas. Är du inloggad med rätt adress?
+        </p>
+      )}
+    </div>
+  );
+};
+
+/** Byråns team: medlemmarna, de öppna inbjudningarna och inbjudningsformuläret. */
+const TeamSection = ({ professionalId }: { professionalId: string }) => {
+  const queryClient = useQueryClient();
+  const [email, setEmail] = useState("");
+  const [role, setRole] = useState<"admin" | "member">("member");
+  const [error, setError] = useState<string | null>(null);
+
+  const { data: team } = useQuery({
+    queryKey: ["firm-team", professionalId],
+    queryFn: () => data.professionals.listTeam(professionalId),
+  });
+  const { data: invitations } = useQuery({
+    queryKey: ["firm-invitations", professionalId],
+    queryFn: () => data.professionals.listTeamInvitations(professionalId),
+  });
+  const refresh = () => {
+    queryClient.invalidateQueries({ queryKey: ["firm-team", professionalId] });
+    queryClient.invalidateQueries({ queryKey: ["firm-invitations", professionalId] });
+  };
+  const invite = useMutation({
+    mutationFn: () => data.professionals.inviteTeamMember(professionalId, email, role),
+    onSuccess: () => {
+      setEmail("");
+      setError(null);
+      refresh();
+    },
+    onError: (e) => setError(e instanceof Error ? e.message : "Inbjudan kunde inte skickas."),
+  });
+  const revoke = useMutation({
+    mutationFn: (id: string) => data.professionals.revokeTeamInvitation(id),
+    onSuccess: refresh,
+  });
+  const remove = useMutation({
+    mutationFn: (id: string) => data.professionals.removeTeamMember(id),
+    onSuccess: refresh,
+  });
+
+  return (
+    <WizardCard>
+      <WizardCardHeader
+        title="Teamet"
+        description="Byråns inloggningar. Teamet ger INTE åtkomst till klienters ärenden – kollegor bjuds in per ärende, under Deltagare."
+      />
+      <ul className="space-y-2">
+        {(team ?? []).map((member) => (
+          <li
+            key={member.id ?? "linked-admin"}
+            className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border p-3"
+          >
+            <div className="min-w-0">
+              <p className="truncate text-sm font-medium text-foreground">{member.email}</p>
+              <p className="text-xs text-muted-foreground">
+                {member.role === "admin" ? "Administratör" : "Teammedlem"}
+                {member.id === null && " · byråns kopplade konto"}
+              </p>
+            </div>
+            {member.id !== null && (
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={remove.isPending}
+                onClick={() => remove.mutate(member.id!)}
+              >
+                Ta bort
+              </Button>
+            )}
+          </li>
+        ))}
+      </ul>
+
+      {(invitations ?? []).length > 0 && (
+        <div className="mt-4">
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            Öppna inbjudningar
+          </p>
+          <ul className="mt-2 space-y-2">
+            {(invitations ?? []).map((invitation) => (
+              <li
+                key={invitation.id}
+                className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-secondary/40 p-3"
+              >
+                <div className="min-w-0">
+                  <p className="truncate text-sm text-foreground">{invitation.email}</p>
+                  <p className="text-xs text-muted-foreground">
+                    Väntar på svar · {invitation.role === "admin" ? "administratör" : "teammedlem"}
+                  </p>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={revoke.isPending}
+                  onClick={() => revoke.mutate(invitation.id)}
+                >
+                  Återkalla
+                </Button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <form
+        className="mt-4 flex flex-wrap items-center gap-2"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (email.trim().includes("@")) invite.mutate();
+        }}
+      >
+        <Input
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="kollega@byran.se"
+          aria-label="Kollegans e-postadress"
+          className="min-w-0 flex-1"
+        />
+        <select
+          value={role}
+          onChange={(e) => setRole(e.target.value as "admin" | "member")}
+          aria-label="Roll i teamet"
+          className="rounded-md border border-border bg-card px-2 py-2 text-sm text-foreground"
+        >
+          <option value="member">Teammedlem</option>
+          <option value="admin">Administratör</option>
+        </select>
+        <Button type="submit" variant="outline" size="sm" disabled={invite.isPending}>
+          Bjud in kollega
+        </Button>
+      </form>
+      {error && (
+        <p className="mt-2 text-sm text-destructive" role="alert">
+          {error}
+        </p>
+      )}
+    </WizardCard>
+  );
+};
+
 const AdvisorProfile = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -278,6 +466,8 @@ const AdvisorProfile = () => {
         ) : isLoading ? (
           <Loader2 className="h-6 w-6 animate-spin text-accent" aria-hidden="true" />
         ) : !profile ? (
+          <>
+          <MyFirmInvitations />
           <WizardCard>
             <WizardCardHeader
               title="Ingen profil är kopplad till ditt konto"
@@ -292,8 +482,13 @@ const AdvisorProfile = () => {
               </Button>
             </div>
           </WizardCard>
+          </>
         ) : (
-          <ProfileForm profile={profile} />
+          <div className="space-y-5">
+            <MyFirmInvitations />
+            <ProfileForm profile={profile} />
+            <TeamSection professionalId={profile.id} />
+          </div>
         )}
       </main>
       <Footer />

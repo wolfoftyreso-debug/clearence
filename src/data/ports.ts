@@ -9,6 +9,9 @@ import type {
   CaseInvitationRecord,
   CaseMemberRecord,
   CaseNoteRecord,
+  FirmInvitationRecord,
+  FirmMemberRecord,
+  MyFirmInvitation,
   TimeEntryRecord,
   CaseMessage,
   CaseRecord,
@@ -157,6 +160,21 @@ export interface ProfessionalsPort {
   claimProfile(input: { professionalId: string; motivation: string; contact: string }): Promise<void>;
   /** Den inloggades egna anspråk, för att visa "under granskning" i katalogen. */
   listMyClaims(): Promise<ProfileClaimRecord[]>;
+
+  /*
+   * Byråteamet: flera inloggningar per byrå. Teammedlemskap ger ALDRIG
+   * ärendeåtkomst - den är per ärende via deltagarna, alltid. Reglerna
+   * (endast admin bjuder in, accept kräver adressmatchning) prövas i
+   * backend.
+   */
+  listTeam(professionalId: string): Promise<FirmMemberRecord[]>;
+  listTeamInvitations(professionalId: string): Promise<FirmInvitationRecord[]>;
+  inviteTeamMember(professionalId: string, email: string, role: "admin" | "member"): Promise<void>;
+  revokeTeamInvitation(invitationId: string): Promise<void>;
+  removeTeamMember(memberId: string): Promise<void>;
+  /** Inbjudningar ställda till den inloggades adress. */
+  myFirmInvitations(): Promise<MyFirmInvitation[]>;
+  acceptFirmInvitation(invitationId: string): Promise<void>;
 
   /* Drift. Behörigheten prövas i databasen, inte här. */
 

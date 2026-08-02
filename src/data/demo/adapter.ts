@@ -26,6 +26,7 @@ import type {
   CaseMessage,
   CaseNoteRecord,
   CaseRecord,
+  FirmMemberRecord,
   ConversationRecord,
   CaseTask,
   TimeEntryRecord,
@@ -85,6 +86,16 @@ interface DemoState {
   usageCharges: UsageChargeRecord[];
   caseNotes: (CaseNoteRecord & { authorUserId: string })[];
   timeEntries: (TimeEntryRecord & { userId: string })[];
+  firmMembers: (FirmMemberRecord & { id: string; professionalId: string })[];
+  firmInvitations: {
+    id: string;
+    professionalId: string;
+    email: string;
+    role: "admin" | "member";
+    createdAt: string;
+    acceptedAt: string | null;
+    revokedAt: string | null;
+  }[];
   /** Byråns egna profiländringar, lagda ovanpå demodatat per profil-id. */
   professionalEdits: Record<string, ProfessionalProfileUpdate>;
 }
@@ -114,6 +125,8 @@ const emptyState = (): DemoState => ({
   usageCharges: [],
   caseNotes: [],
   timeEntries: [],
+  firmMembers: [],
+  firmInvitations: [],
   professionalEdits: {},
 });
 
@@ -628,6 +641,43 @@ const seedForAdvisor = (userId: string) => {
       revokedAt: null,
     },
   ]);
+  // Byråkopplingen: juristen driver Demo Obeståndsjuridik (godkänt anspråk
+  // = kopplad administratör). En kollega i teamet och en öppen inbjudan,
+  // så teamvyn visar hela flödet direkt.
+  state.profileClaims = [
+    {
+      id: uid(),
+      professionalId: "demo-pro-2",
+      status: "approved",
+      reviewNote: null,
+      createdAt: now(),
+      userId,
+      claimantEmail: DEMO_ACCOUNTS.advisor,
+      motivation: "Demobyråns egen profil.",
+      contact: DEMO_ACCOUNTS.advisor,
+    },
+  ];
+  state.firmMembers = [
+    {
+      id: uid(),
+      professionalId: "demo-pro-2",
+      userId: "demo-kollega-1",
+      email: "kollega@clearance.demo",
+      role: "member",
+      createdAt: now(),
+    },
+  ];
+  state.firmInvitations = [
+    {
+      id: uid(),
+      professionalId: "demo-pro-2",
+      email: "ny.kollega@clearance.demo",
+      role: "member",
+      createdAt: now(),
+      acceptedAt: null,
+      revokedAt: null,
+    },
+  ];
 };
 
 /**
@@ -1702,6 +1752,104 @@ export const demoAdapter: DataPort = {
           contact,
         },
       ];
+      save();
+    },
+    // Byråteamet i demon: samma regler som funktionerna i databasen -
+    // den kopplade inloggningen är implicit administratör, bara admin
+    // bjuder in, accept kräver att adressen stämmer.
+    async listTeam(professionalId) {
+      const linked = state.profileClaims.find(
+        (c) => c.professionalId === professionalId && c.status === "approved",
+      );
+      const isMember =
+        linked?.userId === state.user?.id ||
+        state.firmMembers.some(
+          (m) => m.professionalId === professionalId && m.userId === state.user?.id,
+        );
+      if (!isMember) return [];
+      const rows: FirmMemberRecord[] = [];
+      if (linked) {
+        rows.push({
+          id: null,
+          userId: linked.userId,
+          email: linked.claimantEmail,
+          role: "admin",
+          createdAt: linked.createdAt,
+        });
+      }
+      for (const m of state.firmMembers) {
+        if (m.professionalId === professionalId) {
+          rows.push({ id: m.id, userId: m.userId, email: m.email, role: m.role, createdAt: m.createdAt });
+        }
+      }
+      return rows;
+    },
+    async listTeamInvitations(professionalId) {
+      return state.firmInvitations
+        .filter((i) => i.professionalId === professionalId && !i.acceptedAt && !i.revokedAt)
+        .map(({ id, email, role, createdAt }) => ({ id, email, role, createdAt }));
+    },
+    async inviteTeamMember(professionalId, email, role) {
+      const normalized = email.trim().toLowerCase();
+      if (
+        state.firmInvitations.some(
+          (i) => i.professionalId === professionalId && i.email === normalized && !i.acceptedAt && !i.revokedAt,
+        )
+      ) {
+        throw new Error("Adressen har redan en öppen inbjudan");
+      }
+      state.firmInvitations.push({
+        id: uid(),
+        professionalId,
+        email: normalized,
+        role,
+        createdAt: now(),
+        acceptedAt: null,
+        revokedAt: null,
+      });
+      save();
+    },
+    async revokeTeamInvitation(invitationId) {
+      const invitation = state.firmInvitations.find((i) => i.id === invitationId);
+      if (invitation) {
+        invitation.revokedAt = now();
+        save();
+      }
+    },
+    async removeTeamMember(memberId) {
+      state.firmMembers = state.firmMembers.filter((m) => m.id !== memberId);
+      save();
+    },
+    async myFirmInvitations() {
+      const email = state.user?.email?.toLowerCase();
+      if (!email) return [];
+      return state.firmInvitations
+        .filter((i) => i.email === email && !i.acceptedAt && !i.revokedAt)
+        .map((i) => ({
+          id: i.id,
+          professionalId: i.professionalId,
+          firmName:
+            DEMO_PROFESSIONALS.find((p) => p.id === i.professionalId)?.company ?? "Byrån",
+          role: i.role,
+          createdAt: i.createdAt,
+        }));
+    },
+    async acceptFirmInvitation(invitationId) {
+      const invitation = state.firmInvitations.find((i) => i.id === invitationId);
+      if (!invitation || !state.user?.email || invitation.email !== state.user.email.toLowerCase()) {
+        throw new Error("Inbjudan finns inte eller är ställd till en annan adress");
+      }
+      if (invitation.acceptedAt) throw new Error("Inbjudan är redan använd");
+      if (invitation.revokedAt) throw new Error("Inbjudan är återkallad");
+      invitation.acceptedAt = now();
+      state.firmMembers.push({
+        id: uid(),
+        professionalId: invitation.professionalId,
+        userId: state.user.id,
+        email: invitation.email,
+        role: invitation.role,
+        createdAt: now(),
+      });
       save();
     },
     async listMyClaims() {
