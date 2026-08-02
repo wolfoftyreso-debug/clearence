@@ -26,7 +26,7 @@ const Disclaimer = () => (
 );
 
 const KnowledgeIndex = () => (
-  <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-12">
+  <main className="mx-auto w-full max-w-3xl flex-1 px-4 pb-12 pt-24">
     <h1 className="font-display text-3xl text-foreground">Kunskap</h1>
     <p className="mt-2 leading-relaxed text-muted-foreground">
       Företagskrisens regler, förklarade med källhänvisningar. Vad lagen
@@ -63,7 +63,7 @@ const KnowledgeArticlePage = ({ slug }: { slug: string }) => {
 
   if (!article) {
     return (
-      <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-12">
+      <main className="mx-auto w-full max-w-3xl flex-1 px-4 pb-12 pt-24">
         <h1 className="font-display text-2xl text-foreground">Artikeln finns inte</h1>
         <p className="mt-2 text-muted-foreground">
           <Link to="/kunskap" className="text-accent underline">
@@ -75,7 +75,7 @@ const KnowledgeArticlePage = ({ slug }: { slug: string }) => {
   }
 
   return (
-    <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-12">
+    <main className="mx-auto w-full max-w-3xl flex-1 px-4 pb-12 pt-24">
       <nav aria-label="Brödsmulor" className="text-sm text-muted-foreground">
         <Link to="/kunskap" className="underline-offset-4 hover:underline">
           Kunskap

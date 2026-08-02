@@ -53,11 +53,22 @@ export const DemoBanner = () => {
     >
       <div className="container flex items-start gap-2.5 px-0">
         <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0" aria-hidden="true" />
+        {/* Kort på mobil, fullständig på större skärmar: varningen får inte
+            försvinna, men den får heller inte täcka en tredjedel av en liten
+            skärm. Kärnan - påhittat, bedöm inget verkligt bolag - finns i
+            båda varianterna. */}
         <p className="text-xs leading-relaxed">
-          <span className="font-semibold">Demoläge.</span> Allt du ser är påhittat –
-          bolaget, siffrorna och rådgivarna finns inte. Inloggningen godtar vilket
-          lösenord som helst och data sparas bara i din webbläsare. Använd inte det
-          här för att bedöma ett verkligt bolag.
+          <span className="font-semibold">Demoläge.</span>{" "}
+          <span className="sm:hidden">
+            Allt är påhittat och sparas bara i din webbläsare. Bedöm inte ett
+            verkligt bolag med det här.
+          </span>
+          <span className="hidden sm:inline">
+            Allt du ser är påhittat – bolaget, siffrorna och rådgivarna finns
+            inte. Inloggningen godtar vilket lösenord som helst och data sparas
+            bara i din webbläsare. Använd inte det här för att bedöma ett
+            verkligt bolag.
+          </span>
         </p>
         {!user && (
           <Link
