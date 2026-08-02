@@ -12,8 +12,10 @@ import { analyseCrisis } from "@/lib/crisisAnalysis";
 import type { UserRole } from "@/data/types";
 import {
   Banknote,
+  BarChart3,
   Bell,
   Briefcase,
+  Building2,
   FileText,
   Gauge,
   History,
@@ -24,6 +26,7 @@ import {
   type LucideIcon,
   Menu,
   MessageSquare,
+  Scale,
   Settings,
   TrendingDown,
   UserPlus,
@@ -493,6 +496,33 @@ export const DashboardShell = ({ children, title, actions }: DashboardShellProps
                 >
                   <Users className="h-5 w-5 flex-shrink-0" aria-hidden="true" />
                   <span className="min-w-0 flex-1 text-left">Kunder</span>
+                </Link>
+                <Link
+                  to="/admin/foretag"
+                  onClick={() => setSidebarOpen(false)}
+                  aria-current={pathname === "/admin/foretag" ? "page" : undefined}
+                  className="flex w-full items-center gap-3 rounded-md px-4 py-3 text-sm font-medium text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                >
+                  <Building2 className="h-5 w-5 flex-shrink-0" aria-hidden="true" />
+                  <span className="min-w-0 flex-1 text-left">Företag</span>
+                </Link>
+                <Link
+                  to="/admin/radgivare"
+                  onClick={() => setSidebarOpen(false)}
+                  aria-current={pathname === "/admin/radgivare" ? "page" : undefined}
+                  className="flex w-full items-center gap-3 rounded-md px-4 py-3 text-sm font-medium text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                >
+                  <Scale className="h-5 w-5 flex-shrink-0" aria-hidden="true" />
+                  <span className="min-w-0 flex-1 text-left">Rådgivare</span>
+                </Link>
+                <Link
+                  to="/admin/statistik"
+                  onClick={() => setSidebarOpen(false)}
+                  aria-current={pathname === "/admin/statistik" ? "page" : undefined}
+                  className="flex w-full items-center gap-3 rounded-md px-4 py-3 text-sm font-medium text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                >
+                  <BarChart3 className="h-5 w-5 flex-shrink-0" aria-hidden="true" />
+                  <span className="min-w-0 flex-1 text-left">Statistik</span>
                 </Link>
               </>
             )}

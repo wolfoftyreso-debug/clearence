@@ -18,7 +18,7 @@ const BASE = process.argv[2] ?? "http://127.0.0.1:4173";
 const ROUTES = [
   "/", "/wizard", "/kbr", "/likviditetsplan", "/marketplace",
   "/for-radgivare", "/login", "/dashboard", "/dashboard/liquidity",
-  "/mina-forfragningar", "/om", "/kontakt", "/admin", "/admin/inkorg", "/admin/kunder", "/admin/ansokningar",
+  "/mina-forfragningar", "/om", "/kontakt", "/admin", "/admin/inkorg", "/admin/kunder", "/admin/ansokningar", "/admin/foretag", "/admin/radgivare", "/admin/statistik",
   "/dashboard/dokument", "/dashboard/meddelanden", "/dashboard/installningar", "/dashboard/kreditunderlag",
   "/dashboard/deltagare", "/dashboard/handelser", "/arenden", "/kunskap", "/kunskap/kontrollbalansrakning", "/byraprofil",
 ];

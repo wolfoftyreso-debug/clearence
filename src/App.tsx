@@ -35,6 +35,9 @@ const DashboardAudit = lazy(() => import("./pages/DashboardAudit"));
 const PractitionerCases = lazy(() => import("./pages/PractitionerCases"));
 const AdminCustomers = lazy(() => import("./pages/AdminCustomers"));
 const AdminApplications = lazy(() => import("./pages/AdminApplications"));
+const AdminCompanies = lazy(() => import("./pages/AdminCompanies"));
+const AdminAdvisors = lazy(() => import("./pages/AdminAdvisors"));
+const AdminStats = lazy(() => import("./pages/AdminStats"));
 const DashboardDocuments = lazy(() => import("./pages/DashboardDocuments"));
 const DashboardMessages = lazy(() => import("./pages/DashboardMessages"));
 const DashboardSettings = lazy(() => import("./pages/DashboardSettings"));
@@ -183,6 +186,30 @@ const App = () => (
                   element={
                     <ProtectedRoute>
                       <AdminApplications />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/admin/foretag"
+                  element={
+                    <ProtectedRoute>
+                      <AdminCompanies />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/admin/radgivare"
+                  element={
+                    <ProtectedRoute>
+                      <AdminAdvisors />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/admin/statistik"
+                  element={
+                    <ProtectedRoute>
+                      <AdminStats />
                     </ProtectedRoute>
                   }
                 />
