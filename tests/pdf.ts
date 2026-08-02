@@ -12,6 +12,7 @@ import { renderReportPdf } from "../src/lib/reports/pdf";
 import { boardMinutesKbr, TEMPLATES, templateToPdf } from "../src/lib/documentTemplates";
 import { buildCrisisReport, buildKbrReport, buildLiquidityReport } from "../src/lib/reports/builders";
 import { buildInvoiceDocument, buildReceiptDocument } from "../src/lib/reports/invoiceDocuments";
+import { buildTimeBasisReport } from "../src/lib/reports/timeBasis";
 import { analyseCrisis } from "../src/lib/crisisAnalysis";
 import { projectLiquidity } from "../src/lib/liquidityPlan";
 import { COMPANY } from "../src/lib/company";
@@ -213,6 +214,32 @@ for (const template of TEMPLATES) {
     ["UTKAST"],
   );
 }
+
+/* --- fakturaunderlaget ur tidsposterna ------------------------------------ */
+const timeBasis = buildTimeBasisReport({
+  companyName: "Demobolaget AB",
+  orgNumber: "556012-3456",
+  caseId: "demo-case-1",
+  firmName: "Demo Juristbyrå",
+  entries: [
+    { id: "t1", caseId: "demo-case-1", minutes: 90, note: "Genomgång av rekonstruktionsplanen", occurredOn: "2026-08-01", createdAt: "2026-08-01T10:00:00.000Z" },
+    { id: "t2", caseId: "demo-case-1", minutes: 30, note: null, occurredOn: "2026-08-02", createdAt: "2026-08-02T10:00:00.000Z" },
+  ],
+  hourlyRateSek: 1800,
+  vatRatePercent: 25,
+  generatedAt: "2026-08-02T12:00:00.000Z",
+});
+// 120 min à 1800 kr/h = 3600 kr netto; moms 25 % = 900 kr; brutto 4500 kr.
+const tbText = JSON.stringify(timeBasis).replace(/ /g, " ");
+check("tidsunderlag: nettot beräknas ur minuter och timpris", tbText.includes("3 600 kr"));
+check("tidsunderlag: moms och brutto stämmer", tbText.includes("4 500 kr"));
+check("tidsunderlag: timpriset skrivs ut som byråns egen uppgift",
+  tbText.includes("byråns egen uppgift"));
+check("tidsunderlag: underlaget kallar sig inte faktura",
+  timeBasis.disclaimer.includes("inte en faktura"));
+check("tidsunderlag: post utan beskrivning får standardtext",
+  tbText.includes("Arbete i ärendet"));
+validatePdf("tidsunderlag", renderReportPdf(timeBasis), ["Fakturaunderlag"]);
 
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

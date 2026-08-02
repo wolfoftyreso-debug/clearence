@@ -49,6 +49,20 @@ await page.waitForTimeout(800);
 body = await page.innerText("body");
 check("tiden loggas och summeras", /2 h/.test(body) && /Samtal med företrädaren/.test(body));
 
+// 3b. Fakturaunderlaget: timpris in → underlaget öppnas i visaren med
+// rätt summering (2 h à 1800 = 3600 kr exkl. moms).
+await page.fill('input[aria-label="Byråns timpris i kronor"]', "1800");
+await page.click('button:has-text("Fakturaunderlag")');
+await page.waitForTimeout(1500);
+const viewerFrame = page.frames().find((f) => f !== page.mainFrame());
+const frameText = viewerFrame ? await viewerFrame.evaluate(() => document.body?.innerText ?? "") : "";
+const normalized = frameText.replace(/ /g, " ");
+check("fakturaunderlaget öppnas i visaren", /Fakturaunderlag/.test(normalized), normalized.slice(0, 150));
+check("summeringen räknar rätt", /3 600 kr/.test(normalized) && /4 500 kr/.test(normalized));
+check("underlaget är inte en faktura", /inte en faktura/.test(normalized));
+await page.click('button:has-text("Stäng")');
+await page.waitForTimeout(600);
+
 // 4. Begär komplettering.
 await page.fill('input[aria-label="Vad behöver kompletteras?"]', "Senaste kundreskontran");
 await page.click('button:has-text("Skicka begäran")');

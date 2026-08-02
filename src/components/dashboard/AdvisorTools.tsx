@@ -6,6 +6,8 @@ import { CheckCircle2, Clock, FileQuestion, Loader2, StickyNote, Trash2 } from "
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { ReportButton } from "@/components/reports/ReportButton";
+import { buildTimeBasisReport } from "@/lib/reports/timeBasis";
 import { data } from "@/data";
 import type { CaseRecord } from "@/data/types";
 
@@ -119,10 +121,17 @@ const NotesTool = ({ caseId }: { caseId: string }) => {
   );
 };
 
-const TimeTool = ({ caseId }: { caseId: string }) => {
+/** Byråns egna underlagsparametrar, ihågkomna på enheten mellan besök. */
+const RATE_KEY = "clearance-time-rate";
+const VAT_KEY = "clearance-time-vat";
+
+const TimeTool = ({ caseRecord }: { caseRecord: CaseRecord }) => {
+  const caseId = caseRecord.id;
   const queryClient = useQueryClient();
   const [minutes, setMinutes] = useState("");
   const [note, setNote] = useState("");
+  const [rate, setRate] = useState(() => localStorage.getItem(RATE_KEY) ?? "");
+  const [vat, setVat] = useState(() => localStorage.getItem(VAT_KEY) ?? "25");
   const { data: entries } = useQuery({
     queryKey: ["time-entries", caseId],
     queryFn: () => data.advisorTools.listTime(caseId),
@@ -217,6 +226,67 @@ const TimeTool = ({ caseId }: { caseId: string }) => {
             </li>
           ))}
         </ul>
+      )}
+
+      {/* Fakturaunderlaget: byråns egen fakturering, ur de loggade
+          posterna. Timpris och moms är byråns egna uppgifter - de skrivs
+          in här och ut i dokumentet, aldrig ur plattformens parametrar. */}
+      {(entries ?? []).length > 0 && (
+        <div className="mt-4 border-t border-border pt-3">
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            Fakturaunderlag
+          </p>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <Input
+              value={rate}
+              onChange={(e) => {
+                setRate(e.target.value);
+                localStorage.setItem(RATE_KEY, e.target.value);
+              }}
+              inputMode="numeric"
+              placeholder="Timpris kr/h"
+              aria-label="Byråns timpris i kronor"
+              className="w-28 text-right tabular-nums"
+            />
+            <Input
+              value={vat}
+              onChange={(e) => {
+                setVat(e.target.value);
+                localStorage.setItem(VAT_KEY, e.target.value);
+              }}
+              inputMode="numeric"
+              placeholder="Moms %"
+              aria-label="Momssats i procent"
+              className="w-20 text-right tabular-nums"
+            />
+            {Number(rate) > 0 && Number(vat) >= 0 && Number(vat) <= 100 ? (
+              <ReportButton
+                label="Fakturaunderlag"
+                variant="outline"
+                build={() =>
+                  buildTimeBasisReport({
+                    companyName: caseRecord.companyName,
+                    orgNumber: caseRecord.orgNumber,
+                    caseId,
+                    firmName: null,
+                    entries: entries ?? [],
+                    hourlyRateSek: Number(rate),
+                    vatRatePercent: Number(vat),
+                    generatedAt: new Date().toISOString(),
+                  })
+                }
+              />
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                Ange ditt timpris så kan underlaget skapas.
+              </p>
+            )}
+          </div>
+          <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
+            Ett underlag för din egen fakturering – fakturan ställer byrån ut
+            i sitt eget system.
+          </p>
+        </div>
       )}
     </section>
   );
@@ -354,7 +424,7 @@ export const AdvisorTools = ({ caseRecord }: { caseRecord: CaseRecord }) => {
       </p>
       <div className="mt-3 grid grid-cols-1 gap-4 lg:grid-cols-2">
         <NotesTool caseId={caseId} />
-        <TimeTool caseId={caseId} />
+        <TimeTool caseRecord={caseRecord} />
         <CompletionTool caseId={caseId} />
         <ApprovalTool caseRecord={caseRecord} />
       </div>
