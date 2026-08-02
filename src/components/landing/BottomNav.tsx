@@ -114,7 +114,22 @@ export const BottomNav = () => {
           <LogIn className="h-5 w-5" aria-hidden="true" />
           {user ? "Mina sidor" : "Logga in"}
         </button>
-        <button type="button" className={item} aria-expanded={panel === "settings"} onClick={() => setPanel(panel === "settings" ? null : "settings")}>
+        {/* Inloggade har sina riktiga inställningar under Mina sidor -
+            dit leder knappen. Utan konto finns bara språkprofilen, och den
+            visas då direkt här i stället för en inloggningsvägg. */}
+        <button
+          type="button"
+          className={item}
+          aria-expanded={user ? undefined : panel === "settings"}
+          onClick={() => {
+            if (user) {
+              setPanel(null);
+              navigate("/dashboard/installningar");
+            } else {
+              setPanel(panel === "settings" ? null : "settings");
+            }
+          }}
+        >
           <Settings className="h-5 w-5" aria-hidden="true" />
           Inställningar
         </button>

@@ -57,7 +57,7 @@ export const buildNotifications = (input: NotificationInput): NotificationItem[]
       tone: "critical",
       title: "Läget kräver omedelbara åtgärder",
       body: `Systemanalysen bedömer: ${input.crisis.title}.`,
-      href: "/dashboard",
+      href: "/dashboard#systemanalys",
     });
   } else if (input.crisis?.urgency === "weeks") {
     items.push({
@@ -65,7 +65,7 @@ export const buildNotifications = (input: NotificationInput): NotificationItem[]
       tone: "warning",
       title: "Läget kräver åtgärder inom veckor",
       body: `Systemanalysen bedömer: ${input.crisis.title}.`,
-      href: "/dashboard",
+      href: "/dashboard#systemanalys",
     });
   }
 
@@ -80,7 +80,7 @@ export const buildNotifications = (input: NotificationInput): NotificationItem[]
         tone: "critical",
         title: `Passerad frist: ${event.label.toLowerCase()}`,
         body: `Datumet passerade ${countdown.label} utan registrerad åtgärd.`,
-        href: "/dashboard",
+        href: "/dashboard#frister",
       });
     } else if (countdown.tone === "today") {
       nearFrist = true;
@@ -89,7 +89,7 @@ export const buildNotifications = (input: NotificationInput): NotificationItem[]
         tone: "critical",
         title: `Förfaller idag: ${event.label.toLowerCase()}`,
         body: "Sista dagen att agera eller dokumentera beslutet.",
-        href: "/dashboard",
+        href: "/dashboard#frister",
       });
     } else if (countdown.daysLeft <= 3) {
       nearFrist = true;
@@ -98,7 +98,7 @@ export const buildNotifications = (input: NotificationInput): NotificationItem[]
         tone: "warning",
         title: `${event.label} ${countdown.label}`,
         body: "Planera åtgärden nu - handlingsutrymmet krymper med datumet.",
-        href: "/dashboard",
+        href: "/dashboard#frister",
       });
     }
   }
@@ -116,7 +116,7 @@ export const buildNotifications = (input: NotificationInput): NotificationItem[]
         tone: "info",
         title: `Nästa frist: ${upcoming.event.label.toLowerCase()} ${upcoming.countdown.label}`,
         body: "Bevakas i tidslinjen - inget kräver åtgärd i dag.",
-        href: "/dashboard",
+        href: "/dashboard#frister",
       });
     }
   }
@@ -198,3 +198,66 @@ export const buildNotifications = (input: NotificationInput): NotificationItem[]
 
   return items.sort((a, b) => TONE_ORDER[a.tone] - TONE_ORDER[b.tone]);
 };
+
+/* --- notisinställningar ---------------------------------------------------- */
+
+/**
+ * Vilka källor klockan visar - ett val per enhet, sparat lokalt. Frister
+ * och ärendets läge går INTE att stänga av: en notisklocka som kan tystas
+ * om det juridiskt kritiska vore ett sämre löfte än ingen klocka alls.
+ * Det som går att välja bort är det sociala och driften.
+ */
+export type NotificationCategory = "läge" | "samarbete" | "drift";
+
+export const OPTIONAL_CATEGORIES: { id: Exclude<NotificationCategory, "läge">; label: string; description: string }[] = [
+  {
+    id: "samarbete",
+    label: "Meddelanden och deltagare",
+    description: "Taggade meddelanden som väntar på ditt svar och deltagare som tackat ja.",
+  },
+  {
+    id: "drift",
+    label: "Driftlarm",
+    description: "Misslyckade utskick, ny inkorg, ansökningar och profilanspråk. Gäller bara administratörer.",
+  },
+];
+
+export const categoryOf = (id: string): NotificationCategory => {
+  if (id.startsWith("mention-") || id.startsWith("invit-")) return "samarbete";
+  if (id.startsWith("drift-")) return "drift";
+  return "läge";
+};
+
+const PREFS_KEY = "clearance-notification-prefs";
+
+export const getNotificationPrefs = (): Record<NotificationCategory, boolean> => {
+  const all: Record<NotificationCategory, boolean> = { läge: true, samarbete: true, drift: true };
+  try {
+    const raw = localStorage.getItem(PREFS_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw) as Partial<Record<NotificationCategory, boolean>>;
+      for (const category of ["samarbete", "drift"] as const) {
+        if (parsed[category] === false) all[category] = false;
+      }
+    }
+  } catch {
+    /* utan lagring: allt på */
+  }
+  return all;
+};
+
+export const setNotificationPref = (category: Exclude<NotificationCategory, "läge">, enabled: boolean): void => {
+  try {
+    const prefs = getNotificationPrefs();
+    prefs[category] = enabled;
+    localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
+    window.dispatchEvent(new CustomEvent("clearance-notification-prefs"));
+  } catch {
+    /* utan lagring går valet inte att spara */
+  }
+};
+
+export const filterNotifications = (
+  items: NotificationItem[],
+  prefs: Record<NotificationCategory, boolean> = getNotificationPrefs(),
+): NotificationItem[] => items.filter((item) => prefs[categoryOf(item.id)]);

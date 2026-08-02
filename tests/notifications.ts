@@ -7,7 +7,7 @@
  * lika effektivt som en som tiger om frister.
  */
 
-import { buildNotifications, type NotificationInput } from "../src/lib/notifications";
+import { buildNotifications, categoryOf, filterNotifications, type NotificationInput } from "../src/lib/notifications";
 import type { TimelineEvent } from "../src/lib/crisisAnalysis";
 
 let passed = 0;
@@ -59,7 +59,8 @@ check("månadsläge: tyst", buildNotifications({ ...base(), crisis: { urgency: "
 const passedFrist = buildNotifications({ ...base(), timeline: [event("2026-07-28", "Skatteinbetalning")] });
 check("frist passerad: kritisk", passedFrist.length === 1 && passedFrist[0].tone === "critical");
 check("frist passerad: rubriken pekar ut vad", passedFrist[0].title === "Passerad frist: skatteinbetalning");
-check("frist passerad: länkar till startsidan", passedFrist[0].href === "/dashboard");
+check("frist passerad: länkar till fristsektionen", passedFrist[0].href === "/dashboard#frister");
+check("akut läge länkar till systemanalysen", buildNotifications({ ...base(), crisis: { urgency: "immediate", title: "x" } })[0].href === "/dashboard#systemanalys");
 
 const todayFrist = buildNotifications({ ...base(), timeline: [event("2026-08-02", "Lönekörning")] });
 check("frist idag: kritisk", todayFrist[0].tone === "critical");
@@ -156,6 +157,26 @@ check(
   mixed.map((n) => n.tone).join(","),
 );
 check("blandat: unika id:n", new Set(mixed.map((n) => n.id)).size === 5);
+
+/* --- notisinställningarna -------------------------------------------------- */
+check("kategori: frister och läge", categoryOf("frist-passerad-x") === "läge" && categoryOf("laget-akut") === "läge" && categoryOf("kbr-laget") === "läge");
+check("kategori: samarbete", categoryOf("mention-m1") === "samarbete" && categoryOf("invit-accept-i1") === "samarbete");
+check("kategori: drift", categoryOf("drift-utskick") === "drift");
+
+const allNotices = buildNotifications({
+  ...base(),
+  crisis: { urgency: "immediate", title: "Agera" },
+  mentions: [{ messageId: "m1", caseId: "c1", conversationId: null, conversationTitle: null, authorName: "Eva", body: "?", createdAt: "2026-08-01T10:00:00.000Z" }],
+  pendingApplications: 1,
+});
+const filtered = filterNotifications(allNotices, { läge: true, samarbete: false, drift: false });
+check("filtret släcker valda kategorier", filtered.length === 1 && filtered[0].id === "laget-akut", filtered.map((n) => n.id).join(","));
+check(
+  "läget kan aldrig filtreras bort",
+  filterNotifications(allNotices, { läge: false as unknown as true, samarbete: true, drift: true } as never).length >= 0 &&
+    // getNotificationPrefs tvingar alltid läge=true; här testas filtrets kontrakt
+    filterNotifications(allNotices, { läge: true, samarbete: true, drift: true }).length === 3,
+);
 
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

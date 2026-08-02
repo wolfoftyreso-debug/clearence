@@ -6,7 +6,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { data } from "@/data";
 import { billingMessage, billingState } from "@/lib/billing";
 import { paymentAccounts } from "@/lib/company";
-import { buildNotifications } from "@/lib/notifications";
+import { buildNotifications, filterNotifications } from "@/lib/notifications";
 import { analysisInputFromCase } from "@/lib/caseAnalysis";
 import { analyseCrisis } from "@/lib/crisisAnalysis";
 import type { UserRole } from "@/data/types";
@@ -247,7 +247,9 @@ const NotificationBell = () => {
   });
 
   const analysis = latestCase ? analyseCrisis(analysisInputFromCase(latestCase)) : null;
-  const notifications = buildNotifications({
+  // Enhetens notisval (inställningarna) filtrerar det sociala och driften.
+  // Frister och läget går aldrig att stänga av - det är klockans löfte.
+  const notifications = filterNotifications(buildNotifications({
     caseRecord: latestCase ?? null,
     crisis: analysis ? { urgency: analysis.urgency, title: analysis.title } : null,
     timeline: analysis?.timeline ?? [],
@@ -259,7 +261,7 @@ const NotificationBell = () => {
     newContactMessages: (contactMessages ?? []).filter((m) => m.status === "new").length,
     pendingProfileClaims: (profileClaims ?? []).filter((c) => c.status === "pending").length,
     now: new Date(),
-  });
+  }));
   const count = notifications.length;
 
   return (
@@ -299,7 +301,18 @@ const NotificationBell = () => {
                     type="button"
                     onClick={() => {
                       setOpen(false);
-                      navigate(n.href);
+                      // En notis vars mål är sidan man redan står på måste
+                      // ändå göra något synligt: ankaret rullar till rätt
+                      // sektion, efter navigering om en sådan behövs.
+                      const [path, anchor] = n.href.split("#");
+                      const samePage = window.location.pathname === path || window.location.hash.startsWith(`#${path}`);
+                      if (!samePage) navigate(path);
+                      if (anchor) {
+                        window.setTimeout(
+                          () => document.getElementById(anchor)?.scrollIntoView({ behavior: "smooth", block: "start" }),
+                          samePage ? 0 : 350,
+                        );
+                      }
                     }}
                     className="w-full rounded-md px-2 py-2 text-left transition-colors hover:bg-secondary"
                   >

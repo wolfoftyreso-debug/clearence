@@ -12,6 +12,12 @@ import { formatOre, VAT_RATE } from "@/lib/invoice";
 import { buildInvoiceDocument, buildReceiptDocument } from "@/lib/reports/invoiceDocuments";
 import { useInlineReport } from "@/components/reports/useInlineReport";
 import { LanguageLevelPicker } from "@/components/language/GlossaryText";
+import {
+  AccountSecuritySection,
+  ActiveCaseSection,
+  NotificationSection,
+  PresentationSection,
+} from "@/components/settings/PreferenceSections";
 import type { CustomerInvoiceRecord } from "@/data/types";
 import { CheckCircle2, Download, Loader2, Receipt } from "lucide-react";
 
@@ -142,6 +148,10 @@ const DashboardSettings = () => {
           />
           <LanguageLevelPicker />
         </WizardCard>
+
+        <PresentationSection />
+        <ActiveCaseSection />
+        <NotificationSection />
 
         <WizardCard>
           <WizardCardHeader
@@ -308,6 +318,8 @@ const DashboardSettings = () => {
             </ul>
           )}
         </WizardCard>
+
+        <AccountSecuritySection />
       </div>
       {reportViewer}
     </DashboardShell>

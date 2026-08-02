@@ -168,7 +168,7 @@ export const ActionPlan = ({ caseRecord, timeline }: ActionPlanProps) => {
 
       {/* Fristerna */}
       {sortedDeadlines.length > 0 && (
-        <div className="mt-4">
+        <div id="frister" className="mt-4 scroll-mt-20">
           <h3 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             <CalendarClock className="h-3.5 w-3.5" aria-hidden="true" />
             Datum som räknas ned
