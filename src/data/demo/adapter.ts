@@ -37,6 +37,7 @@ import type {
   InvoiceRecord,
   PaymentRecord,
   ProfessionalRecord,
+  ProfileClaimRecord,
   RatingRecord,
   ReferralRecord,
 } from "../types";
@@ -68,6 +69,12 @@ interface DemoState {
   caseInvitations: CaseInvitationRecord[];
   conversations: ConversationRecord[];
   kbrAssessments: { caseId: string | null; status: KbrStatus; createdAt: string }[];
+  profileClaims: (ProfileClaimRecord & {
+    userId: string;
+    claimantEmail: string;
+    motivation: string;
+    contact: string;
+  })[];
 }
 
 const emptyState = (): DemoState => ({
@@ -90,6 +97,7 @@ const emptyState = (): DemoState => ({
   caseInvitations: [],
   conversations: [],
   kbrAssessments: [],
+  profileClaims: [],
 });
 
 /** Files cannot go in localStorage, so they live for the session only. */
@@ -215,6 +223,7 @@ const DEMO_PROFESSIONALS: ProfessionalRecord[] = [
     ],
     specializations: ["Aktiebolag", "Tjänsteföretag"],
     verified: true,
+    source: "application",
   },
   {
     id: "demo-pro-2",
@@ -230,6 +239,7 @@ const DEMO_PROFESSIONALS: ProfessionalRecord[] = [
     fixedPrices: [{ service: "Första rådgivningstimme", price: 2500 }],
     specializations: ["Obeståndsfrågor", "Styrelseansvar"],
     verified: true,
+    source: "application",
   },
   {
     id: "demo-pro-3",
@@ -245,6 +255,25 @@ const DEMO_PROFESSIONALS: ProfessionalRecord[] = [
     fixedPrices: [{ service: "Granskning av kontrollbalansräkning", price: 12000 }],
     specializations: ["Kontrollbalansräkning"],
     verified: true,
+    source: "application",
+  },
+  {
+    // En förifylld, EJ verifierad post - för att kunna visa hela
+    // anspråksflödet i demon: "Är detta din profil?" → drift → Verifierad.
+    id: "demo-pro-4",
+    name: "Demobyrån Nordkvist",
+    company: "Demobyrån Nordkvist AB",
+    category: "rekonstruktor",
+    description:
+      "Förifylld profil från offentliga källor. Uppgifterna är inte bekräftade av byrån - kontaktvägar kan vara inaktuella.",
+    location: "Västerås",
+    email: null,
+    phone: null,
+    website: null,
+    fixedPrices: [],
+    specializations: ["Företagsrekonstruktion"],
+    verified: false,
+    source: "public_register",
   },
 ];
 
@@ -1158,10 +1187,94 @@ export const demoAdapter: DataPort = {
 
   professionals: {
     async listActive() {
-      return DEMO_PROFESSIONALS;
+      // Godkända anspråk lyfter profilen till Verifierad även i demon.
+      return DEMO_PROFESSIONALS.map((pro) =>
+        state.profileClaims.some((c) => c.professionalId === pro.id && c.status === "approved")
+          ? { ...pro, verified: true }
+          : pro,
+      );
     },
     async listRatings() {
       return DEMO_RATINGS;
+    },
+
+    async claimProfile({ professionalId, motivation, contact }) {
+      if (!state.user) throw new Error("Kräver inloggning");
+      const pro = DEMO_PROFESSIONALS.find((p) => p.id === professionalId);
+      if (!pro) throw new Error("Profilen finns inte");
+      const taken = state.profileClaims.some(
+        (c) => c.professionalId === professionalId && c.status === "approved",
+      );
+      if (pro.verified || taken) throw new Error("Profilen är redan kopplad till ett konto");
+      if (
+        state.profileClaims.some(
+          (c) =>
+            c.professionalId === professionalId &&
+            c.userId === state.user?.id &&
+            c.status === "pending",
+        )
+      ) {
+        throw new Error("Du har redan ett anspråk under granskning");
+      }
+      state.profileClaims = [
+        ...state.profileClaims,
+        {
+          id: uid(),
+          professionalId,
+          status: "pending",
+          reviewNote: null,
+          createdAt: now(),
+          userId: state.user.id,
+          claimantEmail: state.user.email ?? "",
+          motivation,
+          contact,
+        },
+      ];
+      save();
+    },
+    async listMyClaims() {
+      if (!state.user) return [];
+      return state.profileClaims
+        .filter((c) => c.userId === state.user?.id)
+        .map(({ id, professionalId, status, reviewNote, createdAt }) => ({
+          id,
+          professionalId,
+          status,
+          reviewNote,
+          createdAt,
+        }));
+    },
+    async listClaims() {
+      return [...state.profileClaims]
+        .sort((a, b) => Number(b.status === "pending") - Number(a.status === "pending"))
+        .map((c) => ({
+          id: c.id,
+          professionalId: c.professionalId,
+          professionalName:
+            DEMO_PROFESSIONALS.find((p) => p.id === c.professionalId)?.name ?? "Okänd profil",
+          claimantEmail: c.claimantEmail,
+          motivation: c.motivation,
+          contact: c.contact,
+          status: c.status,
+          reviewNote: c.reviewNote,
+          createdAt: c.createdAt,
+        }));
+    },
+    async reviewClaim(id, approve, note) {
+      const claim = state.profileClaims.find((c) => c.id === id);
+      if (!claim || claim.status !== "pending") throw new Error("Anspråket är redan avgjort");
+      if (!approve && !note?.trim()) throw new Error("Avslag kräver en motivering");
+      state.profileClaims = state.profileClaims.map((c) => {
+        if (c.id === id) {
+          return { ...c, status: approve ? "approved" : "rejected", reviewNote: note?.trim() || null };
+        }
+        // Samma regel som i databasen: ett godkännande besvarar rivalerna.
+        if (approve && c.professionalId === claim.professionalId && c.status === "pending") {
+          return { ...c, status: "rejected", reviewNote: "Ett annat anspråk på profilen godkändes." };
+        }
+        return c;
+      });
+      save();
     },
   },
 
@@ -1216,6 +1329,7 @@ export const demoAdapter: DataPort = {
         fixedPrices: app.fixedPrices,
         specializations: app.specializations,
         verified: true,
+        source: "application",
       });
       state.application = { ...app, status: "approved", reviewNote: null, reviewedAt: now() };
       save();

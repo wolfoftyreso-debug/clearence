@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { data } from "@/data";
+import { useAuth } from "@/hooks/useAuth";
 import Header from "@/components/landing/Header";
 import Footer from "@/components/landing/Footer";
 import ProfessionalCard from "@/components/marketplace/ProfessionalCard";
@@ -44,6 +45,16 @@ const Marketplace = () => {
   const { data: ratings } = useQuery({
     queryKey: ['professional_ratings'],
     queryFn: () => data.professionals.listRatings()
+  });
+
+  // The signed-in user's own profile claims, so a card can show "under
+  // granskning" instead of offering the claim button twice.
+  const { user } = useAuth();
+  const { data: myClaims } = useQuery({
+    queryKey: ["my-profile-claims"],
+    queryFn: () => data.professionals.listMyClaims(),
+    enabled: !!user,
+    retry: false,
   });
 
   // Calculate average ratings per professional
@@ -99,8 +110,11 @@ const Marketplace = () => {
               Hitta rådgivare
             </h1>
             <p className="mt-4 text-lg text-muted-foreground">
-              Konkursförvaltare, rekonstruktörer, revisorer och jurister. Vi
-              kontrollerar behörigheten innan någon publiceras här.
+              Konkursförvaltare, rekonstruktörer, revisorer och jurister.
+              Märkningen <span className="font-medium text-foreground">Verifierad</span> betyder
+              att vi kontrollerat behörigheten. Profiler märkta{" "}
+              <span className="font-medium text-foreground">Ej verifierad</span> är förifyllda
+              från offentliga källor och kan tas i anspråk av byrån själv.
             </p>
           </div>
 
@@ -182,6 +196,16 @@ const Marketplace = () => {
                     key={professional.id}
                     professional={professional}
                     rating={getAverageRating(professional.id)}
+                    myClaim={
+                      // Ett väntande anspråk trumfar ett gammalt avslag.
+                      (myClaims ?? [])
+                        .filter((c) => c.professionalId === professional.id)
+                        .sort(
+                          (a, b) =>
+                            Number(b.status === "pending") - Number(a.status === "pending") ||
+                            b.createdAt.localeCompare(a.createdAt),
+                        )[0] ?? null
+                    }
                   />
                 ))}
               </div>

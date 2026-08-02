@@ -878,6 +878,137 @@ begin
   end;
 end $$;
 
+/* ========================================================================== */
+/* Profilanspråk: "Är detta din profil?" och driftens granskning              */
+/* ========================================================================== */
+
+reset role;
+-- En förifylld, overifierad profil att göra anspråk på (motsvarar
+-- public_register-posterna som migrationen seedar).
+insert into public.professionals (id, name, category, verified, source)
+values ('f0000000-0000-0000-0000-000000000001', 'Testbyrån Anspråk', 'rekonstruktor', false, 'public_register');
+
+set local role authenticated;
+select pg_temp.as_user('22222222-2222-2222-2222-222222222222');
+do $$
+declare v_id uuid;
+begin
+  v_id := public.claim_professional_profile(
+    'f0000000-0000-0000-0000-000000000001', 'Jag driver byrån.', 'bertil@bolag-b.se');
+  if v_id is null then raise exception 'FAIL  anspråket gav inget id'; end if;
+  raise notice 'ok    an unverified profile can be claimed';
+end $$;
+
+do $$
+begin
+  begin
+    perform public.claim_professional_profile(
+      'f0000000-0000-0000-0000-000000000001', 'Igen.', 'bertil@bolag-b.se');
+    raise exception 'FAIL  dubbla väntande anspråk accepterades';
+  exception when others then
+    if sqlerrm like 'FAIL%' then raise; end if;
+    raise notice 'ok    a second pending claim by the same user is refused';
+  end;
+end $$;
+
+do $$
+begin
+  begin
+    insert into public.profile_claims (professional_id, user_id, motivation, contact)
+    values ('f0000000-0000-0000-0000-000000000001', '22222222-2222-2222-2222-222222222222', 'råinsert', 'x');
+    raise exception 'FAIL  rå insert i profile_claims gick igenom';
+  exception when others then
+    if sqlerrm like 'FAIL%' then raise; end if;
+    raise notice 'ok    claims can only be written through the function';
+  end;
+end $$;
+
+select pg_temp.check('the claimant follows their own claim',
+  (select count(*) from public.profile_claims where professional_id = 'f0000000-0000-0000-0000-000000000001'), 1::bigint);
+select pg_temp.check('non-admins see an empty claims list',
+  (select count(*) from public.list_profile_claims()), 0::bigint);
+
+select pg_temp.as_user('44444444-4444-4444-4444-444444444444');
+select pg_temp.check('other users do not see the claim',
+  (select count(*) from public.profile_claims where professional_id = 'f0000000-0000-0000-0000-000000000001'), 0::bigint);
+-- Ett konkurrerande anspråk från revisorn, för godkännandetestet nedan.
+do $$
+begin
+  perform public.claim_professional_profile(
+    'f0000000-0000-0000-0000-000000000001', 'Det är min byrå.', 'revisor@byra.se');
+  raise notice 'ok    a competing claim can be filed';
+end $$;
+
+do $$
+begin
+  begin
+    perform public.review_profile_claim(
+      (select id from public.list_profile_claims() limit 1), true, null);
+    raise exception 'FAIL  en icke-administratör kunde granska anspråk';
+  exception when others then
+    if sqlerrm like 'FAIL%' then raise; end if;
+    raise notice 'ok    reviewing claims requires drift privileges';
+  end;
+end $$;
+
+-- Driften (1111 är administratör sedan utkorgstesterna) avgör.
+select pg_temp.as_user('11111111-1111-1111-1111-111111111111');
+select pg_temp.check('the admin sees both claims with claimant emails',
+  (select count(*) from public.list_profile_claims()
+   where professional_id = 'f0000000-0000-0000-0000-000000000001'
+     and claimant_email in ('bertil@bolag-b.se', 'revisor@byra.se')), 2::bigint);
+
+do $$
+begin
+  begin
+    perform public.review_profile_claim(
+      (select id from public.profile_claims
+       where user_id = '44444444-4444-4444-4444-444444444444'
+         and professional_id = 'f0000000-0000-0000-0000-000000000001'), false, '  ');
+    raise exception 'FAIL  avslag utan motivering accepterades';
+  exception when others then
+    if sqlerrm like 'FAIL%' then raise; end if;
+    raise notice 'ok    a rejection requires a written reason';
+  end;
+end $$;
+
+do $$
+declare v_pro record; v_other record;
+begin
+  perform public.review_profile_claim(
+    (select id from public.profile_claims
+     where user_id = '22222222-2222-2222-2222-222222222222'
+       and professional_id = 'f0000000-0000-0000-0000-000000000001'), true, null);
+
+  select user_id, verified into v_pro from public.professionals
+  where id = 'f0000000-0000-0000-0000-000000000001';
+  if v_pro.user_id <> '22222222-2222-2222-2222-222222222222' or not v_pro.verified then
+    raise exception 'FAIL  godkännandet kopplade inte profilen (user %, verified %)', v_pro.user_id, v_pro.verified;
+  end if;
+
+  select status, review_note into v_other from public.profile_claims
+  where user_id = '44444444-4444-4444-4444-444444444444'
+    and professional_id = 'f0000000-0000-0000-0000-000000000001';
+  if v_other.status <> 'rejected' or v_other.review_note is null then
+    raise exception 'FAIL  det konkurrerande anspråket fick inget besked (%, %)', v_other.status, v_other.review_note;
+  end if;
+  raise notice 'ok    approval links the profile, sets verified and answers the rival claim';
+end $$;
+
+set local role authenticated;
+select pg_temp.as_user('66666666-6666-6666-6666-666666666666');
+do $$
+begin
+  begin
+    perform public.claim_professional_profile(
+      'f0000000-0000-0000-0000-000000000001', 'Min!', 'ingen@utanfor.se');
+    raise exception 'FAIL  en redan kopplad profil kunde beslagtas';
+  exception when others then
+    if sqlerrm like 'FAIL%' then raise; end if;
+    raise notice 'ok    a linked profile can never be claimed again';
+  end;
+end $$;
+
 reset role;
 select 'ALL RLS TESTS PASSED' as result;
 

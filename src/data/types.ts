@@ -106,6 +106,13 @@ export interface FixedPrice {
   price: number;
 }
 
+/**
+ * Varifrån en katalogpost kommer. "application" = rådgivaren ansökte själv
+ * och granskades; "public_register" = förifylld från offentliga källor och
+ * inte bekräftad av byrån förrän ett profilanspråk godkänts.
+ */
+export type ProfessionalSource = "application" | "public_register";
+
 export interface ProfessionalRecord {
   id: string;
   name: string;
@@ -119,6 +126,26 @@ export interface ProfessionalRecord {
   fixedPrices: FixedPrice[];
   specializations: string[] | null;
   verified: boolean | null;
+  source: ProfessionalSource;
+}
+
+export type ProfileClaimStatus = "pending" | "approved" | "rejected";
+
+/** Den sökandes egen bild av sitt anspråk på en katalogprofil. */
+export interface ProfileClaimRecord {
+  id: string;
+  professionalId: string;
+  status: ProfileClaimStatus;
+  reviewNote: string | null;
+  createdAt: string;
+}
+
+/** Anspråket som driften granskar det: med profil, sökande och underlag. */
+export interface ProfileClaimForReview extends ProfileClaimRecord {
+  professionalName: string;
+  claimantEmail: string;
+  motivation: string;
+  contact: string;
 }
 
 export interface RatingRecord {

@@ -7,11 +7,12 @@ import { Input } from "@/components/ui/input";
 import { data } from "@/data";
 import { billingState } from "@/lib/billing";
 import { ProviderLogo } from "@/components/integrations/ProviderLogo";
-import type { ProfessionalTerms, SecretInfo } from "@/data/types";
+import type { ProfessionalTerms, ProfileClaimForReview, SecretInfo } from "@/data/types";
 import {
   AlertTriangle,
   Banknote,
   ArrowRight,
+  BadgeCheck,
   CheckCircle2,
   KeyRound,
   Loader2,
@@ -263,6 +264,116 @@ const FeeSection = () => {
   );
 };
 
+/**
+ * Profilanspråken: "Är detta din profil?" landar här.
+ *
+ * Granskningen är plattformens KYC i dag: en människa kontrollerar
+ * företrädarrätten via den angivna kontaktvägen innan profilen kopplas
+ * till kontot och märks Verifierad. Ett godkännande avvisar automatiskt
+ * konkurrerande anspråk på samma profil - regeln bor i databasen, knappen
+ * här utlöser den bara.
+ */
+const ClaimRow = ({ claim }: { claim: ProfileClaimForReview }) => {
+  const queryClient = useQueryClient();
+  const [note, setNote] = useState("");
+  const refresh = () => {
+    queryClient.invalidateQueries({ queryKey: ["profile-claims"] });
+    queryClient.invalidateQueries({ queryKey: ["professionals"] });
+  };
+  const review = useMutation({
+    mutationFn: (approve: boolean) =>
+      data.professionals.reviewClaim(claim.id, approve, note.trim() || undefined),
+    onSuccess: refresh,
+  });
+
+  if (claim.status !== "pending") {
+    return (
+      <li className="rounded-md border border-border p-3 opacity-70">
+        <p className="text-sm text-foreground">
+          <span className="font-medium">{claim.professionalName}</span>
+          {" – "}
+          {claim.claimantEmail}
+        </p>
+        <p className="mt-0.5 text-xs text-muted-foreground">
+          {claim.status === "approved" ? "Godkänt" : "Avslaget"}
+          {claim.reviewNote ? ` · ${claim.reviewNote}` : ""}
+        </p>
+      </li>
+    );
+  }
+
+  return (
+    <li className="rounded-md border border-border p-4">
+      <p className="text-sm font-medium text-foreground">{claim.professionalName}</p>
+      <p className="mt-0.5 text-xs text-muted-foreground">
+        Anspråk från {claim.claimantEmail} · kontrollväg: {claim.contact}
+      </p>
+      <p className="mt-2 rounded-md bg-secondary/40 p-2 text-sm leading-relaxed text-foreground">
+        {claim.motivation}
+      </p>
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <Input
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          placeholder="Anteckning (krävs vid avslag)"
+          aria-label={`Anteckning för anspråket på ${claim.professionalName}`}
+          className="min-w-0 flex-1 basis-52"
+        />
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={review.isPending}
+          onClick={() => review.mutate(true)}
+        >
+          Godkänn och verifiera
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          disabled={review.isPending || note.trim() === ""}
+          onClick={() => review.mutate(false)}
+        >
+          Avslå
+        </Button>
+      </div>
+      {review.isError && (
+        <p className="mt-2 text-sm text-destructive" role="alert">
+          {review.error instanceof Error ? review.error.message : "Kunde inte spara beslutet."}
+        </p>
+      )}
+    </li>
+  );
+};
+
+const ClaimsSection = () => {
+  const { data: claims } = useQuery({
+    queryKey: ["profile-claims"],
+    queryFn: () => data.professionals.listClaims(),
+  });
+
+  if (!claims || claims.length === 0) return null;
+  return (
+    <section aria-labelledby="claims-heading">
+      <h2 id="claims-heading" className="flex items-center gap-2 text-lg font-semibold text-foreground">
+        <BadgeCheck className="h-5 w-5 text-accent" aria-hidden="true" />
+        Profilanspråk
+      </h2>
+      <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+        Någon säger sig företräda en förifylld katalogprofil. Kontrollera
+        företrädarrätten via kontaktvägen innan du godkänner – godkännandet
+        kopplar profilen till kontot och märker den Verifierad.
+      </p>
+      <ul className="mt-3 space-y-2">
+        {claims.map((claim) => (
+          <ClaimRow key={claim.id} claim={claim} />
+        ))}
+      </ul>
+    </section>
+  );
+};
+
 const AdminOverview = () => {
   const now = new Date();
 
@@ -338,6 +449,8 @@ const AdminOverview = () => {
             urgent={false}
           />
         </section>
+
+        <ClaimsSection />
 
         <FeeSection />
 

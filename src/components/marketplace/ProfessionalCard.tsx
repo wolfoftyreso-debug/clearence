@@ -1,14 +1,137 @@
+import { useState } from "react";
+import { Link } from "react-router-dom";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Star, MapPin, CheckCircle2, Mail, Phone, ExternalLink } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Star, MapPin, CheckCircle2, Mail, Phone, ExternalLink, Loader2, ShieldQuestion } from "lucide-react";
 import { useRecordReferral } from "@/hooks/useRecordReferral";
-import type { ProfessionalRecord } from "@/data/types";
+import { useAuth } from "@/hooks/useAuth";
+import { data } from "@/data";
+import type { ProfessionalRecord, ProfileClaimRecord } from "@/data/types";
 
 interface ProfessionalCardProps {
   professional: ProfessionalRecord;
   rating: { average: number; count: number } | null;
+  /** Den inloggades eget anspråk på just den här profilen, om något. */
+  myClaim?: ProfileClaimRecord | null;
 }
+
+/**
+ * "Är detta din profil?" på förifyllda, overifierade katalogposter.
+ *
+ * Anspråket är starten på en manuell granskning: vi kontrollerar
+ * företrädarrätten innan profilen kopplas till ett konto och märks
+ * Verifierad. BankID-legitimering kopplas på när avtalet finns - flödet
+ * är byggt för att källan och identifieringen ska kunna bytas utan att
+ * göras om.
+ */
+const ClaimSection = ({ professional, myClaim }: { professional: ProfessionalRecord; myClaim: ProfileClaimRecord | null }) => {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [motivation, setMotivation] = useState("");
+  const [contact, setContact] = useState("");
+
+  const claim = useMutation({
+    mutationFn: () =>
+      data.professionals.claimProfile({
+        professionalId: professional.id,
+        motivation: motivation.trim(),
+        contact: contact.trim(),
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["my-profile-claims"] }),
+  });
+
+  if (myClaim?.status === "pending") {
+    return (
+      <p className="rounded-md bg-secondary/50 p-3 text-xs leading-relaxed text-muted-foreground">
+        Ditt anspråk är under granskning. Vi kontrollerar företrädarrätten
+        manuellt och hör av oss via kontaktvägen du angav.
+      </p>
+    );
+  }
+
+  return (
+    <div className="rounded-md border border-dashed border-border p-3">
+      {myClaim?.status === "rejected" && (
+        <p className="mb-2 text-xs leading-relaxed text-muted-foreground">
+          Ditt tidigare anspråk avslogs
+          {myClaim.reviewNote ? `: ${myClaim.reviewNote}` : "."} Du kan ansöka
+          igen med kompletterande underlag.
+        </p>
+      )}
+      {!open ? (
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <span className="text-xs text-muted-foreground">
+            Företräder du {professional.company ?? professional.name}?
+          </span>
+          {user ? (
+            <Button type="button" variant="outline" size="sm" onClick={() => setOpen(true)}>
+              <ShieldQuestion className="h-4 w-4" aria-hidden="true" />
+              Är detta din profil?
+            </Button>
+          ) : (
+            <Button type="button" variant="outline" size="sm" asChild>
+              <Link to="/login">Logga in och gör anspråk</Link>
+            </Button>
+          )}
+        </div>
+      ) : (
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (motivation.trim() && contact.trim()) claim.mutate();
+          }}
+          className="space-y-2"
+        >
+          <label className="block text-xs font-medium text-foreground">
+            Varför är profilen din?
+            <textarea
+              value={motivation}
+              onChange={(e) => setMotivation(e.target.value)}
+              placeholder="t.ex. Jag är delägare på byrån och står i förordnandelistan."
+              rows={2}
+              className="mt-1 w-full rounded-md border border-border bg-background p-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+          </label>
+          <label className="block text-xs font-medium text-foreground">
+            Kontaktväg för kontrollen
+            <Input
+              value={contact}
+              onChange={(e) => setContact(e.target.value)}
+              placeholder="t.ex. växelnummer eller e-post på byråns domän"
+              className="mt-1 bg-background"
+            />
+          </label>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="submit"
+              size="sm"
+              disabled={!motivation.trim() || !contact.trim() || claim.isPending}
+            >
+              {claim.isPending && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
+              Skicka anspråk
+            </Button>
+            <Button type="button" variant="ghost" size="sm" onClick={() => setOpen(false)}>
+              Avbryt
+            </Button>
+          </div>
+          <p className="text-xs leading-relaxed text-muted-foreground">
+            Granskningen är manuell: vi kontrollerar företrädarrätten innan
+            profilen kopplas till ditt konto och märks Verifierad.
+          </p>
+          {claim.isError && (
+            <p className="text-xs text-destructive" role="alert">
+              {claim.error instanceof Error ? claim.error.message : "Kunde inte skicka anspråket."}
+            </p>
+          )}
+        </form>
+      )}
+    </div>
+  );
+};
 
 const categoryLabels: Record<string, string> = {
   konkursforvaltare: 'Konkursförvaltare',
@@ -23,7 +146,7 @@ const formatPrice = (price: number) => {
   return new Intl.NumberFormat('sv-SE', { style: 'currency', currency: 'SEK', maximumFractionDigits: 0 }).format(price);
 };
 
-const ProfessionalCard = ({ professional, rating }: ProfessionalCardProps) => {
+const ProfessionalCard = ({ professional, rating, myClaim = null }: ProfessionalCardProps) => {
   const recordReferral = useRecordReferral();
 
   return (
@@ -39,8 +162,15 @@ const ProfessionalCard = ({ professional, rating }: ProfessionalCardProps) => {
               <h3 className="min-w-0 break-words font-semibold text-lg text-foreground group-hover:text-accent transition-colors">
                 {professional.name}
               </h3>
-              {professional.verified && (
-                <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+              {professional.verified ? (
+                <span className="flex items-center gap-1 text-xs font-medium text-emerald-600">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-500" aria-hidden="true" />
+                  Verifierad
+                </span>
+              ) : (
+                <Badge variant="outline" className="text-xs font-normal text-muted-foreground">
+                  Ej verifierad
+                </Badge>
               )}
             </div>
             {professional.company && professional.company !== professional.name && (
@@ -163,6 +293,11 @@ const ProfessionalCard = ({ professional, rating }: ProfessionalCardProps) => {
             </Button>
           )}
         </div>
+
+        {/* Förifyllda profiler kan tas i anspråk av sin rättmätiga ägare. */}
+        {!professional.verified && (
+          <ClaimSection professional={professional} myClaim={myClaim} />
+        )}
       </CardContent>
     </Card>
   );

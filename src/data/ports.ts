@@ -38,6 +38,8 @@ import type {
   PaymentRecord,
   PaymentStatus,
   ProfessionalRecord,
+  ProfileClaimForReview,
+  ProfileClaimRecord,
   RatingRecord,
   ReferralRecord,
   ReferralStatus,
@@ -117,6 +119,20 @@ export interface InvoicesPort {
 export interface ProfessionalsPort {
   listActive(): Promise<ProfessionalRecord[]>;
   listRatings(): Promise<RatingRecord[]>;
+
+  /* "Är detta din profil?" - anspråk på förifyllda katalogposter. */
+
+  /** Gör anspråk. Databasen avvisar redan kopplade profiler och dubbletter. */
+  claimProfile(input: { professionalId: string; motivation: string; contact: string }): Promise<void>;
+  /** Den inloggades egna anspråk, för att visa "under granskning" i katalogen. */
+  listMyClaims(): Promise<ProfileClaimRecord[]>;
+
+  /* Drift. Behörigheten prövas i databasen, inte här. */
+
+  /** Alla anspråk, väntande först. Tom lista för icke-administratörer. */
+  listClaims(): Promise<ProfileClaimForReview[]>;
+  /** Avgör: godkännande kopplar profilen till kontot och sätter Verifierad. */
+  reviewClaim(id: string, approve: boolean, note?: string): Promise<void>;
 }
 
 export interface ApplicationsPort {

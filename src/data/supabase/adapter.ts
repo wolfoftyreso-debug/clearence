@@ -21,6 +21,7 @@ import type {
   InvoiceRecord,
   PaymentRecord,
   ProfessionalRecord,
+  ProfileClaimRecord,
   RatingRecord,
   ReferralRecord,
   SecretInfo,
@@ -1238,6 +1239,7 @@ export const supabaseAdapter: DataPort = {
           fixedPrices: asFixedPrices(row.fixed_prices),
           specializations: row.specializations,
           verified: row.verified,
+          source: row.source === "public_register" ? "public_register" : "application",
         }),
       );
     },
@@ -1254,6 +1256,57 @@ export const supabaseAdapter: DataPort = {
           overallScore: row.overall_score,
         }),
       );
+    },
+
+    async claimProfile({ professionalId, motivation, contact }) {
+      const { error } = await supabase.rpc("claim_professional_profile", {
+        p_professional_id: professionalId,
+        p_motivation: motivation,
+        p_contact: contact,
+      });
+      if (error) throw error;
+    },
+    async listMyClaims() {
+      // RLS visar även allas anspråk för en administratör, så listan
+      // avgränsas uttryckligen till det egna kontot här.
+      const { data: session } = await supabase.auth.getSession();
+      const userId = session.session?.user.id;
+      if (!userId) return [];
+      const { data, error } = await supabase
+        .from("profile_claims")
+        .select("id, professional_id, status, review_note, created_at")
+        .eq("user_id", userId);
+      if (error) throw error;
+      return (data ?? []).map((row) => ({
+        id: row.id,
+        professionalId: row.professional_id,
+        status: row.status as ProfileClaimRecord["status"],
+        reviewNote: row.review_note,
+        createdAt: row.created_at,
+      }));
+    },
+    async listClaims() {
+      const { data, error } = await supabase.rpc("list_profile_claims");
+      if (error) throw error;
+      return (data ?? []).map((row) => ({
+        id: row.id,
+        professionalId: row.professional_id,
+        professionalName: row.professional_name,
+        claimantEmail: row.claimant_email,
+        motivation: row.motivation,
+        contact: row.contact,
+        status: row.status as ProfileClaimRecord["status"],
+        reviewNote: row.review_note,
+        createdAt: row.created_at,
+      }));
+    },
+    async reviewClaim(id, approve, note) {
+      const { error } = await supabase.rpc("review_profile_claim", {
+        p_claim_id: id,
+        p_approve: approve,
+        p_note: note ?? null,
+      });
+      if (error) throw error;
     },
   },
 

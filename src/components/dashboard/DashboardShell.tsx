@@ -6,6 +6,9 @@ import { useAuth } from "@/hooks/useAuth";
 import { data } from "@/data";
 import { billingMessage, billingState } from "@/lib/billing";
 import { paymentAccounts } from "@/lib/company";
+import { buildNotifications } from "@/lib/notifications";
+import { analysisInputFromCase } from "@/lib/caseAnalysis";
+import { analyseCrisis } from "@/lib/crisisAnalysis";
 import type { UserRole } from "@/data/types";
 import {
   Banknote,
@@ -176,11 +179,14 @@ const LockedAccountView = ({ signOut }: { signOut: () => void }) => {
 };
 
 /**
- * Notiscentret.
+ * Notiscentret: allt som väntar på användaren, från alla källor.
  *
- * Innehållet är taggade meddelanden som väntar på DITT svar - inget annat.
- * En notis släcks av din uppfattat-kvittens i tråden, inte av att du öppnat
- * panelen: att ha sett klockan är inte att ha svarat rekonstruktören.
+ * Frister, kontrollbalansläget, taggade meddelanden, deltagarsvar och - för
+ * driften - larm om utskick, inkorg, ansökningar och profilanspråk, byggda
+ * av samma deterministiska aggregator som testerna kör. En notis släcks av
+ * att saken hanteras där den hör hemma (kvittensen i tråden, beslutet i
+ * driftvyn), inte av att panelen öppnats: att ha sett klockan är inte att
+ * ha svarat rekonstruktören.
  */
 const NotificationBell = () => {
   const [open, setOpen] = useState(false);
@@ -192,8 +198,69 @@ const NotificationBell = () => {
     retry: false,
     refetchInterval: 60_000,
   });
+  const { data: latestCase } = useQuery({
+    queryKey: ["latest-case-bell"],
+    queryFn: () => data.cases.getLatest(),
+    retry: false,
+  });
+  const caseId = latestCase?.id ?? null;
+  const { data: kbr } = useQuery({
+    queryKey: ["kbr-latest", caseId],
+    queryFn: () => data.kbr.getLatestByCase(caseId as string),
+    enabled: caseId !== null,
+    retry: false,
+  });
+  const { data: invitations } = useQuery({
+    queryKey: ["case-invitations", caseId],
+    queryFn: () => data.members.listInvitations(caseId as string),
+    enabled: caseId !== null,
+    retry: false,
+  });
+  const { data: isAdmin } = useQuery({
+    queryKey: ["am-i-admin"],
+    queryFn: () => data.contact.amIAdmin(),
+    retry: false,
+  });
+  const { data: outbox } = useQuery({
+    queryKey: ["outbox"],
+    queryFn: () => data.billing.listOutbox(),
+    enabled: isAdmin === true,
+    retry: false,
+  });
+  const { data: contactMessages } = useQuery({
+    queryKey: ["admin-contact"],
+    queryFn: () => data.contact.listAll(),
+    enabled: isAdmin === true,
+    retry: false,
+  });
+  const { data: applications } = useQuery({
+    queryKey: ["admin-applications"],
+    queryFn: () => data.applications.listAll(),
+    enabled: isAdmin === true,
+    retry: false,
+  });
+  const { data: profileClaims } = useQuery({
+    queryKey: ["profile-claims"],
+    queryFn: () => data.professionals.listClaims(),
+    enabled: isAdmin === true,
+    retry: false,
+  });
 
-  const count = (mentions ?? []).length;
+  const analysis = latestCase ? analyseCrisis(analysisInputFromCase(latestCase)) : null;
+  const notifications = buildNotifications({
+    caseRecord: latestCase ?? null,
+    crisis: analysis ? { urgency: analysis.urgency, title: analysis.title } : null,
+    timeline: analysis?.timeline ?? [],
+    mentions: mentions ?? [],
+    invitations: invitations ?? [],
+    kbr: kbr ?? null,
+    failedEmails: (outbox ?? []).filter((m) => m.status === "failed"),
+    pendingApplications: (applications ?? []).filter((a) => a.status === "pending").length,
+    newContactMessages: (contactMessages ?? []).filter((m) => m.status === "new").length,
+    pendingProfileClaims: (profileClaims ?? []).filter((c) => c.status === "pending").length,
+    now: new Date(),
+  });
+  const count = notifications.length;
 
   return (
     <div className="relative">
@@ -217,31 +284,34 @@ const NotificationBell = () => {
       {open && (
         <div className="absolute right-0 top-full z-50 mt-1 w-80 max-w-[calc(100vw-2rem)] rounded-md border border-border bg-card p-2 shadow-medium">
           <p className="px-2 py-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Väntar på ditt svar
+            Notiser
           </p>
           {count === 0 ? (
             <p className="px-2 py-3 text-sm text-muted-foreground">
-              Inget väntar på dig. Notiser dyker upp här när någon taggar dig
-              för svar i ett meddelande.
+              Inget kräver dig just nu. Frister, taggade meddelanden,
+              deltagarsvar och driftlarm dyker upp här.
             </p>
           ) : (
-            <ul>
-              {(mentions ?? []).slice(0, 6).map((mention) => (
-                <li key={mention.messageId}>
+            <ul className="max-h-96 overflow-y-auto">
+              {notifications.slice(0, 8).map((n) => (
+                <li key={n.id}>
                   <button
                     type="button"
                     onClick={() => {
                       setOpen(false);
-                      navigate("/dashboard/meddelanden");
+                      navigate(n.href);
                     }}
                     className="w-full rounded-md px-2 py-2 text-left transition-colors hover:bg-secondary"
                   >
-                    <span className="block text-sm font-medium text-foreground">
-                      {mention.authorName ?? "Någon"} väntar på ditt svar
-                      {mention.conversationTitle ? ` i ${mention.conversationTitle}` : ""}
+                    <span
+                      className={`block text-sm font-medium ${
+                        n.tone === "critical" ? "text-frist" : "text-foreground"
+                      }`}
+                    >
+                      {n.title}
                     </span>
                     <span className="mt-0.5 block truncate text-xs text-muted-foreground">
-                      {mention.body}
+                      {n.body}
                     </span>
                   </button>
                 </li>

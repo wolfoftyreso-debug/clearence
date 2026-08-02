@@ -810,6 +810,7 @@ export type Database = {
           phone: string | null
           specializations: string[] | null
           referral_fee: number | null
+          source: string
           updated_at: string
           user_id: string | null
           verified: boolean | null
@@ -831,6 +832,7 @@ export type Database = {
           phone?: string | null
           specializations?: string[] | null
           referral_fee?: number | null
+          source?: string
           updated_at?: string
           user_id?: string | null
           verified?: boolean | null
@@ -852,10 +854,50 @@ export type Database = {
           phone?: string | null
           specializations?: string[] | null
           referral_fee?: number | null
+          source?: string
           updated_at?: string
           user_id?: string | null
           verified?: boolean | null
           website?: string | null
+        }
+        Relationships: []
+      }
+      profile_claims: {
+        Row: {
+          contact: string
+          created_at: string
+          id: string
+          motivation: string
+          professional_id: string
+          review_note: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string
+          user_id: string
+        }
+        Insert: {
+          contact: string
+          created_at?: string
+          id?: string
+          motivation: string
+          professional_id: string
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          user_id: string
+        }
+        Update: {
+          contact?: string
+          created_at?: string
+          id?: string
+          motivation?: string
+          professional_id?: string
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          user_id?: string
         }
         Relationships: []
       }
@@ -943,6 +985,28 @@ export type Database = {
       }
       retry_outbound_email: {
         Args: { p_id: string }
+        Returns: undefined
+      }
+      claim_professional_profile: {
+        Args: { p_professional_id: string; p_motivation: string; p_contact: string }
+        Returns: string
+      }
+      list_profile_claims: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          id: string
+          professional_id: string
+          professional_name: string
+          claimant_email: string
+          motivation: string
+          contact: string
+          status: string
+          review_note: string | null
+          created_at: string
+        }[]
+      }
+      review_profile_claim: {
+        Args: { p_claim_id: string; p_approve: boolean; p_note?: string | null }
         Returns: undefined
       }
       set_referral_fee: {
