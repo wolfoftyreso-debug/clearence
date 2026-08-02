@@ -9,7 +9,12 @@
 
 import { PdfWriter, measure, wrapText } from "../src/lib/pdf";
 import { renderReportPdf } from "../src/lib/reports/pdf";
-import { boardMinutesKbr, templateToPdf } from "../src/lib/documentTemplates";
+import { boardMinutesKbr, TEMPLATES, templateToPdf } from "../src/lib/documentTemplates";
+import { buildCrisisReport, buildKbrReport, buildLiquidityReport } from "../src/lib/reports/builders";
+import { buildInvoiceDocument, buildReceiptDocument } from "../src/lib/reports/invoiceDocuments";
+import { analyseCrisis } from "../src/lib/crisisAnalysis";
+import { projectLiquidity } from "../src/lib/liquidityPlan";
+import { COMPANY } from "../src/lib/company";
 import type { ReportModel } from "../src/lib/reports/types";
 
 let passed = 0;
@@ -100,6 +105,114 @@ check("mall: lagrummet med", mallRaw.includes("25 kap. 13 \xa7"));
 check("mall: utkastmarkeringen med", mallRaw.includes("UTKAST"));
 
 check("determinism", latin(renderReportPdf(model)) === reportRaw);
+
+/* --- ALLA produktionsdokument genom motorn --------------------------------- */
+// Varje dokumenttyp produkten kan producera ska ge en strukturellt giltig
+// PDF: rätt huvud och avslut, xref-offsetar som pekar på sina objekt,
+// minst en sida och det egna innehållet i filen. Ingen dokumenttyp får
+// kunna gå sönder utan att det syns här.
+
+const validatePdf = (name: string, bytes: Uint8Array, mustContain: string[]) => {
+  const s = latin(bytes);
+  check(`${name}: PDF-huvud`, s.startsWith("%PDF-1.4"));
+  check(`${name}: EOF`, s.trimEnd().endsWith("%%EOF"));
+  const pages = (s.match(/\/Type \/Page /g) ?? []).length;
+  check(`${name}: minst en sida`, pages >= 1, String(pages));
+  const at = s.indexOf("xref\n");
+  const offsets = s.slice(at).split("\n").filter((l) => /^\d{10} \d{5} n/.test(l));
+  check(
+    `${name}: xref-offsetar giltiga`,
+    at > 0 && offsets.length > 0 && offsets.every((entry, i) => s.slice(Number(entry.slice(0, 10))).startsWith(`${i + 1} 0 obj`)),
+  );
+  // Tusentalsavgränsaren kan vara vanligt mellanslag eller U+00A0
+  // (CP1252-byte \xa0) beroende på vilken formatterare som byggde talet -
+  // ibland blandat i samma tal. Normalisera före jämförelsen i stället
+  // för att gissa kombinationen.
+  const sNorm = s.replace(/\xa0/g, " ");
+  for (const needle of mustContain) {
+    check(`${name}: innehåller "${needle}"`, sNorm.includes(needle));
+  }
+};
+
+// Krisanalysen - samma fixtur som rapporttesterna.
+const fullAnalysis = analyseCrisis({
+  canPaySalary: false, canPayTax: false, canPayRent: true, canPaySuppliers: false,
+  salaryAmount: 420000, salaryDay: 25, taxAmount: 165000, taxDay: 12,
+  rentAmount: 58000, rentDay: 1, totalDebt: 3200000, quickLiquidationValue: 950000,
+  employees: "6-10",
+});
+validatePdf(
+  "krisanalys",
+  renderReportPdf(buildCrisisReport({
+    analysis: fullAnalysis, companyName: "Demobolaget AB", orgNumber: "556000-0000",
+    reference: "abc-123", employees: "6-10",
+    totalDebt: 3200000, quickLiquidationValue: 950000,
+    generatedAt: "2026-07-31T10:00:00.000Z",
+  })),
+  ["Krisanalys", "Demobolaget AB"],
+);
+
+// Kontrollbalansbedömningen.
+validatePdf(
+  "kbr-rapport",
+  renderReportPdf(buildKbrReport({
+    status: "required", message: "Eget kapital understiger hälften.",
+    shareCapital: 100000, totalAssets: 400000, totalLiabilities: 370000,
+    equity: 30000, threshold: 50000,
+    companyName: null, orgNumber: "556000-0000", reference: null,
+    actions: ["Upprätta KBR", "Kalla till kontrollstämma"],
+    generatedAt: "2026-07-31T10:00:00.000Z",
+  })),
+  ["30 000 kr", "25 kap. 13 \xa7"],
+);
+
+// Likviditetsplanen.
+const liqPlan = {
+  openingBalance: 238400,
+  inflows: [{ id: "i1", label: "Kundfaktura", amount: 181500, counterpart: "", dayOfMonth: 3, date: "2026-08-03", recurring: true }],
+  outflows: [{ id: "o1", label: "Hyra", amount: 58000, counterpart: "", dayOfMonth: 1, date: "2026-08-01", recurring: true, category: "rent" as const }],
+};
+validatePdf(
+  "likviditetsplan",
+  renderReportPdf(buildLiquidityReport({
+    plan: liqPlan, projection: projectLiquidity(liqPlan, 90), horizonDays: 90,
+    companyName: "Demobolaget AB", orgNumber: null, reference: null,
+    employerFeeApplied: true, generatedAt: "2026-07-31T10:00:00.000Z",
+  })),
+  ["238 400 kr"],
+);
+
+// Fakturan och kvittot - samma sifferunderlag genom hela kedjan.
+const invoiceFixture = {
+  invoiceNumber: "2026-0042",
+  issuedAt: "2026-08-01T10:00:00.000Z",
+  dueAt: "2026-08-11T10:00:00.000Z",
+  seller: COMPANY,
+  customer: { name: "Demobolaget AB", orgNumber: null, email: "vd@demo.se", address: null },
+  lines: [{ description: "Ärendeavgift", quantity: 1, unitPriceOre: 99500 }],
+  note: null,
+  totals: { netOre: 99500, vatOre: 24875, grossOre: 124375, vatRate: 0.25 },
+};
+validatePdf("faktura", renderReportPdf(buildInvoiceDocument(invoiceFixture)), ["Faktura 2026-0042", "1 243,75 kr"]);
+validatePdf(
+  "kvitto",
+  renderReportPdf(buildReceiptDocument(invoiceFixture, {
+    paidAt: "2026-08-05T10:00:00.000Z", reference: "OCR 42", receiptNumber: "K-2026-0042",
+  })),
+  ["Kvitto K-2026-0042"],
+);
+
+// Samtliga dokumentmallar - inte bara styrelseprotokollet.
+for (const template of TEMPLATES) {
+  validatePdf(
+    `mall: ${template.id}`,
+    templateToPdf(template.build({
+      companyName: "Demobolaget AB", orgNumber: "556012-3456", place: "Tyresö",
+      date: "2026-08-02", attendees: [{ name: "Anna", role: "Företrädare" }],
+    })),
+    ["UTKAST"],
+  );
+}
 
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);
