@@ -30,15 +30,16 @@ const Hero = () => {
           </p>
 
           <h1 className="mt-4 text-4xl font-display leading-tight sm:text-5xl md:text-6xl">
-            Vägledning vid <span className="text-accent">företagskris</span>
+            Ta kontroll över <span className="text-accent">företagskrisen</span>
           </h1>
 
           <p className="mt-6 max-w-2xl text-lg leading-relaxed text-muted-foreground">
-            CLEARANCE hjälper dig som driver aktiebolag att få ordning på läget och se
-            vilka vägar som finns – företagsrekonstruktion, konkurs eller åtgärder för
-            att vända utvecklingen i egen regi. Du svarar på frågor om ekonomin och får
-            tillbaka en sammanfattning med tidslinje och hänvisningar till de regler
-            som gäller.
+            Ekonomiska problem är inte bara en ekonomisk fråga – de är också ett
+            juridiskt ansvar. Många skyldigheter är tidskritiska, och att agera i
+            tid är ofta avgörande. CLEARANCE ger dig som driver aktiebolag
+            överblicken: vad som ska göras, när det ska göras och varför – med
+            fristerna bevakade, besluten dokumenterade och hänvisningar till de
+            regler som gäller.
           </p>
 
           <div className="mt-10 flex flex-col gap-3 sm:flex-row">

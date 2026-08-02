@@ -105,8 +105,11 @@ export const ActionPlan = ({ caseRecord, timeline }: ActionPlanProps) => {
     <section className="rounded-md border border-border bg-card p-5 shadow-soft">
       <h2 className="flex items-center gap-2 font-semibold text-foreground">
         <ListTodo className="h-5 w-5 text-accent" aria-hidden="true" />
-        Handlingsplan
+        Nästa steg
       </h2>
+      <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+        Vad som ska göras, när och varför – så att inget viktigt missas.
+      </p>
 
       {/* Fristerna */}
       {sortedDeadlines.length > 0 && (

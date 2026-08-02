@@ -13,7 +13,7 @@ import {
   dossierLiquidityFromPayments,
 } from "@/lib/integrations/creditDossier";
 import { downloadTextFile } from "@/lib/integrations/download";
-import { openReport } from "@/lib/reports/deliver";
+import { useInlineReport } from "@/components/reports/useInlineReport";
 import { AlertTriangle, FileDown, FileText, Loader2 } from "lucide-react";
 
 /**
@@ -33,6 +33,7 @@ import { AlertTriangle, FileDown, FileText, Loader2 } from "lucide-react";
 const KINDS = ["rörelsekredit", "factoring", "brygglån", "rekonstruktionsfinansiering"] as const;
 
 const CreditDossierPage = () => {
+  const { open: openInline, viewer: reportViewer } = useInlineReport();
   const { user } = useAuth();
 
   const { data: latestCase, isLoading } = useQuery({
@@ -90,7 +91,7 @@ const CreditDossierPage = () => {
       setBlockers(result.missing);
       return;
     }
-    openReport(result.report);
+    openInline(result.report);
   };
 
   const handleDownloadPackage = () => {
@@ -227,6 +228,7 @@ const CreditDossierPage = () => {
           </p>
         </div>
       )}
+      {reportViewer}
     </DashboardShell>
   );
 };

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { downloadReport, openReport } from "@/lib/reports/deliver";
+import { downloadReport } from "@/lib/reports/deliver";
+import { useInlineReport } from "./useInlineReport";
 import type { ReportModel } from "@/lib/reports/types";
 import { Download, FileText } from "lucide-react";
 
@@ -15,10 +16,9 @@ interface ReportButtonProps {
 /**
  * The single way a report leaves the application.
  *
- * The primary action opens the report so the user can save it as a PDF from
- * the print dialog; the secondary saves the file. Both are offered because
- * they are different jobs - one is for the meeting, the other is for the
- * archive - and because a popup blocker must not leave the user with nothing.
+ * Rapporten visas i appens eget helskärmslager (useInlineReport), aldrig i
+ * en ny flik - se kroken för varför. "Spara fil" finns kvar för arkivet
+ * och mejlbilagan.
  */
 export const ReportButton = ({
   build,
@@ -27,39 +27,50 @@ export const ReportButton = ({
   className,
 }: ReportButtonProps) => {
   const [error, setError] = useState<string | null>(null);
+  const { open, viewer } = useInlineReport();
 
-  const handle = (action: typeof openReport) => {
+  const show = () => {
     setError(null);
     try {
-      const result = action(build());
-      if (!result.ok) setError(result.reason);
+      open(build());
     } catch {
       setError("Rapporten kunde inte skapas. Försök igen.");
+    }
+  };
+
+  const save = () => {
+    setError(null);
+    try {
+      const result = downloadReport(build());
+      if (!result.ok) setError(result.reason);
+    } catch {
+      setError("Rapporten kunde inte sparas. Försök igen.");
     }
   };
 
   return (
     <div className={className}>
       <div className="flex flex-wrap gap-3">
-        <Button type="button" variant={variant} onClick={() => handle(openReport)}>
+        <Button type="button" variant={variant} onClick={show}>
           <FileText className="h-4 w-4" aria-hidden="true" />
           {label}
         </Button>
-        <Button type="button" variant="outline" onClick={() => handle(downloadReport)}>
+        <Button type="button" variant="outline" onClick={save}>
           <Download className="h-4 w-4" aria-hidden="true" />
           Spara fil
         </Button>
       </div>
       <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-        Rapporten öppnas i en ny flik. Välj <strong>Spara som PDF</strong> i
-        utskriftsdialogen om du vill ha den som PDF, eller spara den som fil för att
-        bifoga i ett mejl.
+        Rapporten visas här i appen. Välj <strong>Skriv ut</strong> och sedan{" "}
+        <strong>Spara som PDF</strong> om du vill ha den som PDF, eller spara
+        den som fil för att bifoga i ett mejl.
       </p>
       {error && (
         <p className="mt-2 text-sm text-destructive" role="alert">
           {error}
         </p>
       )}
+      {viewer}
     </div>
   );
 };

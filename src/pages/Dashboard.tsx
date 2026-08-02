@@ -30,6 +30,7 @@ import { useAuth } from "@/hooks/useAuth";
 import type { CaseRecord } from "@/data/types";
 import { DashboardShell } from "@/components/dashboard/DashboardShell";
 import { ActionPlan } from "@/components/dashboard/ActionPlan";
+import { ControlStatus } from "@/components/dashboard/ControlStatus";
 import { analysisInputFromCase, parseAmount } from "@/lib/caseAnalysis";
 
 
@@ -208,6 +209,10 @@ const Dashboard = () => {
               {/* Handlingsplanen först: frågan "vad gör jag, före vilket
                   datum" ska besvaras före all statistik. */}
               <div className="mb-6">
+                <ControlStatus
+                  caseRecord={latestCase}
+                  timeline={analyseCrisis(analysisInput(latestCase)).timeline}
+                />
                 <ActionPlan
                   caseRecord={latestCase}
                   timeline={analyseCrisis(analysisInput(latestCase)).timeline}

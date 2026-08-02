@@ -10,7 +10,7 @@ import { billingMessage, billingState, TRIAL_DAYS } from "@/lib/billing";
 import { COMPANY, paymentAccounts } from "@/lib/company";
 import { formatOre, VAT_RATE } from "@/lib/invoice";
 import { buildInvoiceDocument, buildReceiptDocument } from "@/lib/reports/invoiceDocuments";
-import { openReport } from "@/lib/reports/deliver";
+import { useInlineReport } from "@/components/reports/useInlineReport";
 import type { CustomerInvoiceRecord } from "@/data/types";
 import { CheckCircle2, Download, Loader2, Receipt } from "lucide-react";
 
@@ -64,6 +64,7 @@ const invoiceFromRecord = (
 });
 
 const DashboardSettings = () => {
+  const { open: openInline, viewer: reportViewer } = useInlineReport();
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
@@ -110,13 +111,13 @@ const DashboardSettings = () => {
 
   const printInvoice = (record: CustomerInvoiceRecord) => {
     const invoice = invoiceFromRecord(record, { name: customerName, email: user?.email ?? "" });
-    openReport(buildInvoiceDocument(invoice));
+    openInline(buildInvoiceDocument(invoice));
   };
 
   const printReceipt = (record: CustomerInvoiceRecord) => {
     if (!record.paidAt || !record.receiptNumber) return;
     const invoice = invoiceFromRecord(record, { name: customerName, email: user?.email ?? "" });
-    openReport(
+    openInline(
       buildReceiptDocument(invoice, {
         paidAt: record.paidAt,
         reference: record.paymentReference,
@@ -299,6 +300,7 @@ const DashboardSettings = () => {
           )}
         </WizardCard>
       </div>
+      {reportViewer}
     </DashboardShell>
   );
 };
