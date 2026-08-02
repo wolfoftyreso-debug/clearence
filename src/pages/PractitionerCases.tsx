@@ -124,6 +124,34 @@ const PractitionerCases = () => {
   });
   const portfolio = buildPortfolioSummary(portfolioCases, now);
   const byCaseId = new Map(portfolioCases.map((pc) => [pc.caseRecord.id, pc]));
+
+  // Klientfältet: rådgivarens dag i fyra tal. Samma källor som korten
+  // nedanför - listan och siffrorna kan aldrig säga olika saker.
+  const clientStats = {
+    active: (cases ?? []).filter((c) => !c.closedAt || c.healthMode).length,
+    critical: portfolioCases.filter((pc) => pc.severity === "critical").length,
+    openTasks: portfolioCases.reduce((sum, pc) => sum + pc.openTasks, 0),
+    waiting: (mentions ?? []).length,
+  };
+
+  /** Risknivån per klient, ur samma bedömning som prioritetsordningen. */
+  const RISK_BADGE: Record<string, { label: string; tone: string }> = {
+    critical: { label: "Kritisk", tone: "border-frist/50 bg-frist/10 text-frist" },
+    serious: { label: "Hög", tone: "border-warning/50 bg-warning/10 text-foreground" },
+    elevated: { label: "Medel", tone: "border-border bg-secondary text-foreground" },
+    stable: { label: "Låg", tone: "border-border text-muted-foreground" },
+  };
+
+  /** Ärendetypen som klientlistans statuskolumn. */
+  const caseStatus = (record: CaseRecord): string => {
+    if (record.healthMode) return "Hälsoläge";
+    if (record.closedAt) return "Avslutat";
+    if (record.recommendationType === "reconstruction") return "Rekonstruktion";
+    if (record.recommendationType === "bankruptcy") return "Konkursansökan";
+    const kbr = kbrForCard(record.id);
+    if (kbr && (kbr.status === "required" || kbr.status === "critical")) return "Kontrollbalans";
+    return "Stabilisering";
+  };
   const orderedCases = portfolio.ranked
     .map((r) => ({ ...r, pc: byCaseId.get(r.caseId) }))
     .filter((r) => r.pc !== undefined);
@@ -131,6 +159,17 @@ const PractitionerCases = () => {
   const kbrForCard = (caseId: string) => {
     const index = (cases ?? []).findIndex((c) => c.id === caseId);
     return index >= 0 ? (kbrQueries[index]?.data ?? null) : null;
+  };
+
+  /** Närmaste öppna uppgift i ärendet - klientlistans "nästa aktivitet". */
+  const nextTaskFor = (caseId: string) => {
+    const index = (cases ?? []).findIndex((c) => c.id === caseId);
+    const tasks = index >= 0 ? (taskQueries[index]?.data ?? []) : [];
+    return (
+      tasks
+        .filter((t) => !t.doneAt)
+        .sort((a, b) => (a.dueDate ?? "9999").localeCompare(b.dueDate ?? "9999"))[0] ?? null
+    );
   };
 
   /**
@@ -249,6 +288,33 @@ const PractitionerCases = () => {
           </div>
         ) : (
           <>
+            {/* Klientfältet: dagen i fyra tal, före all analys. */}
+            <section aria-label="Mina klienter" className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              {[
+                { label: "Aktiva", value: clientStats.active, tone: "text-foreground" },
+                {
+                  label: "Kritiska",
+                  value: clientStats.critical,
+                  tone: clientStats.critical > 0 ? "text-frist" : "text-foreground",
+                },
+                { label: "Åtgärder", value: clientStats.openTasks, tone: "text-foreground" },
+                {
+                  label: "Väntar på svar",
+                  value: clientStats.waiting,
+                  tone: clientStats.waiting > 0 ? "text-warning" : "text-foreground",
+                },
+              ].map((stat) => (
+                <div key={stat.label} className="rounded-md border border-border bg-card p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    {stat.label}
+                  </p>
+                  <p className={`mt-0.5 text-2xl font-semibold tabular-nums ${stat.tone}`}>
+                    {stat.value}
+                  </p>
+                </div>
+              ))}
+            </section>
+
             {/* Portföljrapporten */}
             <section className="rounded-md border border-border bg-card p-5 shadow-soft">
               <h2 className="flex items-center gap-2 text-lg font-semibold text-foreground">
@@ -350,6 +416,14 @@ const PractitionerCases = () => {
                         <h3 className="font-medium text-foreground">
                           {record.companyName ?? record.orgNumber}
                         </h3>
+                        <span className="rounded-full border border-border bg-secondary px-2 py-0.5 text-xs font-medium text-foreground">
+                          {caseStatus(record)}
+                        </span>
+                        <span
+                          className={`rounded-full border px-2 py-0.5 text-xs font-medium ${RISK_BADGE[pc!.severity]?.tone ?? RISK_BADGE.stable.tone}`}
+                        >
+                          Risk: {RISK_BADGE[pc!.severity]?.label ?? "Låg"}
+                        </span>
                         {byCaseId.get(record.id) && kbrForCard(record.id) && (
                           <span
                             className={`rounded-full border px-2 py-0.5 text-xs font-medium ${KBR_BADGE[kbrForCard(record.id)!.status].tone}`}
@@ -375,6 +449,13 @@ const PractitionerCases = () => {
                           : "Inga kommande frister"}
                         {` · ${tasks} öppna uppgifter`}
                       </p>
+                      {nextTaskFor(record.id) && (
+                        <p className="mt-0.5 text-xs text-foreground/80">
+                          Nästa aktivitet: {nextTaskFor(record.id)!.label}
+                          {nextTaskFor(record.id)!.dueDate &&
+                            ` – ${countdownTo(nextTaskFor(record.id)!.dueDate!, now).label}`}
+                        </p>
+                      )}
                     </div>
                     <div className="flex flex-wrap gap-2">
                       <Button variant="outline" size="sm" onClick={() => exportCaseIcs(record)}>

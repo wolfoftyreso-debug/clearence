@@ -23,7 +23,7 @@ page.setDefaultTimeout(30000);
 
 await page.goto(`${BASE}/login`, { waitUntil: "domcontentloaded" });
 await page.waitForTimeout(800);
-await page.click('button:has-text("Gå in i demon")');
+await page.click('button:has-text("Demo – Företag")');
 await page.waitForTimeout(1500);
 
 // 1. Hopfälld avslutslänk längst ner - inte en skrikande sektion.

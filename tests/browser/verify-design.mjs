@@ -39,7 +39,7 @@ page.setDefaultTimeout(30000);
 // Demoinloggning så att skyddade rutter går att granska.
 await page.goto(`${BASE}/login`, { waitUntil: "domcontentloaded" });
 await page.waitForTimeout(800);
-const demoButton = page.locator('button:has-text("Gå in i demon")');
+const demoButton = page.locator('button:has-text("Demo – Företag")');
 if ((await demoButton.count()) > 0) {
   await demoButton.click();
   await page.waitForTimeout(1200);

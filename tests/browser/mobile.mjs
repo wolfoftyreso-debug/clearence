@@ -65,7 +65,7 @@ for (const width of WIDTHS) {
   page.setDefaultNavigationTimeout(30_000);
   await page.goto(`${BASE}/login`, { waitUntil: "domcontentloaded" });
   await page.waitForTimeout(400);
-  await page.click('button:has-text("Gå in i demon")').catch(() => {});
+  await page.click('button:has-text("Demo – Företag")').catch(() => {});
   await page.waitForTimeout(900);
 
   for (const route of ROUTES) {

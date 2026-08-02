@@ -18,6 +18,7 @@ import {
   Loader2,
   TrendingUp,
   Trash2,
+  Users,
 } from "lucide-react";
 
 /**
@@ -556,6 +557,60 @@ const NorthStarSection = () => {
   );
 };
 
+/**
+ * Plattformen i siffror: konton och katalog. Räknat ur samma frågor som
+ * kund- och katalogvyerna - inga egna, avvikande summeringar.
+ */
+const PlatformSection = () => {
+  const { data: customers } = useQuery({
+    queryKey: ["customers"],
+    queryFn: () => data.billing.listCustomers(),
+  });
+  const { data: professionals } = useQuery({
+    queryKey: ["professionals"],
+    queryFn: () => data.professionals.listActive(),
+  });
+
+  const count = (fn: (c: NonNullable<typeof customers>[number]) => boolean) =>
+    customers ? customers.filter(fn).length : undefined;
+  const inCatalog = (categories: string[]) =>
+    professionals
+      ? professionals.filter((p) => categories.includes(p.category)).length
+      : undefined;
+
+  const tiles: { label: string; value: number | undefined; note: string }[] = [
+    { label: "Företagskonton", value: count((c) => c.role === "company"), note: "Bolag med konto på plattformen." },
+    { label: "Rådgivarkonton", value: count((c) => c.role === "advisor"), note: "Verifierade rådgivare med inloggning." },
+    { label: "Jurister i katalogen", value: inCatalog(["affarsjurist", "rekonstruktor"]), note: "Jurister och rekonstruktörer." },
+    { label: "Revisorer i katalogen", value: inCatalog(["revisor"]), note: "Granskning och kontrollbalansräkning." },
+  ];
+
+  return (
+    <section aria-labelledby="platform-heading">
+      <h2
+        id="platform-heading"
+        className="flex items-center gap-2 text-lg font-semibold text-foreground"
+      >
+        <Users className="h-5 w-5 text-accent" aria-hidden="true" />
+        Plattformen just nu
+      </h2>
+      <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {tiles.map((tile) => (
+          <div key={tile.label} className="flex flex-col rounded-md border border-border bg-card p-4">
+            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              {tile.label}
+            </span>
+            <span className="mt-1 text-3xl font-semibold tabular-nums text-foreground">
+              {tile.value ?? "–"}
+            </span>
+            <span className="mt-1 text-sm text-muted-foreground">{tile.note}</span>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+};
+
 const AdminOverview = () => {
   const now = new Date();
 
@@ -631,6 +686,8 @@ const AdminOverview = () => {
             urgent={false}
           />
         </section>
+
+        <PlatformSection />
 
         <NorthStarSection />
 

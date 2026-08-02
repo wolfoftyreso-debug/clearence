@@ -7,7 +7,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { data, IS_DEMO } from "@/data";
 import { translateAuthError } from "@/lib/authErrors";
 import type { UserRole } from "@/data/types";
-import { Briefcase, Building2, Loader2 } from "lucide-react";
+import { Briefcase, Building2, Loader2, Scale, SlidersHorizontal } from "lucide-react";
 
 /**
  * Rollen väljs en gång, vid registrering.
@@ -47,20 +47,23 @@ const Login = () => {
   const redirectTo = (location.state as { from?: string } | null)?.from ?? "/dashboard";
 
   /**
-   * One click into the signed-in product. Demo builds accept any credentials,
-   * so the only thing typing them achieves is a chance to get stuck.
+   * One click into the signed-in product, from the perspective that matters
+   * to the viewer: the company in crisis, the advisor with a client list, or
+   * the operator. Demo builds accept any credentials, so the only thing
+   * typing them achieves is a chance to get stuck - each role lands directly
+   * in its own start view.
    */
-  const enterDemo = async () => {
+  const enterDemo = async (demoEmail: string, landing: string) => {
     setError(null);
     setInfo(null);
     setLoading(true);
-    const result = await signIn("demo@example.invalid", "demo-losenord");
+    const result = await signIn(demoEmail, "demo123");
     setLoading(false);
     if (result.error) {
       setError(translateAuthError(result.error));
       return;
     }
-    navigate(redirectTo, { replace: true });
+    navigate(landing, { replace: true });
   };
 
   const handleSubmit = async (e: FormEvent) => {
@@ -137,22 +140,67 @@ const Login = () => {
 
         {IS_DEMO && (
           <div className="mb-4 rounded-md border border-warning/40 bg-warning/10 p-4">
-            <p className="text-sm font-semibold text-foreground">Demoläge</p>
+            <p className="text-sm font-semibold text-foreground">Testa Clearance</p>
             <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
-              Ingen riktig inloggning. Klicka nedan så kommer du direkt in i ett
-              exempelärende – eller skriv vilken e-post och vilket lösenord som helst.
+              Välj vilket perspektiv du vill uppleva – varje konto landar i sin
+              egen startvy med egna exempeldata.
             </p>
-            <Button
-              type="button"
-              variant="accent"
-              size="lg"
-              className="mt-3 w-full"
-              disabled={loading}
-              onClick={() => void enterDemo()}
-            >
-              {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-              Gå in i demon
-            </Button>
+            <div className="mt-3 space-y-2">
+              {([
+                {
+                  email: "foretag@clearance.demo",
+                  label: "Demo – Företag",
+                  description: "Så hanterar ett bolag sin ekonomiska situation.",
+                  icon: Building2,
+                  landing: "/dashboard",
+                },
+                {
+                  email: "jurist@clearance.demo",
+                  label: "Demo – Jurist/Revisor",
+                  description: "Rådgivarens klientlista med flera bolag samtidigt.",
+                  icon: Scale,
+                  landing: "/arenden",
+                },
+                {
+                  email: "admin@clearance.demo",
+                  label: "Demo – Systemadministratör",
+                  description: "Drift, övervakning och plattformens statistik.",
+                  icon: SlidersHorizontal,
+                  landing: "/admin",
+                },
+              ] as const).map((account) => {
+                const Icon = account.icon;
+                return (
+                  <button
+                    key={account.email}
+                    type="button"
+                    disabled={loading}
+                    onClick={() => void enterDemo(account.email, account.landing)}
+                    className="flex w-full items-start gap-3 rounded-md border border-border bg-card p-3 text-left transition-colors hover:border-accent disabled:opacity-60"
+                  >
+                    <Icon className="mt-0.5 h-5 w-5 flex-shrink-0 text-accent" aria-hidden="true" />
+                    <span className="min-w-0">
+                      <span className="block text-sm font-medium text-foreground">
+                        {account.label}
+                      </span>
+                      <span className="block text-xs text-muted-foreground">
+                        {account.description}
+                      </span>
+                      <span className="mt-0.5 block break-all text-xs font-medium text-accent">
+                        {account.email}
+                      </span>
+                    </span>
+                    {loading && (
+                      <Loader2 className="ml-auto h-4 w-4 animate-spin text-accent" aria-hidden="true" />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="mt-2 text-xs text-muted-foreground">
+              Lösenord: <span className="font-medium text-foreground">demo123</span> – demon
+              accepterar vilka uppgifter som helst i formuläret nedan.
+            </p>
           </div>
         )}
 

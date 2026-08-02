@@ -17,7 +17,7 @@ const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
 page.setDefaultTimeout(30000);
 await page.goto(`${BASE}/login`, { waitUntil: "domcontentloaded" });
 await page.waitForTimeout(800);
-await page.click('button:has-text("Gå in i demon")');
+await page.click('button:has-text("Demo – Företag")');
 await page.waitForTimeout(1500);
 await page.goto(`${BASE}/dashboard`, { waitUntil: "domcontentloaded" });
 await page.waitForTimeout(1200);
@@ -45,7 +45,7 @@ await page.waitForTimeout(400);
 //    PDF-knappen ska VISA PDF:en i lagret med förklaringen.
 await page.setContent(`<iframe src="${BASE}/login" style="width:1200px;height:800px"></iframe>`);
 const inner = page.frameLocator("iframe");
-await inner.locator('button:has-text("Gå in i demon")').click();
+await inner.locator('button:has-text("Demo – Företag")').click();
 await page.waitForTimeout(1500);
 await page.evaluate((base) => {
   const f = document.querySelector("iframe");

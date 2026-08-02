@@ -43,7 +43,7 @@ const download = async (trigger) => {
 
 await page.goto(`${BASE}/login`, { waitUntil: "domcontentloaded" });
 await page.waitForTimeout(600);
-await page.click('button:has-text("Gå in i demon")');
+await page.click('button:has-text("Demo – Företag")');
 await page.waitForTimeout(1500);
 
 /* 1. Krisanalysen: direktknappen på startsidan. */

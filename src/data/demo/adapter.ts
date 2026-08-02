@@ -436,6 +436,166 @@ const seedForUser = (userId: string) => {
 };
 
 /**
+ * De tre demokontona - ett perspektiv per målgrupp. Företaget i kris,
+ * juristen/revisorn med en klientportfölj, och driften. Inloggning med ett
+ * av dem sår om demons tillstånd för just den rollen; annars skulle ett
+ * rollbyte visa förra rollens data.
+ */
+export const DEMO_ACCOUNTS = {
+  company: "foretag@clearance.demo",
+  advisor: "jurist@clearance.demo",
+  admin: "admin@clearance.demo",
+} as const;
+
+/** En klient i rådgivarens portfölj: samma stomme som seedCase, egna siffror. */
+const clientCase = (
+  userId: string,
+  overrides: Partial<CaseRecord> & { id: string; companyName: string; orgNumber: string },
+): CaseRecord => ({
+  ...seedCase(userId),
+  recommendationReasons: [],
+  recommendationNextSteps: [],
+  recommendationDescription:
+    "Exempelklient i demoläget. Siffrorna är påhittade och beskriver inte något verkligt bolag.",
+  ...overrides,
+});
+
+/**
+ * Juristens/revisorns demo: fyra klientbolag i olika lägen, så att
+ * klientlistan visar hela spannet - rekonstruktion, kontrollbalansfråga,
+ * konkursansökan och ett hanterbart skatteärende. Namnen är uppenbart
+ * påhittade av samma skäl som byråerna ovan.
+ */
+const seedForAdvisor = (userId: string) => {
+  const bygg = clientCase(userId, {
+    id: "demo-klient-bygg",
+    companyName: "Demo Bygg AB",
+    orgNumber: "556012-1111",
+    recommendationType: "reconstruction",
+    recommendationTitle: "Företagsrekonstruktion pågår",
+    canPaySalary: false,
+    salaryAmount: "380000",
+    salaryDay: 25,
+    canPayTax: false,
+    taxAmount: "140000",
+    taxDay: 12,
+    canPayRent: true,
+    rentAmount: "45000",
+    rentDay: 1,
+    totalDebt: "2900000",
+    quickLiquidationValue: "800000",
+  });
+  const taxi = clientCase(userId, {
+    id: "demo-klient-taxi",
+    companyName: "Taxi Syd Demo AB",
+    orgNumber: "556012-2222",
+    recommendationType: "stabilize",
+    recommendationTitle: "Kontrollbalansfrågan utreds",
+    canPaySalary: true,
+    salaryAmount: "260000",
+    salaryDay: 25,
+    canPayTax: false,
+    taxAmount: "90000",
+    taxDay: 12,
+    canPayRent: true,
+    rentAmount: "30000",
+    rentDay: 1,
+    totalDebt: "1100000",
+    quickLiquidationValue: "700000",
+  });
+  const milano = clientCase(userId, {
+    id: "demo-klient-milano",
+    companyName: "Restaurang Milano Demo AB",
+    orgNumber: "556012-3333",
+    recommendationType: "bankruptcy",
+    recommendationTitle: "Konkursansökan förbereds",
+    canPaySalary: false,
+    salaryAmount: "310000",
+    salaryDay: 25,
+    canPayTax: false,
+    taxAmount: "185000",
+    taxDay: 12,
+    canPayRent: false,
+    rentAmount: "72000",
+    rentDay: 1,
+    canPaySuppliers: false,
+    totalDebt: "4600000",
+    quickLiquidationValue: "500000",
+  });
+  const elservice = clientCase(userId, {
+    id: "demo-klient-elservice",
+    companyName: "Elservice Demo Sverige AB",
+    orgNumber: "556012-4444",
+    recommendationType: "stabilize",
+    recommendationTitle: "Skatteärende – anstånd söks",
+    canPaySalary: true,
+    salaryAmount: "190000",
+    salaryDay: 25,
+    canPayTax: false,
+    taxAmount: "210000",
+    taxDay: 12,
+    canPayRent: true,
+    rentAmount: "22000",
+    rentDay: 1,
+    canPaySuppliers: true,
+    totalDebt: "900000",
+    quickLiquidationValue: "850000",
+  });
+
+  state.cases = [bygg, taxi, milano, elservice];
+  state.payments = seedPayments(bygg.id);
+  // Kontrollbalansfrågan är taxiklientens ärendetyp - bedömningen syns
+  // som badge i klientlistan.
+  state.kbrAssessments = [{ caseId: taxi.id, status: "required", createdAt: now() }];
+  // Öppna uppgifter i olika ärenden - klientfältets "åtgärder".
+  const task = (caseId: string, label: string, dueInDays: number | null): CaseTask => ({
+    id: uid(),
+    caseId,
+    label,
+    dueDate: dueInDays === null ? null : isoDaysFromNow(dueInDays),
+    doneAt: null,
+    doneBy: null,
+    source: "manual",
+    createdAt: now(),
+  });
+  state.caseTasks = [
+    task(bygg.id, "Förbered borgenärsmöte", 1),
+    task(taxi.id, "Begär kompletterande balansrapport", 2),
+    task(milano.id, "Ring företrädaren om konkursansökan", 0),
+    task(elservice.id, "Skicka yttrande till Skatteverket", 3),
+  ];
+};
+
+/**
+ * Driftens demo: rådgivarportföljen som underlag för statistiken, plus ett
+ * återhämtat bolag i hälsoläget - North Star ska inte stå på noll när
+ * plattformen visas upp.
+ */
+const seedForOps = (userId: string) => {
+  seedForAdvisor(userId);
+  state.cases = [
+    ...state.cases,
+    {
+      ...seedCase(userId),
+      id: "demo-klient-handel",
+      companyName: "Demo Handel AB",
+      orgNumber: "556012-5555",
+      recommendationType: "stabilize",
+      recommendationTitle: "Stabiliserat efter åtgärdsprogram",
+      recommendationReasons: [],
+      recommendationNextSteps: [],
+      canPaySalary: true,
+      canPayTax: true,
+      canPayRent: true,
+      canPaySuppliers: true,
+      closedAt: `${isoDaysFromNow(-14)}T09:00:00.000Z`,
+      exitReason: "stabilized",
+      healthMode: true,
+    },
+  ];
+};
+
+/**
  * A snapshot shaped like something a real accounting system would return, so
  * the insight engine has something to chew on in the demo. Same rules as the
  * rest of the demo data: obviously invented names, and the tax account is
@@ -571,8 +731,32 @@ export const demoAdapter: DataPort = {
       return { error: null, needsEmailConfirmation: false };
     },
     async signIn(email) {
-      state.user = { id: demoUserId(email), email };
-      if (state.cases.length === 0) seedForUser(state.user.id);
+      const user = { id: demoUserId(email), email };
+      const account = email.trim().toLowerCase();
+      // De tre rollkontona sår om hela tillståndet: ett rollbyte ska visa
+      // rollens värld, inte resterna av den förra. Det gamla aktiva-ärende-
+      // valet pekar då på ärenden som inte längre finns och rensas.
+      if (
+        account === DEMO_ACCOUNTS.company ||
+        account === DEMO_ACCOUNTS.advisor ||
+        account === DEMO_ACCOUNTS.admin
+      ) {
+        state = { ...emptyState(), user };
+        localStorage.removeItem("clearance-active-case");
+        if (account === DEMO_ACCOUNTS.advisor) {
+          seedForAdvisor(user.id);
+          state.profile = { userId: user.id, role: "advisor", displayName: "Demo Juristbyrå", phone: null };
+        } else if (account === DEMO_ACCOUNTS.admin) {
+          seedForOps(user.id);
+          state.profile = { userId: user.id, role: "company", displayName: "Clearance Drift", phone: null };
+        } else {
+          seedForUser(user.id);
+          state.profile = { userId: user.id, role: "company", displayName: "Demobolaget AB", phone: null };
+        }
+      } else {
+        state.user = user;
+        if (state.cases.length === 0) seedForUser(user.id);
+      }
       save();
       notify();
       return { error: null };

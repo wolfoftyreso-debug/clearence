@@ -20,7 +20,7 @@ const goto = async (path) => {
 
 // Demo-inloggning
 await goto("/login");
-await page.click('button:has-text("Gå in i demon")');
+await page.click('button:has-text("Demo – Företag")');
 await page.waitForTimeout(1200);
 check("demo-inloggning når dashboard", page.url().includes("/dashboard"));
 
@@ -78,7 +78,7 @@ check("Creditsafe under Inom kort", /Creditsafe/i.test(docs), docs.slice(0, 200)
 // 6. Utan ärende: KBR visar guiden i stället för förvalet
 await page.evaluate(() => localStorage.clear());
 await goto("/login");
-await page.click('button:has-text("Gå in i demon")');
+await page.click('button:has-text("Demo – Företag")');
 await page.waitForTimeout(1000);
 // töm ärendena direkt i demolagret
 await page.evaluate(() => {

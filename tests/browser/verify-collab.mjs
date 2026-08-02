@@ -27,7 +27,7 @@ const goto = async (path) => {
 };
 
 await goto("/login");
-await page.click('button:has-text("Gå in i demon")');
+await page.click('button:has-text("Demo – Företag")');
 await page.waitForTimeout(1200);
 
 // 1. Deltagarsidan: bjud in en revisor
