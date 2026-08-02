@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { downloadReportPdf } from "@/lib/reports/deliver";
 import { useInlineReport } from "./useInlineReport";
 import type { ReportModel } from "@/lib/reports/types";
 import { Download, FileText } from "lucide-react";
@@ -27,7 +26,7 @@ export const ReportButton = ({
   className,
 }: ReportButtonProps) => {
   const [error, setError] = useState<string | null>(null);
-  const { open, viewer } = useInlineReport();
+  const { open, openPdf, viewer } = useInlineReport();
 
   const show = () => {
     setError(null);
@@ -41,8 +40,9 @@ export const ReportButton = ({
   const save = () => {
     setError(null);
     try {
-      const result = downloadReportPdf(build());
-      if (!result.ok) setError(result.reason);
+      // Laddar ner i en vanlig flik; inbäddat visas PDF:en i visaren i
+      // stället för att en blockerad nedladdning ser ut som ingenting.
+      openPdf(build());
     } catch {
       setError("Rapporten kunde inte sparas. Försök igen.");
     }

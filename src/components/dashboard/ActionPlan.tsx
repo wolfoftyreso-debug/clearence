@@ -32,11 +32,25 @@ import { ArrowRight, CalendarClock, CheckCircle2, ChevronDown, ListTodo, Loader2
  *    belägga.
  */
 
+/**
+ * Fristernas visuella allvar. Tre lika grå boxar för tre olika allvarliga
+ * datum KÄNDES som ingenting - hierarkin ska synas innan texten lästs:
+ * vänsterkanten bär färgen, nedräkningen är radens största element och den
+ * närmast förestående fristen pekas ut även när den ligger veckor bort.
+ * Sakligt, inte skrämmande: färgen graderar brådska, texten är oförändrad.
+ */
 const toneClass: Record<Countdown["tone"], string> = {
-  passed: "border-frist/40 bg-frist/10 text-frist",
-  today: "border-frist/40 bg-frist/10 text-frist",
-  soon: "border-warning/40 bg-warning/10 text-foreground",
-  later: "border-border bg-secondary/40 text-muted-foreground",
+  passed: "border-l-frist border-frist/40 bg-frist/10",
+  today: "border-l-frist border-frist/40 bg-frist/10",
+  soon: "border-l-warning border-warning/50 bg-warning/10",
+  later: "border-l-border border-border bg-secondary/30",
+};
+
+const countdownClass: Record<Countdown["tone"], string> = {
+  passed: "text-frist",
+  today: "text-frist",
+  soon: "text-warning-foreground",
+  later: "text-foreground",
 };
 
 const sek = (value: number) =>
@@ -169,39 +183,64 @@ export const ActionPlan = ({ caseRecord, timeline }: ActionPlanProps) => {
       {/* Fristerna */}
       {sortedDeadlines.length > 0 && (
         <div id="frister" className="mt-4 scroll-mt-20">
-          <h3 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            <CalendarClock className="h-3.5 w-3.5" aria-hidden="true" />
+          <h3 className="flex items-center gap-2 text-sm font-bold text-foreground">
+            <CalendarClock className="h-4 w-4 text-accent" aria-hidden="true" />
             Datum som räknas ned
           </h3>
           <ul className="mt-2 space-y-2">
-            {sortedDeadlines.map((event) => {
+            {sortedDeadlines.map((event, index) => {
               const countdown = countdownTo(event.iso, now);
+              // Den närmast förestående fristen får blå markering och
+              // etiketten NÄRMAST även när inget är akut - blicken ska
+              // alltid veta var den ska börja.
+              const isNext =
+                countdown.tone !== "passed" &&
+                sortedDeadlines.findIndex((e) => countdownTo(e.iso, now).tone !== "passed") === index;
+              const highlight =
+                isNext && countdown.tone === "later"
+                  ? "border-l-accent border-accent/40 bg-accent/5"
+                  : toneClass[countdown.tone];
               return (
                 <li
                   key={`${event.iso}-${event.label}`}
-                  className={`rounded-md border p-3 ${toneClass[countdown.tone]}`}
+                  className={`rounded-md border border-l-4 p-3.5 ${highlight}`}
                 >
                   {/* Rubrik och datum på första raden, beloppet på en egen -
                       inklämt bredvid datumet bröts "420 000 kr" mitt i talet
                       på en telefon. Ett belopp som radbryts läses fel, och
                       fel läsning av ett belopp är värre än en rad till. */}
-                  <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
-                    <span className="min-w-0 text-sm font-medium text-foreground">{event.label}</span>
-                    <span className="whitespace-nowrap text-sm font-semibold tabular-nums">
-                      {new Date(event.iso).toLocaleDateString("sv-SE", {
-                        day: "numeric",
-                        month: "short",
-                      })}{" "}
-                      · {countdown.label}
+                  <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1">
+                    <span className="min-w-0">
+                      <span className="block text-sm font-semibold text-foreground">{event.label}</span>
+                      {event.amount !== null && (
+                        <span className="mt-0.5 block whitespace-nowrap font-display text-lg font-semibold tabular-nums text-foreground">
+                          {sek(event.amount)}
+                        </span>
+                      )}
+                    </span>
+                    <span className="text-right">
+                      <span
+                        className={`block whitespace-nowrap text-base font-bold tabular-nums ${
+                          isNext && countdown.tone === "later" ? "text-accent" : countdownClass[countdown.tone]
+                        }`}
+                      >
+                        {countdown.label}
+                      </span>
+                      <span className="block whitespace-nowrap text-xs text-muted-foreground">
+                        {new Date(event.iso).toLocaleDateString("sv-SE", {
+                          day: "numeric",
+                          month: "short",
+                        })}
+                        {isNext && (
+                          <span className="ml-1.5 rounded-sm bg-accent px-1 py-0.5 text-[10px] font-bold uppercase tracking-wide text-accent-foreground">
+                            Närmast
+                          </span>
+                        )}
+                      </span>
                     </span>
                   </div>
-                  {event.amount !== null && (
-                    <p className="mt-0.5 whitespace-nowrap text-sm tabular-nums text-muted-foreground">
-                      {sek(event.amount)}
-                    </p>
-                  )}
                   {event.note && (
-                    <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
+                    <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
                       {event.note}
                     </p>
                   )}
@@ -219,7 +258,8 @@ export const ActionPlan = ({ caseRecord, timeline }: ActionPlanProps) => {
 
       {/* Uppgifterna */}
       <div className="mt-5">
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+        <h3 className="flex items-center gap-2 text-sm font-bold text-foreground">
+          <ListChecks className="h-4 w-4 text-accent" aria-hidden="true" />
           Att göra
         </h3>
         {isLoading ? (

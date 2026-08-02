@@ -7,6 +7,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { CASE_ROLE_LABELS } from "@/lib/caseRoles";
 import { TEMPLATES, templateToPdf, type GeneratedDocument, type TemplateInput } from "@/lib/documentTemplates";
 import { downloadTextFile } from "@/lib/integrations/download";
+import { useInlineReport } from "@/components/reports/useInlineReport";
 import type { CaseRecord } from "@/data/types";
 import { CheckCircle2, Download, FileSignature, FolderUp, Loader2 } from "lucide-react";
 
@@ -31,6 +32,9 @@ interface DocumentTemplatesProps {
 export const DocumentTemplates = ({ caseRecord }: DocumentTemplatesProps) => {
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  // Samma PDF-leverans som rapporterna: nedladdning i vanlig flik,
+  // visning i lagret där nedladdningar blockeras (inbäddade vyer).
+  const { deliverPdfBytes, viewer: pdfViewer } = useInlineReport();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [place, setPlace] = useState("");
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
@@ -160,18 +164,13 @@ export const DocumentTemplates = ({ caseRecord }: DocumentTemplatesProps) => {
                   type="button"
                   variant="outline"
                   size="sm"
-                  onClick={() => {
-                    const bytes = templateToPdf(generated);
-                    const blob = new Blob([bytes as BlobPart], { type: "application/pdf" });
-                    const url = URL.createObjectURL(blob);
-                    const link = document.createElement("a");
-                    link.href = url;
-                    link.download = generated.fileName.replace(/\.txt$/, ".pdf");
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
-                    setTimeout(() => URL.revokeObjectURL(url), 10_000);
-                  }}
+                  onClick={() =>
+                    deliverPdfBytes(
+                      templateToPdf(generated),
+                      generated.fileName.replace(/\.txt$/, ".pdf"),
+                      generated.title,
+                    )
+                  }
                 >
                   <Download className="h-4 w-4" aria-hidden="true" />
                   Ladda ner PDF
@@ -214,6 +213,7 @@ export const DocumentTemplates = ({ caseRecord }: DocumentTemplatesProps) => {
           )}
         </div>
       )}
+      {pdfViewer}
     </section>
   );
 };
