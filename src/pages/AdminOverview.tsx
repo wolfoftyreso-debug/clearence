@@ -487,14 +487,26 @@ const CompanyPlanSection = () => {
     queryKey: ["company-plan"],
     queryFn: () => data.billing.getCompanyPlan(),
   });
-  const [value, setValue] = useState("");
+  const [standard, setStandard] = useState("");
+  const [business, setBusiness] = useState("");
+  const [enterprise, setEnterprise] = useState("");
   const saveMutation = useMutation({
-    mutationFn: (monthlyExVatSek: number) => data.ops.setCompanyPlan({ monthlyExVatSek }),
+    mutationFn: (input: {
+      monthlyExVatSek: number;
+      businessExVatSek?: number | null;
+      enterpriseExVatSek?: number | null;
+    }) => data.ops.setCompanyPlan(input),
     onSuccess: () => {
-      setValue("");
+      setStandard("");
+      setBusiness("");
+      setEnterprise("");
       queryClient.invalidateQueries({ queryKey: ["company-plan"] });
     },
   });
+  const parse = (raw: string): number | undefined => {
+    const n = Number(raw.replace(/[^\d]/g, ""));
+    return n > 0 ? n : undefined;
+  };
 
   return (
     <section aria-labelledby="company-plan-heading">
@@ -511,28 +523,56 @@ const CompanyPlanSection = () => {
         abonnemanget pausas. Beloppet visas i pris- och låstexterna direkt.
       </p>
       <form
-        className="mt-3 flex flex-wrap items-center gap-2"
+        className="mt-3 flex flex-wrap items-end gap-2"
         onSubmit={(e) => {
           e.preventDefault();
-          const parsed = Number(value.replace(/[^\d]/g, ""));
-          if (parsed > 0) saveMutation.mutate(parsed);
+          const monthly = parse(standard) ?? plan?.monthlyExVatSek;
+          if (!monthly) return;
+          saveMutation.mutate({
+            monthlyExVatSek: monthly,
+            businessExVatSek: parse(business) ?? plan?.businessExVatSek ?? null,
+            enterpriseExVatSek: parse(enterprise) ?? plan?.enterpriseExVatSek ?? null,
+          });
         }}
       >
-        <p className="text-sm text-foreground">
+        <p className="w-full text-sm text-foreground">
           Nuvarande:{" "}
           <span className="font-semibold tabular-nums">
-            {plan ? `${plan.monthlyExVatSek} kr/mån + moms` : "laddar …"}
+            {plan
+              ? `Standard ${plan.monthlyExVatSek} · Business ${plan.businessExVatSek ?? "–"} · Enterprise ${plan.enterpriseExVatSek ?? "–"} kr/mån + moms`
+              : "laddar …"}
           </span>
         </p>
         <Input
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          placeholder="Nytt belopp exkl. moms"
+          value={standard}
+          onChange={(e) => setStandard(e.target.value)}
+          placeholder="Standard"
           inputMode="numeric"
-          className="w-44"
+          className="w-32"
           aria-label="Ny månadsavgift exklusive moms"
         />
-        <Button type="submit" size="sm" variant="outline" disabled={!value.trim() || saveMutation.isPending}>
+        <Input
+          value={business}
+          onChange={(e) => setBusiness(e.target.value)}
+          placeholder="Business"
+          inputMode="numeric"
+          className="w-32"
+          aria-label="Business-nivåns månadsavgift exklusive moms"
+        />
+        <Input
+          value={enterprise}
+          onChange={(e) => setEnterprise(e.target.value)}
+          placeholder="Enterprise"
+          inputMode="numeric"
+          className="w-32"
+          aria-label="Enterprise-nivåns månadsavgift exklusive moms"
+        />
+        <Button
+          type="submit"
+          size="sm"
+          variant="outline"
+          disabled={(!standard.trim() && !business.trim() && !enterprise.trim()) || saveMutation.isPending}
+        >
           Spara
         </Button>
         {saveMutation.isError && (

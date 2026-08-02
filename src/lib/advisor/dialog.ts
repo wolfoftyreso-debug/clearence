@@ -727,6 +727,18 @@ export const INVITE_CONTRACT = {
 
 export const EMAIL_SHAPE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
+/**
+ * Fakturaintentionen: "visa min faktura" gäller ABONNEMANGET - inte en
+ * kundfordran. Prövas före krisflödena, annars äter kundflödet ordet
+ * faktura. Resultatet blir ett fakturakort i samtalet, och allt finns
+ * alltid också under Inställningar - rådgivaren lägger saker på rätt
+ * plats, användaren behöver inte leta.
+ */
+export const invoiceIntent = (text: string): boolean =>
+  /\b(min|mina|vår|våra|senaste|månads)[a-zåäö]*\s*faktur/i.test(text) ||
+  /faktur[a-zåäö]*\s*(från|för|hos)\s*clearance/i.test(text) ||
+  /\bkvitto\b/i.test(text);
+
 /** Formaterar ett svar för journalen/samtalsloggen. */
 export const answerLabel = (step: DialogStep, raw: string): string => {
   if (step.kind === "yesno") return yes(raw) ? "Ja" : "Nej";

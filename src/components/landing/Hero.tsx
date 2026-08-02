@@ -1,7 +1,6 @@
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { SectionLink } from "./HowItWorksLink";
-import { SiteSearch } from "./SiteSearch";
 import { ClaraIntro } from "@/components/advisor/ClaraIntro";
 import { Clock, FileText, UserCheck } from "lucide-react";
 
@@ -101,10 +100,9 @@ const Hero = () => {
           )}
         </div>
 
-        <div className="mt-8">
-          <SiteSearch />
-        </div>
-
+        {/* Sökrutan är borttagen härifrån på uttrycklig begäran: samtalet
+            ÄR ingången. Sök finns kvar i bottennavigeringen för den som
+            letar något specifikt. */}
         <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
           <Link
             to="/wizard"

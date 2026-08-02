@@ -19,16 +19,83 @@
 import type { AccountBillingRecord } from "@/data/types";
 
 export interface CompanyPlan {
-  /** Månadsavgift i SEK, exklusive moms. Sätts av drift. */
+  /** Standard-nivåns månadsavgift i SEK, exklusive moms. Sätts av drift. */
   monthlyExVatSek: number;
+  /** Business-nivån. Null = visas som "kontakta oss". */
+  businessExVatSek?: number | null;
+  /** Enterprise-nivån. Offert är alltid ett alternativ. */
+  enterpriseExVatSek?: number | null;
 }
 
-/** Reservvärdet tills drift satt parametern. Beslutat betapris. */
-export const DEFAULT_COMPANY_PLAN: CompanyPlan = { monthlyExVatSek: 985 };
+/** Reservvärdena tills drift satt parametrarna. Beslutade betapriser. */
+export const DEFAULT_COMPANY_PLAN: CompanyPlan = {
+  monthlyExVatSek: 985,
+  businessExVatSek: 2780,
+  enterpriseExVatSek: 4500,
+};
+
+/**
+ * Nivåerna. "Start" heter aldrig provversion - en provversion förväntas
+ * vara gratis eller hårt begränsad, och det ska sägas rakt: Start ÄR
+ * gratis, för att uppleva produkten. Nivåerna knyts till funktioner och
+ * användare - aldrig till omsättning, för två bolag med samma omsättning
+ * kan ha helt olika behov.
+ */
+export const PLAN_TIERS = [
+  {
+    id: "start",
+    name: "Clearance Start",
+    audience: "För att uppleva produkten",
+    includes: [
+      "Samtalet med rådgivaren",
+      "Grundläggande analys och lägesbild",
+      "Skapa dokument och handlingsplan",
+    ],
+    excludes: ["Ingen export", "Ingen delning", "Ingen ekonomisystemskoppling"],
+  },
+  {
+    id: "standard",
+    name: "Clearance Standard",
+    audience: "Små och medelstora företag",
+    includes: [
+      "Obegränsad dialog och full handlingsplan",
+      "Dokumentgenerering, arkiv och ärendehistorik",
+      "Export, delning och e-post till rådgivare",
+      "Ekonomisystemskoppling (Fortnox/Visma när avtalen är på plats)",
+    ],
+    excludes: [],
+  },
+  {
+    id: "business",
+    name: "Clearance Business",
+    audience: "Företag med större komplexitet",
+    includes: [
+      "Flera användare och flera bolag",
+      "Behörighetsstyrning och styrelseportal",
+      "Avancerade arbetsflöden och utökade integrationer",
+      "Prioriterad support",
+    ],
+    excludes: [],
+  },
+  {
+    id: "enterprise",
+    name: "Clearance Enterprise",
+    audience: "Större bolag med särskilda krav",
+    includes: [
+      "Anpassade integrationer och API",
+      "Fler användare och roller",
+      "Avancerad loggning",
+      "Dedikerad onboarding och anpassad support",
+    ],
+    excludes: [],
+  },
+] as const;
 
 /** "985 kr/mån + moms" - alltid exklusive moms mot aktiebolag. */
-export const formatPlanPrice = (plan: CompanyPlan): string =>
-  `${String(Math.round(plan.monthlyExVatSek)).replace(/\B(?=(\d{3})+(?!\d))/g, " ")} kr/mån + moms`;
+export const formatMonthly = (sek: number): string =>
+  `${String(Math.round(sek)).replace(/\B(?=(\d{3})+(?!\d))/g, " ")} kr/mån + moms`;
+
+export const formatPlanPrice = (plan: CompanyPlan): string => formatMonthly(plan.monthlyExVatSek);
 
 /** Villkoren i klartext - samma ord överallt där planen visas. */
 export const PLAN_TERMS = [

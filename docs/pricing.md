@@ -37,17 +37,32 @@ I kod: `firstPaymentDone()` i src/lib/pricing.ts är hela frågan, och
 `LockedFeature` är betalväggens enda utseende - samma ord överallt,
 med priset ur driftparametern.
 
-## Framtida nivåer (planerade, byggs inte i betan)
+## Nivåerna (beslutade; Business/Enterprise lanseras stegvis)
 
-* **Clearance Standard** - dagens plan.
-* **Clearance Pro** - fler integrationer, fler användare, avancerade
-  funktioner.
-* **Clearance Advisor** - för jurister, revisorer och rekonstruktörer
-  med flera klientföretag (byråsidans planer finns redan som
-  driftparametrar per byrå).
+* **Clearance Start – Gratis.** Kallas ALDRIG provversion (en
+  provversion förväntas vara gratis eller hårt begränsad - Start ÄR
+  gratis, för att uppleva produkten). Samtal, grundläggande analys,
+  dokument. Ingen export, ingen delning, ingen ekonomisystemskoppling.
+* **Clearance Standard – 985 kr/mån + moms.** Små och medelstora
+  företag: obegränsad dialog, dokumentgenerering och arkiv,
+  ärendehistorik, export, delning, e-post till rådgivare,
+  ekonomisystemskoppling.
+* **Clearance Business – 2 780 kr/mån + moms.** Större komplexitet:
+  flera användare och bolag, behörighetsstyrning, styrelseportal,
+  avancerade arbetsflöden, utökade integrationer, prioriterad support.
+* **Clearance Enterprise – 4 500 kr/mån + moms, eller offert.**
+  Anpassade integrationer, API, fler roller, avancerad loggning,
+  dedikerad onboarding, anpassad support.
 
-För betalanseringen kommuniceras EN plan. Enkelt att förstå, enkelt
-att lita på.
+**Nivåerna knyts till funktioner, användare och integrationsbehov -
+aldrig till omsättning.** Två bolag med samma omsättning kan ha helt
+olika behov. Alla belopp är driftparametrar i app_settings.
+
+Rådgivaren hanterar även faktureringen i samtalet: "Visa min faktura"
+ger fakturakortet (nummer, belopp, förfallodatum, status) direkt i
+dialogen, och allt finns alltid också under Inställningar - resultatet
+hamnar på rätt plats utan att användaren sorterar. Byråsidans planer
+(Advisor-spåret) finns redan som driftparametrar per byrå.
 
 ## Dokumentarkivet och godkännandena (nästa byggen)
 

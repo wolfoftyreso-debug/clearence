@@ -49,6 +49,18 @@ check("formatteringen: exklusive moms, svenskt tusental", formatPlanPrice({ mont
 check("formatteringen följer parametern", formatPlanPrice({ monthlyExVatSek: 1200 }) === "1 200 kr/mån + moms");
 check("låstexten bär parameterns belopp", lockMessage({ monthlyExVatSek: 1200 }).includes("1 200 kr/mån + moms"));
 
+/* --- nivåerna -------------------------------------------------------------- */
+
+import { PLAN_TIERS, formatMonthly } from "../src/lib/pricing";
+
+check("fyra nivåer", PLAN_TIERS.length === 4);
+check("nivånamnen", PLAN_TIERS.map((t) => t.id).join(",") === "start,standard,business,enterprise");
+check("ordet provversion förekommer aldrig", !/provversion/i.test(JSON.stringify(PLAN_TIERS)));
+check("Start säger vad som INTE ingår", PLAN_TIERS[0].excludes.length >= 3);
+check("reservvärden för alla nivåer", DEFAULT_COMPANY_PLAN.businessExVatSek === 2780 && DEFAULT_COMPANY_PLAN.enterpriseExVatSek === 4500);
+check("nivåbelopp formateras svenskt", formatMonthly(2780) === "2 780 kr/mån + moms");
+check("nivåerna knyts aldrig till omsättning", !/omsättning/i.test(JSON.stringify(PLAN_TIERS)));
+
 /* --- tonen: inbjudan, inte inlåsning --------------------------------------- */
 
 const msg = lockMessage(DEFAULT_COMPANY_PLAN);

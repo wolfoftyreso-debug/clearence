@@ -960,8 +960,16 @@ export const supabaseAdapter: DataPort = {
         .eq("key", "company_plan")
         .maybeSingle();
       if (error) throw error;
-      const raw = (data?.value as { monthly_ex_vat_sek?: number } | null) ?? null;
-      return { monthlyExVatSek: raw?.monthly_ex_vat_sek ?? 985 };
+      const raw = (data?.value as {
+        monthly_ex_vat_sek?: number;
+        business_ex_vat_sek?: number | null;
+        enterprise_ex_vat_sek?: number | null;
+      } | null) ?? null;
+      return {
+        monthlyExVatSek: raw?.monthly_ex_vat_sek ?? 985,
+        businessExVatSek: raw?.business_ex_vat_sek ?? 2780,
+        enterpriseExVatSek: raw?.enterprise_ex_vat_sek ?? 4500,
+      };
     },
     async listCustomers() {
       // RLS filtrerar: den som inte är administratör får sina egna rader,
@@ -1242,13 +1250,17 @@ export const supabaseAdapter: DataPort = {
       });
       if (error) throw error;
     },
-    async setCompanyPlan({ monthlyExVatSek }) {
+    async setCompanyPlan({ monthlyExVatSek, businessExVatSek, enterpriseExVatSek }) {
       if (!Number.isFinite(monthlyExVatSek) || monthlyExVatSek <= 0) {
         throw new Error("Ogiltigt belopp");
       }
       const { error } = await supabase.from("app_settings").upsert({
         key: "company_plan",
-        value: { monthly_ex_vat_sek: Math.round(monthlyExVatSek) },
+        value: {
+          monthly_ex_vat_sek: Math.round(monthlyExVatSek),
+          business_ex_vat_sek: businessExVatSek == null ? null : Math.round(businessExVatSek),
+          enterprise_ex_vat_sek: enterpriseExVatSek == null ? null : Math.round(enterpriseExVatSek),
+        },
         updated_at: new Date().toISOString(),
       });
       if (error) throw error;

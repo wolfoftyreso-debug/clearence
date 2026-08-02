@@ -68,7 +68,7 @@ export const ClaraIntro = ({ onDone }: { onDone: (name: string | null) => void }
   };
 
   return (
-    <section aria-label="Samtal med CLEARANCE" className="rounded-md border border-border bg-card p-5 shadow-soft">
+    <section aria-label="Samtal med CLEARANCE" className="flex min-h-[24rem] flex-col rounded-md border border-border bg-card p-5 shadow-soft">
       <ol className="space-y-3" aria-live="polite">
         {entries.map((entry, i) => (
           <li key={i} className={entry.who === "user" ? "flex justify-end" : "flex items-start gap-2"}>
@@ -107,7 +107,7 @@ export const ClaraIntro = ({ onDone }: { onDone: (name: string | null) => void }
       )}
 
       {(stage === "name" || stage === "company") && (
-        <form onSubmit={submit} className="mt-4 flex gap-2">
+        <form onSubmit={submit} className="mt-auto flex gap-2 pt-4">
           <label htmlFor="onboarding-input" className="sr-only">
             {stage === "name" ? "Vad heter du?" : "Vilket företag gäller det?"}
           </label>
@@ -117,9 +117,10 @@ export const ClaraIntro = ({ onDone }: { onDone: (name: string | null) => void }
             onChange={(e) => setInput(e.target.value)}
             placeholder={stage === "name" ? "Ditt namn" : "Företagets namn"}
             autoComplete="off"
+            className="h-12 text-base"
           />
-          <Button type="submit" variant="accent" disabled={!input.trim()} aria-label="Skicka">
-            <Send className="h-4 w-4" aria-hidden="true" />
+          <Button type="submit" variant="accent" size="lg" disabled={!input.trim()} aria-label="Skicka">
+            <Send className="h-5 w-5" aria-hidden="true" />
           </Button>
         </form>
       )}

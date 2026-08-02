@@ -17,6 +17,7 @@ import {
   buildPriorities,
   decisionCheckIn,
   inviteIntent,
+  invoiceIntent,
   matchFlow,
   type InviteRole,
   type DialogAssessment,
@@ -341,6 +342,25 @@ const DashboardSamtal = () => {
       openOptions(trimmed);
       return;
     }
+    /* Abonnemangsfakturan - före krisflödena, annars äter kundflödet
+       ordet "faktura". Kortet visas i samtalet; allt finns också under
+       Inställningar. */
+    if (invoiceIntent(trimmed)) {
+      say([{ who: "user", text: trimmed }]);
+      void data.billing.listMyInvoices().then((invoices) => {
+        const latest = invoices[0] ?? null;
+        setInvoiceCard(latest);
+        say([
+          {
+            who: "radgivare",
+            text: latest
+              ? `Här är din senaste faktura. Alla fakturor och kvitton finns samlade under Inställningar.`
+              : "Ingen faktura är utställd ännu. När abonnemanget startar skapas månadsfakturan automatiskt och landar under Inställningar – jag säger till här när den finns.",
+          },
+        ]);
+      });
+      return;
+    }
     const matched = matchFlow(trimmed);
     if (matched) {
       startFlow(matched, trimmed);
@@ -482,6 +502,7 @@ const DashboardSamtal = () => {
   const [reconsiderFor, setReconsiderFor] = useState<string | null>(null);
   const [reconsiderNote, setReconsiderNote] = useState("");
   const [checkInDone, setCheckInDone] = useState<"stands" | "changed" | null>(null);
+  const [invoiceCard, setInvoiceCard] = useState<import("@/data/types").CustomerInvoiceRecord | null>(null);
   const activeDecision = (decisions ?? []).find((d) => d.status === "active") ?? null;
   const reconsider = useMutation({
     mutationFn: ({ id, note }: { id: string; note: string }) => data.dialogue.reconsiderDecision(id, note),
@@ -500,7 +521,7 @@ const DashboardSamtal = () => {
 
   return (
     <DashboardShell title="CLEARANCE – din krisrådgivare">
-      <div className="mx-auto max-w-3xl">
+      <div className="mx-auto max-w-4xl">
         {isLoading ? null : !latestCase ? (
           /* Första upplevelsen är ett samtal, inte ett dashboard: CLEARANCE
              frågar en sak i taget och öppnar sedan nulägesanalysen själv. */
@@ -513,7 +534,9 @@ const DashboardSamtal = () => {
         ) : (
           <>
             {/* Samtalet */}
-            <section aria-label="Samtal med rådgivaren" className="rounded-md border border-border bg-card p-5 shadow-soft">
+            {/* Samtalet fyller ytan: minsta höjd nära hela fönstret och
+                inmatningen längst ned - en arbetsyta, inte en widget. */}
+            <section aria-label="Samtal med rådgivaren" className="flex min-h-[calc(100vh-14rem)] flex-col rounded-md border border-border bg-card p-5 shadow-soft">
               {entries.length === 0 && (
                 <div>
                   {/* Aldrig "hur kan jag hjälpa dig idag?" - läget först.
@@ -752,6 +775,45 @@ const DashboardSamtal = () => {
                 ))}
               </ol>
 
+              {/* Fakturakortet: det rådgivaren tar fram hamnar också på
+                  rätt plats - Inställningar - utan att användaren sorterar. */}
+              {invoiceCard && (
+                <div className="mt-4 rounded-md border border-border bg-card p-4">
+                  <div className="flex flex-wrap items-baseline justify-between gap-2">
+                    <p className="text-sm font-semibold text-foreground">
+                      Faktura {invoiceCard.invoiceNumber}
+                    </p>
+                    <span
+                      className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold ${
+                        invoiceCard.paidAt
+                          ? "border-success/40 bg-success/10 text-foreground"
+                          : "border-warning/50 bg-warning/10 text-foreground"
+                      }`}
+                    >
+                      {invoiceCard.paidAt ? "Betald" : "Väntar på betalning"}
+                    </span>
+                  </div>
+                  <dl className="mt-2 grid gap-x-6 gap-y-1 text-sm sm:grid-cols-2">
+                    <div className="flex justify-between gap-3">
+                      <dt className="text-muted-foreground">Belopp</dt>
+                      <dd className="font-medium tabular-nums text-foreground">
+                        {(invoiceCard.netOre / 100).toLocaleString("sv-SE")} kr + moms
+                      </dd>
+                    </div>
+                    <div className="flex justify-between gap-3">
+                      <dt className="text-muted-foreground">Förfallodatum</dt>
+                      <dd className="font-medium text-foreground">{invoiceCard.dueAt.slice(0, 10)}</dd>
+                    </div>
+                  </dl>
+                  <Link
+                    to="/dashboard/installningar"
+                    className="mt-3 inline-block text-sm font-medium text-accent underline-offset-4 hover:underline"
+                  >
+                    Alla fakturor och kvitton
+                  </Link>
+                </div>
+              )}
+
               {/* Action Contract: kontrollera + bekräfta. Hela mejlet,
                   mottagaren och behörigheten - FÖRE, aldrig efter. */}
               {invite?.stage === "confirm" && invite.preview && (
@@ -938,7 +1000,7 @@ const DashboardSamtal = () => {
                   ))}
                 </div>
               ) : !assessment && invite?.stage !== "confirm" ? (
-                <form onSubmit={submit} className="mt-4 flex gap-2">
+                <form onSubmit={submit} className="mt-auto flex gap-2 pt-4">
                   <label htmlFor="samtal-input" className="sr-only">
                     {invite?.stage === "ask"
                       ? "Rådgivarens e-postadress"
@@ -957,9 +1019,10 @@ const DashboardSamtal = () => {
                     }
                     inputMode={currentStep?.kind === "amount" ? "numeric" : "text"}
                     autoComplete="off"
+                    className="h-12 text-base"
                   />
-                  <Button type="submit" variant="accent" disabled={!input.trim()} aria-label="Skicka">
-                    <Send className="h-4 w-4" aria-hidden="true" />
+                  <Button type="submit" variant="accent" size="lg" disabled={!input.trim()} aria-label="Skicka">
+                    <Send className="h-5 w-5" aria-hidden="true" />
                   </Button>
                 </form>
               ) : null}

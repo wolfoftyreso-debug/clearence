@@ -102,8 +102,10 @@ interface DemoState {
   professionalEdits: Record<string, ProfessionalProfileUpdate>;
   advisorSessions: AdvisorSessionRecord[];
   caseDecisions: CaseDecisionRecord[];
-  /** Företagsplanens månadsavgift (exkl. moms) - driftparameter, aldrig kod. */
+  /** Företagsplanernas månadsavgifter (exkl. moms) - driftparametrar, aldrig kod. */
   companyPlanMonthlyExVatSek: number | null;
+  companyPlanBusinessExVatSek: number | null;
+  companyPlanEnterpriseExVatSek: number | null;
 }
 
 const emptyState = (): DemoState => ({
@@ -137,6 +139,8 @@ const emptyState = (): DemoState => ({
   advisorSessions: [],
   caseDecisions: [],
   companyPlanMonthlyExVatSek: null,
+  companyPlanBusinessExVatSek: null,
+  companyPlanEnterpriseExVatSek: null,
 });
 
 /** Files cannot go in localStorage, so they live for the session only. */
@@ -1262,7 +1266,11 @@ export const demoAdapter: DataPort = {
     async getCompanyPlan() {
       // Driftparametern, med beslutat betapris som reserv - aldrig ett
       // belopp i en vy.
-      return { monthlyExVatSek: state.companyPlanMonthlyExVatSek ?? 985 };
+      return {
+        monthlyExVatSek: state.companyPlanMonthlyExVatSek ?? 985,
+        businessExVatSek: state.companyPlanBusinessExVatSek ?? 2780,
+        enterpriseExVatSek: state.companyPlanEnterpriseExVatSek ?? 4500,
+      };
     },
     async listCustomers() {
       if (!state.user) return [];
@@ -1417,11 +1425,17 @@ export const demoAdapter: DataPort = {
       };
       demoPlans.set(professionalId, { ...plan, shadow });
     },
-    async setCompanyPlan({ monthlyExVatSek }) {
+    async setCompanyPlan({ monthlyExVatSek, businessExVatSek, enterpriseExVatSek }) {
       if (!Number.isFinite(monthlyExVatSek) || monthlyExVatSek <= 0) {
         throw new Error("Ogiltigt belopp");
       }
       state.companyPlanMonthlyExVatSek = Math.round(monthlyExVatSek);
+      if (businessExVatSek !== undefined) {
+        state.companyPlanBusinessExVatSek = businessExVatSek === null ? null : Math.round(businessExVatSek);
+      }
+      if (enterpriseExVatSek !== undefined) {
+        state.companyPlanEnterpriseExVatSek = enterpriseExVatSek === null ? null : Math.round(enterpriseExVatSek);
+      }
       save();
     },
     async northStarCounts() {

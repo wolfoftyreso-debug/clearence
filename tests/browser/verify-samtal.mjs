@@ -132,6 +132,16 @@ await page.goto(`${BASE}/dashboard/samtal`, { waitUntil: "domcontentloaded" });
 await page.waitForTimeout(1200);
 check("snabbvalen har likviditetschippen", (await page.locator('button:has-text("Pengarna räcker inte")').count()) > 0);
 
+// 7b2. Fakturafrågan gäller abonnemanget - inte kundflödet.
+await page.goto(`${BASE}/dashboard/samtal`, { waitUntil: "domcontentloaded" });
+await page.waitForTimeout(1200);
+await page.fill("#samtal-input", "Visa min senaste faktura");
+await page.click('button[aria-label="Skicka"]');
+await page.waitForTimeout(800);
+body = await page.innerText("body");
+check("fakturafrågan startar inte kundflödet", !/obetalda fordran/i.test(body));
+check("fakturasvaret pekar på Inställningar", /Ingen faktura är utställd ännu|Alla fakturor och kvitton/i.test(body));
+
 // 7c. Lägesbilden i hälsningen: visad, inte påstådd - med analys som panel.
 await page.goto(`${BASE}/dashboard/samtal`, { waitUntil: "domcontentloaded" });
 await page.waitForTimeout(1500);

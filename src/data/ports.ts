@@ -424,7 +424,11 @@ export interface BillingPort {
    * Företagsplanen: beloppet är en driftparameter, aldrig en kodrad.
    * Läsbar för alla (priset är publikt); skrivs via ops.setCompanyPlan.
    */
-  getCompanyPlan(): Promise<{ monthlyExVatSek: number }>;
+  getCompanyPlan(): Promise<{
+    monthlyExVatSek: number;
+    businessExVatSek: number | null;
+    enterpriseExVatSek: number | null;
+  }>;
 
   /* Drift. Kräver administratörsbehörighet, som prövas i databasen. */
 
@@ -524,7 +528,11 @@ export interface OpsPort {
    * av drift - gäller framåt och visas omedelbart i alla lås- och
    * pristexter.
    */
-  setCompanyPlan(input: { monthlyExVatSek: number }): Promise<void>;
+  setCompanyPlan(input: {
+    monthlyExVatSek: number;
+    businessExVatSek?: number | null;
+    enterpriseExVatSek?: number | null;
+  }): Promise<void>;
 
   /** North Star och churn: återhämtade, i hälsoläge, dålig churn, öppna. */
   northStarCounts(): Promise<{
