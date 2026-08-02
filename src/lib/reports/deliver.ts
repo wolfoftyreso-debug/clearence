@@ -82,37 +82,7 @@ export const downloadReport = (model: ReportModel): DeliveryResult => {
   }
 };
 
-/**
- * Opens the report in a new tab where the user can print it or save it as a
- * PDF. Falls back to downloading the file when the tab cannot be opened,
- * which is usually a popup blocker - so the action never silently does
- * nothing.
- */
-export const openReport = (model: ReportModel): DeliveryResult => {
-  const html = renderReport(model);
-
-  let printWindow: Window | null = null;
-  try {
-    // No "noopener" here: it makes window.open return null, and we need the
-    // handle to write the document into. Nothing untrusted is being loaded -
-    // the tab starts blank and receives markup this application rendered - so
-    // there is no opener to protect against.
-    printWindow = window.open("", "_blank");
-  } catch {
-    printWindow = null;
-  }
-
-  if (!printWindow) return downloadReport(model);
-
-  try {
-    printWindow.document.open();
-    printWindow.document.write(html);
-    printWindow.document.close();
-    printWindow.focus();
-    return { ok: true, via: "print-window" };
-  } catch {
-    // Some environments hand back a window that cannot be written to.
-    printWindow.close();
-    return downloadReport(model);
-  }
-};
+// Den gamla popupvägen (window.open + document.write) är borttagen med
+// avsikt: i inbäddade och mobila vyer blockerades den tyst, vilket är
+// varför alla rapporter numera går genom visaren i appen
+// (useInlineReport) eller riktiga PDF-nedladdningar. Återinför den inte.

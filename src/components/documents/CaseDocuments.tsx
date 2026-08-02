@@ -5,6 +5,7 @@ import { data } from "@/data";
 import type { DocumentKind, DocumentRecord } from "@/data/types";
 import { format } from "date-fns";
 import { sv } from "date-fns/locale";
+import { openFileUrl } from "@/lib/integrations/download";
 import {
   AlertTriangle,
   Download,
@@ -117,7 +118,7 @@ export const CaseDocuments = ({ caseId, userId }: CaseDocumentsProps) => {
         setError("Kunde inte skapa en nedladdningslänk. Försök igen.");
         return;
       }
-      window.open(url, "_blank", "noopener,noreferrer");
+      openFileUrl(url);
     } catch {
       setError("Kunde inte skapa en nedladdningslänk. Försök igen.");
     } finally {

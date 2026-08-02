@@ -21,3 +21,19 @@ export const downloadTextFile = (
   anchor.remove();
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
 };
+
+/**
+ * Öppnar en (signerad) fil-URL i ny flik via ett ankarklick i stället för
+ * window.open: popupanrop blockeras tyst i inbäddade och mobila vyer -
+ * "Sånt här måste fungera"-klassen av fel - medan ett ankare med target
+ * beter sig som en vanlig länk och följer med användargesten.
+ */
+export const openFileUrl = (url: string): void => {
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.target = "_blank";
+  anchor.rel = "noopener noreferrer";
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+};

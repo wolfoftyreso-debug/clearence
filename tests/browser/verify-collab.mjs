@@ -100,7 +100,7 @@ check("efter sammanslagning: en grupp kvar", !/finns två gånger/i.test(body));
 check("meddelandena ligger kvar i målgruppen", /engagemangsbeskedet/.test(body));
 
 // 6. Uppfattat-kvittens (skicka som "motpart" går inte i demon - kvittera
-//    i stället ett meddelande någon annan skrivit: demo-użytkownaren är
+//    i stället ett meddelande någon annan skrivit: demo-användaren är
 //    författare, så kvittensknappen ska INTE visas på egna meddelanden)
 check("egna meddelanden saknar kvittensknapp", !/^Uppfattat$/m.test(body));
 
@@ -116,12 +116,17 @@ await page.waitForTimeout(1200);
 body = await page.innerText("body");
 check("bilagan syns som chip", /engagemangsbesked\.pdf/.test(body), body.slice(0, 400));
 
-// 8. Notiscentret finns i skalet
+// 8. Notiscentret finns i skalet. Sedan Notiscenter 2.0 aggregerar klockan
+//    alla källor - den egna taggen är redan kvitterad (rätt beteende), så
+//    panelen ska visa ärendets läge, inte den släckta taggen.
 const bell = await page.locator('button[aria-label^="Notiser"]').count();
 check("notisklockan finns i sidhuvudet", bell >= 1);
 await page.click('button[aria-label^="Notiser"]');
 await page.waitForTimeout(400);
-check("notiscentret öppnas", /Väntar på ditt svar/i.test(await page.innerText("body")));
+check(
+  "notiscentret öppnas med ärendets läge",
+  /Läget kräver|Förfaller|frist|Kontrollbalans/i.test(await page.innerText("body")),
+);
 
 await browser.close();
 console.log(`\n${passed} passed, ${failed} failed`);

@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/hooks/useAuth";
 import { data } from "@/data";
+import { openFileUrl } from "@/lib/integrations/download";
 import type { CaseMemberRecord, ConversationRecord } from "@/data/types";
 import {
   AtSign,
@@ -509,7 +510,7 @@ const DashboardMessages = () => {
                         type="button"
                         onClick={async () => {
                           const url = await data.documents.getDownloadUrl(attachmentDoc.id, 300);
-                          if (url) window.open(url, "_blank", "noopener,noreferrer");
+                          if (url) openFileUrl(url);
                         }}
                         className="mt-2 inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-xs text-foreground transition-colors hover:border-accent"
                       >
