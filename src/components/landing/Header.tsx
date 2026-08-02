@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { SectionLink } from "./HowItWorksLink";
 import { Button } from "@/components/ui/button";
 import { Menu, X } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
@@ -29,12 +30,12 @@ const Header = () => {
 
           {/* Desktop Navigation */}
           <nav className="hidden md:flex items-center gap-8">
-            <a href="/#features" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+            <SectionLink target="features" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
               Funktioner
-            </a>
-            <a href="/#how-it-works" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+            </SectionLink>
+            <SectionLink target="how-it-works" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
               Så fungerar det
-            </a>
+            </SectionLink>
             <Link to="/om" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
               Om oss
             </Link>
@@ -83,20 +84,20 @@ const Header = () => {
         {isMenuOpen && (
           <div className="md:hidden py-4 border-t border-border animate-fade-in">
             <nav className="flex flex-col gap-2">
-              <a
-                href="/#features"
+              <SectionLink
+                target="features"
                 className="px-4 py-3 text-foreground hover:bg-secondary rounded-lg transition-colors"
-                onClick={() => setIsMenuOpen(false)}
+                onNavigate={() => setIsMenuOpen(false)}
               >
                 Funktioner
-              </a>
-              <a
-                href="/#how-it-works"
+              </SectionLink>
+              <SectionLink
+                target="how-it-works"
                 className="px-4 py-3 text-foreground hover:bg-secondary rounded-lg transition-colors"
-                onClick={() => setIsMenuOpen(false)}
+                onNavigate={() => setIsMenuOpen(false)}
               >
                 Så fungerar det
-              </a>
+              </SectionLink>
               <Link
                 to="/om"
                 className="px-4 py-3 text-foreground hover:bg-secondary rounded-lg transition-colors"

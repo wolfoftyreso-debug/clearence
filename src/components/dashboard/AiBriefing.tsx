@@ -1,0 +1,173 @@
+import { Link } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
+import { data } from "@/data";
+import { buildExecutiveSummary, type ActionHorizon } from "@/lib/executiveSummary";
+import type { CaseRecord } from "@/data/types";
+import type { TimelineEvent } from "@/lib/crisisAnalysis";
+import { ArrowRight, Compass, Sparkles } from "lucide-react";
+
+/**
+ * Din AI-lägesrapport: det första som möter användaren efter inloggning.
+ *
+ * Ingen lista, ingen chatbot - en ledningssammanfattning skriven som om en
+ * erfaren rekonstruktör just satt sig in i bolaget. Innehållet byggs av
+ * den deterministiska motorn i src/lib/executiveSummary.ts ur ärendets
+ * samtliga registrerade uppgifter, och uppdateras automatiskt varje gång
+ * någon uppgift ändras - det är därför informationsraden kan lova det.
+ *
+ * Känslan som eftersträvas: "Nu förstår jag exakt var vi står."
+ */
+
+const SEVERITY_TONE: Record<string, string> = {
+  stable: "border-success/40 bg-success/10 text-foreground",
+  elevated: "border-warning/50 bg-warning/10 text-foreground",
+  serious: "border-warning/60 bg-warning/15 text-foreground",
+  critical: "border-frist/50 bg-frist/10 text-frist",
+};
+
+const HORIZON_TONE: Record<ActionHorizon, string> = {
+  omedelbart: "border-frist/50 bg-frist/10 text-frist",
+  idag: "border-frist/40 bg-frist/5 text-foreground",
+  "denna vecka": "border-warning/50 bg-warning/10 text-foreground",
+  "kan vänta": "border-border bg-secondary/40 text-muted-foreground",
+};
+
+interface AiBriefingProps {
+  caseRecord: CaseRecord;
+  timeline: TimelineEvent[];
+}
+
+export const AiBriefing = ({ caseRecord, timeline }: AiBriefingProps) => {
+  const { data: tasks } = useQuery({
+    queryKey: ["case-tasks", caseRecord.id],
+    queryFn: () => data.tasks.listByCase(caseRecord.id),
+    retry: false,
+  });
+  const { data: members } = useQuery({
+    queryKey: ["case-members", caseRecord.id],
+    queryFn: () => data.members.listMembers(caseRecord.id),
+    retry: false,
+  });
+  const { data: kbr } = useQuery({
+    queryKey: ["kbr-latest", caseRecord.id],
+    queryFn: () => data.kbr.getLatestByCase(caseRecord.id),
+    retry: false,
+  });
+  const { data: documents } = useQuery({
+    queryKey: ["case-documents", caseRecord.id],
+    queryFn: () => data.documents.listByCase(caseRecord.id),
+    retry: false,
+  });
+  const { data: payments } = useQuery({
+    queryKey: ["case-payments", caseRecord.id],
+    queryFn: () => data.payments.listByCase(caseRecord.id),
+    retry: false,
+  });
+
+  const summary = buildExecutiveSummary({
+    caseRecord,
+    timeline,
+    tasks: tasks ?? [],
+    members: members ?? [],
+    kbr: kbr ?? null,
+    documentCount: (documents ?? []).length,
+    payments: payments ?? [],
+    now: new Date(),
+  });
+
+  const horizons: ActionHorizon[] = ["omedelbart", "idag", "denna vecka", "kan vänta"];
+
+  return (
+    <section className="mb-6 rounded-md border border-border bg-card p-5 shadow-soft">
+      <div className="flex flex-wrap items-center gap-2">
+        <h2 className="flex items-center gap-2 text-lg font-semibold text-foreground">
+          <Sparkles className="h-5 w-5 text-accent" aria-hidden="true" />
+          Din AI-lägesrapport
+        </h2>
+        <span
+          className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold ${SEVERITY_TONE[summary.severity]}`}
+        >
+          {summary.severityLabel}
+        </span>
+      </div>
+      <p className="mt-1 text-xs text-muted-foreground">
+        Rapporten uppdaterades nyss och bygger på all information som finns
+        registrerad i ditt ärende. Den uppdateras automatiskt när nya uppgifter
+        tillkommer.
+      </p>
+
+      <p className="mt-4 text-base font-medium leading-relaxed text-foreground">
+        {summary.headline}
+      </p>
+
+      {summary.sections.map((section) => (
+        <div key={section.id} className="mt-5">
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            {section.title}
+          </h3>
+          {section.paragraphs.map((paragraph) => (
+            <p
+              key={paragraph.slice(0, 48)}
+              className="mt-2 text-sm leading-relaxed text-foreground/90"
+            >
+              {paragraph}
+            </p>
+          ))}
+        </div>
+      ))}
+
+      {/* Prioriterad handlingsplan */}
+      {summary.actions.length > 0 && (
+        <div className="mt-5">
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            Vad måste göras nu?
+          </h3>
+          <ul className="mt-2 space-y-1.5">
+            {horizons.flatMap((horizon) =>
+              summary.actions
+                .filter((a) => a.horizon === horizon)
+                .map((action) => (
+                  <li key={`${action.horizon}-${action.label}`}>
+                    <Link
+                      to={action.href ?? "/dashboard"}
+                      className={`group flex items-start gap-3 rounded-md border p-2.5 transition-colors hover:border-accent ${HORIZON_TONE[action.horizon]}`}
+                    >
+                      <span className="mt-0.5 w-16 flex-shrink-0 break-words text-[11px] font-bold uppercase leading-tight tracking-wide sm:w-24">
+                        {action.horizon}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-sm font-medium text-foreground">
+                          {action.label}
+                        </span>
+                        <span className="mt-0.5 block text-xs leading-relaxed text-muted-foreground">
+                          {action.why}
+                        </span>
+                      </span>
+                      <ArrowRight
+                        className="mt-1 h-4 w-4 flex-shrink-0 opacity-0 transition-opacity group-hover:opacity-100"
+                        aria-hidden="true"
+                      />
+                    </Link>
+                  </li>
+                )),
+            )}
+          </ul>
+        </div>
+      )}
+
+      {/* Rekommenderad strategi */}
+      <div className="mt-5 rounded-md border border-accent/30 bg-accent/5 p-4">
+        <h3 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-accent">
+          <Compass className="h-3.5 w-3.5" aria-hidden="true" />
+          Rekommenderad strategi
+        </h3>
+        <p className="mt-2 text-sm leading-relaxed text-foreground">{summary.strategy}</p>
+      </div>
+
+      <p className="mt-4 text-xs leading-relaxed text-muted-foreground">
+        Rapporten är systemets analys av ärendets registrerade uppgifter –
+        besluten stäms av med revisor eller juridisk rådgivare.
+      </p>
+    </section>
+  );
+};

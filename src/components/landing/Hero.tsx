@@ -1,4 +1,5 @@
 import { Button } from "@/components/ui/button";
+import { HowItWorksLink } from "./HowItWorksLink";
 import { ArrowRight, Clock, FileText, UserCheck } from "lucide-react";
 import { Link } from "react-router-dom";
 
@@ -51,7 +52,7 @@ const Hero = () => {
               </Link>
             </Button>
             <Button variant="outline" size="xl" asChild>
-              <a href="/#how-it-works">Se hur det fungerar</a>
+              <HowItWorksLink>Se hur det fungerar</HowItWorksLink>
             </Button>
           </div>
         </div>
