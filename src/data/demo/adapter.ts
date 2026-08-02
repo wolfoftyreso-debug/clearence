@@ -37,6 +37,8 @@ import type {
   InvoiceRecord,
   PaymentRecord,
   ContactRequestRecord,
+  MyProfessionalProfile,
+  ProfessionalProfileUpdate,
   ProfessionalRecord,
   ProfileClaimRecord,
   UsageChargeRecord,
@@ -79,6 +81,8 @@ interface DemoState {
   })[];
   contactRequests: (ContactRequestRecord & { preview: unknown; summary: unknown })[];
   usageCharges: UsageChargeRecord[];
+  /** Byråns egna profiländringar, lagda ovanpå demodatat per profil-id. */
+  professionalEdits: Record<string, ProfessionalProfileUpdate>;
 }
 
 const emptyState = (): DemoState => ({
@@ -104,6 +108,7 @@ const emptyState = (): DemoState => ({
   profileClaims: [],
   contactRequests: [],
   usageCharges: [],
+  professionalEdits: {},
 });
 
 /** Files cannot go in localStorage, so they live for the session only. */
@@ -1221,12 +1226,65 @@ export const demoAdapter: DataPort = {
 
   professionals: {
     async listActive() {
-      // Godkända anspråk lyfter profilen till Verifierad även i demon.
-      return DEMO_PROFESSIONALS.map((pro) =>
-        state.profileClaims.some((c) => c.professionalId === pro.id && c.status === "approved")
-          ? { ...pro, verified: true }
-          : pro,
+      // Godkända anspråk lyfter profilen till Verifierad, och byråns egna
+      // ändringar läggs ovanpå - samma som katalogen i skarp drift.
+      return DEMO_PROFESSIONALS.map((pro) => {
+        const edits = state.professionalEdits[pro.id];
+        const verified =
+          pro.verified ||
+          state.profileClaims.some((c) => c.professionalId === pro.id && c.status === "approved");
+        return {
+          ...pro,
+          ...(edits
+            ? {
+                description: edits.description,
+                location: edits.location,
+                email: edits.email,
+                phone: edits.phone,
+                website: edits.website,
+                specializations: edits.specializations,
+                fixedPrices: edits.fixedPrices,
+              }
+            : {}),
+          verified,
+        };
+      });
+    },
+
+    async getMyProfile() {
+      if (!state.user) return null;
+      const claim = state.profileClaims.find(
+        (c) => c.userId === state.user?.id && c.status === "approved",
       );
+      if (!claim) return null;
+      const pro = DEMO_PROFESSIONALS.find((p) => p.id === claim.professionalId);
+      if (!pro) return null;
+      const edits = state.professionalEdits[pro.id];
+      const profile: MyProfessionalProfile = {
+        id: pro.id,
+        name: pro.name,
+        company: pro.company,
+        category: pro.category,
+        verified: true,
+        description: edits?.description ?? pro.description,
+        location: edits?.location ?? pro.location,
+        email: edits?.email ?? pro.email,
+        phone: edits?.phone ?? pro.phone,
+        website: edits?.website ?? pro.website,
+        specializations: edits?.specializations ?? pro.specializations ?? [],
+        fixedPrices: edits?.fixedPrices ?? pro.fixedPrices,
+        billingEmail: edits?.billingEmail ?? null,
+      };
+      return profile;
+    },
+    async updateMyProfile(input: ProfessionalProfileUpdate) {
+      if (!state.user) throw new Error("Kräver inloggning");
+      const claim = state.profileClaims.find(
+        (c) => c.userId === state.user?.id && c.status === "approved",
+      );
+      if (!claim) throw new Error("Ingen byråprofil är kopplad till ditt konto");
+      state.professionalEdits = { ...state.professionalEdits, [claim.professionalId]: input };
+      save();
     },
     async listRatings() {
       return DEMO_RATINGS;

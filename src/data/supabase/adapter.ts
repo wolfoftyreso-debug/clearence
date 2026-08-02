@@ -1288,6 +1288,40 @@ export const supabaseAdapter: DataPort = {
       );
     },
 
+    async getMyProfile() {
+      const { data, error } = await supabase.rpc("get_my_professional_profile");
+      if (error) throw error;
+      const row = (data ?? [])[0];
+      if (!row) return null;
+      return {
+        id: row.id,
+        name: row.name,
+        company: row.company,
+        category: row.category,
+        verified: row.verified,
+        description: row.description,
+        location: row.location,
+        email: row.email,
+        phone: row.phone,
+        website: row.website,
+        specializations: row.specializations ?? [],
+        fixedPrices: asFixedPrices(row.fixed_prices),
+        billingEmail: row.billing_email,
+      };
+    },
+    async updateMyProfile(input) {
+      const { error } = await supabase.rpc("update_my_professional_profile", {
+        p_description: input.description,
+        p_location: input.location,
+        p_email: input.email,
+        p_phone: input.phone,
+        p_website: input.website,
+        p_specializations: input.specializations,
+        p_fixed_prices: input.fixedPrices as unknown as Json,
+        p_billing_email: input.billingEmail,
+      });
+      if (error) throw error;
+    },
     async claimProfile({ professionalId, motivation, contact }) {
       const { error } = await supabase.rpc("claim_professional_profile", {
         p_professional_id: professionalId,

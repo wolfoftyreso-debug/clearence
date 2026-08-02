@@ -40,6 +40,8 @@ import type {
   ProfessionalRecord,
   ContactRequestRecord,
   LeadPreviewRecord,
+  MyProfessionalProfile,
+  ProfessionalProfileUpdate,
   ProfileClaimForReview,
   ProfileClaimRecord,
   UsageChargeRecord,
@@ -124,6 +126,11 @@ export interface ProfessionalsPort {
   listRatings(): Promise<RatingRecord[]>;
 
   /* "Är detta din profil?" - anspråk på förifyllda katalogposter. */
+
+  /** Innehavarens egen profil, eller null utan koppling. */
+  getMyProfile(): Promise<MyProfessionalProfile | null>;
+  /** Uppdaterar tjänstefälten. Identitet och verifiering är driftens. */
+  updateMyProfile(input: ProfessionalProfileUpdate): Promise<void>;
 
   /** Gör anspråk. Databasen avvisar redan kopplade profiler och dubbletter. */
   claimProfile(input: { professionalId: string; motivation: string; contact: string }): Promise<void>;

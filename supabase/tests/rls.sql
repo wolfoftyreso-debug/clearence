@@ -1205,6 +1205,92 @@ begin
   end;
 end $$;
 
+/* ========================================================================== */
+/* Byråprofilens självadministration                                          */
+/* ========================================================================== */
+
+-- 4444 äger Upplåsningsbyrån (f0..2) sedan lead-testerna; 2222 äger
+-- Testbyrån Anspråk (f0..1) sedan anspråkstesterna.
+set local role authenticated;
+select pg_temp.as_user('44444444-4444-4444-4444-444444444444');
+do $$
+declare v_row record;
+begin
+  select * into v_row from public.get_my_professional_profile();
+  if v_row.name <> 'Upplåsningsbyrån' or not v_row.verified then
+    raise exception 'FAIL  innehavaren ser inte sin egen profil (%)', v_row.name;
+  end if;
+  raise notice 'ok    the owner sees their own profile incl billing address';
+end $$;
+
+do $$
+declare v_pro record;
+begin
+  perform public.update_my_professional_profile(
+    'Uppdaterad beskrivning från byrån.', 'Uppsala', 'ny@byra.se', '018-111 222',
+    'https://byra.se', array['Rekonstruktion', 'Ackord'],
+    '[{"service": "Inledande genomgång", "price": 0}]'::jsonb, 'faktura@byra.se');
+  select description, location, verified, name into v_pro
+  from public.professionals where id = 'f0000000-0000-0000-0000-000000000002';
+  if v_pro.description <> 'Uppdaterad beskrivning från byrån.' or v_pro.location <> 'Uppsala' then
+    raise exception 'FAIL  uppdateringen slog inte igenom (%)', v_pro.description;
+  end if;
+  if not v_pro.verified or v_pro.name <> 'Upplåsningsbyrån' then
+    raise exception 'FAIL  identitet eller verifiering rördes av självbetjäningen';
+  end if;
+  raise notice 'ok    the owner updates service fields; identity and verification stay';
+end $$;
+
+do $$
+begin
+  begin
+    perform public.update_my_professional_profile(
+      'x', null, null, null, 'ftp://fel', null, null, null);
+    raise exception 'FAIL  ogiltig webbadress accepterades';
+  exception when others then
+    if sqlerrm like 'FAIL%' then raise; end if;
+    raise notice 'ok    a malformed website address is refused';
+  end;
+  begin
+    perform public.update_my_professional_profile(
+      'x', null, null, null, null, null, '[{"service": "", "price": 100}]'::jsonb, null);
+    raise exception 'FAIL  fast pris utan tjänst accepterades';
+  exception when others then
+    if sqlerrm like 'FAIL%' then raise; end if;
+    raise notice 'ok    a fixed price without a service name is refused';
+  end;
+end $$;
+
+-- 2222:s uppdatering träffar bara den egna profilen, aldrig 4444:s.
+select pg_temp.as_user('22222222-2222-2222-2222-222222222222');
+do $$
+declare v_other text;
+begin
+  perform public.update_my_professional_profile(
+    'Bertils byrå.', null, null, null, null, null, null, null);
+  select description into v_other
+  from public.professionals where id = 'f0000000-0000-0000-0000-000000000002';
+  if v_other <> 'Uppdaterad beskrivning från byrån.' then
+    raise exception 'FAIL  en annan byrås profil ändrades (%)', v_other;
+  end if;
+  raise notice 'ok    an update can never touch another firm''s profile';
+end $$;
+
+-- Konto utan profil får besked, inte tystnad.
+select pg_temp.as_user('66666666-6666-6666-6666-666666666666');
+select pg_temp.check('no profile -> empty result',
+  (select count(*) from public.get_my_professional_profile()), 0::bigint);
+do $$
+begin
+  begin
+    perform public.update_my_professional_profile('x', null, null, null, null, null, null, null);
+    raise exception 'FAIL  uppdatering utan profil gick igenom';
+  exception when others then
+    if sqlerrm like 'FAIL%' then raise; end if;
+    raise notice 'ok    an account without a profile gets a clear error';
+  end;
+end $$;
+
 reset role;
 select 'ALL RLS TESTS PASSED' as result;
 

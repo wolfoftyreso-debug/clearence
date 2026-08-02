@@ -22,6 +22,7 @@ const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Marketplace = lazy(() => import("./pages/Marketplace"));
 const ForAdvisors = lazy(() => import("./pages/ForAdvisors"));
 const AdvisorReferrals = lazy(() => import("./pages/AdvisorReferrals"));
+const AdvisorProfile = lazy(() => import("./pages/AdvisorProfile"));
 const LiquidityTimeline = lazy(() => import("./pages/LiquidityTimeline"));
 const LiquidityPlanner = lazy(() => import("./pages/LiquidityPlanner"));
 const KBRModule = lazy(() => import("./pages/KBRModule"));
@@ -148,6 +149,7 @@ const App = () => (
                 <Route path="/marketplace" element={<Marketplace />} />
                 <Route path="/for-radgivare" element={<ForAdvisors />} />
                 <Route path="/mina-forfragningar" element={<AdvisorReferrals />} />
+                <Route path="/byraprofil" element={<AdvisorProfile />} />
                 <Route path="/kontakt" element={<Contact />} />
                 {/* Driftinkorgen. ProtectedRoute kräver bara inloggning -
                     behörighetsprövningen görs i sidan och, det som räknas, av

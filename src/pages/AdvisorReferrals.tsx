@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Header from "@/components/landing/Header";
 import Footer from "@/components/landing/Footer";
@@ -304,7 +304,11 @@ const AdvisorReferrals = () => {
           <h1 className="font-display text-3xl text-foreground mb-1">Dina förfrågningar</h1>
           <p className="text-muted-foreground">
             Företag som kontaktat dig via CLEARANCE, och vad som ligger till grund för
-            din faktura.
+            din faktura. Uppgifterna företagen ser om er redigerar du under{" "}
+            <Link to="/byraprofil" className="font-medium text-accent underline underline-offset-4">
+              Byråprofil
+            </Link>
+            .
           </p>
         </div>
 

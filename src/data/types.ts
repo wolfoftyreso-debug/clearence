@@ -129,6 +129,40 @@ export interface ProfessionalRecord {
   source: ProfessionalSource;
 }
 
+/**
+ * Innehavarens egen bild av sin katalogprofil, inklusive
+ * faktureringsadressen som aldrig visas publikt. Identitetsfälten (namn,
+ * byrå, kategori) och verifieringen är läsvärden här - de ändras av
+ * driften, aldrig av byrån själv.
+ */
+export interface MyProfessionalProfile {
+  id: string;
+  name: string;
+  company: string | null;
+  category: string;
+  verified: boolean;
+  description: string | null;
+  location: string | null;
+  email: string | null;
+  phone: string | null;
+  website: string | null;
+  specializations: string[];
+  fixedPrices: FixedPrice[];
+  billingEmail: string | null;
+}
+
+/** Fälten byrån själv råder över. Hela tillståndet skickas varje gång. */
+export interface ProfessionalProfileUpdate {
+  description: string | null;
+  location: string | null;
+  email: string | null;
+  phone: string | null;
+  website: string | null;
+  specializations: string[];
+  fixedPrices: FixedPrice[];
+  billingEmail: string | null;
+}
+
 export type ProfileClaimStatus = "pending" | "approved" | "rejected";
 
 /** Den sökandes egen bild av sitt anspråk på en katalogprofil. */

@@ -1178,6 +1178,37 @@ export type Database = {
         Args: { p_professional_id: string; p_hold: boolean; p_reason?: string | null }
         Returns: undefined
       }
+      get_my_professional_profile: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          id: string
+          name: string
+          company: string | null
+          category: string
+          verified: boolean
+          description: string | null
+          location: string | null
+          email: string | null
+          phone: string | null
+          website: string | null
+          specializations: string[] | null
+          fixed_prices: Json
+          billing_email: string | null
+        }[]
+      }
+      update_my_professional_profile: {
+        Args: {
+          p_description: string | null
+          p_location: string | null
+          p_email: string | null
+          p_phone: string | null
+          p_website: string | null
+          p_specializations: string[] | null
+          p_fixed_prices: Json | null
+          p_billing_email: string | null
+        }
+        Returns: undefined
+      }
       set_referral_fee: {
         Args: { p_professional_id: string; p_fee_sek: number | null }
         Returns: undefined

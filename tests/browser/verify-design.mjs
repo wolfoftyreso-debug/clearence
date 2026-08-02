@@ -20,7 +20,7 @@ const ROUTES = [
   "/for-radgivare", "/login", "/dashboard", "/dashboard/liquidity",
   "/mina-forfragningar", "/om", "/kontakt", "/admin", "/admin/inkorg", "/admin/kunder", "/admin/ansokningar",
   "/dashboard/dokument", "/dashboard/meddelanden", "/dashboard/installningar", "/dashboard/kreditunderlag",
-  "/dashboard/deltagare", "/dashboard/handelser", "/arenden", "/kunskap", "/kunskap/kontrollbalansrakning",
+  "/dashboard/deltagare", "/dashboard/handelser", "/arenden", "/kunskap", "/kunskap/kontrollbalansrakning", "/byraprofil",
 ];
 
 try {
