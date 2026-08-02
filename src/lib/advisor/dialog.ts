@@ -76,6 +76,13 @@ export interface DialogAssessment {
   meter?: DialogMeter;
   plan?: PlanRow[];
   /**
+   * Källmärkningen: varje bedömning bär sin källa, synligt. Dialogens
+   * svar är användarens egna uppgifter - alltså en tolkning (medel),
+   * tills de stäms mot verifierade data (hög). Saknas underlag säger
+   * fallbacken det i stället för att gissa (låg).
+   */
+  confidence: { level: "high" | "medium" | "low"; note: string };
+  /**
    * Förslag till protokollförbart beslut, med premissen utskriven.
    * Premissen är omprövningsvillkoret: när verkligheten motsäger den
    * ska beslutet upp igen - det är beslutsminnets hela poäng.
@@ -120,10 +127,17 @@ const amountOf = (answer: string | undefined): number => parseAmount(answer ?? "
  * Flödena listar sina handlingar i prioritetsordning - de tre första är
  * de tre viktigaste, resten stryks här och ingen annanstans.
  */
-const withLabel = (a: Omit<DialogAssessment, "severityLabel">): DialogAssessment => ({
+const withLabel = (
+  a: Omit<DialogAssessment, "severityLabel" | "confidence"> & Partial<Pick<DialogAssessment, "confidence">>,
+): DialogAssessment => ({
   ...a,
   actions: a.actions.slice(0, 3),
   severityLabel: SEVERITY_LABELS[a.severity],
+  confidence:
+    a.confidence ?? {
+      level: "medium",
+      note: "Tolkning utifrån uppgifterna du lämnat i samtalet – kompletteras de ändras bilden.",
+    },
 });
 
 /* --- flödena --------------------------------------------------------------- */

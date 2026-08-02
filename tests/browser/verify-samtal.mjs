@@ -49,14 +49,14 @@ await page.click('button:has-text("Ja")'); // löner inom 30 dagar
 await page.waitForTimeout(600);
 await page.fill("#samtal-input", "0");
 await page.click('button[aria-label="Skicka"]');
-await page.waitForTimeout(600);
-await page.click('button:has-text("Nej")'); // ingen KBR
 await page.waitForTimeout(1200);
 body = await page.innerText("body");
+// Ärendeminnet: KBR är gjord i demoseeden, så Clara hoppar över frågan.
+check("minnet hoppar över KBR-frågan", /hoppar jag över/i.test(body));
 check("bedömningen återger beloppet", /150 000 kr/.test(body));
 check("lagrummet nämns", /59 kap/.test(body));
 check("rådgivningsgränsen står i svaret", /stäm av med/i.test(body));
-check("KBR-handlingen länkas", (await page.locator('a[href*="/kbr"]').count()) > 0);
+check("källmärkningen visar underlaget", /Tolkning utifrån uppgifterna du lämnat/i.test(body));
 check("allvarsgraden visas", /Kritiskt läge/i.test(body));
 
 // 3b. Konstitutionen i gränssnittet: bekräftelsen kom före frågorna,
@@ -75,6 +75,13 @@ await page.waitForTimeout(1000);
 body = await page.innerText("body");
 check("beslutet bekräftas", /protokollfört/i.test(body));
 check("beslutet listas med premiss", /Fattade beslut/i.test(body) && /Beslutet vilar på uppgifterna i samtalet/i.test(body));
+
+// 4a. Sessionsavslutet: kvittot på vad som gjordes.
+await page.click('button:has-text("Avsluta samtalet")');
+await page.waitForTimeout(600);
+body = await page.innerText("body");
+check("avslutet kvitterar arbetet", /Bra arbetat/i.test(body) && /protokollfört beslutet/i.test(body));
+check("avslutet lovar kontinuitet", /fortsätter vi där vi slutade/i.test(body));
 
 // 4b. Minnet: Clara följer upp beslutet mot premissen vid nästa besök.
 await page.goto(`${BASE}/dashboard/samtal`, { waitUntil: "domcontentloaded" });
@@ -118,6 +125,15 @@ await page.waitForTimeout(1500);
 body = await page.innerText("body");
 check("hälsningens lägesbild har områdena", /Likviditet/i.test(body) && /Frister/i.test(body) && /Dokumentation/i.test(body));
 check("analysempanelen finns i samtalet", /Visa analys/.test(body));
+// Ärendeminnet i hälsningen: sedan sist ur journalen + öppen arbetsmodell.
+check("sedan sist-briefingen visas", /Sedan vi pratades vid har följande hänt/i.test(body));
+check("beslutet syns i briefingen", /Beslut protokollfört/i.test(body) || /beslut omprövades/i.test(body));
+await page.click('summary:has-text("Vad jag vet om ditt företag")');
+await page.waitForTimeout(400);
+body = await page.innerText("body");
+check("arbetsmodellen visar bolaget med källa", /Demobolaget AB/i.test(body) && /ur nulägesanalysen/i.test(body));
+check("arbetsmodellen visar personerna", /Personerna kring bolaget/i.test(body));
+check("arbetsmodellen kan rättas", /säg till, så uppdaterar vi den/i.test(body));
 await page.click('summary:has-text("Visa analys")');
 await page.waitForTimeout(400);
 body = await page.innerText("body");

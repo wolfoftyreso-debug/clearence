@@ -22,6 +22,7 @@ import {
   type SnapshotRow,
 } from "@/lib/advisor/dialog";
 import { OPTIONS_STANCE } from "@/lib/advisor/options";
+import { buildWorkingModel, sinceLastVisit } from "@/lib/advisor/memory";
 import { analyseCrisis } from "@/lib/crisisAnalysis";
 import { analysisInputFromCase, parseAmount } from "@/lib/caseAnalysis";
 import { countdownTo } from "@/lib/actionPlan";
@@ -244,27 +245,71 @@ const DashboardSamtal = () => {
     retry: false,
     enabled: !!latestCase,
   });
+  const { data: members } = useQuery({
+    queryKey: ["case-members", latestCase?.id],
+    queryFn: () => data.members.listMembers(latestCase!.id),
+    retry: false,
+    enabled: !!latestCase,
+  });
+  const { data: pastSessions } = useQuery({
+    queryKey: ["advisor-sessions", latestCase?.id],
+    queryFn: () => data.dialogue.listSessions(latestCase!.id),
+    retry: false,
+    enabled: !!latestCase,
+  });
+  const { data: auditEvents } = useQuery({
+    queryKey: ["case-audit", latestCase?.id],
+    queryFn: () => data.audit.listByCase(latestCase!.id),
+    retry: false,
+    enabled: !!latestCase,
+  });
+
+  // Sedan sist: journalens händelser efter senaste samtalet - aldrig påhittat.
+  const lastVisit = pastSessions?.[0]?.closedAt ?? pastSessions?.[0]?.startedAt ?? null;
+  const sinceLines = useMemo(
+    () => sinceLastVisit(auditEvents ?? [], lastVisit),
+    [auditEvents, lastVisit],
+  );
 
   // Lägesbilden i hälsningen: byggd ur ärendets egna siffror.
   const caseSnapshot = useMemo(() => {
     if (!latestCase) return null;
-    const countdowns = analyseCrisis(analysisInputFromCase(latestCase)).timeline.map((e) =>
-      countdownTo(e.iso, new Date()),
-    );
-    const upcoming = countdowns.filter((c) => c.tone !== "passed");
+    const timeline = analyseCrisis(analysisInputFromCase(latestCase)).timeline;
+    const counted = timeline.map((e) => ({ label: e.label, countdown: countdownTo(e.iso, new Date()) }));
+    const upcoming = counted
+      .filter((c) => c.countdown.tone !== "passed")
+      .sort((a, b) => a.countdown.daysLeft - b.countdown.daysLeft);
     const totalDebt = parseAmount(latestCase.totalDebt);
     const liquidation = parseAmount(latestCase.quickLiquidationValue);
     const coverageRatio = totalDebt > 0 ? Math.round((liquidation / totalDebt) * 100) : null;
     return {
       coverageRatio,
+      nextDeadline: upcoming.length
+        ? { label: upcoming[0].label, daysLeft: upcoming[0].countdown.daysLeft }
+        : null,
       rows: buildCaseSnapshot({
         coverageRatio,
-        passedDeadlines: countdowns.filter((c) => c.tone === "passed").length,
-        daysToNextDeadline: upcoming.length ? Math.min(...upcoming.map((c) => c.daysLeft)) : null,
+        passedDeadlines: counted.filter((c) => c.countdown.tone === "passed").length,
+        daysToNextDeadline: upcoming.length ? upcoming[0].countdown.daysLeft : null,
         kbrDone: !!kbr,
       }),
     };
   }, [latestCase, kbr]);
+
+  // Arbetsmodellen: öppen för användaren, med källa per uppgift.
+  const workingModel = useMemo(
+    () =>
+      latestCase
+        ? buildWorkingModel({
+            caseRecord: latestCase,
+            decisions: decisions ?? [],
+            members: members ?? [],
+            nextDeadline: caseSnapshot?.nextDeadline ?? null,
+            kbrDone: !!kbr,
+          })
+        : null,
+    [latestCase, decisions, members, caseSnapshot, kbr],
+  );
 
   const [entries, setEntries] = useState<ChatEntry[]>([]);
   const [flow, setFlow] = useState<DialogFlow | null>(null);
@@ -302,6 +347,25 @@ const DashboardSamtal = () => {
     });
   };
 
+  /* Ärendeminnets regel: Clara frågar aldrig om sådant hon redan vet.
+     Svar som finns i ärendet fylls i före första frågan - och hon säger
+     att hon hoppar över dem, så minnet syns i stället för att anas. */
+  const knownAnswers = (chosen: DialogFlow): { answers: Record<string, string>; notes: string[] } => {
+    const known: Record<string, string> = {};
+    const notes: string[] = [];
+    if (chosen.steps.some((s) => s.id === "kbr") && kbr) {
+      known.kbr = "ja";
+      notes.push("Kontrollbalansbedömningen är redan gjord i ärendet, så den frågan hoppar jag över.");
+    }
+    return { answers: known, notes };
+  };
+
+  const nextUnanswered = (chosen: DialogFlow, from: number, ans: Record<string, string>): number => {
+    let i = from;
+    while (i < chosen.steps.length && ans[chosen.steps[i].id] !== undefined) i += 1;
+    return i;
+  };
+
   const startFlow = (chosen: DialogFlow, userText: string) => {
     if (!latestCase) return;
     sessionRef.current = {
@@ -313,16 +377,19 @@ const DashboardSamtal = () => {
       closedAt: null,
       entries: [],
     };
+    const known = knownAnswers(chosen);
+    const first = nextUnanswered(chosen, 0, known.answers);
     setFlow(chosen);
-    setStepIndex(0);
-    setAnswers({});
+    setStepIndex(first);
+    setAnswers(known.answers);
     setAssessment(null);
     setDecisionSaved(false);
     // Konstitutionen: först bekräftelsen och tryggheten, sedan EN fråga.
     say([
       { who: "user", text: userText },
       { who: "radgivare", text: chosen.ack },
-      { who: "radgivare", text: chosen.steps[0].prompt },
+      ...known.notes.map((text) => ({ who: "radgivare" as const, text })),
+      { who: "radgivare", text: chosen.steps[first].prompt },
     ]);
   };
 
@@ -357,11 +424,12 @@ const DashboardSamtal = () => {
     const nextAnswers = { ...answers, [currentStep.id]: raw };
     setAnswers(nextAnswers);
     const shown = answerLabel(currentStep, raw);
-    if (stepIndex + 1 < flow.steps.length) {
-      setStepIndex(stepIndex + 1);
+    const next = nextUnanswered(flow, stepIndex + 1, nextAnswers);
+    if (next < flow.steps.length) {
+      setStepIndex(next);
       say([
         { who: "user", text: shown },
-        { who: "radgivare", text: flow.steps[stepIndex + 1].prompt },
+        { who: "radgivare", text: flow.steps[next].prompt },
       ]);
     } else {
       const result = flow.assess(nextAnswers);
@@ -452,6 +520,23 @@ const DashboardSamtal = () => {
             <section aria-label="Samtal med rådgivaren" className="rounded-md border border-border bg-card p-5 shadow-soft">
               {entries.length === 0 && (
                 <div>
+                  {/* Aldrig "hur kan jag hjälpa dig idag?" - läget först.
+                      Sedan sist-raderna kommer ur journalen, inte ur luften. */}
+                  {sinceLines.length > 0 && (
+                    <div className="mb-4 rounded-md border border-border bg-secondary/30 p-3">
+                      <p className="text-sm font-medium text-foreground">
+                        Sedan vi pratades vid har följande hänt:
+                      </p>
+                      <ul className="mt-1.5 space-y-1">
+                        {sinceLines.map((line) => (
+                          <li key={line} className="flex items-start gap-2 text-sm leading-relaxed text-foreground/90">
+                            <span className="mt-0.5 text-success" aria-hidden="true">✓</span>
+                            <span className="min-w-0">{line}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                   <p className="text-base leading-relaxed text-foreground">
                     {CLARA.greeting(profile?.displayName ?? null)}
                   </p>
@@ -481,6 +566,40 @@ const DashboardSamtal = () => {
                                     : "Tillgångarna täcker skulderna - fler vägar står öppna.",
                               }}
                             />
+                          </div>
+                        </details>
+                      )}
+                      {/* Arbetsmodellen: öppen, med källa per uppgift.
+                          Transparens är skillnaden mellan en arbetsmodell
+                          och en övervakningsakt. */}
+                      {workingModel && (
+                        <details className="mt-2">
+                          <summary className="cursor-pointer list-none text-sm font-medium text-accent underline-offset-4 hover:underline">
+                            Vad jag vet om ditt företag
+                          </summary>
+                          <div className="mt-2 space-y-3 rounded-md border border-border p-3">
+                            {workingModel.map((section) => (
+                              <div key={section.id}>
+                                <h3 className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+                                  {section.title}
+                                </h3>
+                                <dl className="mt-1 space-y-1">
+                                  {section.rows.map((row) => (
+                                    <div key={`${row.label}-${row.value}`} className="text-sm leading-relaxed">
+                                      <dt className="inline font-medium text-foreground">{row.label}: </dt>
+                                      <dd className="inline text-foreground/90">
+                                        {row.value}{" "}
+                                        <span className="text-xs text-muted-foreground">({row.source})</span>
+                                      </dd>
+                                    </div>
+                                  ))}
+                                </dl>
+                              </div>
+                            ))}
+                            <p className="text-xs leading-relaxed text-muted-foreground">
+                              Det här är arbetsmodellen jag utgår ifrån. Stämmer
+                              något inte längre – säg till, så uppdaterar vi den.
+                            </p>
                           </div>
                         </details>
                       )}
@@ -573,6 +692,20 @@ const DashboardSamtal = () => {
                   >
                     {assessment.severityLabel}
                   </span>
+                  {/* Källmärkningen: vad bedömningen bygger på, synligt. */}
+                  <p className="flex items-start gap-2 text-xs leading-relaxed text-muted-foreground">
+                    <span
+                      className={`mt-1 h-2 w-2 flex-shrink-0 rounded-full ${
+                        assessment.confidence.level === "high"
+                          ? "bg-success"
+                          : assessment.confidence.level === "medium"
+                            ? "bg-warning"
+                            : "bg-destructive"
+                      }`}
+                      aria-hidden="true"
+                    />
+                    <span className="min-w-0">{assessment.confidence.note}</span>
+                  </p>
                   {/* Rätt medium för budskapet: lägesbild för prioritering,
                       mätare för det som mäts, tidslinje för processen. */}
                   {assessment.snapshot && <SnapshotList rows={assessment.snapshot} />}
@@ -651,19 +784,27 @@ const DashboardSamtal = () => {
                       </Link>
                     </div>
                   )}
+                  {/* Sessionsavslutet: kvittot på vad som gjordes, och
+                      löftet att nästa samtal börjar där detta slutade. */}
                   <button
                     type="button"
                     onClick={() => {
+                      const done = [`✓ gått igenom: ${flow?.title.toLowerCase() ?? "läget"}`];
+                      if (decisionSaved) done.push("✓ protokollfört beslutet med dess premiss");
+                      say([
+                        {
+                          who: "radgivare",
+                          text: `Bra arbetat. Vi har:\n${done.join("\n")}\nAllt är journalfört. Nästa gång fortsätter vi där vi slutade.`,
+                        },
+                      ]);
                       setFlow(null);
                       setAssessment(null);
                       setStepIndex(0);
-                      setEntries([]);
-                      sessionRef.current = null;
                       setDecisionSaved(false);
                     }}
                     className="text-sm font-medium text-accent underline-offset-4 hover:underline"
                   >
-                    Nytt samtal
+                    Avsluta samtalet
                   </button>
                 </div>
               )}

@@ -155,6 +155,72 @@ check("lägesbilden: passerad frist är kritisk", snapshotRows[1].tone === "crit
 check("lägesbilden: ogjord KBR varnar", snapshotRows[2].tone === "warning");
 check("lägesbilden: lugnt läge är grönt", buildCaseSnapshot({ coverageRatio: 120, passedDeadlines: 0, daysToNextDeadline: 30, kbrDone: true }).every((r) => r.tone === "success"));
 
+/* --- ärendeminnet: arbetsmodellen och sedan sist --------------------------- */
+
+import { buildWorkingModel, sinceLastVisit } from "../src/lib/advisor/memory";
+import type { AuditEventRecord, CaseDecisionRecord, CaseMemberRecord, CaseRecord } from "../src/data/types";
+
+const CASE: CaseRecord = {
+  id: "c1",
+  companyName: "Trygg Bil Stockholm AB",
+  orgNumber: "556000-0001",
+  employees: 12,
+  totalDebt: "1 200 000",
+  quickLiquidationValue: "400 000",
+  recommendationType: "reconstruction",
+} as unknown as CaseRecord;
+
+const DECISIONS: CaseDecisionRecord[] = [
+  {
+    id: "d1", caseId: "c1", title: "Avvakta rekonstruktion", rationale: "r",
+    premise: "Positivt kassaflöde inom sex veckor", decidedAt: "2026-08-01T09:00:00Z",
+    status: "active", reconsideredAt: null, reconsiderNote: null,
+  },
+];
+
+const MEMBERS: CaseMemberRecord[] = [
+  { id: "m1", caseId: "c1", userId: "u1", role: "owner", displayName: "Erik", email: "erik@x.se", createdAt: "2026-08-01", revokedAt: null } as CaseMemberRecord,
+  { id: "m2", caseId: "c1", userId: "u2", role: "auditor", displayName: "Björn", email: "bjorn@x.se", createdAt: "2026-08-01", revokedAt: null } as CaseMemberRecord,
+];
+
+const model = buildWorkingModel({
+  caseRecord: CASE,
+  decisions: DECISIONS,
+  members: MEMBERS,
+  nextDeadline: { label: "Skattens förfallodag", daysLeft: 9 },
+  kbrDone: false,
+});
+const flat = JSON.stringify(model);
+
+check("modellen: bolaget med org.nr", flat.includes("Trygg Bil Stockholm AB (556000-0001)"));
+check("modellen: skuldtäckningen räknad (33 %)", flat.includes("33 % vid snabb avyttring"));
+check("modellen: målet ur rekommendationen", flat.includes("rekonstruktion och säkra fortsatt drift"));
+check("modellen: närmaste fristen med dagar", flat.includes("Skattens förfallodag (om 9 dagar)"));
+check("modellen: beslutet ur beslutsminnet", flat.includes("Avvakta rekonstruktion"));
+check("modellen: relationsminnet vet vem Björn är", flat.includes("Björn") && /Björn[^}]*[Rr]evisor/.test(flat));
+check("modellen: varje rad har källa", model.every((s) => s.rows.every((r) => r.source.startsWith("ur "))));
+
+const EVENTS: AuditEventRecord[] = [
+  { id: 1, caseId: "c1", actorUserId: null, actorRole: null, action: "insert", objectType: "case_documents", objectId: null, detail: "likviditetsprognos.pdf", occurredAt: "2026-08-02T10:00:00Z" },
+  { id: 2, caseId: "c1", actorUserId: null, actorRole: null, action: "insert", objectType: "case_decisions", objectId: null, detail: "beslut: \"Avvakta rekonstruktion\"", occurredAt: "2026-08-02T11:00:00Z" },
+  { id: 3, caseId: "c1", actorUserId: null, actorRole: null, action: "insert", objectType: "advisor_sessions", objectId: null, detail: "samtal", occurredAt: "2026-08-02T12:00:00Z" },
+  { id: 4, caseId: "c1", actorUserId: null, actorRole: null, action: "insert", objectType: "case_documents", objectId: null, detail: "gammal.pdf", occurredAt: "2026-07-01T10:00:00Z" },
+];
+
+const since = sinceLastVisit(EVENTS, "2026-08-01T00:00:00Z");
+check("sedan sist: nya dokument rapporteras", since.some((l) => l.includes("likviditetsprognos.pdf")));
+check("sedan sist: beslut rapporteras", since.some((l) => l.includes("Avvakta rekonstruktion")));
+check("sedan sist: egna samtal räknas inte som nytt", !since.some((l) => l.includes("samtal")));
+check("sedan sist: gamla händelser filtreras bort", !since.some((l) => l.includes("gammal.pdf")));
+check("sedan sist: första besöket är tomt (inget att påstå)", sinceLastVisit(EVENTS, null).length === 0);
+
+/* --- källmärkningen -------------------------------------------------------- */
+
+for (const flow of DIALOG_FLOWS) {
+  const a = flow.assess(SAMPLE_ANSWERS[flow.id]);
+  check(`${flow.id}: bedömningen bär källmärkning`, a.confidence.level === "medium" && a.confidence.note.length > 20);
+}
+
 /* --- svarsformatering för journalen ---------------------------------------- */
 
 check("answerLabel: ja/nej normaliseras", answerLabel({ id: "x", prompt: "", kind: "yesno" }, "JA, tyvärr") === "Ja");
