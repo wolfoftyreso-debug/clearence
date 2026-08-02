@@ -1,7 +1,8 @@
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { SectionLink } from "./HowItWorksLink";
 import { SiteSearch } from "./SiteSearch";
+import { ClaraIntro } from "@/components/advisor/ClaraIntro";
 import { Clock, FileText, UserCheck } from "lucide-react";
 
 /**
@@ -50,6 +51,7 @@ const CompassIllustration = () => (
 
 const Hero = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
 
   return (
     <section className="border-b border-border bg-secondary/30">
@@ -76,10 +78,28 @@ const Hero = () => {
           </div>
         </div>
 
-        {/* Frågan, sökrutan, pillerknapparna och tjänstelänken. */}
-        <h1 className="mt-10 text-center font-display text-4xl text-accent sm:text-5xl">
-          Vad vill du göra?
-        </h1>
+        {/* Det första mötet ÄR samtalet. Clara tar emot direkt - utan
+            konto, utan meny. Inloggade med pågående ärende fortsätter
+            där de slutade i stället för att presenteras igen. */}
+        <h1 className="sr-only">CLEARANCE – vägledning vid företagskris</h1>
+        <div className="mx-auto mt-10 max-w-2xl">
+          {user ? (
+            <div className="rounded-md border border-border bg-card p-5 text-center shadow-soft">
+              <p className="text-base leading-relaxed text-foreground">
+                Välkommen tillbaka. Clara har läget klart – fortsätt samtalet
+                där ni slutade.
+              </p>
+              <Link
+                to="/dashboard/samtal"
+                className="mt-4 inline-block rounded-full bg-accent px-7 py-3 text-base font-semibold text-accent-foreground shadow-soft transition-opacity hover:opacity-90"
+              >
+                Fortsätt samtalet
+              </Link>
+            </div>
+          ) : (
+            <ClaraIntro onDone={() => navigate("/wizard")} />
+          )}
+        </div>
 
         <div className="mt-8">
           <SiteSearch />

@@ -154,6 +154,39 @@ check("katalogens fyra kategorier", /Kassaflöde/i.test(body) && /Intäkter/i.te
 check("ingen förutbestämd utgång", /aktivt val/i.test(body));
 check("rådgivningsgränsen står på sidan", /stäms av med revisor/i.test(body));
 
+// 7d. Action Contract: bjuda in revisorn - hela mejlet före, kvittot efter.
+await page.goto(`${BASE}/dashboard/samtal`, { waitUntil: "domcontentloaded" });
+await page.waitForTimeout(1200);
+await page.fill("#samtal-input", "Jag behöver min revisor");
+await page.click('button[aria-label="Skicka"]');
+await page.waitForTimeout(600);
+body = await page.innerText("body");
+check("kontraktet ber om adressen med länkregeln", /Vilken e-postadress har din revisor/i.test(body) && /exakt den adressen/i.test(body));
+await page.fill("#samtal-input", "inte en adress");
+await page.click('button[aria-label="Skicka"]');
+await page.waitForTimeout(500);
+body = await page.innerText("body");
+check("ogiltig adress avvisas vänligt", /ser inte ut som en e-postadress/i.test(body));
+await page.fill("#samtal-input", "bjorn@revision.se");
+await page.click('button[aria-label="Skicka"]');
+await page.waitForTimeout(800);
+body = await page.innerText("body");
+check("förstå-steget citerar adress och roll", /Jag uppfattar att du vill bjuda in bjorn@revision.se/i.test(body));
+check("kontrollera-steget visar gränserna", /Jag ändrar ingenting i ärendet/i.test(body));
+check("hela mejlet visas före utskick", /Till: bjorn@revision.se/i.test(body) && /Inbjudan till ärendet för Demobolaget AB/i.test(body) && /personlig länk – skapas vid utskicket/i.test(body));
+await page.click('button:has-text("Skicka inbjudan")');
+await page.waitForTimeout(1000);
+body = await page.innerText("body");
+check("verifieringen kvitterar och pekar på Deltagare", /Inbjudan är skickad till bjorn@revision.se/i.test(body) && /journalförd/i.test(body));
+await page.goto(`${BASE}/dashboard/deltagare`, { waitUntil: "domcontentloaded" });
+await page.waitForTimeout(1200);
+body = await page.innerText("body");
+check("inbjudan syns under Deltagare", /bjorn@revision\.se/.test(body) && /Väntar på svar/i.test(body));
+await page.goto(`${BASE}/dashboard/handelser`, { waitUntil: "domcontentloaded" });
+await page.waitForTimeout(1200);
+body = await page.innerText("body");
+check("åtgärden är journalförd", /bjorn@revision\.se som revisor/i.test(body));
+
 // 8. Onboardingen: en ny användare möts av Clara, inte av ett dashboard.
 await page.goto(`${BASE}/login`, { waitUntil: "domcontentloaded" });
 await page.waitForTimeout(800);

@@ -9,12 +9,15 @@ import { useAuth } from "@/hooks/useAuth";
 import {
   CLARA,
   DIALOG_FLOWS,
+  EMAIL_SHAPE,
   FALLBACK_REPLY,
-  ONBOARDING,
+  INVITE_CONTRACT,
   answerLabel,
   buildCaseSnapshot,
   decisionCheckIn,
+  inviteIntent,
   matchFlow,
+  type InviteRole,
   type DialogAssessment,
   type DialogFlow,
   type DialogMeter,
@@ -23,6 +26,9 @@ import {
 } from "@/lib/advisor/dialog";
 import { OPTIONS_STANCE } from "@/lib/advisor/options";
 import { buildWorkingModel, sinceLastVisit } from "@/lib/advisor/memory";
+import { ClaraIntro } from "@/components/advisor/ClaraIntro";
+import { caseInvitationEmail } from "@/lib/email/messages";
+import { CASE_ROLE_DESCRIPTIONS, CASE_ROLE_LABELS } from "@/lib/caseRoles";
 import { analyseCrisis } from "@/lib/crisisAnalysis";
 import { analysisInputFromCase, parseAmount } from "@/lib/caseAnalysis";
 import { countdownTo } from "@/lib/actionPlan";
@@ -110,112 +116,6 @@ const SEVERITY_TONE: Record<DialogAssessment["severity"], string> = {
   critical: "border-frist/50 bg-frist/10 text-frist",
   serious: "border-warning/60 bg-warning/15 text-foreground",
   elevated: "border-warning/50 bg-warning/10 text-foreground",
-};
-
-/**
- * Onboardingsamtalet: namn, företag, situation - en fråga i taget, i
- * chattform. Sedan öppnar Clara nulägesanalysen själv; användaren letar
- * aldrig i en meny. Svaren stannar i sessionen (namnet sparas i
- * profilen) - faktainsamlingen är nulägesanalysens jobb, inte hälsningens.
- */
-const OnboardingConversation = ({ onDone }: { onDone: (name: string | null) => void }) => {
-  const [entries, setEntries] = useState<ChatEntry[]>(
-    ONBOARDING.intro.map((text) => ({ who: "radgivare" as const, text })),
-  );
-  const [stage, setStage] = useState<"name" | "company" | "situation" | "done">("name");
-  const [name, setName] = useState<string | null>(null);
-  const [input, setInput] = useState("");
-  const bottomRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ block: "nearest" });
-  }, [entries.length]);
-
-  const submit = (e: FormEvent) => {
-    e.preventDefault();
-    const value = input.trim();
-    if (!value) return;
-    setInput("");
-    if (stage === "name") {
-      setName(value);
-      setEntries((prev) => [
-        ...prev,
-        { who: "user", text: value },
-        { who: "radgivare", text: ONBOARDING.askCompany(value) },
-      ]);
-      setStage("company");
-    } else if (stage === "company") {
-      setEntries((prev) => [
-        ...prev,
-        { who: "user", text: value },
-        { who: "radgivare", text: ONBOARDING.askSituation },
-      ]);
-      setStage("situation");
-    }
-  };
-
-  const chooseSituation = (label: string) => {
-    setEntries((prev) => [
-      ...prev,
-      { who: "user", text: label },
-      ...ONBOARDING.closing.map((text) => ({ who: "radgivare" as const, text })),
-    ]);
-    setStage("done");
-    // Clara navigerar - efter en paus lång nog att hinna läsa avslutet.
-    window.setTimeout(() => onDone(name), 2600);
-  };
-
-  return (
-    <section aria-label="Samtal med Clara" className="rounded-md border border-border bg-card p-5 shadow-soft">
-      <ol className="space-y-3" aria-live="polite">
-        {entries.map((entry, i) => (
-          <li key={i} className={entry.who === "user" ? "flex justify-end" : "flex"}>
-            <p
-              className={`max-w-[85%] whitespace-pre-wrap rounded-md px-3.5 py-2.5 text-sm leading-relaxed ${
-                entry.who === "user" ? "bg-accent text-accent-foreground" : "bg-secondary/60 text-foreground"
-              }`}
-            >
-              {entry.text}
-            </p>
-          </li>
-        ))}
-      </ol>
-
-      {stage === "situation" && (
-        <div className="mt-4 flex flex-col items-start gap-2">
-          {ONBOARDING.situations.map((s) => (
-            <button
-              key={s.id}
-              type="button"
-              onClick={() => chooseSituation(s.label)}
-              className="rounded-full border border-border bg-card px-3.5 py-1.5 text-sm font-medium text-foreground transition-colors hover:border-accent"
-            >
-              {s.label}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {(stage === "name" || stage === "company") && (
-        <form onSubmit={submit} className="mt-4 flex gap-2">
-          <label htmlFor="onboarding-input" className="sr-only">
-            {stage === "name" ? "Vad heter du?" : "Vilket företag gäller det?"}
-          </label>
-          <Input
-            id="onboarding-input"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder={stage === "name" ? "Ditt namn" : "Företagets namn"}
-            autoComplete="off"
-          />
-          <Button type="submit" variant="accent" disabled={!input.trim()} aria-label="Skicka">
-            <Send className="h-4 w-4" aria-hidden="true" />
-          </Button>
-        </form>
-      )}
-      <div ref={bottomRef} />
-    </section>
-  );
 };
 
 const DashboardSamtal = () => {
@@ -407,6 +307,17 @@ const DashboardSamtal = () => {
   const handleFreeText = (text: string) => {
     const trimmed = text.trim();
     if (!trimmed) return;
+    /* Åtgärdsintention före analysintention: "jag behöver min revisor"
+       startar Action Contract, inte en frågeserie. */
+    const role = inviteIntent(trimmed);
+    if (role && latestCase) {
+      setInvite({ role, stage: "ask" });
+      say([
+        { who: "user", text: trimmed },
+        { who: "radgivare", text: INVITE_CONTRACT.askEmail(CASE_ROLE_LABELS[role]) },
+      ]);
+      return;
+    }
     if (/alternativ|vägar framåt|vad kan jag göra/i.test(trimmed)) {
       openOptions(trimmed);
       return;
@@ -450,11 +361,74 @@ const DashboardSamtal = () => {
     }
   };
 
+  /* Action Contract, steg för steg. Adressen tas emot, mejlet byggs med
+     SAMMA byggare som utskicket använder, och visas i sin helhet före
+     bekräftelsen. Användaren ska aldrig bli överraskad. */
+  const [invite, setInvite] = useState<null | {
+    role: InviteRole;
+    stage: "ask" | "confirm";
+    email?: string;
+    preview?: { recipient: string; subject: string; bodyText: string };
+  }>(null);
+
+  const handleInviteEmail = (raw: string) => {
+    if (!invite || !latestCase) return;
+    const email = raw.trim().toLowerCase();
+    if (!EMAIL_SHAPE.test(email)) {
+      say([
+        { who: "user", text: raw.trim() },
+        { who: "radgivare", text: INVITE_CONTRACT.invalidEmail },
+      ]);
+      return;
+    }
+    const message = caseInvitationEmail({
+      recipient: email,
+      inviterName: profile?.displayName ?? user?.email ?? "Du",
+      companyName: latestCase.companyName ?? "bolaget",
+      roleLabel: CASE_ROLE_LABELS[invite.role],
+      roleDescription: CASE_ROLE_DESCRIPTIONS[invite.role],
+      acceptUrl: "[personlig länk – skapas vid utskicket]",
+      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+    });
+    setInvite({
+      ...invite,
+      stage: "confirm",
+      email,
+      preview: { recipient: message.recipient, subject: message.subject, bodyText: message.bodyText },
+    });
+    say([
+      { who: "user", text: email },
+      { who: "radgivare", text: INVITE_CONTRACT.understand(email, CASE_ROLE_LABELS[invite.role]) },
+    ]);
+  };
+
+  const sendInvite = useMutation({
+    mutationFn: () => data.members.invite(latestCase!.id, invite!.email!, invite!.role),
+    onSuccess: () => {
+      say([{ who: "radgivare", text: INVITE_CONTRACT.verifySuccess(invite!.email!) }]);
+      setInvite(null);
+      queryClient.invalidateQueries({ queryKey: ["case-invitations", latestCase?.id] });
+      queryClient.invalidateQueries({ queryKey: ["case-audit", latestCase?.id] });
+    },
+    onError: (error) => {
+      say([
+        {
+          who: "radgivare",
+          text: INVITE_CONTRACT.verifyFailure(
+            error instanceof Error ? error.message : "okänt fel.",
+          ),
+        },
+      ]);
+      setInvite(null);
+    },
+  });
+
   const submit = (e: FormEvent) => {
     e.preventDefault();
     const value = input;
     setInput("");
-    if (currentStep) answerStep(value);
+    if (invite?.stage === "ask") handleInviteEmail(value);
+    else if (currentStep) answerStep(value);
     else handleFreeText(value);
   };
 
@@ -508,7 +482,7 @@ const DashboardSamtal = () => {
         {isLoading ? null : !latestCase ? (
           /* Första upplevelsen är ett samtal, inte ett dashboard: Clara
              frågar en sak i taget och öppnar sedan nulägesanalysen själv. */
-          <OnboardingConversation
+          <ClaraIntro
             onDone={(name) => {
               if (name) void data.profile.update({ displayName: name, phone: profile?.phone ?? null });
               navigate("/wizard");
@@ -646,7 +620,7 @@ const DashboardSamtal = () => {
 
               {/* Snabbvalen står kvar tills ett flöde faktiskt börjat - även
                   efter fallbacken ska nästa steg vara ett klick bort. */}
-              {!flow && !assessment && (
+              {!flow && !assessment && !invite && (
                 <div className={`flex flex-wrap gap-2 ${entries.length === 0 ? "mt-4" : "mt-4 border-t border-border pt-4"}`}>
                   {DIALOG_FLOWS.map((f) => (
                     <button
@@ -664,6 +638,13 @@ const DashboardSamtal = () => {
                     className="rounded-full border border-border bg-card px-3.5 py-1.5 text-sm font-medium text-foreground transition-colors hover:border-accent"
                   >
                     Vilka alternativ har jag?
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleFreeText("Jag behöver min revisor")}
+                    className="rounded-full border border-border bg-card px-3.5 py-1.5 text-sm font-medium text-foreground transition-colors hover:border-accent"
+                  >
+                    Bjud in min revisor
                   </button>
                 </div>
               )}
@@ -683,6 +664,51 @@ const DashboardSamtal = () => {
                   </li>
                 ))}
               </ol>
+
+              {/* Action Contract: kontrollera + bekräfta. Hela mejlet,
+                  mottagaren och behörigheten - FÖRE, aldrig efter. */}
+              {invite?.stage === "confirm" && invite.preview && (
+                <div className="mt-4 space-y-3 rounded-md border border-accent/30 bg-accent/5 p-4">
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-accent">
+                    Innan något skickas
+                  </h3>
+                  <ul className="space-y-1">
+                    {INVITE_CONTRACT.control(CASE_ROLE_DESCRIPTIONS[invite.role]).map((line) => (
+                      <li key={line.slice(0, 32)} className="flex gap-2 text-sm leading-relaxed text-foreground/90">
+                        <span className="mt-2 h-1 w-1 flex-shrink-0 rounded-full bg-accent" aria-hidden="true" />
+                        <span className="min-w-0">{line}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <div className="rounded-md border border-border bg-card p-3">
+                    <p className="text-xs text-muted-foreground">Till: {invite.preview.recipient}</p>
+                    <p className="mt-1 text-sm font-medium text-foreground">{invite.preview.subject}</p>
+                    <pre className="mt-2 max-h-64 overflow-y-auto whitespace-pre-wrap font-sans text-xs leading-relaxed text-foreground/90">
+                      {invite.preview.bodyText}
+                    </pre>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      variant="accent"
+                      size="sm"
+                      disabled={sendInvite.isPending}
+                      onClick={() => sendInvite.mutate()}
+                    >
+                      {INVITE_CONTRACT.confirmLabel}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setInvite(null);
+                        say([{ who: "radgivare", text: INVITE_CONTRACT.cancelReply }]);
+                      }}
+                    >
+                      Avbryt
+                    </Button>
+                  </div>
+                </div>
+              )}
 
               {/* Bedömningen: handlingarna och beslutsförslaget. */}
               {assessment && (
@@ -824,16 +850,24 @@ const DashboardSamtal = () => {
                     </Button>
                   ))}
                 </div>
-              ) : !assessment ? (
+              ) : !assessment && invite?.stage !== "confirm" ? (
                 <form onSubmit={submit} className="mt-4 flex gap-2">
                   <label htmlFor="samtal-input" className="sr-only">
-                    {currentStep ? currentStep.prompt : "Beskriv vad som har hänt"}
+                    {invite?.stage === "ask"
+                      ? "Rådgivarens e-postadress"
+                      : currentStep
+                        ? currentStep.prompt
+                        : "Beskriv vad som har hänt"}
                   </label>
                   <Input
                     id="samtal-input"
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
-                    placeholder={currentStep?.hint ?? "Beskriv vad som har hänt …"}
+                    placeholder={
+                      invite?.stage === "ask"
+                        ? "namn@byran.se"
+                        : currentStep?.hint ?? "Beskriv vad som har hänt …"
+                    }
                     inputMode={currentStep?.kind === "amount" ? "numeric" : "text"}
                     autoComplete="off"
                   />

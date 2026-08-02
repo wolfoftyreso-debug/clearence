@@ -547,6 +547,47 @@ export const decisionCheckIn = (decision: {
     : `Den ${when} beslutade ni: ”${decision.title}”. Är det fortfarande planen?`;
 };
 
+/* --- Action Contract: inbjudan av extern expert ---------------------------- */
+
+/**
+ * "Jag behöver min revisor" är ingen frågeserie och ingen vy - det är en
+ * ÅTGÄRD, och åtgärder går genom Action Contract (docs/agent-architecture.md):
+ * förstå, kontrollera, bekräfta, utför, verifiera, logga. Clara visar
+ * hela mejlet och exakt vad rollen ger åtkomst till INNAN något skickas.
+ * Användaren ska aldrig bli överraskad.
+ */
+export type InviteRole = "auditor" | "legal_advisor";
+
+/** Fritext → inbjudningsintention. Jurist före revisor: "min jurist" vinner. */
+export const inviteIntent = (text: string): InviteRole | null => {
+  if (!/\b(bjud|bjuda|prata med|behöver|koppla in|kontakta)\b/i.test(text)) return null;
+  if (/jurist|advokat/i.test(text)) return "legal_advisor";
+  if (/revisor/i.test(text)) return "auditor";
+  return null;
+};
+
+export const INVITE_CONTRACT = {
+  askEmail: (roleLabel: string): string =>
+    `Självklart. Vilken e-postadress har din ${roleLabel.toLowerCase()}? Inbjudan blir medlemskap först när personen loggar in med exakt den adressen – en vidarebefordrad länk ger ingen åtkomst.`,
+  invalidEmail: "Det där ser inte ut som en e-postadress. Försök igen – till exempel namn@byran.se.",
+  understand: (email: string, roleLabel: string): string =>
+    `Jag uppfattar att du vill bjuda in ${email} till ärendet som ${roleLabel.toLowerCase()}.`,
+  /** Kontrollera-steget: vad åtgärden ger, och vad den inte ger. */
+  control: (roleDescription: string): string[] => [
+    `Rollen innebär: ${roleDescription}`,
+    "Jag ändrar ingenting i ärendet - inbjudan ger läsning och deltagande enligt rollen, och den kan återkallas under Deltagare.",
+    "Mejlet nedan skickas exakt som det står. Den personliga länken skapas vid utskicket.",
+  ],
+  confirmLabel: "Skicka inbjudan",
+  cancelReply: "Okej – jag skickar ingenting. Säg till när du vill ta det.",
+  verifySuccess: (email: string): string =>
+    `Inbjudan är skickad till ${email} och journalförd. Den blir medlemskap först när personen loggar in med samma adress – status syns under Deltagare.`,
+  verifyFailure: (reason: string): string =>
+    `Inbjudan skickades inte: ${reason} Ingenting har journalförts som skickat.`,
+} as const;
+
+export const EMAIL_SHAPE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+
 /** Formaterar ett svar för journalen/samtalsloggen. */
 export const answerLabel = (step: DialogStep, raw: string): string => {
   if (step.kind === "yesno") return yes(raw) ? "Ja" : "Nej";

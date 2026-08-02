@@ -221,6 +221,24 @@ for (const flow of DIALOG_FLOWS) {
   check(`${flow.id}: bedömningen bär källmärkning`, a.confidence.level === "medium" && a.confidence.note.length > 20);
 }
 
+/* --- Action Contract: inbjudan --------------------------------------------- */
+
+import { EMAIL_SHAPE, INVITE_CONTRACT, inviteIntent } from "../src/lib/advisor/dialog";
+
+check("intent: 'jag behöver min revisor' → revisor", inviteIntent("Jag behöver min revisor") === "auditor");
+check("intent: 'kan vi koppla in en jurist' → jurist", inviteIntent("kan vi koppla in en jurist?") === "legal_advisor");
+check("intent: 'bjud in advokaten' → jurist", inviteIntent("bjud in advokaten") === "legal_advisor");
+check("intent: att bara nämna revisorn räcker inte", inviteIntent("revisorn var nöjd i fjol") === null);
+check("intent: krisflödena krockar inte", inviteIntent("jag kan inte betala momsen") === null);
+
+check("kontraktet: förstå-steget citerar adress och roll", INVITE_CONTRACT.understand("bjorn@revision.se", "Revisor").includes("bjorn@revision.se"));
+check("kontraktet: kontrollera-steget säger vad som INTE händer", INVITE_CONTRACT.control("beskrivning").some((l) => l.includes("Jag ändrar ingenting")));
+check("kontraktet: länkregeln står i frågan", INVITE_CONTRACT.askEmail("Revisor").includes("exakt den adressen"));
+check("kontraktet: verifieringen är journalmedveten", INVITE_CONTRACT.verifySuccess("a@b.se").includes("journalförd"));
+check("kontraktet: misslyckande ljuger inte", INVITE_CONTRACT.verifyFailure("adressen har redan en inbjudan.").includes("Ingenting har journalförts som skickat"));
+check("kontraktet: e-postformen prövas", EMAIL_SHAPE.test("namn@byran.se") && !EMAIL_SHAPE.test("inte en adress"));
+check("kontraktet: ordet AI förekommer inte", !/\bAI\b/i.test(JSON.stringify(INVITE_CONTRACT.control("x")) + INVITE_CONTRACT.askEmail("Revisor")));
+
 /* --- svarsformatering för journalen ---------------------------------------- */
 
 check("answerLabel: ja/nej normaliseras", answerLabel({ id: "x", prompt: "", kind: "yesno" }, "JA, tyvärr") === "Ja");
