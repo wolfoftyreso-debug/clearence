@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { downloadReport } from "@/lib/reports/deliver";
+import { downloadReportPdf } from "@/lib/reports/deliver";
 import { useInlineReport } from "./useInlineReport";
 import type { ReportModel } from "@/lib/reports/types";
 import { Download, FileText } from "lucide-react";
@@ -41,7 +41,7 @@ export const ReportButton = ({
   const save = () => {
     setError(null);
     try {
-      const result = downloadReport(build());
+      const result = downloadReportPdf(build());
       if (!result.ok) setError(result.reason);
     } catch {
       setError("Rapporten kunde inte sparas. Försök igen.");
@@ -57,13 +57,12 @@ export const ReportButton = ({
         </Button>
         <Button type="button" variant="outline" onClick={save}>
           <Download className="h-4 w-4" aria-hidden="true" />
-          Spara fil
+          Ladda ner PDF
         </Button>
       </div>
       <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-        Rapporten visas här i appen. Välj <strong>Skriv ut</strong> och sedan{" "}
-        <strong>Spara som PDF</strong> om du vill ha den som PDF, eller spara
-        den som fil för att bifoga i ett mejl.
+        Rapporten visas här i appen och kan laddas ner som PDF direkt – för
+        arkivet, mejlbilagan eller mötet med rådgivaren.
       </p>
       {error && (
         <p className="mt-2 text-sm text-destructive" role="alert">

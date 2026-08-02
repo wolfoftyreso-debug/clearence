@@ -11,6 +11,7 @@
  */
 
 import { renderReport } from "./render";
+import { renderReportPdf } from "./pdf";
 import type { ReportModel } from "./types";
 
 export type DeliveryResult =
@@ -33,6 +34,33 @@ export const reportFileName = (model: ReportModel): string => {
     : date.toISOString().slice(0, 10);
   const who = model.meta.companyName ?? model.meta.orgNumber ?? "clearance";
   return `${slug(model.meta.documentTitle)}-${slug(who)}-${iso}.html`;
+};
+
+const downloadBlob = (blob: Blob, fileName: string): void => {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+};
+
+/**
+ * Laddar ner rapporten som riktig PDF - byggd av vår egen sättning
+ * (src/lib/reports/pdf.ts), inte via utskriftsdialogen. Fungerar därmed
+ * även i inbäddade vyer där både popupfönster och utskrift kan blockeras.
+ */
+export const downloadReportPdf = (model: ReportModel): DeliveryResult => {
+  try {
+    const bytes = renderReportPdf(model);
+    const blob = new Blob([bytes as BlobPart], { type: "application/pdf" });
+    downloadBlob(blob, reportFileName(model).replace(/\.html$/, ".pdf"));
+    return { ok: true, via: "download" };
+  } catch {
+    return { ok: false, reason: "PDF-filen kunde inte skapas." };
+  }
 };
 
 /** Saves the report as a self-contained file the user can keep or email. */

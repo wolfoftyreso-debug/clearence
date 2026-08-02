@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { data } from "@/data";
 import { useAuth } from "@/hooks/useAuth";
 import { CASE_ROLE_LABELS } from "@/lib/caseRoles";
-import { TEMPLATES, type GeneratedDocument, type TemplateInput } from "@/lib/documentTemplates";
+import { TEMPLATES, templateToPdf, type GeneratedDocument, type TemplateInput } from "@/lib/documentTemplates";
 import { downloadTextFile } from "@/lib/integrations/download";
 import type { CaseRecord } from "@/data/types";
 import { CheckCircle2, Download, FileSignature, FolderUp, Loader2 } from "lucide-react";
@@ -56,7 +56,12 @@ export const DocumentTemplates = ({ caseRecord }: DocumentTemplatesProps) => {
 
   const save = useMutation({
     mutationFn: async (doc: GeneratedDocument) => {
-      const file = new File([doc.body], doc.fileName, { type: "text/plain" });
+      // PDF in i akten: det är formatet en motpart, bank eller domstol
+      // förväntar sig - textfilen finns kvar som nedladdning.
+      const bytes = templateToPdf(doc);
+      const file = new File([bytes as BlobPart], doc.fileName.replace(/\.txt$/, ".pdf"), {
+        type: "application/pdf",
+      });
       await data.documents.upload({
         caseId: caseRecord.id,
         kind: "other",
@@ -155,10 +160,29 @@ export const DocumentTemplates = ({ caseRecord }: DocumentTemplatesProps) => {
                   type="button"
                   variant="outline"
                   size="sm"
-                  onClick={() => downloadTextFile(generated.body, generated.fileName, "text/plain;charset=utf-8")}
+                  onClick={() => {
+                    const bytes = templateToPdf(generated);
+                    const blob = new Blob([bytes as BlobPart], { type: "application/pdf" });
+                    const url = URL.createObjectURL(blob);
+                    const link = document.createElement("a");
+                    link.href = url;
+                    link.download = generated.fileName.replace(/\.txt$/, ".pdf");
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    setTimeout(() => URL.revokeObjectURL(url), 10_000);
+                  }}
                 >
                   <Download className="h-4 w-4" aria-hidden="true" />
-                  Ladda ner
+                  Ladda ner PDF
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => downloadTextFile(generated.body, generated.fileName, "text/plain;charset=utf-8")}
+                >
+                  .txt
                 </Button>
                 <Button
                   type="button"

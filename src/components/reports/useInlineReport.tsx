@@ -1,6 +1,6 @@
 import { useRef, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
-import { downloadReport } from "@/lib/reports/deliver";
+import { downloadReport, downloadReportPdf } from "@/lib/reports/deliver";
 import { renderReport } from "@/lib/reports/render";
 import type { ReportModel } from "@/lib/reports/types";
 import { Download, Printer, X } from "lucide-react";
@@ -57,10 +57,18 @@ export const useInlineReport = (): {
             type="button"
             variant="outline"
             size="sm"
-            onClick={() => model && downloadReport(model)}
+            onClick={() => model && downloadReportPdf(model)}
           >
             <Download className="h-4 w-4" aria-hidden="true" />
-            Spara fil
+            Ladda ner PDF
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => model && downloadReport(model)}
+          >
+            Spara HTML
           </Button>
           <Button
             type="button"

@@ -23,6 +23,8 @@
  *     om företagsrekonstruktion för rekonstruktionsansökan.
  */
 
+import { PdfWriter } from "@/lib/pdf";
+
 export interface TemplatePerson {
   name: string;
   role: string;
@@ -208,6 +210,31 @@ export const boardMinutesReconstruction = (input: TemplateInput): GeneratedDocum
     fileName: `styrelseprotokoll-rekonstruktion-${input.date}.txt`,
     body: lines.join("\n"),
   };
+};
+
+/**
+ * Mallen som PDF: den förformaterade texten sätts rad för rad - radbrytningar
+ * och understreckslinjer i mallen är del av dokumentet och bevaras.
+ */
+export const templateToPdf = (doc: GeneratedDocument): Uint8Array => {
+  const pdf = new PdfWriter(`Clearance · ${doc.title}`);
+  pdf.text(doc.title, { font: "bold", size: 15, spaceAfter: 4 });
+  pdf.rule();
+  pdf.space(4);
+  for (const line of doc.body.split("\n")) {
+    if (line.trim() === "") {
+      pdf.space(6);
+    } else if (/^=+$/.test(line.trim())) {
+      pdf.rule(0.7);
+    } else if (/^§ \d/.test(line) ) {
+      pdf.text(line, { font: "bold", size: 10.5, spaceAfter: 1 });
+    } else if (line.startsWith("UTKAST")) {
+      pdf.text(line, { font: "bold", size: 9, gray: 0.35, spaceAfter: 1 });
+    } else {
+      pdf.text(line, { size: 10, spaceAfter: 1 });
+    }
+  }
+  return pdf.toBytes();
 };
 
 export const TEMPLATES = [
