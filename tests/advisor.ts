@@ -13,6 +13,7 @@ import {
   FALLBACK_REPLY,
   ONBOARDING,
   answerLabel,
+  buildCaseSnapshot,
   decisionCheckIn,
   matchFlow,
 } from "../src/lib/advisor/dialog";
@@ -127,6 +128,32 @@ const checkIn = decisionCheckIn({
 check("beslutsuppföljningen citerar premissen", checkIn.includes("150 000 kr saknas"));
 check("beslutsuppföljningen frågar om planen står fast", checkIn.includes("Är det fortfarande planen?"));
 check("beslutsuppföljningen anger datumet", /Den 1 augusti/.test(checkIn));
+
+/* --- Conversation UI: blocken är deterministiska delar av bedömningen ------ */
+
+const taxUi = tax.assess(SAMPLE_ANSWERS.skatt);
+check("skatt: mätaren räknar rätt (80/150 = 53 %)", taxUi.meter?.percent === 53, taxUi.meter);
+check("skatt: mätarens not har båda beloppen", !!taxUi.meter && taxUi.meter.note.includes("80 000 kr") && taxUi.meter.note.includes("150 000 kr"));
+check("skatt: lägesbilden har tre områden", taxUi.snapshot?.length === 3);
+check("skatt: lönepressen syns i lägesbilden", !!taxUi.snapshot?.some((r) => r.label === "Löner" && r.tone === "warning"));
+check("skatt: tidslinjen börjar idag och följer upp", !!taxUi.plan && taxUi.plan[0].when === "Idag" && taxUi.plan.some((r) => r.when.includes("7 dagar")));
+
+const wages = DIALOG_FLOWS.find((f) => f.id === "loner")!;
+check("löner: antalet är ett svarskort med fyra val", wages.steps.find((s) => s.id === "antal")?.kind === "choice" && wages.steps.find((s) => s.id === "antal")?.options?.length === 4);
+const wagesUi = wages.assess({ saknas: "200 000", antal: "6–20", skatt: "ja" });
+check("löner: valet återges i bedömningen", wagesUi.paragraphs[0].includes("6–20 anställda"));
+check("löner: lönegarantin i lägesbilden som trygghet", !!wagesUi.snapshot?.some((r) => r.label === "Lönegarantin" && r.tone === "success"));
+
+const kfmUi = kfm.assess(SAMPLE_ANSWERS.kronofogden);
+check("kfm: tidslinjen anpassas efter bestridandet", !!kfmUi.plan?.some((r) => r.label.includes("Bestrid")));
+check("kfm: utan bestridande föreslås avbetalningsplan", !!kfm.assess({ ...SAMPLE_ANSWERS.kronofogden, bestrider: "nej" }).plan?.some((r) => r.label.includes("avbetalningsplan")));
+
+const snapshotRows = buildCaseSnapshot({ coverageRatio: 34, passedDeadlines: 1, daysToNextDeadline: 4, kbrDone: false });
+check("lägesbilden: tre rader alltid", snapshotRows.length === 3);
+check("lägesbilden: låg täckning är kritisk och citeras", snapshotRows[0].tone === "critical" && snapshotRows[0].note.includes("34 %"));
+check("lägesbilden: passerad frist är kritisk", snapshotRows[1].tone === "critical");
+check("lägesbilden: ogjord KBR varnar", snapshotRows[2].tone === "warning");
+check("lägesbilden: lugnt läge är grönt", buildCaseSnapshot({ coverageRatio: 120, passedDeadlines: 0, daysToNextDeadline: 30, kbrDone: true }).every((r) => r.tone === "success"));
 
 /* --- svarsformatering för journalen ---------------------------------------- */
 

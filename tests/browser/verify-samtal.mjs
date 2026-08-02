@@ -64,6 +64,11 @@ check("allvarsgraden visas", /Kritiskt läge/i.test(body));
 check("bekräftelsen kom före frågorna", /pressande situation/i.test(body));
 check("hela motiveringen ligger bakom en länk", /Visa hela motiveringen/i.test(body));
 
+// 3c. Conversation UI: bedömningen bär lägesbild, mätare och tidslinje.
+check("lägesbilden i bedömningen", /Skattefristen/i.test(body) && /Företrädaransvaret prövas mot förfallodagen/i.test(body));
+check("mätaren med stapel och tal", /Väntade kundinbetalningar mot bristen/i.test(body) && /0 %/.test(body));
+check("processtidslinjen", /Före förfallodagen/i.test(body) && /Uppföljning mot likviditetsplanen/i.test(body));
+
 // 4. Protokollför beslutet.
 await page.click('button:has-text("Protokollför med premiss")');
 await page.waitForTimeout(1000);
@@ -106,6 +111,17 @@ await page.waitForTimeout(800);
 body = await page.innerText("body");
 check("fallbacken pekar på nulägesanalysen", /nulägesanalys/i.test(body));
 check("snabbvalen finns för nästa försök", /Kan inte betala skatten/i.test(body) || /Brev från Kronofogden/i.test(body));
+
+// 7c. Lägesbilden i hälsningen: visad, inte påstådd - med analys som panel.
+await page.goto(`${BASE}/dashboard/samtal`, { waitUntil: "domcontentloaded" });
+await page.waitForTimeout(1500);
+body = await page.innerText("body");
+check("hälsningens lägesbild har områdena", /Likviditet/i.test(body) && /Frister/i.test(body) && /Dokumentation/i.test(body));
+check("analysempanelen finns i samtalet", /Visa analys/.test(body));
+await page.click('summary:has-text("Visa analys")');
+await page.waitForTimeout(400);
+body = await page.innerText("body");
+check("panelens mätare visar täckningsgraden", /Skuldtäckning vid snabb avyttring/i.test(body) && /%/.test(body));
 
 // 7b. Handlingsalternativen: Clara svarar med hållningen och navigerar själv.
 await page.goto(`${BASE}/dashboard/samtal`, { waitUntil: "domcontentloaded" });

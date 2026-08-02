@@ -20,7 +20,7 @@
 
 import { parseAmount } from "@/lib/caseAnalysis";
 
-export type DialogStepKind = "amount" | "yesno" | "text";
+export type DialogStepKind = "amount" | "yesno" | "text" | "choice";
 
 export interface DialogStep {
   id: string;
@@ -29,6 +29,8 @@ export interface DialogStep {
   kind: DialogStepKind;
   /** Placeholder/exempel i inmatningsfältet. */
   hint?: string;
+  /** Svarskortets alternativ - kind "choice" väljer, skriver inte. */
+  options?: string[];
 }
 
 export interface DialogAction {
@@ -37,11 +39,42 @@ export interface DialogAction {
   why: string;
 }
 
+/** En rad i lägesbilden: område, allvarston och en kort not. */
+export interface SnapshotRow {
+  tone: "critical" | "warning" | "success";
+  label: string;
+  note: string;
+}
+
+/** Mätaren: ett tal som blir begripligare som stapel än som mening. */
+export interface DialogMeter {
+  label: string;
+  /** 0-100, redan avrundad. */
+  percent: number;
+  note: string;
+}
+
+/** Processtidslinjen: i vilken ordning det händer. */
+export interface PlanRow {
+  when: string;
+  label: string;
+}
+
 export interface DialogAssessment {
   severity: "critical" | "serious" | "elevated";
   severityLabel: string;
   paragraphs: string[];
   actions: DialogAction[];
+  /**
+   * Conversation UI, inte chat UI: rådgivaren väljer det medium som bär
+   * budskapet bäst. Text när något förklaras, lägesbild när områden
+   * prioriteras, mätare när något mäts, tidslinje när det är en process.
+   * Blocken är deterministiska delar av bedömningen - inga påhittade
+   * siffror, bara användarens egna i annan form.
+   */
+  snapshot?: SnapshotRow[];
+  meter?: DialogMeter;
+  plan?: PlanRow[];
   /**
    * Förslag till protokollförbart beslut, med premissen utskriven.
    * Premissen är omprövningsvillkoret: när verkligheten motsäger den
@@ -160,6 +193,35 @@ const taxFlow: DialogFlow = {
       severity: "critical",
       paragraphs,
       actions,
+      snapshot: [
+        { tone: "critical", label: "Skattefristen", note: "Företrädaransvaret prövas mot förfallodagen" },
+        {
+          tone: gap > 0 && covered ? "success" : "warning",
+          label: "Likviditet",
+          note:
+            gap > 0
+              ? covered
+                ? "Väntade inbetalningar kan täcka bristen - om de hinner fram"
+                : `${kr(Math.max(gap - incoming, 0))} saknas även efter väntade inbetalningar`
+              : "Beloppet är inte fastställt",
+        },
+        yes(answers.loner)
+          ? { tone: "warning", label: "Löner", note: "Förfaller inom 30 dagar - prioriteringen är juridiskt känslig" }
+          : { tone: "success", label: "Löner", note: "Inga löner under press den närmaste månaden" },
+      ],
+      meter:
+        gap > 0
+          ? {
+              label: "Väntade kundinbetalningar mot bristen",
+              percent: Math.min(100, Math.round((incoming / gap) * 100)),
+              note: `${kr(incoming)} väntas av ${kr(gap)} som saknas`,
+            }
+          : undefined,
+      plan: [
+        { when: "Idag", label: "Förbered anståndsansökan till Skatteverket" },
+        { when: "Före förfallodagen", label: "Beslut om väg - anstånd, uppgörelse eller insolvensprövning" },
+        { when: "Om 7 dagar", label: "Uppföljning mot likviditetsplanen" },
+      ],
       decisionSuggestion: {
         title: "Hantera skattebristen före förfallodagen",
         premise: `Beslutet vilar på uppgifterna i samtalet: ${gap > 0 ? `${kr(gap)} saknas` : "beloppet är inte fastställt"}, ${incoming > 0 ? `${kr(incoming)} väntas från kunder` : "inga kundinbetalningar väntas"}${yes(answers.loner) ? ", löner förfaller inom 30 dagar" : ""}. Ändras någon av uppgifterna bör beslutet omprövas.`,
@@ -179,14 +241,14 @@ const wagesFlow: DialogFlow = {
   triggers: [/\bl[öo]n/i, /anställd/i, /personal/i],
   steps: [
     { id: "saknas", prompt: "Hur mycket saknas för nästa löneutbetalning?", kind: "amount", hint: "t.ex. 200 000 kr" },
-    { id: "antal", prompt: "Hur många anställda berörs?", kind: "amount", hint: "t.ex. 8" },
+    { id: "antal", prompt: "Hur många anställda berörs?", kind: "choice", options: ["1–5", "6–20", "21–50", "Fler än 50"] },
     { id: "skatt", prompt: "Finns det samtidigt skatter eller avgifter som förfaller den närmaste månaden?", kind: "yesno" },
   ],
   assess(answers) {
     const gap = amountOf(answers.saknas);
-    const count = amountOf(answers.antal);
+    const staff = (answers.antal ?? "").trim();
     const paragraphs: string[] = [
-      `${gap > 0 ? `Det saknas ${kr(gap)} till nästa löneutbetalning${count > 0 ? ` för ${count} anställda` : ""}.` : "Lönerna riskerar att inte kunna betalas."} Uteblivna löner är i praktiken en obeståndssignal: de anställda kan begära bolaget i konkurs, och förtroendet är svårt att reparera.`,
+      `${gap > 0 ? `Det saknas ${kr(gap)} till nästa löneutbetalning${staff ? ` för ${staff} anställda` : ""}.` : "Lönerna riskerar att inte kunna betalas."} Uteblivna löner är i praktiken en obeståndssignal: de anställda kan begära bolaget i konkurs, och förtroendet är svårt att reparera.`,
       `Vid företagsrekonstruktion eller konkurs träder den statliga lönegarantin in och betalar de anställdas löner upp till taket – de anställda är alltså mindre utsatta i ett ordnat förfarande än i ett utdraget informellt betalningsdröjsmål.`,
     ];
     if (yes(answers.skatt)) {
@@ -198,6 +260,18 @@ const wagesFlow: DialogFlow = {
     return withLabel({
       severity: "critical",
       paragraphs,
+      snapshot: [
+        { tone: "critical", label: "Löner", note: staff ? `${staff} anställda berörs av nästa utbetalning` : "Nästa utbetalning är under press" },
+        yes(answers.skatt)
+          ? { tone: "warning", label: "Skatter", note: "Förfaller samtidigt - prioriteringen kan angripas i efterhand" }
+          : { tone: "success", label: "Skatter", note: "Ingen samtidig skattepress registrerad" },
+        { tone: "success", label: "Lönegarantin", note: "Skyddar de anställda vid rekonstruktion eller konkurs" },
+      ],
+      plan: [
+        { when: "Idag", label: "Likviditetsbilden: exakt vad som finns och vad som förfaller" },
+        { when: "Före lönekörningen", label: "Beslut om väg - egen finansiering eller rekonstruktionsprövning" },
+        { when: "Om 7 dagar", label: "Uppföljning mot planen" },
+      ],
       actions: [
         { label: "Se hur länge pengarna räcker", href: "/dashboard/liquidity", why: "Likviditetsplanen visar om lönebristen är en engångshändelse eller ett mönster." },
         { label: "Hitta rekonstruktör", href: "/marketplace", why: "Rekonstruktion med lönegaranti kan vara de anställdas bästa skydd." },
@@ -273,6 +347,16 @@ const enforcementFlow: DialogFlow = {
     return withLabel({
       severity: yes(answers.fler) ? "critical" : "serious",
       paragraphs,
+      plan: [
+        { when: "Idag", label: "Läs förklaringsfristen i brevet - den styr allt" },
+        {
+          when: "Inom fristen",
+          label: yes(answers.bestrider)
+            ? "Bestrid skriftligen - då prövas målet i domstol i stället"
+            : "Kontakta sökanden om avbetalningsplan före utslaget",
+        },
+        { when: "Om 7 dagar", label: "Uppföljning - och kontroll att inget nytt föreläggande kommit" },
+      ],
       actions: [
         { label: "Läs om betalningsföreläggande", href: "/kunskap", why: "Fristerna, bestridandet och vad ett utslag innebär." },
         ...(yes(answers.fler)
@@ -392,6 +476,44 @@ export const ONBOARDING = {
     "Jag öppnar nu nulägesanalysen. Den tar 5–10 minuter och ger oss en gemensam bild av läget – siffrorna, fristerna och alternativen. Jag finns här när den är klar.",
   ],
 } as const;
+
+/**
+ * Lägesbilden i Claras hälsning: tre områden med ton och not, byggda ur
+ * ärendets registrerade uppgifter. "Jag har en ganska bra bild av
+ * situationen" - visad, inte påstådd.
+ */
+export const buildCaseSnapshot = (input: {
+  coverageRatio: number | null;
+  passedDeadlines: number;
+  daysToNextDeadline: number | null;
+  kbrDone: boolean;
+}): SnapshotRow[] => [
+  {
+    tone: input.coverageRatio !== null && input.coverageRatio < 50 ? "critical" : input.coverageRatio !== null && input.coverageRatio < 100 ? "warning" : "success",
+    label: "Likviditet",
+    note:
+      input.coverageRatio === null
+        ? "Skuldtäckningen är inte fastställd än"
+        : `Snabba avyttringsvärdet täcker ${input.coverageRatio} % av skulderna`,
+  },
+  {
+    tone: input.passedDeadlines > 0 ? "critical" : (input.daysToNextDeadline ?? 99) <= 7 ? "warning" : "success",
+    label: "Frister",
+    note:
+      input.passedDeadlines > 0
+        ? `${input.passedDeadlines} ${input.passedDeadlines === 1 ? "datum har" : "datum har"} passerat - hanteras i handlingsplanen`
+        : input.daysToNextDeadline !== null
+          ? `Närmaste bevakade datum om ${input.daysToNextDeadline} dagar`
+          : "Inga kommande frister i underlaget",
+  },
+  {
+    tone: input.kbrDone ? "success" : "warning",
+    label: "Dokumentation",
+    note: input.kbrDone
+      ? "Kontrollbalansbedömningen är gjord och journalförd"
+      : "Kontrollbalansbedömningen är inte gjord än",
+  },
+];
 
 /**
  * Beslutsuppföljningen - minnet som gör Clara till en rådgivare och

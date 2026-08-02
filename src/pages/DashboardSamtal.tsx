@@ -12,14 +12,79 @@ import {
   FALLBACK_REPLY,
   ONBOARDING,
   answerLabel,
+  buildCaseSnapshot,
   decisionCheckIn,
   matchFlow,
   type DialogAssessment,
   type DialogFlow,
+  type DialogMeter,
+  type PlanRow,
+  type SnapshotRow,
 } from "@/lib/advisor/dialog";
 import { OPTIONS_STANCE } from "@/lib/advisor/options";
+import { analyseCrisis } from "@/lib/crisisAnalysis";
+import { analysisInputFromCase, parseAmount } from "@/lib/caseAnalysis";
+import { countdownTo } from "@/lib/actionPlan";
 import type { AdvisorSessionRecord } from "@/data/types";
-import { ArrowRight, Compass, Gavel, RotateCcw, Send } from "lucide-react";
+import { ArrowRight, Compass, FileCheck2, Gavel, RotateCcw, Send } from "lucide-react";
+
+/* --- Conversation UI-blocken: rätt medium för budskapet -------------------- */
+
+const SNAPSHOT_DOT: Record<SnapshotRow["tone"], string> = {
+  critical: "bg-destructive",
+  warning: "bg-warning",
+  success: "bg-success",
+};
+
+/** Lägesbilden: områden med ton och not - prioritering man ser, inte läser. */
+const SnapshotList = ({ rows }: { rows: SnapshotRow[] }) => (
+  <ul className="space-y-1.5">
+    {rows.map((row) => (
+      <li key={row.label} className="flex items-start gap-2.5 rounded-md border border-border p-2.5">
+        <span className={`mt-1.5 h-2 w-2 flex-shrink-0 rounded-full ${SNAPSHOT_DOT[row.tone]}`} aria-hidden="true" />
+        <span className="min-w-0">
+          <span className="block text-sm font-medium text-foreground">{row.label}</span>
+          <span className="block text-xs leading-relaxed text-muted-foreground">{row.note}</span>
+        </span>
+      </li>
+    ))}
+  </ul>
+);
+
+/** Mätaren: stapel + tal, för det som mäts. */
+const MeterBar = ({ meter }: { meter: DialogMeter }) => (
+  <div className="rounded-md border border-border p-3">
+    <div className="flex items-baseline justify-between gap-3">
+      <p className="text-sm font-medium text-foreground">{meter.label}</p>
+      <p className="text-sm font-semibold tabular-nums text-foreground">{meter.percent} %</p>
+    </div>
+    <div className="mt-2 h-2 overflow-hidden rounded-full bg-secondary" role="img" aria-label={`${meter.label}: ${meter.percent} procent`}>
+      <div
+        className={`h-full rounded-full ${meter.percent < 50 ? "bg-destructive" : meter.percent < 100 ? "bg-warning" : "bg-success"}`}
+        style={{ width: `${Math.max(4, meter.percent)}%` }}
+      />
+    </div>
+    <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">{meter.note}</p>
+  </div>
+);
+
+/** Processtidslinjen: ordningen, som punkter på en linje. */
+const PlanTimeline = ({ rows }: { rows: PlanRow[] }) => (
+  <ol className="space-y-0">
+    {rows.map((row, i) => (
+      <li key={`${row.when}-${row.label}`} className="relative flex gap-3 pb-3 last:pb-0">
+        <span className="flex flex-col items-center" aria-hidden="true">
+          <span className="mt-1 h-2.5 w-2.5 flex-shrink-0 rounded-full border-2 border-accent bg-card" />
+          {i < rows.length - 1 && <span className="w-px flex-1 bg-border" />}
+        </span>
+        <span className="min-w-0 pb-1">
+          <span className="block text-[11px] font-bold uppercase tracking-wide text-muted-foreground">{row.when}</span>
+          <span className="block text-sm leading-relaxed text-foreground">{row.label}</span>
+        </span>
+      </li>
+    ))}
+  </ol>
+);
 
 /**
  * Samtalet med krisrådgivaren: produktens framsida i dialogform.
@@ -173,6 +238,33 @@ const DashboardSamtal = () => {
     queryFn: () => data.profile.getMine(),
     retry: false,
   });
+  const { data: kbr } = useQuery({
+    queryKey: ["kbr-latest", latestCase?.id],
+    queryFn: () => data.kbr.getLatestByCase(latestCase!.id),
+    retry: false,
+    enabled: !!latestCase,
+  });
+
+  // Lägesbilden i hälsningen: byggd ur ärendets egna siffror.
+  const caseSnapshot = useMemo(() => {
+    if (!latestCase) return null;
+    const countdowns = analyseCrisis(analysisInputFromCase(latestCase)).timeline.map((e) =>
+      countdownTo(e.iso, new Date()),
+    );
+    const upcoming = countdowns.filter((c) => c.tone !== "passed");
+    const totalDebt = parseAmount(latestCase.totalDebt);
+    const liquidation = parseAmount(latestCase.quickLiquidationValue);
+    const coverageRatio = totalDebt > 0 ? Math.round((liquidation / totalDebt) * 100) : null;
+    return {
+      coverageRatio,
+      rows: buildCaseSnapshot({
+        coverageRatio,
+        passedDeadlines: countdowns.filter((c) => c.tone === "passed").length,
+        daysToNextDeadline: upcoming.length ? Math.min(...upcoming.map((c) => c.daysLeft)) : null,
+        kbrDone: !!kbr,
+      }),
+    };
+  }, [latestCase, kbr]);
 
   const [entries, setEntries] = useState<ChatEntry[]>([]);
   const [flow, setFlow] = useState<DialogFlow | null>(null);
@@ -368,6 +460,32 @@ const DashboardSamtal = () => {
                     systemets analys av det du anger – underlag för beslut, inte
                     juridisk rådgivning.
                   </p>
+                  {/* Lägesbilden: visad, inte påstådd - med analysen som
+                      panel i samtalet, inte som ny sida. */}
+                  {caseSnapshot && (
+                    <div className="mt-4">
+                      <SnapshotList rows={caseSnapshot.rows} />
+                      {caseSnapshot.coverageRatio !== null && (
+                        <details className="mt-2">
+                          <summary className="cursor-pointer list-none text-sm font-medium text-accent underline-offset-4 hover:underline">
+                            Visa analys
+                          </summary>
+                          <div className="mt-2">
+                            <MeterBar
+                              meter={{
+                                label: "Skuldtäckning vid snabb avyttring",
+                                percent: caseSnapshot.coverageRatio,
+                                note:
+                                  caseSnapshot.coverageRatio < 100
+                                    ? "Under 100 % innebär att skulderna inte täcks fullt ut - vägvalen finns under Handlingsalternativ."
+                                    : "Tillgångarna täcker skulderna - fler vägar står öppna.",
+                              }}
+                            />
+                          </div>
+                        </details>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -455,6 +573,15 @@ const DashboardSamtal = () => {
                   >
                     {assessment.severityLabel}
                   </span>
+                  {/* Rätt medium för budskapet: lägesbild för prioritering,
+                      mätare för det som mäts, tidslinje för processen. */}
+                  {assessment.snapshot && <SnapshotList rows={assessment.snapshot} />}
+                  {assessment.meter && <MeterBar meter={assessment.meter} />}
+                  {assessment.plan && (
+                    <div className="rounded-md border border-border p-3">
+                      <PlanTimeline rows={assessment.plan} />
+                    </div>
+                  )}
                   {assessment.paragraphs.length > 2 && (
                     <details className="rounded-md border border-border p-3">
                       <summary className="cursor-pointer list-none text-sm font-medium text-accent underline-offset-4 hover:underline">
@@ -504,11 +631,25 @@ const DashboardSamtal = () => {
                       </Button>
                     </div>
                   )}
-                  {decisionSaved && (
-                    <p className="rounded-md border border-success/40 bg-success/10 p-3 text-sm text-foreground" role="status">
-                      Beslutet är protokollfört med sin premiss. Ändras förutsättningarna
-                      finns det här nedan att ompröva.
-                    </p>
+                  {decisionSaved && assessment.decisionSuggestion && (
+                    /* Dokumentkortet: det som skapades, direkt i samtalet. */
+                    <div className="flex items-center gap-3 rounded-md border border-success/40 bg-success/5 p-3" role="status">
+                      <FileCheck2 className="h-5 w-5 flex-shrink-0 text-success" aria-hidden="true" />
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-sm font-medium text-foreground">
+                          Protokollfört beslut: {assessment.decisionSuggestion.title}
+                        </span>
+                        <span className="block text-xs text-muted-foreground">
+                          Sparat med premiss – omprövas under Fattade beslut när läget ändras
+                        </span>
+                      </span>
+                      <Link
+                        to="/dashboard/handelser"
+                        className="flex-shrink-0 text-sm font-medium text-accent underline-offset-4 hover:underline"
+                      >
+                        Visa journalen
+                      </Link>
+                    </div>
                   )}
                   <button
                     type="button"
@@ -532,6 +673,15 @@ const DashboardSamtal = () => {
                 <div className="mt-4 flex gap-2">
                   <Button variant="outline" onClick={() => answerStep("ja")}>Ja</Button>
                   <Button variant="outline" onClick={() => answerStep("nej")}>Nej</Button>
+                </div>
+              ) : !assessment && currentStep?.kind === "choice" ? (
+                /* Svarskortet: välja, inte skriva. */
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {(currentStep.options ?? []).map((option) => (
+                    <Button key={option} variant="outline" onClick={() => answerStep(option)}>
+                      {option}
+                    </Button>
+                  ))}
                 </div>
               ) : !assessment ? (
                 <form onSubmit={submit} className="mt-4 flex gap-2">
