@@ -179,28 +179,32 @@ export const ActionPlan = ({ caseRecord, timeline }: ActionPlanProps) => {
               return (
                 <li
                   key={`${event.iso}-${event.label}`}
-                  className={`flex flex-wrap items-baseline gap-x-3 gap-y-1 rounded-md border p-3 ${toneClass[countdown.tone]}`}
+                  className={`rounded-md border p-3 ${toneClass[countdown.tone]}`}
                 >
-                  <span className="min-w-0 flex-1 text-sm font-medium text-foreground">
-                    {event.label}
-                    {event.amount !== null && (
-                      <span className="ml-2 font-normal text-muted-foreground">
-                        {sek(event.amount)}
-                      </span>
-                    )}
-                    {event.note && (
-                      <span className="mt-0.5 block text-xs font-normal text-muted-foreground">
-                        {event.note}
-                      </span>
-                    )}
-                  </span>
-                  <span className="flex-shrink-0 text-sm font-semibold tabular-nums">
-                    {new Date(event.iso).toLocaleDateString("sv-SE", {
-                      day: "numeric",
-                      month: "short",
-                    })}{" "}
-                    · {countdown.label}
-                  </span>
+                  {/* Rubrik och datum på första raden, beloppet på en egen -
+                      inklämt bredvid datumet bröts "420 000 kr" mitt i talet
+                      på en telefon. Ett belopp som radbryts läses fel, och
+                      fel läsning av ett belopp är värre än en rad till. */}
+                  <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
+                    <span className="min-w-0 text-sm font-medium text-foreground">{event.label}</span>
+                    <span className="whitespace-nowrap text-sm font-semibold tabular-nums">
+                      {new Date(event.iso).toLocaleDateString("sv-SE", {
+                        day: "numeric",
+                        month: "short",
+                      })}{" "}
+                      · {countdown.label}
+                    </span>
+                  </div>
+                  {event.amount !== null && (
+                    <p className="mt-0.5 whitespace-nowrap text-sm tabular-nums text-muted-foreground">
+                      {sek(event.amount)}
+                    </p>
+                  )}
+                  {event.note && (
+                    <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
+                      {event.note}
+                    </p>
+                  )}
                 </li>
               );
             })}
@@ -238,6 +242,10 @@ export const ActionPlan = ({ caseRecord, timeline }: ActionPlanProps) => {
                     : [];
                   return (
                     <li key={task.id} className="rounded-md border border-border p-3">
+                      {/* Rubriken får hela radbredden; expandern står på egen
+                          rad under, indragen i linje med texten. En knapp som
+                          trängs bredvid en tvåradig rubrik var det rörigaste
+                          på hela mobilvyn - lugn slår densitet. */}
                       <div className="flex items-start gap-3">
                         <input
                           id={`task-${task.id}`}
@@ -253,21 +261,21 @@ export const ActionPlan = ({ caseRecord, timeline }: ActionPlanProps) => {
                         >
                           {task.label}
                         </label>
-                        <button
-                          type="button"
-                          onClick={() => setExpandedTask(expanded ? null : task.id)}
-                          aria-expanded={expanded}
-                          aria-label={expanded ? "Stäng processen" : "Öppna processen"}
-                          className="flex flex-shrink-0 items-center gap-1 rounded-md border border-border px-2 py-1 text-xs text-muted-foreground transition-colors hover:border-accent hover:text-foreground"
-                        >
-                          <ListChecks className="h-3.5 w-3.5" aria-hidden="true" />
-                          Så gör du
-                          <ChevronDown
-                            className={`h-3.5 w-3.5 transition-transform ${expanded ? "rotate-180" : ""}`}
-                            aria-hidden="true"
-                          />
-                        </button>
                       </div>
+                      <button
+                        type="button"
+                        onClick={() => setExpandedTask(expanded ? null : task.id)}
+                        aria-expanded={expanded}
+                        aria-label={expanded ? "Stäng processen" : "Öppna processen"}
+                        className="ml-7 mt-1.5 flex items-center gap-1 text-xs font-medium text-accent transition-colors hover:text-foreground"
+                      >
+                        <ListChecks className="h-3.5 w-3.5" aria-hidden="true" />
+                        Så gör du
+                        <ChevronDown
+                          className={`h-3.5 w-3.5 transition-transform ${expanded ? "rotate-180" : ""}`}
+                          aria-hidden="true"
+                        />
+                      </button>
 
                       {expanded && (
                         <div className="mt-3 space-y-3 rounded-md bg-secondary/40 p-3">
@@ -400,14 +408,18 @@ export const ActionPlan = ({ caseRecord, timeline }: ActionPlanProps) => {
                 onChange={(e) => setNewLabel(e.target.value)}
                 placeholder="Lägg till en uppgift"
                 aria-label="Ny uppgift"
+                className="min-w-0 flex-1"
               />
+              {/* Ikonknapp på mobil - textknappen bröt raden på 320 px. */}
               <Button
                 type="submit"
                 variant="outline"
+                aria-label="Lägg till uppgiften"
                 disabled={newLabel.trim().length < 3 || add.isPending}
+                className="flex-shrink-0 whitespace-nowrap"
               >
                 <Plus className="h-4 w-4" aria-hidden="true" />
-                Lägg till
+                <span className="hidden sm:inline">Lägg till</span>
               </Button>
             </form>
             {(toggle.isError || add.isError) && (

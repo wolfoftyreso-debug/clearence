@@ -224,23 +224,26 @@ const Dashboard = () => {
                 />
               </div>
 
-              {/* Stats grid */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-                <div className="p-5 rounded-md bg-card border border-border shadow-soft">
-                  <p className="text-sm text-muted-foreground mb-1">Totala skulder</p>
-                  <p className="text-2xl font-display font-semibold text-foreground">
+              {/* Nyckeltalen: en kompakt rad, inte tre fullbreddskort som
+                  trycker ner resten av sidan på mobil. Täckningsgraden får
+                  dubbelbredd på småskärm - dess etikett är kortast men dess
+                  färgsignal viktigast. */}
+              <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
+                <div className="rounded-md border border-border bg-card p-4 shadow-soft">
+                  <p className="text-xs text-muted-foreground sm:text-sm">Totala skulder</p>
+                  <p className="mt-0.5 font-display text-xl font-semibold text-foreground sm:text-2xl">
                     {totalDebt.toLocaleString("sv-SE")} kr
                   </p>
                 </div>
-                <div className="p-5 rounded-md bg-card border border-border shadow-soft">
-                  <p className="text-sm text-muted-foreground mb-1">Snabbt avyttringsvärde</p>
-                  <p className="text-2xl font-display font-semibold text-foreground">
+                <div className="rounded-md border border-border bg-card p-4 shadow-soft">
+                  <p className="text-xs text-muted-foreground sm:text-sm">Snabbt avyttringsvärde</p>
+                  <p className="mt-0.5 font-display text-xl font-semibold text-foreground sm:text-2xl">
                     {liquidationValue.toLocaleString("sv-SE")} kr
                   </p>
                 </div>
-                <div className="p-5 rounded-md bg-card border border-border shadow-soft">
-                  <p className="text-sm text-muted-foreground mb-1">Täckningsgrad</p>
-                  <p className={`text-2xl font-display font-semibold ${
+                <div className="col-span-2 rounded-md border border-border bg-card p-4 shadow-soft sm:col-span-1">
+                  <p className="text-xs text-muted-foreground sm:text-sm">Täckningsgrad</p>
+                  <p className={`mt-0.5 font-display text-xl font-semibold sm:text-2xl ${
                     coverageRatio !== null && coverageRatio < 30 ? "text-destructive" : "text-foreground"
                   }`}>
                     {coverageRatio !== null ? `${coverageRatio}%` : "–"}
