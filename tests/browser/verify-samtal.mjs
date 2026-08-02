@@ -59,12 +59,27 @@ check("rådgivningsgränsen står i svaret", /stäm av med/i.test(body));
 check("KBR-handlingen länkas", (await page.locator('a[href*="/kbr"]').count()) > 0);
 check("allvarsgraden visas", /Kritiskt läge/i.test(body));
 
+// 3b. Konstitutionen i gränssnittet: bekräftelsen kom före frågorna,
+// motiveringen ligger bakom en länk, aldrig fler än tre steg.
+check("bekräftelsen kom före frågorna", /pressande situation/i.test(body));
+check("hela motiveringen ligger bakom en länk", /Visa hela motiveringen/i.test(body));
+
 // 4. Protokollför beslutet.
 await page.click('button:has-text("Protokollför med premiss")');
 await page.waitForTimeout(1000);
 body = await page.innerText("body");
 check("beslutet bekräftas", /protokollfört/i.test(body));
 check("beslutet listas med premiss", /Fattade beslut/i.test(body) && /Beslutet vilar på uppgifterna i samtalet/i.test(body));
+
+// 4b. Minnet: Clara följer upp beslutet mot premissen vid nästa besök.
+await page.goto(`${BASE}/dashboard/samtal`, { waitUntil: "domcontentloaded" });
+await page.waitForTimeout(1500);
+body = await page.innerText("body");
+check("Clara följer upp beslutet", /Är det fortfarande planen\?/.test(body) && /150 000 kr/.test(body));
+await page.click('button:has-text("Ja, planen står fast")');
+await page.waitForTimeout(600);
+body = await page.innerText("body");
+check("planen bekräftas lugnt", /fortsätter vi enligt plan/i.test(body));
 
 // 5. Ompröva.
 await page.click('button:has-text("Ompröva beslutet")');
@@ -91,6 +106,49 @@ await page.waitForTimeout(800);
 body = await page.innerText("body");
 check("fallbacken pekar på nulägesanalysen", /nulägesanalys/i.test(body));
 check("snabbvalen finns för nästa försök", /Kan inte betala skatten/i.test(body) || /Brev från Kronofogden/i.test(body));
+
+// 8. Onboardingen: en ny användare möts av Clara, inte av ett dashboard.
+await page.goto(`${BASE}/login`, { waitUntil: "domcontentloaded" });
+await page.waitForTimeout(800);
+await page.fill("#email", "clara-onboarding@example.invalid");
+await page.fill("#password", "demo123");
+await page.click('button[type="submit"]:has-text("Logga in")');
+await page.waitForTimeout(1800);
+// Demon seedar ett exempelärende åt alla - töm det för att nå det äkta
+// nya-användare-läget (i produktion är det här utgångsläget).
+await page.evaluate(() => {
+  const raw = JSON.parse(localStorage.getItem("clearance-demo-state"));
+  raw.cases = [];
+  raw.caseMembers = [];
+  raw.kbrAssessments = [];
+  localStorage.setItem("clearance-demo-state", JSON.stringify(raw));
+});
+await page.goto(`${BASE}/dashboard`, { waitUntil: "domcontentloaded" });
+await page.waitForTimeout(1500);
+body = await page.innerText("body");
+check("tomt läge pekar på Clara", /Prata med Clara/i.test(body));
+await page.click('button:has-text("Prata med Clara")');
+await page.waitForTimeout(1200);
+body = await page.innerText("body");
+check("Clara presenterar sig", /Jag heter Clara/i.test(body));
+check("första frågan är namnet", /Vad heter du\?/.test(body));
+await page.fill("#onboarding-input", "Erik Andersson");
+await page.click('button[aria-label="Skicka"]');
+await page.waitForTimeout(600);
+body = await page.innerText("body");
+check("namnet används sparsamt (förnamn, en gång)", /Tack Erik\./.test(body) && !/Erik Erik/.test(body));
+check("nästa fråga är företaget", /Vilket företag gäller det\?/.test(body));
+await page.fill("#onboarding-input", "Eriks Bygg AB");
+await page.click('button[aria-label="Skicka"]');
+await page.waitForTimeout(600);
+body = await page.innerText("body");
+check("situationsvalen visas", /Vilket av följande stämmer bäst\?/.test(body) && /orolig för ekonomin/i.test(body));
+await page.click('button:has-text("Jag kan inte betala vissa fakturor")');
+await page.waitForTimeout(800);
+body = await page.innerText("body");
+check("Clara navigerar själv", /Jag öppnar nu nulägesanalysen/i.test(body));
+await page.waitForTimeout(3000);
+check("nulägesanalysen öppnades", page.url().includes("/wizard"));
 
 await browser.close();
 console.log(`\n${passed} passed, ${failed} failed`);

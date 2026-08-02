@@ -7,9 +7,12 @@ import { Input } from "@/components/ui/input";
 import { data } from "@/data";
 import { useAuth } from "@/hooks/useAuth";
 import {
+  CLARA,
   DIALOG_FLOWS,
   FALLBACK_REPLY,
+  ONBOARDING,
   answerLabel,
+  decisionCheckIn,
   matchFlow,
   type DialogAssessment,
   type DialogFlow,
@@ -42,6 +45,112 @@ const SEVERITY_TONE: Record<DialogAssessment["severity"], string> = {
   elevated: "border-warning/50 bg-warning/10 text-foreground",
 };
 
+/**
+ * Onboardingsamtalet: namn, företag, situation - en fråga i taget, i
+ * chattform. Sedan öppnar Clara nulägesanalysen själv; användaren letar
+ * aldrig i en meny. Svaren stannar i sessionen (namnet sparas i
+ * profilen) - faktainsamlingen är nulägesanalysens jobb, inte hälsningens.
+ */
+const OnboardingConversation = ({ onDone }: { onDone: (name: string | null) => void }) => {
+  const [entries, setEntries] = useState<ChatEntry[]>(
+    ONBOARDING.intro.map((text) => ({ who: "radgivare" as const, text })),
+  );
+  const [stage, setStage] = useState<"name" | "company" | "situation" | "done">("name");
+  const [name, setName] = useState<string | null>(null);
+  const [input, setInput] = useState("");
+  const bottomRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ block: "nearest" });
+  }, [entries.length]);
+
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    const value = input.trim();
+    if (!value) return;
+    setInput("");
+    if (stage === "name") {
+      setName(value);
+      setEntries((prev) => [
+        ...prev,
+        { who: "user", text: value },
+        { who: "radgivare", text: ONBOARDING.askCompany(value) },
+      ]);
+      setStage("company");
+    } else if (stage === "company") {
+      setEntries((prev) => [
+        ...prev,
+        { who: "user", text: value },
+        { who: "radgivare", text: ONBOARDING.askSituation },
+      ]);
+      setStage("situation");
+    }
+  };
+
+  const chooseSituation = (label: string) => {
+    setEntries((prev) => [
+      ...prev,
+      { who: "user", text: label },
+      ...ONBOARDING.closing.map((text) => ({ who: "radgivare" as const, text })),
+    ]);
+    setStage("done");
+    // Clara navigerar - efter en paus lång nog att hinna läsa avslutet.
+    window.setTimeout(() => onDone(name), 2600);
+  };
+
+  return (
+    <section aria-label="Samtal med Clara" className="rounded-md border border-border bg-card p-5 shadow-soft">
+      <ol className="space-y-3" aria-live="polite">
+        {entries.map((entry, i) => (
+          <li key={i} className={entry.who === "user" ? "flex justify-end" : "flex"}>
+            <p
+              className={`max-w-[85%] whitespace-pre-wrap rounded-md px-3.5 py-2.5 text-sm leading-relaxed ${
+                entry.who === "user" ? "bg-accent text-accent-foreground" : "bg-secondary/60 text-foreground"
+              }`}
+            >
+              {entry.text}
+            </p>
+          </li>
+        ))}
+      </ol>
+
+      {stage === "situation" && (
+        <div className="mt-4 flex flex-col items-start gap-2">
+          {ONBOARDING.situations.map((s) => (
+            <button
+              key={s.id}
+              type="button"
+              onClick={() => chooseSituation(s.label)}
+              className="rounded-full border border-border bg-card px-3.5 py-1.5 text-sm font-medium text-foreground transition-colors hover:border-accent"
+            >
+              {s.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {(stage === "name" || stage === "company") && (
+        <form onSubmit={submit} className="mt-4 flex gap-2">
+          <label htmlFor="onboarding-input" className="sr-only">
+            {stage === "name" ? "Vad heter du?" : "Vilket företag gäller det?"}
+          </label>
+          <Input
+            id="onboarding-input"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder={stage === "name" ? "Ditt namn" : "Företagets namn"}
+            autoComplete="off"
+          />
+          <Button type="submit" variant="accent" disabled={!input.trim()} aria-label="Skicka">
+            <Send className="h-4 w-4" aria-hidden="true" />
+          </Button>
+        </form>
+      )}
+      <div ref={bottomRef} />
+    </section>
+  );
+};
+
 const DashboardSamtal = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -57,6 +166,11 @@ const DashboardSamtal = () => {
     queryKey: ["case-decisions", latestCase?.id],
     queryFn: () => data.dialogue.listDecisions(latestCase!.id),
     enabled: !!latestCase,
+  });
+  const { data: profile } = useQuery({
+    queryKey: ["my-profile"],
+    queryFn: () => data.profile.getMine(),
+    retry: false,
   });
 
   const [entries, setEntries] = useState<ChatEntry[]>([]);
@@ -111,9 +225,10 @@ const DashboardSamtal = () => {
     setAnswers({});
     setAssessment(null);
     setDecisionSaved(false);
+    // Konstitutionen: först bekräftelsen och tryggheten, sedan EN fråga.
     say([
       { who: "user", text: userText },
-      { who: "radgivare", text: `Jag förstår – ${chosen.title.toLowerCase()}. Jag behöver ställa några frågor för att bedöma situationen.` },
+      { who: "radgivare", text: chosen.ack },
       { who: "radgivare", text: chosen.steps[0].prompt },
     ]);
   };
@@ -143,10 +258,15 @@ const DashboardSamtal = () => {
     } else {
       const result = flow.assess(nextAnswers);
       setAssessment(result);
+      // Konstitutionen: det korta svaret i flödet - kärnan och gränsen.
+      // Hela motiveringen ligger ett klick bort i bedömningsblocket.
+      const lead = result.paragraphs[0];
+      const boundary = result.paragraphs[result.paragraphs.length - 1];
       say(
         [
           { who: "user", text: shown },
-          ...result.paragraphs.map((p) => ({ who: "radgivare" as const, text: p })),
+          { who: "radgivare", text: lead },
+          ...(boundary !== lead ? [{ who: "radgivare" as const, text: boundary }] : []),
         ],
         true,
       );
@@ -189,6 +309,8 @@ const DashboardSamtal = () => {
 
   const [reconsiderFor, setReconsiderFor] = useState<string | null>(null);
   const [reconsiderNote, setReconsiderNote] = useState("");
+  const [checkInDone, setCheckInDone] = useState<"stands" | "changed" | null>(null);
+  const activeDecision = (decisions ?? []).find((d) => d.status === "active") ?? null;
   const reconsider = useMutation({
     mutationFn: ({ id, note }: { id: string; note: string }) => data.dialogue.reconsiderDecision(id, note),
     onSuccess: () => {
@@ -208,16 +330,14 @@ const DashboardSamtal = () => {
     <DashboardShell title="Rådgivaren">
       <div className="mx-auto max-w-3xl">
         {isLoading ? null : !latestCase ? (
-          <div className="rounded-md border border-border bg-card p-6">
-            <h2 className="font-display text-xl text-foreground">Vi börjar med läget</h2>
-            <p className="mt-2 leading-relaxed text-muted-foreground">
-              Rådgivaren arbetar i ett ärende. Gör den fria nulägesanalysen först –
-              den skapar ärendet och ger samtalet något att stå på.
-            </p>
-            <Button variant="accent" className="mt-6" onClick={() => navigate("/wizard")}>
-              Starta utvärderingen
-            </Button>
-          </div>
+          /* Första upplevelsen är ett samtal, inte ett dashboard: Clara
+             frågar en sak i taget och öppnar sedan nulägesanalysen själv. */
+          <OnboardingConversation
+            onDone={(name) => {
+              if (name) void data.profile.update({ displayName: name, phone: profile?.phone ?? null });
+              navigate("/wizard");
+            }}
+          />
         ) : (
           <>
             {/* Samtalet */}
@@ -225,8 +345,7 @@ const DashboardSamtal = () => {
               {entries.length === 0 && (
                 <div>
                   <p className="text-base leading-relaxed text-foreground">
-                    Hej! Beskriv vad som har hänt, så tar vi det därifrån – eller
-                    välj en situation nedan.
+                    {CLARA.greeting(profile?.displayName ?? null)}
                   </p>
                   <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
                     Samtalet journalförs i ärendets händelselogg. Bedömningarna är
@@ -234,6 +353,42 @@ const DashboardSamtal = () => {
                     juridisk rådgivning.
                   </p>
                 </div>
+              )}
+
+              {/* Minnet: det senaste aktiva beslutet följs upp mot sin
+                  premiss. En rådgivare som följer bolaget - ingen chatbot. */}
+              {entries.length === 0 && !checkInDone && activeDecision && (
+                <div className="mt-4 rounded-md border border-accent/30 bg-accent/5 p-4">
+                  <p className="text-sm leading-relaxed text-foreground">
+                    {decisionCheckIn(activeDecision)}
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Button size="sm" variant="outline" onClick={() => setCheckInDone("stands")}>
+                      Ja, planen står fast
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setCheckInDone("changed");
+                        setReconsiderFor(activeDecision.id);
+                      }}
+                    >
+                      Nej, läget har ändrats
+                    </Button>
+                  </div>
+                </div>
+              )}
+              {checkInDone === "stands" && entries.length === 0 && (
+                <p className="mt-3 text-sm leading-relaxed text-muted-foreground" role="status">
+                  Bra. Då fortsätter vi enligt plan – säg till om något ändras.
+                </p>
+              )}
+              {checkInDone === "changed" && entries.length === 0 && (
+                <p className="mt-3 text-sm leading-relaxed text-muted-foreground" role="status">
+                  Då omprövar vi beslutet. Skriv vad som har ändrats under Fattade
+                  beslut nedan, så stämplas omprövningen i journalen.
+                </p>
               )}
 
               {/* Snabbvalen står kvar tills ett flöde faktiskt börjat - även
@@ -277,6 +432,20 @@ const DashboardSamtal = () => {
                   >
                     {assessment.severityLabel}
                   </span>
+                  {assessment.paragraphs.length > 2 && (
+                    <details className="rounded-md border border-border p-3">
+                      <summary className="cursor-pointer list-none text-sm font-medium text-accent underline-offset-4 hover:underline">
+                        Visa hela motiveringen
+                      </summary>
+                      <div className="mt-2 space-y-2">
+                        {assessment.paragraphs.slice(1, -1).map((p) => (
+                          <p key={p.slice(0, 40)} className="text-sm leading-relaxed text-foreground/90">
+                            {p}
+                          </p>
+                        ))}
+                      </div>
+                    </details>
+                  )}
                   <ul className="space-y-1.5">
                     {assessment.actions.map((action) => (
                       <li key={action.label}>

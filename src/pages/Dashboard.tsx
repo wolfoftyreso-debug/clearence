@@ -142,15 +142,19 @@ const Dashboard = () => {
               <Loader2 className="w-6 h-6 animate-spin text-accent" />
             </div>
           ) : !latestCase ? (
+            /* Första mötet är ett samtal, inte ett tomt dashboard: Clara
+               tar hand om namnet, företaget och situationen - en fråga i
+               taget - och öppnar sedan nulägesanalysen själv. */
             <div className="text-center py-16 px-4 rounded-md bg-card border border-border shadow-soft">
               <h2 className="text-xl font-display font-semibold text-foreground mb-2">
-                Inget ärende ännu
+                Vi tar det steg för steg
               </h2>
               <p className="text-muted-foreground mb-6 max-w-md mx-auto">
-                Gör en krisutvärdering för att skapa ditt första ärende och se det här.
+                Clara hjälper dig skapa struktur, förstå dina alternativ och
+                dokumentera allt längs vägen. Börja med ett kort samtal.
               </p>
-              <Button variant="accent" size="lg" onClick={() => navigate("/wizard")}>
-                Starta utvärdering
+              <Button variant="accent" size="lg" onClick={() => navigate("/dashboard/samtal")}>
+                Prata med Clara
               </Button>
             </div>
           ) : latestCase.healthMode ? (

@@ -55,6 +55,12 @@ export interface DialogFlow {
   title: string;
   /** Kort etikett för snabbvalsknappen. */
   chip: string;
+  /**
+   * Bekräftelsen (konstitutionens steg 1-2): först förståelse, sedan
+   * riktning. ALDRIG juridik, aldrig "fel". 1-3 meningar - sedan kommer
+   * första frågan, en i taget.
+   */
+  ack: string;
   /** Fritextmönster som väljer flödet. */
   triggers: RegExp[];
   steps: DialogStep[];
@@ -76,8 +82,14 @@ const yes = (answer: string | undefined): boolean =>
 
 const amountOf = (answer: string | undefined): number => parseAmount(answer ?? "");
 
+/**
+ * Konstitutionens tak: aldrig fler än tre rekommenderade nästa steg.
+ * Flödena listar sina handlingar i prioritetsordning - de tre första är
+ * de tre viktigaste, resten stryks här och ingen annanstans.
+ */
 const withLabel = (a: Omit<DialogAssessment, "severityLabel">): DialogAssessment => ({
   ...a,
+  actions: a.actions.slice(0, 3),
   severityLabel: SEVERITY_LABELS[a.severity],
 });
 
@@ -87,6 +99,7 @@ const taxFlow: DialogFlow = {
   id: "skatt",
   title: "Skatten kan inte betalas",
   chip: "Kan inte betala skatten",
+  ack: "Jag förstår – skatten kan inte betalas. Det är en pressande situation, och den går att hantera. Vi tar det steg för steg, så att rätt saker blir gjorda i rätt ordning.",
   triggers: [/moms/i, /skatt/i, /arbetsgivaravgift/i, /skattekonto/i],
   steps: [
     { id: "saknas", prompt: "Hur mycket saknas för att kunna betala hela skatten på förfallodagen?", kind: "amount", hint: "t.ex. 150 000 kr" },
@@ -159,6 +172,7 @@ const wagesFlow: DialogFlow = {
   id: "loner",
   title: "Lönerna kan inte betalas",
   chip: "Kan inte betala lönerna",
+  ack: "Jag förstår – lönerna kan inte betalas. Det är en av de situationer företagare upplever som mest stressande, och det finns ordnade vägar igenom den. Mitt mål är att du får kontroll över läget och rätt beslut dokumenterade.",
   // \b framför ordet räcker: "lön" i "affärsplan" finns inte, och svenska
   // böjningar (lönerna, lönen) fångas utan slut-gräns. Observera att \b
   // inte fungerar EFTER å/ä/ö i JavaScript - därför bara ledande gräns.
@@ -201,6 +215,7 @@ const receivableFlow: DialogFlow = {
   id: "kundforlust",
   title: "En stor kundfordran betalas inte",
   chip: "Kund betalar inte",
+  ack: "Jag förstår – en kund betalar inte. Det är ett vanligt och hanterbart problem, men det ska tas på allvar innan det blir ett större. Vi går igenom det steg för steg.",
   triggers: [/\bkund/i, /fordran/i, /faktur/i, /betalar inte/i],
   steps: [
     { id: "belopp", prompt: "Hur stor är den obetalda fordran?", kind: "amount", hint: "t.ex. 100 000 kr" },
@@ -234,6 +249,7 @@ const enforcementFlow: DialogFlow = {
   id: "kronofogden",
   title: "Brev från Kronofogden",
   chip: "Brev från Kronofogden",
+  ack: "Jag förstår – ett brev från Kronofogden. Det känns allvarligt, och det finns en tydlig ordning för hur det hanteras. Vi tar det lugnt och metodiskt, en fråga i taget.",
   triggers: [/kronofogd/i, /betalningsföreläggande/i, /utmätning/i, /delgiv/i],
   steps: [
     { id: "belopp", prompt: "Vilket belopp kräver motparten?", kind: "amount", hint: "t.ex. 75 000 kr" },
@@ -278,6 +294,7 @@ const bankFlow: DialogFlow = {
   id: "banken",
   title: "Banken säger nej",
   chip: "Banken säger nej",
+  ack: "Jag förstår – banken säger nej. Det är ett bakslag, men sällan slutet: det finns fler vägar till finansiering än bankens. Vi börjar med att förstå läget.",
   // Ledande ordgräns så "affärsplan" inte läses som "lån".
   triggers: [/\bbank/i, /kredit/i, /\bl[åa]n/i, /finansier/i],
   steps: [
@@ -327,6 +344,72 @@ export const FALLBACK_REPLY = [
   "Det där behöver utredas bredare än ett snabbt samtal – och en gissning vore fel mot dig.",
   "Gör den fria nulägesanalysen, så går vi igenom hela situationen: siffrorna, fristerna och alternativen. Den tar 5–10 minuter, och resultatet blir grunden för allt annat i ärendet.",
 ] as const;
+
+/* --- Clara ----------------------------------------------------------------- */
+
+/**
+ * Claras röst regleras av Conversation Constitution
+ * (docs/conversation-constitution.md): bekräfta, skapa trygghet, EN
+ * fråga i taget, max tre rekommendationer, namnet sparsamt. Texterna
+ * här är de enda ställen där Clara presenterar sig - en röst, en källa.
+ */
+export const CLARA = {
+  name: "Clara",
+  /** Hälsning i ett ärende som redan finns. Namnet används sparsamt. */
+  greeting: (displayName: string | null): string =>
+    displayName
+      ? `Hej ${displayName.split(" ")[0]}. Beskriv vad som har hänt, så tar vi det därifrån – eller välj en situation nedan.`
+      : "Hej. Beskriv vad som har hänt, så tar vi det därifrån – eller välj en situation nedan.",
+} as const;
+
+/**
+ * Onboardingen: den första upplevelsen är ett samtal, inte ett
+ * dashboard. Clara frågar EN sak i taget - namn, företag, situation -
+ * och öppnar sedan nulägesanalysen själv. Användaren ska aldrig behöva
+ * tänka "var ska jag klicka?".
+ */
+export const ONBOARDING = {
+  intro: [
+    "Hej. Jag heter Clara och jag hjälper dig genom den här processen.",
+    "Om ditt företag har ekonomiska problem är du inte ensam. Det kan kännas överväldigande, men vi tar en sak i taget – mitt jobb är att hjälpa dig skapa struktur, förstå dina alternativ och dokumentera allt längs vägen.",
+    "Låt oss börja. Vad heter du?",
+  ],
+  askCompany: (name: string): string => `Tack ${name.split(" ")[0]}. Vilket företag gäller det?`,
+  askSituation: "Tack. Först behöver jag förstå din situation. Vilket av följande stämmer bäst?",
+  situations: [
+    { id: "oro", label: "Jag är orolig för ekonomin" },
+    { id: "fakturor", label: "Jag kan inte betala vissa fakturor" },
+    { id: "loner", label: "Jag kan inte betala löner" },
+    { id: "ansvar", label: "Jag riskerar personligt betalningsansvar" },
+    { id: "vet-inte", label: "Jag vet inte riktigt vad problemet är" },
+  ],
+  /**
+   * Avslutet: bekräftelse + vad som händer härnäst. Nulägesanalysen är
+   * faktainsamlingen - Clara öppnar den, användaren letar inte.
+   */
+  closing: [
+    "Tack. Då har jag det jag behöver för att börja.",
+    "Jag öppnar nu nulägesanalysen. Den tar 5–10 minuter och ger oss en gemensam bild av läget – siffrorna, fristerna och alternativen. Jag finns här när den är klar.",
+  ],
+} as const;
+
+/**
+ * Beslutsuppföljningen - minnet som gör Clara till en rådgivare och
+ * inte en chatbot. Frågan byggs ur beslutets premiss: det som gällde
+ * när beslutet togs är det som ska prövas mot verkligheten.
+ */
+export const decisionCheckIn = (decision: {
+  title: string;
+  premise: string | null;
+  decidedAt: string;
+}): string => {
+  const d = new Date(decision.decidedAt);
+  const months = ["januari", "februari", "mars", "april", "maj", "juni", "juli", "augusti", "september", "oktober", "november", "december"];
+  const when = `${d.getDate()} ${months[d.getMonth()]}`;
+  return decision.premise
+    ? `Den ${when} beslutade ni: ”${decision.title}”. ${decision.premise} Är det fortfarande planen?`
+    : `Den ${when} beslutade ni: ”${decision.title}”. Är det fortfarande planen?`;
+};
 
 /** Formaterar ett svar för journalen/samtalsloggen. */
 export const answerLabel = (step: DialogStep, raw: string): string => {

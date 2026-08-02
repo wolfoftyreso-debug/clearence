@@ -8,9 +8,12 @@
  */
 
 import {
+  CLARA,
   DIALOG_FLOWS,
   FALLBACK_REPLY,
+  ONBOARDING,
   answerLabel,
+  decisionCheckIn,
   matchFlow,
 } from "../src/lib/advisor/dialog";
 
@@ -91,6 +94,39 @@ for (const flow of ["skatt", "loner", "kronofogden"] as const) {
   const text = f.assess(SAMPLE_ANSWERS[flow]).paragraphs.join(" ");
   check(`${flow}: rådgivningsgränsen står i bedömningen`, /stäm av med/i.test(text));
 }
+
+/* --- konstitutionen i kod (Conversation Constitution) ---------------------- */
+
+const countSentences = (s: string) => (s.match(/[.!?](\s|$)/g) ?? []).length;
+
+for (const flow of DIALOG_FLOWS) {
+  // Steg 1-2: bekräftelse och trygghet FÖRE frågorna - aldrig juridik i öppningen.
+  check(`${flow.id}: bekräftelsen finns och är 1-3 meningar`, countSentences(flow.ack) >= 1 && countSentences(flow.ack) <= 3, flow.ack);
+  check(`${flow.id}: öppningen bekräftar (jag förstår)`, /^Jag förstår/i.test(flow.ack));
+  check(`${flow.id}: ingen juridik i öppningen`, !/\bkap\.|\blag\b|\bansvar|\bkonkurs/i.test(flow.ack), flow.ack);
+  // Hård regel: aldrig fler än tre rekommenderade nästa steg.
+  const answers = SAMPLE_ANSWERS[flow.id];
+  if (answers) {
+    check(`${flow.id}: max tre rekommendationer`, flow.assess(answers).actions.length <= 3);
+  }
+  // En fråga per tur: varje steg är EN fråga, inte flera.
+  check(`${flow.id}: en fråga per steg`, flow.steps.every((s) => (s.prompt.match(/\?/g) ?? []).length === 1));
+}
+
+check("Clara hälsar med förnamn, sparsamt", CLARA.greeting("Erik Andersson").startsWith("Hej Erik."));
+check("Clara hälsar utan namn när det saknas", CLARA.greeting(null).startsWith("Hej."));
+check("onboardingen har fem situationsval", ONBOARDING.situations.length === 5);
+check("onboardingen frågar EN sak i taget", ONBOARDING.intro[ONBOARDING.intro.length - 1].includes("Vad heter du?"));
+check("Clara navigerar själv till nulägesanalysen", ONBOARDING.closing.join(" ").includes("Jag öppnar nu nulägesanalysen"));
+
+const checkIn = decisionCheckIn({
+  title: "Hantera skattebristen före förfallodagen",
+  premise: "Beslutet vilar på att 150 000 kr saknas.",
+  decidedAt: "2026-08-01T09:00:00Z",
+});
+check("beslutsuppföljningen citerar premissen", checkIn.includes("150 000 kr saknas"));
+check("beslutsuppföljningen frågar om planen står fast", checkIn.includes("Är det fortfarande planen?"));
+check("beslutsuppföljningen anger datumet", /Den 1 augusti/.test(checkIn));
 
 /* --- svarsformatering för journalen ---------------------------------------- */
 
