@@ -534,6 +534,24 @@ export const DashboardShell = ({ children, title, actions }: DashboardShellProps
                   <BarChart3 className="h-5 w-5 flex-shrink-0" aria-hidden="true" />
                   <span className="min-w-0 flex-1 text-left">Statistik</span>
                 </Link>
+                <Link
+                  to="/admin/analys"
+                  onClick={() => setSidebarOpen(false)}
+                  aria-current={pathname === "/admin/analys" ? "page" : undefined}
+                  className="flex w-full items-center gap-3 rounded-md px-4 py-3 text-sm font-medium text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                >
+                  <Gauge className="h-5 w-5 flex-shrink-0" aria-hidden="true" />
+                  <span className="min-w-0 flex-1 text-left">Analysövervakning</span>
+                </Link>
+                <Link
+                  to="/admin/loggar"
+                  onClick={() => setSidebarOpen(false)}
+                  aria-current={pathname === "/admin/loggar" ? "page" : undefined}
+                  className="flex w-full items-center gap-3 rounded-md px-4 py-3 text-sm font-medium text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                >
+                  <History className="h-5 w-5 flex-shrink-0" aria-hidden="true" />
+                  <span className="min-w-0 flex-1 text-left">Loggar</span>
+                </Link>
               </>
             )}
           </nav>

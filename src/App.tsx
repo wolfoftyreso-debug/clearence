@@ -38,6 +38,8 @@ const AdminApplications = lazy(() => import("./pages/AdminApplications"));
 const AdminCompanies = lazy(() => import("./pages/AdminCompanies"));
 const AdminAdvisors = lazy(() => import("./pages/AdminAdvisors"));
 const AdminStats = lazy(() => import("./pages/AdminStats"));
+const AdminAnalysis = lazy(() => import("./pages/AdminAnalysis"));
+const AdminLogs = lazy(() => import("./pages/AdminLogs"));
 const DashboardDocuments = lazy(() => import("./pages/DashboardDocuments"));
 const DashboardMessages = lazy(() => import("./pages/DashboardMessages"));
 const DashboardSettings = lazy(() => import("./pages/DashboardSettings"));
@@ -210,6 +212,22 @@ const App = () => (
                   element={
                     <ProtectedRoute>
                       <AdminStats />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/admin/analys"
+                  element={
+                    <ProtectedRoute>
+                      <AdminAnalysis />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/admin/loggar"
+                  element={
+                    <ProtectedRoute>
+                      <AdminLogs />
                     </ProtectedRoute>
                   }
                 />
