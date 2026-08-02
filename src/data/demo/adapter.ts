@@ -454,6 +454,71 @@ const seedForUser = (userId: string) => {
   state.documents = [];
   state.referrals = [];
   state.application = null;
+  // Demoföretaget har redan gjort kontrollbalansbedömningen - siffrorna är
+  // Demobolagets (tillgångar 950 000, skulder 3 200 000) och ger kritiskt
+  // läge, samma bild som krisanalysen. Badgen, notisen och hälsovyn har
+  // därmed något att visa direkt.
+  state.kbrAssessments = [{ caseId: demoCase.id, status: "critical", createdAt: now() }];
+};
+
+/**
+ * Guideutkasten: demoföretaget har redan fyllt i kontrollbalansräkningen
+ * och likviditetsplanen. Utkasten läggs på resultatsteget med Demobolagets
+ * siffror, så den som öppnar guiderna ser SVAREN - inte tomma formulär.
+ * Samma lagringsformat som useAutosavedState skriver.
+ */
+const seedGuideDrafts = () => {
+  const envelope = (value: unknown) =>
+    JSON.stringify({ version: 1, value, savedAt: new Date().toISOString() });
+  localStorage.setItem(
+    "clearance-kbr-draft",
+    envelope({
+      step: 3,
+      form: {
+        orgNumber: "556012-3456",
+        companyInfo: null,
+        companyLookupStatus: "idle",
+        shareCapital: "100000",
+        totalAssets: "950000",
+        totalLiabilities: "3200000",
+        hasRelatedCompanies: false,
+        isPartOfLargerStructure: false,
+        ambitionLevel: "stabilize",
+      },
+    }),
+  );
+  const recurring = (id: string, label: string, amount: number, dayOfMonth: number) => ({
+    id,
+    label,
+    amount,
+    recurring: true,
+    dayOfMonth,
+    date: isoDaysFromNow(7),
+  });
+  localStorage.setItem(
+    "clearance-liquidity-draft",
+    envelope({
+      step: 6,
+      openingBalance: "185000",
+      items: {
+        income: [recurring("demo-lp-1", "Kundfakturor", 310000, 15)],
+        salary: [recurring("demo-lp-2", "Löner", 420000, 25)],
+        tax: [recurring("demo-lp-3", "Skatt och moms", 165000, 12)],
+        fixed: [recurring("demo-lp-4", "Hyra", 58000, 1)],
+        supplier: [
+          {
+            id: "demo-lp-5",
+            label: "Underleverantör mars",
+            amount: 96000,
+            recurring: false,
+            dayOfMonth: 1,
+            date: isoDaysFromNow(21),
+          },
+        ],
+      },
+      addEmployerFee: true,
+    }),
+  );
 };
 
 /**
@@ -857,6 +922,10 @@ export const demoAdapter: DataPort = {
       ) {
         state = { ...emptyState(), user };
         localStorage.removeItem("clearance-active-case");
+        // Guideutkasten hör till företagsrollen - ett rollbyte ska inte
+        // ärva dem.
+        localStorage.removeItem("clearance-kbr-draft");
+        localStorage.removeItem("clearance-liquidity-draft");
         if (account === DEMO_ACCOUNTS.advisor) {
           seedForAdvisor(user.id);
           state.profile = { userId: user.id, role: "advisor", displayName: "Demo Juristbyrå", phone: null };
@@ -865,6 +934,7 @@ export const demoAdapter: DataPort = {
           state.profile = { userId: user.id, role: "company", displayName: "Clearance Drift", phone: null };
         } else {
           seedForUser(user.id);
+          seedGuideDrafts();
           state.profile = { userId: user.id, role: "company", displayName: "Demobolaget AB", phone: null };
         }
       } else {

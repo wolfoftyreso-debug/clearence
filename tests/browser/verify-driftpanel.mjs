@@ -24,7 +24,10 @@ await page.click('button:has-text("Demo – Företag")');
 await page.waitForTimeout(1200);
 check("demo-inloggning når dashboard", page.url().includes("/dashboard"));
 
-// 1. KBR steg 0: förvalt vägval från utvärderingen
+// 1. KBR steg 0: förvalt vägval från utvärderingen. Demoföretaget har ett
+// färdigt utkast på resultatsteget - den här sviten testar själva guiden
+// och börjar därför om från början.
+await page.evaluate(() => localStorage.removeItem("clearance-kbr-draft"));
 await goto("/kbr");
 const body = await page.innerText("body");
 check("KBR visar förvalt vägval", /Förvalt utifrån din utvärdering/i.test(body), body.slice(0, 200));
@@ -80,8 +83,10 @@ await page.evaluate(() => localStorage.clear());
 await goto("/login");
 await page.click('button:has-text("Demo – Företag")');
 await page.waitForTimeout(1000);
-// töm ärendena direkt i demolagret
+// töm ärendena direkt i demolagret - och guideutkastet, som annars
+// återupptar på resultatsteget i stället för vägvalet
 await page.evaluate(() => {
+  localStorage.removeItem("clearance-kbr-draft");
   const key = Object.keys(localStorage).find((k) => /demo/i.test(k) && localStorage.getItem(k)?.includes('"cases"'));
   if (key) {
     const state = JSON.parse(localStorage.getItem(key));
