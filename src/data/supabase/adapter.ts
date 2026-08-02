@@ -952,6 +952,17 @@ export const supabaseAdapter: DataPort = {
       if (error) throw error;
       return (data ?? []).map(toCustomerInvoice);
     },
+    async getCompanyPlan() {
+      // Driftparametern i app_settings; beslutat betapris som reserv.
+      const { data, error } = await supabase
+        .from("app_settings")
+        .select("value")
+        .eq("key", "company_plan")
+        .maybeSingle();
+      if (error) throw error;
+      const raw = (data?.value as { monthly_ex_vat_sek?: number } | null) ?? null;
+      return { monthlyExVatSek: raw?.monthly_ex_vat_sek ?? 985 };
+    },
     async listCustomers() {
       // RLS filtrerar: den som inte är administratör får sina egna rader,
       // vilket är rätt svar och inte ett fel.
@@ -1228,6 +1239,17 @@ export const supabaseAdapter: DataPort = {
       const { error } = await supabase.rpc("set_billing_shadow", {
         p_professional_id: professionalId,
         p_shadow: shadow,
+      });
+      if (error) throw error;
+    },
+    async setCompanyPlan({ monthlyExVatSek }) {
+      if (!Number.isFinite(monthlyExVatSek) || monthlyExVatSek <= 0) {
+        throw new Error("Ogiltigt belopp");
+      }
+      const { error } = await supabase.from("app_settings").upsert({
+        key: "company_plan",
+        value: { monthly_ex_vat_sek: Math.round(monthlyExVatSek) },
+        updated_at: new Date().toISOString(),
       });
       if (error) throw error;
     },

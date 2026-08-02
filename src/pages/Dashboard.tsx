@@ -25,6 +25,7 @@ import { data } from "@/data";
 import { useAuth } from "@/hooks/useAuth";
 import type { CaseRecord } from "@/data/types";
 import { DashboardShell } from "@/components/dashboard/DashboardShell";
+import { LockedFeature, useEntitlements } from "@/components/billing/LockedFeature";
 import { ActionPlan } from "@/components/dashboard/ActionPlan";
 import { ControlStatus } from "@/components/dashboard/ControlStatus";
 import { AiBriefing } from "@/components/dashboard/AiBriefing";
@@ -50,6 +51,7 @@ const recommendationCopy: Record<
 const Dashboard = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { exportAndSharing } = useEntitlements();
 
   const { data: latestCase, isLoading } = useQuery({
     queryKey: ["latest-case", user?.id],
@@ -300,16 +302,23 @@ const Dashboard = () => {
                 />
                   {/* Fristkalendern: ärendets lagstadgade datum till Outlook,
                       Google eller byråns system. Aktexporten: hela ärendet
-                      som strukturerad akt - även vägen UT ur plattformen,
-                      utan att fråga någon om lov. */}
-                  <Button variant="outline" onClick={() => void exportIcs(latestCase)}>
-                    <CalendarClock className="h-4 w-4" aria-hidden="true" />
-                    Fristkalender (.ics)
-                  </Button>
-                  <Button variant="outline" onClick={() => void exportBundle(latestCase)}>
-                    <FolderDown className="h-4 w-4" aria-hidden="true" />
-                    Exportera akt
-                  </Button>
+                      som strukturerad akt - även vägen UT ur plattformen.
+                      Betalväggen: export väntar på första betalningen -
+                      arbetet finns kvar, ingenting raderas. */}
+                  {exportAndSharing ? (
+                    <>
+                      <Button variant="outline" onClick={() => void exportIcs(latestCase)}>
+                        <CalendarClock className="h-4 w-4" aria-hidden="true" />
+                        Fristkalender (.ics)
+                      </Button>
+                      <Button variant="outline" onClick={() => void exportBundle(latestCase)}>
+                        <FolderDown className="h-4 w-4" aria-hidden="true" />
+                        Exportera akt
+                      </Button>
+                    </>
+                  ) : (
+                    <LockedFeature title="Export av akt och fristkalender" />
+                  )}
                 </div>
               </div>
 

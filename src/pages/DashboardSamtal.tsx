@@ -28,6 +28,8 @@ import {
 import { OPTIONS_STANCE } from "@/lib/advisor/options";
 import { buildWorkingModel, sinceLastVisit } from "@/lib/advisor/memory";
 import { ClaraIntro } from "@/components/advisor/ClaraIntro";
+import { useEntitlements } from "@/components/billing/LockedFeature";
+import { lockMessage } from "@/lib/pricing";
 import { caseInvitationEmail } from "@/lib/email/messages";
 import { CASE_ROLE_DESCRIPTIONS, CASE_ROLE_LABELS } from "@/lib/caseRoles";
 import { analyseCrisis } from "@/lib/crisisAnalysis";
@@ -124,6 +126,7 @@ const DashboardSamtal = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [params] = useSearchParams();
+  const { exportAndSharing: inviteEntitled, plan } = useEntitlements();
 
   const { data: latestCase, isLoading } = useQuery({
     queryKey: ["latest-case", user?.id],
@@ -318,6 +321,15 @@ const DashboardSamtal = () => {
        startar Action Contract, inte en frågeserie. */
     const role = inviteIntent(trimmed);
     if (role && latestCase) {
+      // Betalväggen: delning med externa väntar på första betalningen.
+      // Rådgivaren säger det ärligt - inget arbete går förlorat.
+      if (!inviteEntitled) {
+        say([
+          { who: "user", text: trimmed },
+          { who: "radgivare", text: `Delning med externa rådgivare ${lockMessage(plan).charAt(0).toLowerCase()}${lockMessage(plan).slice(1)}` },
+        ]);
+        return;
+      }
       setInvite({ role, stage: "ask" });
       say([
         { who: "user", text: trimmed },

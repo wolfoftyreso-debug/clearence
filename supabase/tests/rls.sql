@@ -1785,6 +1785,49 @@ delete from public.advisor_sessions where id = 'd1a10000-0000-0000-0000-00000000
 select pg_temp.check('journal sessions cannot be deleted',
   (select count(*) from public.advisor_sessions), 1::bigint);
 
+/* ========================================================================== */
+/* Driftparametrarna: företagsplanens pris                                    */
+/* ========================================================================== */
+
+set local role authenticated;
+
+-- Driften (1111) sätter företagsplanens månadsavgift.
+select pg_temp.as_user('11111111-1111-1111-1111-111111111111');
+insert into public.app_settings (key, value)
+values ('company_plan', '{"monthly_ex_vat_sek": 985}'::jsonb);
+select pg_temp.check('the admin sets the company plan',
+  (select count(*) from public.app_settings where key = 'company_plan'), 1::bigint);
+
+-- Alla inloggade läser priset - det står på startsidan.
+select pg_temp.as_user('22222222-2222-2222-2222-222222222222');
+select pg_temp.check('any user reads the plan price',
+  (select (value->>'monthly_ex_vat_sek')::int from public.app_settings where key = 'company_plan'), 985);
+
+-- Men bara driften skriver.
+do $$
+begin
+  begin
+    update public.app_settings
+    set value = '{"monthly_ex_vat_sek": 1}'::jsonb
+    where key = 'company_plan';
+    if (select (value->>'monthly_ex_vat_sek')::int from public.app_settings where key = 'company_plan') = 1 then
+      raise exception 'FAIL  en vanlig användare kunde ändra priset';
+    end if;
+    raise notice 'ok    a non-admin cannot change the price';
+  exception when others then
+    if sqlerrm like 'FAIL%' then raise; end if;
+    raise notice 'ok    a non-admin cannot change the price';
+  end;
+end $$;
+
+-- Driften ändrar parametern; ändringen gäller omedelbart.
+select pg_temp.as_user('11111111-1111-1111-1111-111111111111');
+update public.app_settings
+set value = '{"monthly_ex_vat_sek": 1200}'::jsonb, updated_at = now()
+where key = 'company_plan';
+select pg_temp.check('the admin updates the plan and it takes effect',
+  (select (value->>'monthly_ex_vat_sek')::int from public.app_settings where key = 'company_plan'), 1200);
+
 reset role;
 select 'ALL RLS TESTS PASSED' as result;
 

@@ -420,6 +420,11 @@ export interface BillingPort {
   getMine(): Promise<AccountBillingRecord>;
   /** Kundens egna fakturor och kvitton, nyast först. */
   listMyInvoices(): Promise<CustomerInvoiceRecord[]>;
+  /**
+   * Företagsplanen: beloppet är en driftparameter, aldrig en kodrad.
+   * Läsbar för alla (priset är publikt); skrivs via ops.setCompanyPlan.
+   */
+  getCompanyPlan(): Promise<{ monthlyExVatSek: number }>;
 
   /* Drift. Kräver administratörsbehörighet, som prövas i databasen. */
 
@@ -513,6 +518,13 @@ export interface OpsPort {
    * att slå av läget efterfakturerar aldrig gamla skuggrader.
    */
   setBillingShadow(professionalId: string, shadow: boolean): Promise<void>;
+
+  /**
+   * Företagsabonnemangets månadsavgift (exkl. moms). En parameter, satt
+   * av drift - gäller framåt och visas omedelbart i alla lås- och
+   * pristexter.
+   */
+  setCompanyPlan(input: { monthlyExVatSek: number }): Promise<void>;
 
   /** North Star och churn: återhämtade, i hälsoläge, dålig churn, öppna. */
   northStarCounts(): Promise<{

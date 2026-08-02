@@ -476,6 +476,75 @@ const PlanRow = ({
   );
 };
 
+/**
+ * Företagsabonnemanget: EN plan, ett belopp, satt här och ingen
+ * annanstans. Ändringen slår igenom omedelbart i alla pris- och
+ * låstexter - beloppet är en parameter, aldrig en kodrad.
+ */
+const CompanyPlanSection = () => {
+  const queryClient = useQueryClient();
+  const { data: plan } = useQuery({
+    queryKey: ["company-plan"],
+    queryFn: () => data.billing.getCompanyPlan(),
+  });
+  const [value, setValue] = useState("");
+  const saveMutation = useMutation({
+    mutationFn: (monthlyExVatSek: number) => data.ops.setCompanyPlan({ monthlyExVatSek }),
+    onSuccess: () => {
+      setValue("");
+      queryClient.invalidateQueries({ queryKey: ["company-plan"] });
+    },
+  });
+
+  return (
+    <section aria-labelledby="company-plan-heading">
+      <h2
+        id="company-plan-heading"
+        className="flex items-center gap-2 text-lg font-semibold text-foreground"
+      >
+        <Banknote className="h-5 w-5 text-accent" aria-hidden="true" />
+        Företagsabonnemanget
+      </h2>
+      <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+        Månadsavgiften för företagskunder, exklusive moms. Månadsfaktura, ingen
+        bindningstid, uppsägning när som helst – och alla data sparas även om
+        abonnemanget pausas. Beloppet visas i pris- och låstexterna direkt.
+      </p>
+      <form
+        className="mt-3 flex flex-wrap items-center gap-2"
+        onSubmit={(e) => {
+          e.preventDefault();
+          const parsed = Number(value.replace(/[^\d]/g, ""));
+          if (parsed > 0) saveMutation.mutate(parsed);
+        }}
+      >
+        <p className="text-sm text-foreground">
+          Nuvarande:{" "}
+          <span className="font-semibold tabular-nums">
+            {plan ? `${plan.monthlyExVatSek} kr/mån + moms` : "laddar …"}
+          </span>
+        </p>
+        <Input
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          placeholder="Nytt belopp exkl. moms"
+          inputMode="numeric"
+          className="w-44"
+          aria-label="Ny månadsavgift exklusive moms"
+        />
+        <Button type="submit" size="sm" variant="outline" disabled={!value.trim() || saveMutation.isPending}>
+          Spara
+        </Button>
+        {saveMutation.isError && (
+          <p className="text-sm text-destructive" role="alert">
+            Kunde inte spara beloppet.
+          </p>
+        )}
+      </form>
+    </section>
+  );
+};
+
 const PlanSection = () => {
   const { data: terms } = useQuery({
     queryKey: ["professional-terms"],
@@ -488,7 +557,7 @@ const PlanSection = () => {
 
   if (!terms || terms.length === 0) return null;
   return (
-    <section aria-labelledby="plans-heading">
+    <section aria-labelledby="plans-heading" data-section="byraplaner">
       <h2 id="plans-heading" className="flex items-center gap-2 text-lg font-semibold text-foreground">
         <Banknote className="h-5 w-5 text-accent" aria-hidden="true" />
         Prisplaner för upplåsta ärenden
@@ -709,6 +778,8 @@ const AdminOverview = () => {
         <NorthStarSection />
 
         <ClaimsSection />
+
+        <CompanyPlanSection />
 
         <PlanSection />
 

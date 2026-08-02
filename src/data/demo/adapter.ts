@@ -102,6 +102,8 @@ interface DemoState {
   professionalEdits: Record<string, ProfessionalProfileUpdate>;
   advisorSessions: AdvisorSessionRecord[];
   caseDecisions: CaseDecisionRecord[];
+  /** Företagsplanens månadsavgift (exkl. moms) - driftparameter, aldrig kod. */
+  companyPlanMonthlyExVatSek: number | null;
 }
 
 const emptyState = (): DemoState => ({
@@ -134,6 +136,7 @@ const emptyState = (): DemoState => ({
   professionalEdits: {},
   advisorSessions: [],
   caseDecisions: [],
+  companyPlanMonthlyExVatSek: null,
 });
 
 /** Files cannot go in localStorage, so they live for the session only. */
@@ -1239,12 +1242,13 @@ export const demoAdapter: DataPort = {
     async getMine() {
       if (!state.user) throw new Error("Inte inloggad");
       if (!state.billing) {
-        // Gratisveckan börjar när kontot först används.
+        // Demokunden är en BETALANDE kund - betalväggens öppna sida ska
+        // kunna demonstreras. Låst läge nås genom att nollställa paidAt.
         state.billing = {
           userId: state.user.id,
           startedAt: now(),
           dueAt: null,
-          paidAt: null,
+          paidAt: now(),
           closedAt: null,
           note: null,
         };
@@ -1254,6 +1258,11 @@ export const demoAdapter: DataPort = {
     },
     async listMyInvoices() {
       return [...state.customerInvoices].sort((a, b) => b.issuedAt.localeCompare(a.issuedAt));
+    },
+    async getCompanyPlan() {
+      // Driftparametern, med beslutat betapris som reserv - aldrig ett
+      // belopp i en vy.
+      return { monthlyExVatSek: state.companyPlanMonthlyExVatSek ?? 985 };
     },
     async listCustomers() {
       if (!state.user) return [];
@@ -1407,6 +1416,13 @@ export const demoAdapter: DataPort = {
         shadow: false,
       };
       demoPlans.set(professionalId, { ...plan, shadow });
+    },
+    async setCompanyPlan({ monthlyExVatSek }) {
+      if (!Number.isFinite(monthlyExVatSek) || monthlyExVatSek <= 0) {
+        throw new Error("Ogiltigt belopp");
+      }
+      state.companyPlanMonthlyExVatSek = Math.round(monthlyExVatSek);
+      save();
     },
     async northStarCounts() {
       const cases = state.cases;

@@ -13,6 +13,7 @@ import {
   type CaseRole,
 } from "@/lib/caseRoles";
 import { ArrowRight, Loader2, Mail, ShieldQuestion, UserPlus, Users, X } from "lucide-react";
+import { LockedFeature, useEntitlements } from "@/components/billing/LockedFeature";
 
 /**
  * Deltagare: vilka som är inne i ärendet, och vägen in för nästa person.
@@ -147,6 +148,7 @@ const TeamQuickPick = ({
 
 const DashboardParticipants = () => {
   const queryClient = useQueryClient();
+  const { exportAndSharing: inviteEntitled } = useEntitlements();
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<CaseRole>("board_member");
 
@@ -298,7 +300,12 @@ const DashboardParticipants = () => {
               </section>
             )}
 
-            {/* Bjud in */}
+            {/* Bjud in. Betalväggen: delning med externa aktiveras efter
+                första betalningen - deltagarlistan och allt arbete finns
+                kvar oavsett. */}
+            {!inviteEntitled ? (
+              <LockedFeature title="Bjud in revisor, jurist och styrelse till ärendet" />
+            ) : (
             <section
               aria-labelledby="invite-heading"
               className="rounded-md border border-border bg-card p-5"
@@ -390,6 +397,7 @@ const DashboardParticipants = () => {
                 </span>
               </p>
             </section>
+            )}
 
             {/* Vägen till NY kompetens: katalogen. Menyvalet "Rådgivare"
                 flyttade hit i Excellence rond 2 - att hitta en rådgivare är

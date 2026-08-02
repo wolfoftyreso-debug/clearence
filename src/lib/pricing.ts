@@ -1,0 +1,63 @@
+/**
+ * Företagsabonnemanget och betalväggen.
+ *
+ * Prismodellen är beslutad för betan: EN plan, månadsfaktura, ingen
+ * bindningstid, uppsägning när som helst, tillgång under den betalda
+ * perioden - och alla data sparas även om abonnemanget pausas.
+ *
+ * Beloppet är en DRIFTPARAMETER, aldrig en kodrad: gränssnittet läser
+ * alltid planen via dataporten, och drift kan ändra den utan release.
+ * Konstanten här är bara reservvärdet när ingen parameter är satt.
+ *
+ * Betalväggens princip: användaren blir aldrig inlåst och förlorar
+ * aldrig sitt arbete. Allt skapande är öppet från början - analysen,
+ * samtalet, dokumenten, handlingsplanen. Det som väntar på första
+ * betalningen är vägarna UT och RUNT: export och delning. En naturlig
+ * uppgradering, inte en gisslansituation.
+ */
+
+import type { AccountBillingRecord } from "@/data/types";
+
+export interface CompanyPlan {
+  /** Månadsavgift i SEK, exklusive moms. Sätts av drift. */
+  monthlyExVatSek: number;
+}
+
+/** Reservvärdet tills drift satt parametern. Beslutat betapris. */
+export const DEFAULT_COMPANY_PLAN: CompanyPlan = { monthlyExVatSek: 985 };
+
+/** "985 kr/mån + moms" - alltid exklusive moms mot aktiebolag. */
+export const formatPlanPrice = (plan: CompanyPlan): string =>
+  `${String(Math.round(plan.monthlyExVatSek)).replace(/\B(?=(\d{3})+(?!\d))/g, " ")} kr/mån + moms`;
+
+/** Villkoren i klartext - samma ord överallt där planen visas. */
+export const PLAN_TERMS = [
+  "Månadsvis faktura",
+  "Ingen bindningstid – uppsägning när som helst",
+  "Tillgång till tjänsten under den betalda perioden",
+  "Alla data sparas även om abonnemanget pausas",
+] as const;
+
+/* --- betalväggen ----------------------------------------------------------- */
+
+/**
+ * Nyckelfrågan är EN: har första fakturan betalats? Före den är allt
+ * skapande öppet men export och delning väntar. Efter den är de öppna.
+ * Ett pausat abonnemang raderar aldrig data - frysningen är läsbar.
+ */
+export const firstPaymentDone = (billing: AccountBillingRecord | null | undefined): boolean =>
+  !!billing?.paidAt;
+
+/** Vad som väntar på första betalningen - listan är kommunikationen. */
+export const LOCKED_UNTIL_FIRST_PAYMENT = [
+  "Export av dokument och ärendehistorik",
+  "Delning med externa rådgivare",
+  "Fristkalender till eget kalenderprogram",
+] as const;
+
+/**
+ * Låstexten som visas vid varje stängd funktion. Priset kommer ur
+ * planen (driftparametern), aldrig ur en strängkonstant i en vy.
+ */
+export const lockMessage = (plan: CompanyPlan): string =>
+  `Aktiveras när första fakturan är betald. ${formatPlanPrice(plan)} – ingen bindningstid, avsluta när som helst. Allt du skapat finns kvar.`;

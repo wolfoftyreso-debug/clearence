@@ -103,6 +103,21 @@ Varje bedömning bär sin källa, synligt:
 * 🔴 **Låg** - viktiga uppgifter saknas; CLEARANCE säger det och drar ingen
   slutsats (fallbackens beteende).
 
+## De fyra objekten
+
+Allt i systemet ska kunna beskrivas med fyra objekt - inget femte
+införs utan att ett av de fyra visat sig otillräckligt:
+
+* **Samtal** - dialogen med rådgivaren (journalförd).
+* **Beslut** - vad som faktiskt beslutades, med premiss.
+* **Dokument** - det som skapades eller laddades upp.
+* **Uppgifter** - det som återstår att göra.
+
+Aktivitetsloggen (händelseloggen) löper genom alla fyra och är den
+gemensamma tidslinjen: "09:14 prognos skapad, 10:11 skickad till
+revisorn, 13:05 godkänd, 13:07 handlingsplan uppdaterad." Den är lika
+värdefull för användaren som för rådgivaren som fortsätter arbetet.
+
 ## Löftet till användaren
 
 > Clearance hjälper dig att fatta bättre beslut - men viktiga
