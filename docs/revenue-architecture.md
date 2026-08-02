@@ -23,6 +23,7 @@ insolvensrättens realiteter – inte ur tycke.
 | G3 | **Desperation prissätts inte.** Ingen avgift får växa med hur illa bolaget ligger till, och inga stora avgifter tas av bolag i obeståndsnära läge. | Risk-/kreditbaserade modeller uteslutna. Företagssidans avgift är låg och platt per segment. |
 | G4 | **Intäkten följer levererat, kalkylerbart värde – hos den som kan kalkylera det.** | Värdehändelserna faktureras byråsidan, där nyttan är rationell (intagskostnad ↓, debiterbar tid ↑). |
 | G5 | **Ärendedata är aldrig en intäktsström.** Ingen försäljning av data, inga annonsintäkter, ingen "anonymiserad statistik till banker". | Förtroendet ÄR produkten. Detta står här för att det ska vara ett beslut, inte en glidning. |
+| G6 | **Plattformen ska alltid tjäna mer när kunden lyckas än när kunden misslyckas.** | Ryggraden. En lyckad rekonstruktion ska vara mer lönsam för CLEARANCE än en konkurs (längre ärende, fler värdehändelser, efterföljande hälsofas). Ett återhämtat bolag ska kunna stanna som betalande kund i en enklare hälso-/efterlevnadsnivå. Byråer med många lyckade uppdrag ska vilja stanna och investera mer. Varje framtida intäktsidé prövas mot frågan: *tjänar vi mer på att det går bra?* Om inte, byggs den om eller förkastas. |
 
 ---
 
@@ -40,10 +41,32 @@ flowchart LR
 ```
 
 **Strukturell nyckelinsikt:** företagssidan är *transient* – ett lyckat ärende
-lämnar systemet (stabiliserat, rekonstruerat eller ordnat avvecklat). Det är
-**bra churn** och ska firas, inte motarbetas. Byråsidan är den *återkommande*
-relationen: samma byrå möter nya ärenden år efter år. Arkitekturen lägger därför
-tyngdpunkten av den långsiktiga intäkten på sidan med långsiktig närvaro.
+lämnar krisläget. Det är **bra churn ur krisen** och ska firas. Byråsidan är den
+*återkommande* relationen: samma byrå möter nya ärenden år efter år. Arkitekturen
+lägger därför tyngdpunkten av den långsiktiga intäkten på sidan med långsiktig
+närvaro – **och ger det återhämtade bolaget en väg att stanna** (hälsonivån
+nedan), så att G6 håller även på företagssidan.
+
+### Recovery Lifetime Value (RLV)
+
+Måttet arkitekturen optimerar för. **RLV = det totala värdet av ett företag från
+första krissignal tills det är ekonomiskt stabilt – och tiden därefter.**
+
+```
+RLV = (A × L_kris)            grundabonnemang under krisfasen
+    + (V × f × u)             värdehändelser: förfrågningar × andel upplåsta × byråavgift*
+    + (P)                     premiumhändelser (signering, bevakning, integrationer)
+    + (H × L_hälsa × k)       hälsonivån efter krisen × konverteringsgrad
+    + (T)                     framtida tilläggstjänster
+```
+*Byråavgiften bokförs på byråsidan men uppstår ur företagets ärende – RLV räknar
+värdet per *ärende över båda sidor*, för det är så G6 mäts: en lyckad resa
+maximerar varje term; en konkurs kapar de tre sista.
+
+**Produktimplikation (medveten bygglucka):** hälsonivån – ett enklare
+efterlevnads-/bevakningsläge för det återhämtade bolaget (frister, KBR-vakt,
+kreditbevakning, årshjul) – är **inte byggd**. Den är arkitekturens nästa
+produktyta och G6:s bärare på företagssidan.
 
 ---
 
@@ -164,13 +187,14 @@ kontorsstruktur.
 
 | Ordning | Beslut/aktivitet | Beroende |
 |---|---|---|
-| 1 | Insolvensrättslig prövning av företagssidans avgifter (inkl. designfråga A1) | Jurist |
-| 2 | Bankgiro + momsreg/F-skatt bekräftas | Landvex admin |
-| 3 | Avtalspriser: Creditsafe, BankID, Fortnox/Visma | Partnerförhandling |
-| 4 | Betalningsviljeintervjuer, 10–15 per sida, guider ur värdedrivarna | Marknad |
-| 5 | Pilotparametrar sätts i driftpanelen (ett segmentband, en byråkohort) | 1–4 |
-| 6 | Exitorsak börjar registreras (bra churn-KPI:n) | Liten migration |
-| 7 | Först här: dokumentet **Prissättning v1.0** med kronor | 1–6 |
+| 1 | **Economic Model v1.0** (`docs/economic-model.md`): cost-to-serve, marginaler, break-even som parametriserad modell | Detta dokument |
+| 2 | Insolvensrättslig prövning av företagssidans avgifter (inkl. designfråga A1) | Jurist |
+| 3 | Bankgiro + momsreg/F-skatt bekräftas | Landvex admin |
+| 4 | Avtalspriser: Creditsafe, BankID, Fortnox/Visma | Partnerförhandling |
+| 5 | Betalningsviljeintervjuer, 10–15 per sida, guider ur värdedrivarna | Marknad |
+| 6 | Pilot med verkliga kunder (parametrar i driftpanelen; ett segmentband, en byråkohort) | 1–5 |
+| 7 | Exitorsak börjar registreras (bra churn- och G6-mätningen) | Liten migration |
+| 8 | Först här: dokumentet **Prissättning v1.0** med kronor | 1–7 |
 
 ---
 
