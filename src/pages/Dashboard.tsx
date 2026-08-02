@@ -432,7 +432,7 @@ const Dashboard = () => {
 
               {/* Klientverktygen: bara för rådgivarrollen - komponenten
                   gatear sig själv. */}
-              <AdvisorTools caseId={latestCase.id} />
+              <AdvisorTools caseRecord={latestCase} />
 
               {/* Quick actions */}
               <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-4">

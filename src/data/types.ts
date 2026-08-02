@@ -70,11 +70,21 @@ export interface CaseRecord {
   exitReason: CaseExitReason | null;
   /** Ärendet lever vidare i hälsoläget efter en lyckad krisfas. */
   healthMode: boolean;
+  /** Rådgivarens gransknings-stämpel på handlingsplanen. Null = ej godkänd. */
+  planApprovedAt: string | null;
+  planApprovedBy: string | null;
 }
 
 export type NewCase = Omit<
   CaseRecord,
-  "id" | "createdAt" | "updatedAt" | "closedAt" | "exitReason" | "healthMode"
+  | "id"
+  | "createdAt"
+  | "updatedAt"
+  | "closedAt"
+  | "exitReason"
+  | "healthMode"
+  | "planApprovedAt"
+  | "planApprovedBy"
 >;
 
 export interface KbrAssessmentInput {
@@ -549,6 +559,8 @@ export interface CaseTask {
   doneBy: string | null;
   source: "recommendation" | "manual";
   createdAt: string;
+  /** Deltagaren uppgiften är delegerad till. Null = ingen tilldelning. */
+  assignedTo: string | null;
 }
 
 /**

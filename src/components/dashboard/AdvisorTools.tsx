@@ -2,11 +2,12 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { sv } from "date-fns/locale";
-import { Clock, FileQuestion, Loader2, StickyNote, Trash2 } from "lucide-react";
+import { CheckCircle2, Clock, FileQuestion, Loader2, StickyNote, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { data } from "@/data";
+import type { CaseRecord } from "@/data/types";
 
 /**
  * Klientverktygen: rådgivarens arbetsyta inne i klientens ärende.
@@ -284,27 +285,78 @@ const CompletionTool = ({ caseId }: { caseId: string }) => {
   );
 };
 
+/**
+ * Godkännandet av handlingsplanen: rådgivarens gransknings-stämpel, synlig
+ * för bolaget som "Granskad av rådgivare" i Nästa steg. Endast en
+ * rådgivarroll i ärendet kan sätta eller återta den - regeln prövas i
+ * databasen, inte här.
+ */
+const ApprovalTool = ({ caseRecord }: { caseRecord: CaseRecord }) => {
+  const queryClient = useQueryClient();
+  const set = useMutation({
+    mutationFn: (approved: boolean) => data.cases.setPlanApproval(caseRecord.id, approved),
+    onSuccess: () => queryClient.invalidateQueries(),
+  });
+  const approved = caseRecord.planApprovedAt !== null;
+
+  return (
+    <section
+      aria-labelledby="approval-heading"
+      className={`rounded-md border p-5 shadow-soft ${
+        approved ? "border-success/40 bg-success/5" : "border-border bg-card"
+      }`}
+    >
+      <h3 id="approval-heading" className="flex items-center gap-2 font-semibold text-foreground">
+        <CheckCircle2
+          className={`h-5 w-5 ${approved ? "text-success" : "text-accent"}`}
+          aria-hidden="true"
+        />
+        Godkännande av handlingsplanen
+      </h3>
+      <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+        {approved
+          ? `Planen godkändes ${format(new Date(caseRecord.planApprovedAt!), "d MMMM yyyy", { locale: sv })}. Bolaget ser stämpeln i Nästa steg.`
+          : "Din gransknings-stämpel på bolagets handlingsplan. Bolaget ser den som ”Granskad av rådgivare” – och den är din, inte företrädarens egen."}
+      </p>
+      <Button
+        variant={approved ? "outline" : "accent"}
+        size="sm"
+        className="mt-3"
+        disabled={set.isPending}
+        onClick={() => set.mutate(!approved)}
+      >
+        {approved ? "Återta godkännandet" : "Godkänn handlingsplanen"}
+      </Button>
+      {set.isError && (
+        <p className="mt-2 text-sm text-destructive" role="alert">
+          Kunde inte ändra godkännandet. Försök igen.
+        </p>
+      )}
+    </section>
+  );
+};
+
 /** Hela panelen. Gatear sig själv: utan rådgivarroll renderas ingenting. */
-export const AdvisorTools = ({ caseId }: { caseId: string }) => {
+export const AdvisorTools = ({ caseRecord }: { caseRecord: CaseRecord }) => {
   const { data: profile } = useQuery({
     queryKey: ["my-profile"],
     queryFn: () => data.profile.getMine(),
   });
   if (profile?.role !== "advisor") return null;
+  const caseId = caseRecord.id;
 
   return (
     <div className="mt-6">
       <h2 className="font-semibold text-foreground">Klientverktyg</h2>
       <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
         Din arbetsyta i klientens ärende. Anteckningarna och tiden är dina
-        egna; kompletteringar går till bolaget.
+        egna; kompletteringar och godkännanden går till bolaget.
       </p>
       <div className="mt-3 grid grid-cols-1 gap-4 lg:grid-cols-2">
         <NotesTool caseId={caseId} />
         <TimeTool caseId={caseId} />
-        <div className="lg:col-span-2">
-          <CompletionTool caseId={caseId} />
-        </div>
+        <CompletionTool caseId={caseId} />
+        <ApprovalTool caseRecord={caseRecord} />
       </div>
     </div>
   );

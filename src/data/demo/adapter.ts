@@ -349,6 +349,8 @@ const seedCase = (userId: string): CaseRecord => ({
   closedAt: null,
   exitReason: null,
   healthMode: false,
+  planApprovedAt: null,
+  planApprovedBy: null,
 });
 
 const seedPayments = (caseId: string): PaymentRecord[] => [
@@ -563,6 +565,7 @@ const seedForAdvisor = (userId: string) => {
     doneBy: null,
     source: "manual",
     createdAt: now(),
+    assignedTo: null,
   });
   state.caseTasks = [
     task(bygg.id, "Förbered borgenärsmöte", 1),
@@ -601,6 +604,30 @@ const seedForAdvisor = (userId: string) => {
       createdAt: now(),
     },
   ];
+  // Deltagare per klientärende: företrädaren och rådgivaren själv, så
+  // delegeringen har någon att peka på.
+  state.caseMembers = [bygg, taxi, milano, elservice].flatMap((c) => [
+    {
+      id: uid(),
+      caseId: c.id,
+      userId: `demo-foretradare-${c.id}`,
+      role: "owner" as const,
+      displayName: "Företrädaren (demo)",
+      email: "foretradare@example.invalid",
+      createdAt: now(),
+      revokedAt: null,
+    },
+    {
+      id: uid(),
+      caseId: c.id,
+      userId,
+      role: "reconstructor" as const,
+      displayName: "Demo Juristbyrå",
+      email: DEMO_ACCOUNTS.advisor,
+      createdAt: now(),
+      revokedAt: null,
+    },
+  ]);
 };
 
 /**
@@ -894,6 +921,7 @@ export const demoAdapter: DataPort = {
           doneBy: null,
           source: "recommendation",
           createdAt: now(),
+          assignedTo: null,
         });
       }
       save();
@@ -908,6 +936,7 @@ export const demoAdapter: DataPort = {
         doneBy: null,
         source: "manual",
         createdAt: now(),
+        assignedTo: null,
       });
       save();
     },
@@ -916,6 +945,12 @@ export const demoAdapter: DataPort = {
       if (!task) return;
       task.doneAt = done ? now() : null;
       task.doneBy = done ? (state.user?.id ?? null) : null;
+      save();
+    },
+    async assign(id, userId) {
+      const task = state.caseTasks.find((t) => t.id === id);
+      if (!task) return;
+      task.assignedTo = userId;
       save();
     },
   },
@@ -1466,6 +1501,8 @@ export const demoAdapter: DataPort = {
         closedAt: null,
         exitReason: null,
         healthMode: false,
+        planApprovedAt: null,
+        planApprovedBy: null,
       };
       state.cases = [record, ...state.cases];
       save();
@@ -1500,6 +1537,19 @@ export const demoAdapter: DataPort = {
       record.closedAt = null;
       record.exitReason = null;
       record.healthMode = false;
+      record.updatedAt = now();
+      save();
+    },
+    // Samma regel som set_plan_approval() i databasen: godkännandet är
+    // rådgivarens, aldrig företrädarens egen självbetjäning.
+    async setPlanApproval(caseId, approved) {
+      if (state.profile?.role !== "advisor") {
+        throw new Error("Endast en rådgivarroll i ärendet kan godkänna handlingsplanen");
+      }
+      const record = state.cases.find((c) => c.id === caseId);
+      if (!record) throw new Error("Ärendet finns inte");
+      record.planApprovedAt = approved ? now() : null;
+      record.planApprovedBy = approved ? (state.user?.id ?? null) : null;
       record.updatedAt = now();
       save();
     },

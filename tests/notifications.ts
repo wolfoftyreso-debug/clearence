@@ -178,5 +178,19 @@ check(
     filterNotifications(allNotices, { läge: true, samarbete: true, drift: true }).length === 3,
 );
 
+/* --- delegerade uppgifter ------------------------------------------------- */
+check("inga tilldelade uppgifter: tyst",
+  buildNotifications({ ...base(), assignedOpenTasks: 0 }).length === 0);
+const assignedOne = buildNotifications({ ...base(), assignedOpenTasks: 1 });
+check("en tilldelad uppgift: varningsnotis i singular",
+  assignedOne.length === 1 && assignedOne[0].tone === "warning" &&
+  assignedOne[0].title === "En uppgift är tilldelad dig");
+const assignedMany = buildNotifications({ ...base(), assignedOpenTasks: 3 });
+check("flera tilldelade: antalet i rubriken",
+  assignedMany[0].title === "3 uppgifter är tilldelade dig" &&
+  assignedMany[0].href === "/dashboard#frister");
+check("tilldelningsnotisen hör till samarbetet",
+  categoryOf(assignedMany[0].id) === "samarbete");
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

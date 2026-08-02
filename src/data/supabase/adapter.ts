@@ -278,6 +278,8 @@ type CaseRow = {
   closed_at: string | null;
   exit_reason: string | null;
   health_mode: boolean;
+  plan_approved_at: string | null;
+  plan_approved_by: string | null;
 };
 
 const toCase = (row: CaseRow): CaseRecord => ({
@@ -307,6 +309,8 @@ const toCase = (row: CaseRow): CaseRecord => ({
   closedAt: row.closed_at,
   exitReason: (row.exit_reason as CaseExitReason | null) ?? null,
   healthMode: row.health_mode,
+  planApprovedAt: row.plan_approved_at,
+  planApprovedBy: row.plan_approved_by,
 });
 
 const toPayment = (row: {
@@ -507,6 +511,7 @@ export const supabaseAdapter: DataPort = {
           // är text i schemat, därav förträngningen här vid gränsen.
           source: row.source as CaseTask["source"],
           createdAt: row.created_at,
+          assignedTo: row.assigned_to,
         }),
       );
     },
@@ -536,6 +541,13 @@ export const supabaseAdapter: DataPort = {
             ? { done_at: new Date().toISOString(), done_by: userId }
             : { done_at: null, done_by: null },
         )
+        .eq("id", id);
+      if (error) throw error;
+    },
+    async assign(id, userId) {
+      const { error } = await supabase
+        .from("case_tasks")
+        .update({ assigned_to: userId })
         .eq("id", id);
       if (error) throw error;
     },
@@ -1243,6 +1255,13 @@ export const supabaseAdapter: DataPort = {
     },
     async reopen(caseId) {
       const { error } = await supabase.rpc("reopen_case", { p_case_id: caseId });
+      if (error) throw error;
+    },
+    async setPlanApproval(caseId, approved) {
+      const { error } = await supabase.rpc("set_plan_approval", {
+        p_case_id: caseId,
+        p_approved: approved,
+      });
       if (error) throw error;
     },
   },

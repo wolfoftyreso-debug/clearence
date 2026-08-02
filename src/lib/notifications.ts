@@ -34,6 +34,8 @@ export interface NotificationInput {
   timeline: TimelineEvent[];
   mentions: OpenMention[];
   invitations: CaseInvitationRecord[];
+  /** Öppna uppgifter i ärendet som är delegerade till den inloggade. */
+  assignedOpenTasks?: number;
   kbr: { status: KbrStatus; createdAt: string } | null;
   /** Endast för driftadministratörer; annars tomma. */
   failedEmails: OutboundEmailRecord[];
@@ -129,6 +131,19 @@ export const buildNotifications = (input: NotificationInput): NotificationItem[]
       title: input.kbr.status === "critical" ? "Kontrollbalans: kritisk" : "Kontrollbalansräkning krävs",
       body: "Bedömningen visar kapitalbrist. Protokollför styrelsens beslut och följ stämmospåret.",
       href: "/kbr",
+    });
+  }
+
+  // Uppgifter delegerade till den inloggade. Samma kategori som taggarna:
+  // det är samarbetets "du är efterfrågad", inte ärendets läge.
+  if ((input.assignedOpenTasks ?? 0) > 0) {
+    const n = input.assignedOpenTasks!;
+    items.push({
+      id: "mention-uppgifter-tilldelade",
+      tone: "warning",
+      title: n === 1 ? "En uppgift är tilldelad dig" : `${n} uppgifter är tilldelade dig`,
+      body: "Öppna handlingsplanen och bocka av när de är gjorda.",
+      href: "/dashboard#frister",
     });
   }
 

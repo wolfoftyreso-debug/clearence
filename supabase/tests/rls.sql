@@ -1472,6 +1472,78 @@ delete from public.case_notes;
 select pg_temp.check('the author can delete their own note',
   (select count(*) from public.case_notes), 0::bigint);
 
+/* ========================================================================== */
+/* Delegering och godkännande av handlingsplanen                              */
+/* ========================================================================== */
+
+set local role authenticated;
+
+-- Ägaren (skrivroll) skapar en uppgift och delegerar den till revisorn.
+select pg_temp.as_user('11111111-1111-1111-1111-111111111111');
+insert into public.case_tasks (case_id, label)
+values ('aaaaaaaa-0000-0000-0000-000000000001', 'Delegeringstest: granska balansrapport');
+update public.case_tasks
+set assigned_to = '44444444-4444-4444-4444-444444444444'
+where label = 'Delegeringstest: granska balansrapport';
+select pg_temp.check('a write role can delegate a task',
+  (select count(*) from public.case_tasks
+   where label = 'Delegeringstest: granska balansrapport'
+     and assigned_to = '44444444-4444-4444-4444-444444444444'), 1::bigint);
+
+-- Den tilldelade ser sin uppgift (medlemsläsning).
+select pg_temp.as_user('44444444-4444-4444-4444-444444444444');
+select pg_temp.check('the assignee sees the delegated task',
+  (select count(*) from public.case_tasks
+   where assigned_to = '44444444-4444-4444-4444-444444444444'), 1::bigint);
+
+-- Företrädaren kan INTE godkänna sin egen handlingsplan.
+select pg_temp.as_user('11111111-1111-1111-1111-111111111111');
+do $$
+begin
+  begin
+    perform public.set_plan_approval('aaaaaaaa-0000-0000-0000-000000000001', true);
+    raise exception 'FAIL  företrädaren kunde godkänna sin egen plan';
+  exception when others then
+    if sqlerrm like 'FAIL%' then raise; end if;
+    raise notice 'ok    the owner cannot approve their own action plan';
+  end;
+end $$;
+
+-- Borgenären kan inte heller.
+select pg_temp.as_user('55555555-5555-5555-5555-555555555555');
+do $$
+begin
+  begin
+    perform public.set_plan_approval('aaaaaaaa-0000-0000-0000-000000000001', true);
+    raise exception 'FAIL  en borgenär kunde godkänna planen';
+  exception when others then
+    if sqlerrm like 'FAIL%' then raise; end if;
+    raise notice 'ok    a creditor cannot approve the action plan';
+  end;
+end $$;
+
+-- Revisorn (rådgivarroll) godkänner: vem och när stämplas ihop.
+select pg_temp.as_user('44444444-4444-4444-4444-444444444444');
+do $$
+declare v_case record;
+begin
+  perform public.set_plan_approval('aaaaaaaa-0000-0000-0000-000000000001', true);
+  select plan_approved_at, plan_approved_by into v_case
+  from public.cases where id = 'aaaaaaaa-0000-0000-0000-000000000001';
+  if v_case.plan_approved_at is null
+     or v_case.plan_approved_by <> '44444444-4444-4444-4444-444444444444' then
+    raise exception 'FAIL  godkännandet stämplades fel';
+  end if;
+  raise notice 'ok    an advisor role approves and the stamp records who and when';
+  perform public.set_plan_approval('aaaaaaaa-0000-0000-0000-000000000001', false);
+  select plan_approved_at, plan_approved_by into v_case
+  from public.cases where id = 'aaaaaaaa-0000-0000-0000-000000000001';
+  if v_case.plan_approved_at is not null or v_case.plan_approved_by is not null then
+    raise exception 'FAIL  återtaget godkännande nollades inte';
+  end if;
+  raise notice 'ok    withdrawing the approval clears both fields together';
+end $$;
+
 reset role;
 select 'ALL RLS TESTS PASSED' as result;
 

@@ -111,6 +111,12 @@ export interface CasesPort {
   }): Promise<void>;
   /** Tillbaka till krisläget, från avslut eller hälsoläge. */
   reopen(caseId: string): Promise<void>;
+  /**
+   * Rådgivarens gransknings-stämpel på handlingsplanen. Endast en
+   * rådgivarroll i ärendet kan sätta eller återta den - regeln prövas i
+   * backend, aldrig här.
+   */
+  setPlanApproval(caseId: string, approved: boolean): Promise<void>;
   /** Väljer aktivt ärende. null återgår till senaste. Rent klientval - åtkomsten prövas i databasen. */
   select(caseId: string | null): void;
   create(input: NewCase & { userId: string }): Promise<CaseRecord>;
@@ -304,6 +310,8 @@ export interface TasksPort {
   add(caseId: string, label: string, dueDate: string | null): Promise<void>;
   /** Bockar av eller ångrar. Vem och när sätts av implementationen. */
   setDone(id: string, done: boolean): Promise<void>;
+  /** Delegerar uppgiften till en deltagare, eller tar bort tilldelningen. */
+  assign(id: string, userId: string | null): Promise<void>;
 }
 
 /**

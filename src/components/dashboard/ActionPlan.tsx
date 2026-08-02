@@ -98,6 +98,14 @@ export const ActionPlan = ({ caseRecord, timeline }: ActionPlanProps) => {
     },
   });
 
+  // Delegeringen: en uppgift kan pekas på en deltagare. Vem som får ändra
+  // avgörs av radskyddet; här visas bara valet.
+  const assign = useMutation({
+    mutationFn: ({ id, userId }: { id: string; userId: string | null }) =>
+      data.tasks.assign(id, userId),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ["case-tasks", caseRecord.id] }),
+  });
+
   // Spelbokskontexten: det systemet vet om ärendet, för att kunna öppna en
   // process bakom varje uppgift och se när den är genomförd.
   const { data: members } = useQuery({
@@ -172,9 +180,20 @@ export const ActionPlan = ({ caseRecord, timeline }: ActionPlanProps) => {
 
   return (
     <section className="rounded-md border border-border bg-card p-5 shadow-soft">
-      <h2 className="flex items-center gap-2 font-semibold text-foreground">
+      <h2 className="flex flex-wrap items-center gap-2 font-semibold text-foreground">
         <ListTodo className="h-5 w-5 text-accent" aria-hidden="true" />
         Nästa steg
+        {/* Rådgivarens gransknings-stämpel: sätts via klientverktygen,
+            aldrig av företrädaren själv - regeln bor i databasen. */}
+        {caseRecord.planApprovedAt && (
+          <span className="rounded-full border border-success/50 bg-success/10 px-2 py-0.5 text-xs font-medium text-foreground">
+            Granskad av rådgivare{" "}
+            {new Date(caseRecord.planApprovedAt).toLocaleDateString("sv-SE", {
+              day: "numeric",
+              month: "short",
+            })}
+          </span>
+        )}
       </h2>
       <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
         Vad som ska göras, när och varför – så att inget viktigt missas.
@@ -316,6 +335,36 @@ export const ActionPlan = ({ caseRecord, timeline }: ActionPlanProps) => {
                           aria-hidden="true"
                         />
                       </button>
+
+                      {/* Delegeringen: pekas på en deltagare, syns för alla. */}
+                      {(members ?? []).filter((m) => !m.revokedAt).length > 0 && (
+                        <div className="ml-7 mt-1.5 flex flex-wrap items-center gap-1.5">
+                          <label
+                            htmlFor={`assign-${task.id}`}
+                            className="text-xs text-muted-foreground"
+                          >
+                            Tilldelad:
+                          </label>
+                          <select
+                            id={`assign-${task.id}`}
+                            value={task.assignedTo ?? ""}
+                            disabled={assign.isPending}
+                            onChange={(e) =>
+                              assign.mutate({ id: task.id, userId: e.target.value || null })
+                            }
+                            className="max-w-full rounded-md border border-border bg-card px-1.5 py-0.5 text-xs text-foreground"
+                          >
+                            <option value="">Ingen</option>
+                            {(members ?? [])
+                              .filter((m) => !m.revokedAt)
+                              .map((m) => (
+                                <option key={m.userId} value={m.userId}>
+                                  {m.displayName || m.email || "Deltagare"}
+                                </option>
+                              ))}
+                          </select>
+                        </div>
+                      )}
 
                       {expanded && (
                         <div className="mt-3 space-y-3 rounded-md bg-secondary/40 p-3">

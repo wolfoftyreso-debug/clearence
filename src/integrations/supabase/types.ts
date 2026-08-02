@@ -135,6 +135,7 @@ export type Database = {
       }
       case_tasks: {
         Row: {
+          assigned_to: string | null
           case_id: string
           created_at: string
           done_at: string | null
@@ -145,12 +146,14 @@ export type Database = {
           source: string
         }
         Insert: {
+          assigned_to?: string | null
           case_id: string
           due_date?: string | null
           label: string
           source?: string
         }
         Update: {
+          assigned_to?: string | null
           done_at?: string | null
           done_by?: string | null
         }
@@ -453,6 +456,8 @@ export type Database = {
           health_mode: boolean
           id: string
           org_number: string
+          plan_approved_at: string | null
+          plan_approved_by: string | null
           quick_liquidation_value: string | null
           recommendation_description: string | null
           recommendation_next_steps: Json
@@ -485,6 +490,8 @@ export type Database = {
           health_mode?: boolean
           id?: string
           org_number: string
+          plan_approved_at?: string | null
+          plan_approved_by?: string | null
           quick_liquidation_value?: string | null
           recommendation_description?: string | null
           recommendation_next_steps?: Json
@@ -517,6 +524,8 @@ export type Database = {
           health_mode?: boolean
           id?: string
           org_number?: string
+          plan_approved_at?: string | null
+          plan_approved_by?: string | null
           quick_liquidation_value?: string | null
           recommendation_description?: string | null
           recommendation_next_steps?: Json
@@ -1113,6 +1122,10 @@ export type Database = {
       }
       reopen_case: {
         Args: { p_case_id: string }
+        Returns: undefined
+      }
+      set_plan_approval: {
+        Args: { p_case_id: string; p_approved: boolean }
         Returns: undefined
       }
       north_star_counts: {

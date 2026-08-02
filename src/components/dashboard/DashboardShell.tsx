@@ -194,6 +194,7 @@ const LockedAccountView = ({ signOut }: { signOut: () => void }) => {
 const NotificationBell = () => {
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   const { data: mentions } = useQuery({
     queryKey: ["open-mentions"],
@@ -216,6 +217,12 @@ const NotificationBell = () => {
   const { data: invitations } = useQuery({
     queryKey: ["case-invitations", caseId],
     queryFn: () => data.members.listInvitations(caseId as string),
+    enabled: caseId !== null,
+    retry: false,
+  });
+  const { data: caseTasks } = useQuery({
+    queryKey: ["case-tasks", caseId],
+    queryFn: () => data.tasks.listByCase(caseId as string),
     enabled: caseId !== null,
     retry: false,
   });
@@ -258,6 +265,9 @@ const NotificationBell = () => {
     timeline: analysis?.timeline ?? [],
     mentions: mentions ?? [],
     invitations: invitations ?? [],
+    assignedOpenTasks: (caseTasks ?? []).filter(
+      (t) => !t.doneAt && t.assignedTo !== null && t.assignedTo === user?.id,
+    ).length,
     kbr: kbr ?? null,
     failedEmails: (outbox ?? []).filter((m) => m.status === "failed"),
     pendingApplications: (applications ?? []).filter((a) => a.status === "pending").length,
