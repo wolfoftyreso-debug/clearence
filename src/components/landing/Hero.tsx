@@ -78,7 +78,7 @@ const Hero = () => {
           </div>
         </div>
 
-        {/* Det första mötet ÄR samtalet. Clara tar emot direkt - utan
+        {/* Det första mötet ÄR samtalet. CLEARANCE tar emot direkt - utan
             konto, utan meny. Inloggade med pågående ärende fortsätter
             där de slutade i stället för att presenteras igen. */}
         <h1 className="sr-only">CLEARANCE – vägledning vid företagskris</h1>
@@ -86,7 +86,7 @@ const Hero = () => {
           {user ? (
             <div className="rounded-md border border-border bg-card p-5 text-center shadow-soft">
               <p className="text-base leading-relaxed text-foreground">
-                Välkommen tillbaka. Clara har läget klart – fortsätt samtalet
+                Välkommen tillbaka. CLEARANCE har läget klart – fortsätt samtalet
                 där ni slutade.
               </p>
               <Link

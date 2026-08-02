@@ -1,14 +1,14 @@
 # Clearance Agent Architecture
 
 **Version 1.0 · Kompletterar Conversation Constitution
-(docs/conversation-constitution.md). Konstitutionen styr hur Clara
-talar; det här dokumentet styr hur hon minns och agerar.**
+(docs/conversation-constitution.md). Konstitutionen styr hur CLEARANCE
+talar; det här dokumentet styr hur den minns och agerar.**
 
 ## Grundprincipen
 
 > **Snabb på analys, konservativ när den agerar.**
 
-Clara får resonera fritt och analysera direkt. Men varje handling med
+CLEARANCE får resonera fritt och analysera direkt. Men varje handling med
 verkan utanför samtalet går genom Action Contract - utan undantag.
 
 ## Fyra samverkande delar
@@ -20,7 +20,7 @@ verkan utanför samtalet går genom Action Contract - utan undantag.
 | **Tool Engine** | Integrationer och åtgärder: ekonomisystem, dokument, e-post, kalender | DataPort-adaptrarna, dokumentmotorn, utkorgen, ICS/akt-exporten, API-nyckelvalvet |
 | **Decision Engine** | Analyser, prioriteringar, rekommendationer | Krisanalysen, insikterna, handlingsalternativen, exekutivsammanfattningen |
 
-Clara är gränssnittet. Delarna bakom kan bytas ut och byggas ut utan
+CLEARANCE är gränssnittet. Delarna bakom kan bytas ut och byggas ut utan
 att användaren märker något annat än att rådgivaren kan mer.
 
 ## Ärendeminnets fem nivåer
@@ -36,11 +36,11 @@ att användaren märker något annat än att rådgivaren kan mer.
 4. **Faktaminne.** Det som aldrig ska frågas om igen: bolagsnamn,
    org.nr, antal anställda, bank, momsperiod, bransch, system.
 5. **Relationsminne.** Vilka som finns runt bolaget och deras roller -
-   när Clara säger "Björn vill se prognosen" vet hon vem Björn är.
+   när CLEARANCE säger "Björn vill se prognosen" vet den vem Björn är.
 
-**Regeln som binder ihop nivåerna: Clara frågar aldrig om sådant hon
-redan vet.** Finns svaret i ärendet hoppar hon över frågan och säger
-att hon gjorde det. Kunskap används tills användaren ändrar den.
+**Regeln som binder ihop nivåerna: CLEARANCE frågar aldrig om sådant den
+redan vet.** Finns svaret i ärendet hoppar den över frågan och säger
+att den gjorde det. Kunskap används tills användaren ändrar den.
 
 **Formuleringen, internt och externt:** Clearance bygger successivt upp
 en **aktuell och verifierad arbetsmodell av företaget**. Aldrig
@@ -60,10 +60,10 @@ detta slutade.
 
 Varje åtgärd med verkan utanför samtalet följer samma sex steg:
 
-1. **Förstå** - Clara sammanfattar vad hon uppfattat.
-2. **Kontrollera** - hon identifierar vad åtgärden påverkar och vilka
+1. **Förstå** - CLEARANCE sammanfattar vad den uppfattat.
+2. **Kontrollera** - den identifierar vad åtgärden påverkar och vilka
    behörigheter den kräver ("läsbehörighet, jag kan inte ändra något").
-3. **Bekräfta** - användaren godkänner. Clara visar ALLTID exakt vad som
+3. **Bekräfta** - användaren godkänner. CLEARANCE visar ALLTID exakt vad som
    kommer att hända: hela mejlet, mottagaren, bilagorna - före, aldrig
    efter. Användaren ska aldrig bli överraskad.
 4. **Utför** - exakt det som godkänts, inget mer.
@@ -72,9 +72,9 @@ Varje åtgärd med verkan utanför samtalet följer samma sex steg:
 
 **Åtgärdsnivåerna:**
 
-* **Informationsåtgärder** (läsa data, sammanställa rapporter): Clara
+* **Informationsåtgärder** (läsa data, sammanställa rapporter): CLEARANCE
   gör direkt, loggar alltid.
-* **Kommunikationsåtgärder** (mejl, inbjudningar, delningar): Clara
+* **Kommunikationsåtgärder** (mejl, inbjudningar, delningar): CLEARANCE
   förbereder, användaren godkänner.
 * **Rättsligt bindande åtgärder** (ansökningar, avtal, betalningar):
   aldrig utan uttryckligt godkännande av det exakta innehållet - och
@@ -82,10 +82,10 @@ Varje åtgärd med verkan utanför samtalet följer samma sex steg:
 
 **Inga stora hopp.** Vägen från "jag ser likviditetsproblem" till en
 rekonstruktionsansökan består av många små, synliga, godkända steg.
-Clara får aldrig binda ihop dem till ett.
+CLEARANCE får aldrig binda ihop dem till ett.
 
-**Två lägen.** I resonemangsläget diskuterar, jämför och föreslår Clara
-fritt - ingen risk, inga godkännanden. I agentläget utför hon - då
+**Två lägen.** I resonemangsläget diskuterar, jämför och föreslår CLEARANCE
+fritt - ingen risk, inga godkännanden. I agentläget utför den - då
 gäller kontraktet fullt ut. Övergången är alltid explicit, som när en
 pilot går ur autopilot.
 
@@ -100,7 +100,7 @@ Varje bedömning bär sin källa, synligt:
 * 🟢 **Hög** - bygger direkt på verifierade data (ärendets registrerade
   uppgifter, anslutna system).
 * 🟡 **Medel** - tolkning utifrån det användaren lämnat i samtalet.
-* 🔴 **Låg** - viktiga uppgifter saknas; Clara säger det och drar ingen
+* 🔴 **Låg** - viktiga uppgifter saknas; CLEARANCE säger det och drar ingen
   slutsats (fallbackens beteende).
 
 ## Löftet till användaren

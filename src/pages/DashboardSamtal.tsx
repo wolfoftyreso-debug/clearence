@@ -14,6 +14,7 @@ import {
   INVITE_CONTRACT,
   answerLabel,
   buildCaseSnapshot,
+  buildPriorities,
   decisionCheckIn,
   inviteIntent,
   matchFlow,
@@ -164,8 +165,9 @@ const DashboardSamtal = () => {
     enabled: !!latestCase,
   });
 
-  // Sedan sist: journalens händelser efter senaste samtalet - aldrig påhittat.
-  const lastVisit = pastSessions?.[0]?.closedAt ?? pastSessions?.[0]?.startedAt ?? null;
+  // Sedan sist: journalens händelser efter senaste AVSLUTADE samtalet -
+  // ett påbörjat men oavslutat samtal är inget "senast vi pratades vid".
+  const lastVisit = pastSessions?.find((s) => s.closedAt)?.closedAt ?? null;
   const sinceLines = useMemo(
     () => sinceLastVisit(auditEvents ?? [], lastVisit),
     [auditEvents, lastVisit],
@@ -182,15 +184,20 @@ const DashboardSamtal = () => {
     const totalDebt = parseAmount(latestCase.totalDebt);
     const liquidation = parseAmount(latestCase.quickLiquidationValue);
     const coverageRatio = totalDebt > 0 ? Math.round((liquidation / totalDebt) * 100) : null;
+    const passedDeadlines = counted.filter((c) => c.countdown.tone === "passed").length;
+    const daysToNextDeadline = upcoming.length ? upcoming[0].countdown.daysLeft : null;
     return {
       coverageRatio,
       nextDeadline: upcoming.length
         ? { label: upcoming[0].label, daysLeft: upcoming[0].countdown.daysLeft }
         : null,
-      rows: buildCaseSnapshot({
+      rows: buildCaseSnapshot({ coverageRatio, passedDeadlines, daysToNextDeadline, kbrDone: !!kbr }),
+      // "Det viktigaste nu": högst tre numrerade steg ur samma underlag.
+      priorities: buildPriorities({
         coverageRatio,
-        passedDeadlines: counted.filter((c) => c.countdown.tone === "passed").length,
-        daysToNextDeadline: upcoming.length ? upcoming[0].countdown.daysLeft : null,
+        passedDeadlines,
+        daysToNextDeadline,
+        nextDeadlineLabel: upcoming.length ? upcoming[0].label : null,
         kbrDone: !!kbr,
       }),
     };
@@ -247,9 +254,9 @@ const DashboardSamtal = () => {
     });
   };
 
-  /* Ärendeminnets regel: Clara frågar aldrig om sådant hon redan vet.
-     Svar som finns i ärendet fylls i före första frågan - och hon säger
-     att hon hoppar över dem, så minnet syns i stället för att anas. */
+  /* Ärendeminnets regel: CLEARANCE frågar aldrig om sådant den redan vet.
+     Svar som finns i ärendet fylls i före första frågan - och den säger
+     att den hoppar över dem, så minnet syns i stället för att anas. */
   const knownAnswers = (chosen: DialogFlow): { answers: Record<string, string>; notes: string[] } => {
     const known: Record<string, string> = {};
     const notes: string[] = [];
@@ -294,7 +301,7 @@ const DashboardSamtal = () => {
   };
 
   /* "Vilka alternativ har jag?" är ingen frågeserie - det är en vy.
-     Clara svarar med hållningen och öppnar handlingsalternativen själv:
+     CLEARANCE svarar med hållningen och öppnar handlingsalternativen själv:
      användaren ska aldrig behöva tänka "var ska jag klicka?". */
   const openOptions = (userText: string) => {
     say([
@@ -326,7 +333,10 @@ const DashboardSamtal = () => {
     if (matched) {
       startFlow(matched, trimmed);
     } else {
+      // Ingen återvändsgränd: rådgivaren guidar genom nulägesanalysen
+      // och öppnar den själv - användaren skickas aldrig iväg.
       say([{ who: "user", text: trimmed }, ...FALLBACK_REPLY.map((t) => ({ who: "radgivare" as const, text: t }))]);
+      window.setTimeout(() => navigate("/wizard"), 2600);
     }
   };
 
@@ -477,10 +487,10 @@ const DashboardSamtal = () => {
   );
 
   return (
-    <DashboardShell title="Rådgivaren">
+    <DashboardShell title="CLEARANCE – din krisrådgivare">
       <div className="mx-auto max-w-3xl">
         {isLoading ? null : !latestCase ? (
-          /* Första upplevelsen är ett samtal, inte ett dashboard: Clara
+          /* Första upplevelsen är ett samtal, inte ett dashboard: CLEARANCE
              frågar en sak i taget och öppnar sedan nulägesanalysen själv. */
           <ClaraIntro
             onDone={(name) => {
@@ -522,14 +532,58 @@ const DashboardSamtal = () => {
                   {/* Lägesbilden: visad, inte påstådd - med analysen som
                       panel i samtalet, inte som ny sida. */}
                   {caseSnapshot && (
-                    <div className="mt-4">
-                      <SnapshotList rows={caseSnapshot.rows} />
+                    <div className="mt-5 space-y-5">
+                      <div>
+                        <div className="flex items-baseline justify-between gap-3">
+                          <h3 className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+                            Läget just nu
+                          </h3>
+                          <span className="text-xs text-muted-foreground">
+                            ur ärendets registrerade uppgifter
+                          </span>
+                        </div>
+                        <div className="mt-2">
+                          <SnapshotList rows={caseSnapshot.rows} />
+                        </div>
+                      </div>
+
+                      {/* Morgonbriefingens kärna: högst tre numrerade steg. */}
+                      <div>
+                        <h3 className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+                          Det viktigaste nu
+                        </h3>
+                        <ol className="mt-2 space-y-1.5">
+                          {caseSnapshot.priorities.map((item, i) => (
+                            <li key={item.label}>
+                              <Link
+                                to={item.href}
+                                className="group flex items-center gap-3 rounded-md border border-border p-2.5 transition-colors hover:border-accent"
+                              >
+                                <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-secondary text-xs font-bold text-foreground">
+                                  {i + 1}
+                                </span>
+                                <span className="min-w-0 flex-1 text-sm font-medium text-foreground">
+                                  {item.label}
+                                </span>
+                                <ArrowRight className="h-4 w-4 flex-shrink-0 opacity-0 transition-opacity group-hover:opacity-100" aria-hidden="true" />
+                              </Link>
+                            </li>
+                          ))}
+                        </ol>
+                      </div>
+
                       {caseSnapshot.coverageRatio !== null && (
-                        <details className="mt-2">
-                          <summary className="cursor-pointer list-none text-sm font-medium text-accent underline-offset-4 hover:underline">
-                            Visa analys
+                        <details className="rounded-md border border-border">
+                          <summary className="flex cursor-pointer items-center justify-between gap-3 p-3 [&::-webkit-details-marker]:hidden">
+                            <span className="min-w-0">
+                              <span className="block text-sm font-medium text-foreground">Visa analys</span>
+                              <span className="block text-xs text-muted-foreground">
+                                Skuldtäckningen som stapel, direkt här i samtalet
+                              </span>
+                            </span>
+                            <span className="text-sm font-medium text-accent" aria-hidden="true">Öppna</span>
                           </summary>
-                          <div className="mt-2">
+                          <div className="px-3 pb-3">
                             <MeterBar
                               meter={{
                                 label: "Skuldtäckning vid snabb avyttring",
@@ -547,11 +601,19 @@ const DashboardSamtal = () => {
                           Transparens är skillnaden mellan en arbetsmodell
                           och en övervakningsakt. */}
                       {workingModel && (
-                        <details className="mt-2">
-                          <summary className="cursor-pointer list-none text-sm font-medium text-accent underline-offset-4 hover:underline">
-                            Vad jag vet om ditt företag
+                        <details className="rounded-md border border-border">
+                          <summary className="flex cursor-pointer items-center justify-between gap-3 p-3 [&::-webkit-details-marker]:hidden">
+                            <span className="min-w-0">
+                              <span className="block text-sm font-medium text-foreground">
+                                Vad jag vet om ditt företag
+                              </span>
+                              <span className="block text-xs text-muted-foreground">
+                                Arbetsmodellen jag utgår ifrån – med källa för varje uppgift
+                              </span>
+                            </span>
+                            <span className="text-sm font-medium text-accent" aria-hidden="true">Öppna</span>
                           </summary>
-                          <div className="mt-2 space-y-3 rounded-md border border-border p-3">
+                          <div className="space-y-3 px-3 pb-3">
                             {workingModel.map((section) => (
                               <div key={section.id}>
                                 <h3 className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
@@ -621,7 +683,11 @@ const DashboardSamtal = () => {
               {/* Snabbvalen står kvar tills ett flöde faktiskt börjat - även
                   efter fallbacken ska nästa steg vara ett klick bort. */}
               {!flow && !assessment && !invite && (
-                <div className={`flex flex-wrap gap-2 ${entries.length === 0 ? "mt-4" : "mt-4 border-t border-border pt-4"}`}>
+                <div className={entries.length === 0 ? "mt-5" : "mt-4 border-t border-border pt-4"}>
+                  <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+                    Eller välj det som stämmer bäst
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-2">
                   {DIALOG_FLOWS.map((f) => (
                     <button
                       key={f.id}
@@ -646,12 +712,21 @@ const DashboardSamtal = () => {
                   >
                     Bjud in min revisor
                   </button>
+                  </div>
                 </div>
               )}
 
               <ol className="space-y-3" aria-live="polite">
                 {entries.map((entry, i) => (
-                  <li key={i} className={entry.who === "user" ? "flex justify-end" : "flex"}>
+                  <li key={i} className={entry.who === "user" ? "flex justify-end" : "flex items-start gap-2"}>
+                    {entry.who === "radgivare" && (
+                      <span
+                        className="mt-0.5 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-accent text-[11px] font-bold text-accent-foreground"
+                        aria-hidden="true"
+                      >
+                        C
+                      </span>
+                    )}
                     <p
                       className={`max-w-[85%] whitespace-pre-wrap rounded-md px-3.5 py-2.5 text-sm leading-relaxed ${
                         entry.who === "user"

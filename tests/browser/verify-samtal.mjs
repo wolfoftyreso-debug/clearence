@@ -51,7 +51,7 @@ await page.fill("#samtal-input", "0");
 await page.click('button[aria-label="Skicka"]');
 await page.waitForTimeout(1200);
 body = await page.innerText("body");
-// Ärendeminnet: KBR är gjord i demoseeden, så Clara hoppar över frågan.
+// Ärendeminnet: KBR är gjord i demoseeden, så CLEARANCE hoppar över frågan.
 check("minnet hoppar över KBR-frågan", /hoppar jag över/i.test(body));
 check("bedömningen återger beloppet", /150 000 kr/.test(body));
 check("lagrummet nämns", /59 kap/.test(body));
@@ -83,11 +83,11 @@ body = await page.innerText("body");
 check("avslutet kvitterar arbetet", /Bra arbetat/i.test(body) && /protokollfört beslutet/i.test(body));
 check("avslutet lovar kontinuitet", /fortsätter vi där vi slutade/i.test(body));
 
-// 4b. Minnet: Clara följer upp beslutet mot premissen vid nästa besök.
+// 4b. Minnet: CLEARANCE följer upp beslutet mot premissen vid nästa besök.
 await page.goto(`${BASE}/dashboard/samtal`, { waitUntil: "domcontentloaded" });
 await page.waitForTimeout(1500);
 body = await page.innerText("body");
-check("Clara följer upp beslutet", /Är det fortfarande planen\?/.test(body) && /150 000 kr/.test(body));
+check("CLEARANCE följer upp beslutet", /Är det fortfarande planen\?/.test(body) && /150 000 kr/.test(body));
 await page.click('button:has-text("Ja, planen står fast")');
 await page.waitForTimeout(600);
 body = await page.innerText("body");
@@ -116,8 +116,21 @@ await page.fill("#samtal-input", "kan ni skriva min affärsplan");
 await page.click('button[aria-label="Skicka"]');
 await page.waitForTimeout(800);
 body = await page.innerText("body");
-check("fallbacken pekar på nulägesanalysen", /nulägesanalys/i.test(body));
-check("snabbvalen finns för nästa försök", /Kan inte betala skatten/i.test(body) || /Brev från Kronofogden/i.test(body));
+check("fallbacken guidar genom nulägesanalysen", /Jag guidar dig genom nulägesanalysen/i.test(body));
+await page.waitForTimeout(2600);
+check("rådgivaren öppnar analysen själv", page.url().includes("/wizard"));
+
+// 7a2. "Jag har slut på pengar" är inget okänt - det är likviditetsflödet.
+await page.goto(`${BASE}/dashboard/samtal`, { waitUntil: "domcontentloaded" });
+await page.waitForTimeout(1200);
+await page.fill("#samtal-input", "Jag har slut på pengar");
+await page.click('button[aria-label="Skicka"]');
+await page.waitForTimeout(700);
+body = await page.innerText("body");
+check("slut på pengar startar likviditetsflödet", /pengarna räcker inte/i.test(body) && /Hur mycket finns tillgängligt på kontot/i.test(body));
+await page.goto(`${BASE}/dashboard/samtal`, { waitUntil: "domcontentloaded" });
+await page.waitForTimeout(1200);
+check("snabbvalen har likviditetschippen", (await page.locator('button:has-text("Pengarna räcker inte")').count()) > 0);
 
 // 7c. Lägesbilden i hälsningen: visad, inte påstådd - med analys som panel.
 await page.goto(`${BASE}/dashboard/samtal`, { waitUntil: "domcontentloaded" });
@@ -125,6 +138,11 @@ await page.waitForTimeout(1500);
 body = await page.innerText("body");
 check("hälsningens lägesbild har områdena", /Likviditet/i.test(body) && /Frister/i.test(body) && /Dokumentation/i.test(body));
 check("analysempanelen finns i samtalet", /Visa analys/.test(body));
+// Tydlighetsronden: identitet, sektionsrubriker och morgonbriefingen.
+check("CLEARANCE har namn i rubriken", /CLEARANCE – din krisrådgivare/i.test(body));
+check("lägesbilden har rubrik och källa", /Läget just nu/i.test(body) && /ur ärendets registrerade uppgifter/i.test(body));
+check("Det viktigaste nu är numrerat", /Det viktigaste nu/i.test(body) && (await page.locator('ol a:has-text("kontrollbalansbedömningen"), ol a:has-text("handlingsplanen"), ol a:has-text("pengarna räcker")').count()) > 0);
+check("chipsen har ledtext", /Eller välj det som stämmer bäst/i.test(body));
 // Ärendeminnet i hälsningen: sedan sist ur journalen + öppen arbetsmodell.
 check("sedan sist-briefingen visas", /Sedan vi pratades vid har följande hänt/i.test(body));
 check("beslutet syns i briefingen", /Beslut protokollfört/i.test(body) || /beslut omprövades/i.test(body));
@@ -139,13 +157,13 @@ await page.waitForTimeout(400);
 body = await page.innerText("body");
 check("panelens mätare visar täckningsgraden", /Skuldtäckning vid snabb avyttring/i.test(body) && /%/.test(body));
 
-// 7b. Handlingsalternativen: Clara svarar med hållningen och navigerar själv.
+// 7b. Handlingsalternativen: CLEARANCE svarar med hållningen och navigerar själv.
 await page.goto(`${BASE}/dashboard/samtal`, { waitUntil: "domcontentloaded" });
 await page.waitForTimeout(1200);
 await page.click('button:has-text("Vilka alternativ har jag?")');
 await page.waitForTimeout(800);
 body = await page.innerText("body");
-check("Clara svarar med hållningen", /flera vägar framåt/i.test(body));
+check("CLEARANCE svarar med hållningen", /flera vägar framåt/i.test(body));
 await page.waitForTimeout(2000);
 check("alternativvyn öppnades", page.url().includes("/dashboard/alternativ"));
 body = await page.innerText("body");
@@ -187,7 +205,7 @@ await page.waitForTimeout(1200);
 body = await page.innerText("body");
 check("åtgärden är journalförd", /bjorn@revision\.se som revisor/i.test(body));
 
-// 8. Onboardingen: en ny användare möts av Clara, inte av ett dashboard.
+// 8. Onboardingen: en ny användare möts av CLEARANCE, inte av ett dashboard.
 await page.goto(`${BASE}/login`, { waitUntil: "domcontentloaded" });
 await page.waitForTimeout(800);
 await page.fill("#email", "clara-onboarding@example.invalid");
@@ -206,11 +224,11 @@ await page.evaluate(() => {
 await page.goto(`${BASE}/dashboard`, { waitUntil: "domcontentloaded" });
 await page.waitForTimeout(1500);
 body = await page.innerText("body");
-check("tomt läge pekar på Clara", /Prata med Clara/i.test(body));
-await page.click('button:has-text("Prata med Clara")');
+check("tomt läge pekar på CLEARANCE", /Prata med CLEARANCE/i.test(body));
+await page.click('button:has-text("Prata med CLEARANCE")');
 await page.waitForTimeout(1200);
 body = await page.innerText("body");
-check("Clara presenterar sig", /Jag heter Clara/i.test(body));
+check("CLEARANCE presenterar sig", /Jag heter CLEARANCE/i.test(body));
 check("första frågan är namnet", /Vad heter du\?/.test(body));
 await page.fill("#onboarding-input", "Erik Andersson");
 await page.click('button[aria-label="Skicka"]');
@@ -226,7 +244,7 @@ check("situationsvalen visas", /Vilket av följande stämmer bäst\?/.test(body)
 await page.click('button:has-text("Jag kan inte betala vissa fakturor")');
 await page.waitForTimeout(800);
 body = await page.innerText("body");
-check("Clara navigerar själv", /Jag öppnar nu nulägesanalysen/i.test(body));
+check("CLEARANCE navigerar själv", /Jag öppnar nu nulägesanalysen/i.test(body));
 await page.waitForTimeout(3000);
 check("nulägesanalysen öppnades", page.url().includes("/wizard"));
 

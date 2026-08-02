@@ -1,8 +1,8 @@
 /**
- * Startsidan ÄR samtalet: en besökare möts av Clara direkt - inte av en
+ * Startsidan ÄR samtalet: en besökare möts av CLEARANCE direkt - inte av en
  * meny, inte av "Vad vill du göra?". Hela onboardingen går att köra utan
  * konto och slutar i nulägesanalysen. En inloggad användare med ärende
- * presenteras inte för Clara igen - hen fortsätter där samtalet slutade.
+ * presenteras inte för CLEARANCE igen - hen fortsätter där samtalet slutade.
  */
 import pw from "/opt/node22/lib/node_modules/playwright/index.js";
 const { chromium } = pw;
@@ -15,13 +15,13 @@ const check = (name, ok, extra = "") => {
 
 const browser = await chromium.launch();
 
-// 1. Anonym besökare: Clara direkt på startsidan.
+// 1. Anonym besökare: CLEARANCE direkt på startsidan.
 const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
 page.setDefaultTimeout(30000);
 await page.goto(`${BASE}/`, { waitUntil: "domcontentloaded" });
 await page.waitForTimeout(1200);
 let body = await page.innerText("body");
-check("Clara möter besökaren direkt", /Jag heter Clara/i.test(body));
+check("CLEARANCE möter besökaren direkt", /Jag heter CLEARANCE/i.test(body));
 check("första frågan är namnet", /Vad heter du\?/.test(body));
 check("gamla portalfrågan är borta", !/Vad vill du göra\?/.test(body));
 await page.fill("#onboarding-input", "Erik");
@@ -34,7 +34,7 @@ body = await page.innerText("body");
 check("situationsvalen visas utan konto", /Vilket av följande stämmer bäst\?/.test(body));
 await page.click('button:has-text("Jag är orolig för ekonomin")');
 await page.waitForTimeout(3400);
-check("Clara öppnar nulägesanalysen", page.url().includes("/wizard"));
+check("CLEARANCE öppnar nulägesanalysen", page.url().includes("/wizard"));
 
 // 2. Inloggad med ärende: fortsätt samtalet, ingen ny presentation.
 await page.goto(`${BASE}/login`, { waitUntil: "domcontentloaded" });

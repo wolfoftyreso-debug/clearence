@@ -6,12 +6,12 @@ import { Send } from "lucide-react";
 
 /**
  * Det första mötet med Clearance ÄR samtalet - inte en meny, inte ett
- * dashboard, inte en sökruta. Clara frågar en sak i taget - namn,
+ * dashboard, inte en sökruta. CLEARANCE frågar en sak i taget - namn,
  * företag, situation - och öppnar sedan nulägesanalysen själv.
  *
  * Komponenten bor här för att den används på två ställen: startsidan
  * (före inloggning - därför krävs inget konto för att prata) och
- * samtalsvyn för en inloggad användare utan ärende. Samma Clara, samma
+ * samtalsvyn för en inloggad användare utan ärende. Samma CLEARANCE, samma
  * ord, oavsett dörr.
  */
 
@@ -63,15 +63,23 @@ export const ClaraIntro = ({ onDone }: { onDone: (name: string | null) => void }
       ...ONBOARDING.closing.map((text) => ({ who: "radgivare" as const, text })),
     ]);
     setStage("done");
-    // Clara navigerar - efter en paus lång nog att hinna läsa avslutet.
+    // CLEARANCE navigerar - efter en paus lång nog att hinna läsa avslutet.
     window.setTimeout(() => onDone(name), 2600);
   };
 
   return (
-    <section aria-label="Samtal med Clara" className="rounded-md border border-border bg-card p-5 shadow-soft">
+    <section aria-label="Samtal med CLEARANCE" className="rounded-md border border-border bg-card p-5 shadow-soft">
       <ol className="space-y-3" aria-live="polite">
         {entries.map((entry, i) => (
-          <li key={i} className={entry.who === "user" ? "flex justify-end" : "flex"}>
+          <li key={i} className={entry.who === "user" ? "flex justify-end" : "flex items-start gap-2"}>
+            {entry.who === "radgivare" && (
+              <span
+                className="mt-0.5 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-accent text-[11px] font-bold text-accent-foreground"
+                aria-hidden="true"
+              >
+                C
+              </span>
+            )}
             <p
               className={`max-w-[85%] whitespace-pre-wrap rounded-md px-3.5 py-2.5 text-sm leading-relaxed ${
                 entry.who === "user" ? "bg-accent text-accent-foreground" : "bg-secondary/60 text-foreground"

@@ -188,7 +188,7 @@ export interface ActionCategory {
 }
 
 /**
- * Katalogen är en verktygslåda, inte en föreskrift. Clara resonerar:
+ * Katalogen är en verktygslåda, inte en föreskrift. CLEARANCE resonerar:
  * "Det finns flera vägar framåt. Vi ska först förstå varför kassaflödet
  * är negativt, och därefter bedöma vilka åtgärder som är mest
  * realistiska för just ditt företag."
@@ -239,6 +239,6 @@ export const ACTION_CATALOG: ActionCategory[] = [
   },
 ];
 
-/** Claras hållning när alternativen efterfrågas - konstitutionens formulering. */
+/** CLEARANCE:s hållning när alternativen efterfrågas - konstitutionens formulering. */
 export const OPTIONS_STANCE =
   "Det finns flera vägar framåt. Vi ska först förstå varför kassaflödet är negativt, och därefter bedöma vilka åtgärder som är mest realistiska för just ditt företag.";

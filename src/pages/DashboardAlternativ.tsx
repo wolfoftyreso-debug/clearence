@@ -84,7 +84,7 @@ const DashboardAlternativ = () => {
               skapar vi bilden tillsammans.
             </p>
             <Button variant="accent" className="mt-4" onClick={() => navigate("/dashboard/samtal")}>
-              Prata med Clara
+              Prata med CLEARANCE
             </Button>
           </div>
         ) : (

@@ -1,7 +1,7 @@
 /**
  * Ärendeminnet: den aktuella och verifierade arbetsmodellen av företaget.
  *
- * Två löften bor här. Det första: Clara frågar aldrig om sådant hon
+ * Två löften bor här. Det första: CLEARANCE frågar aldrig om sådant den
  * redan vet - kunskapen i modellen används tills användaren ändrar den.
  * Det andra: modellen är ÖPPEN. "Vad jag vet om ditt företag" visar
  * exakt vad systemet arbetar utifrån, med källa per uppgift - en

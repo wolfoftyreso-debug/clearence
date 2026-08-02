@@ -39,6 +39,22 @@ check("banken → bankflödet", matchFlow("banken har sagt upp checkkrediten")?.
 check("skatt vinner över kund när båda nämns", matchFlow("kan inte betala momsen eftersom kunden inte betalat")?.id === "skatt");
 check("okänd fritext → null (ärlig fallback)", matchFlow("hjälp mig med någonting helt annat") === null);
 check("fallbacken pekar på nulägesanalysen", FALLBACK_REPLY.join(" ").includes("nulägesanalys"));
+check("fallbacken guidar och öppnar själv - skickar aldrig iväg", FALLBACK_REPLY.join(" ").includes("Jag guidar dig") && FALLBACK_REPLY.join(" ").includes("Jag öppnar nulägesanalysen"));
+
+/* --- likviditetsflödet: "jag har slut på pengar" --------------------------- */
+
+check("slut på pengar → likviditetsflödet", matchFlow("Jag har slut på pengar")?.id === "likviditet");
+check("pengarna räcker inte → likviditetsflödet", matchFlow("pengarna räcker inte i november")?.id === "likviditet");
+check("tomt på kontot → likviditetsflödet", matchFlow("det är tomt på kontot")?.id === "likviditet");
+const liq = DIALOG_FLOWS.find((f) => f.id === "likviditet")!;
+const LIQ_ANSWERS = { konto: "100 000", behov: "300 000", storst: "Skatt", inbet: "50 000" };
+const liqA = liq.assess(LIQ_ANSWERS);
+check("likviditet: mätaren räknar rätt (150/300 = 50 %)", liqA.meter?.percent === 50, liqA.meter);
+check("likviditet: bristen skrivs ut", liqA.paragraphs.join(" ").includes("150 000 kr"));
+check("likviditet: största posten styr planen", !!liqA.plan?.some((r) => r.label.includes("anståndsansökan")));
+check("likviditet: skatt som störst ger anståndshandling", liqA.actions.some((a) => a.label.includes("anstånd")));
+check("likviditet: beslutsförslag med sifferpremiss", !!liqA.decisionSuggestion && liqA.decisionSuggestion.premise.includes("300 000 kr"));
+check("likviditet: full täckning ger inget beslutsförslag", liq.assess({ konto: "400 000", behov: "300 000", storst: "Löner", inbet: "0" }).decisionSuggestion === null);
 
 /* --- varje flöde: komplett väg till bedömning ------------------------------ */
 
@@ -48,6 +64,7 @@ const SAMPLE_ANSWERS: Record<string, Record<string, string>> = {
   kundforlust: { belopp: "100 000", forsenad: "45", paminnelse: "ja" },
   kronofogden: { belopp: "75 000", bestrider: "ja", fler: "nej" },
   banken: { vad: "nej till utökad kredit", belopp: "500 000", sakerheter: "ja" },
+  likviditet: { konto: "100 000", behov: "300 000", storst: "Skatt", inbet: "50 000" },
 };
 
 for (const flow of DIALOG_FLOWS) {
@@ -114,11 +131,11 @@ for (const flow of DIALOG_FLOWS) {
   check(`${flow.id}: en fråga per steg`, flow.steps.every((s) => (s.prompt.match(/\?/g) ?? []).length === 1));
 }
 
-check("Clara hälsar med förnamn, sparsamt", CLARA.greeting("Erik Andersson").startsWith("Hej Erik."));
-check("Clara hälsar utan namn när det saknas", CLARA.greeting(null).startsWith("Hej."));
+check("CLEARANCE hälsar med förnamn, sparsamt", CLARA.greeting("Erik Andersson").startsWith("Hej Erik."));
+check("CLEARANCE hälsar utan namn när det saknas", CLARA.greeting(null).startsWith("Hej."));
 check("onboardingen har fem situationsval", ONBOARDING.situations.length === 5);
 check("onboardingen frågar EN sak i taget", ONBOARDING.intro[ONBOARDING.intro.length - 1].includes("Vad heter du?"));
-check("Clara navigerar själv till nulägesanalysen", ONBOARDING.closing.join(" ").includes("Jag öppnar nu nulägesanalysen"));
+check("CLEARANCE navigerar själv till nulägesanalysen", ONBOARDING.closing.join(" ").includes("Jag öppnar nu nulägesanalysen"));
 
 const checkIn = decisionCheckIn({
   title: "Hantera skattebristen före förfallodagen",
@@ -220,6 +237,18 @@ for (const flow of DIALOG_FLOWS) {
   const a = flow.assess(SAMPLE_ANSWERS[flow.id]);
   check(`${flow.id}: bedömningen bär källmärkning`, a.confidence.level === "medium" && a.confidence.note.length > 20);
 }
+
+/* --- Det viktigaste nu ------------------------------------------------------ */
+
+import { buildPriorities } from "../src/lib/advisor/dialog";
+
+const crisisPrio = buildPriorities({ coverageRatio: 28, passedDeadlines: 1, daysToNextDeadline: 10, nextDeadlineLabel: "Skattens förfallodag", kbrDone: false });
+check("prioriteringar: aldrig fler än tre", crisisPrio.length === 3);
+check("prioriteringar: passerad frist överst", crisisPrio[0].label.includes("passerade fristen"));
+check("prioriteringar: nästa frist med dagar", crisisPrio[1].label.includes("skattens förfallodag") && crisisPrio[1].label.includes("10 dagar"));
+check("prioriteringar: KBR som tredje", crisisPrio[2].href === "/kbr");
+check("prioriteringar: lugnt läge ger ändå ett nästa steg", buildPriorities({ coverageRatio: 120, passedDeadlines: 0, daysToNextDeadline: 40, nextDeadlineLabel: "Årsstämman", kbrDone: true }).length === 1);
+check("prioriteringar: alla vägar är interna", crisisPrio.every((p) => p.href.startsWith("/")));
 
 /* --- Action Contract: inbjudan --------------------------------------------- */
 

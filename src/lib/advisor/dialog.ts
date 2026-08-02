@@ -423,7 +423,104 @@ const bankFlow: DialogFlow = {
   },
 };
 
-export const DIALOG_FLOWS: DialogFlow[] = [taxFlow, wagesFlow, receivableFlow, enforcementFlow, bankFlow];
+const liquidityFlow: DialogFlow = {
+  id: "likviditet",
+  title: "Pengarna räcker inte",
+  chip: "Pengarna räcker inte",
+  ack: "Jag förstår – pengarna räcker inte. Det är ett läge som går att strukturera, och det är precis det vi gör nu. Jag ställer frågorna, en i taget.",
+  triggers: [
+    /slut på peng/i,
+    /pengarna räcker inte/i,
+    /räcker inte pengarna/i,
+    /inga pengar/i,
+    /tomt på kontot/i,
+    /likviditet/i,
+    /kassan/i,
+  ],
+  steps: [
+    { id: "konto", prompt: "Hur mycket finns tillgängligt på kontot idag?", kind: "amount", hint: "t.ex. 100 000 kr" },
+    { id: "behov", prompt: "Ungefär hur mycket förfaller till betalning de närmaste 30 dagarna – löner, skatt, hyra och leverantörer tillsammans?", kind: "amount", hint: "t.ex. 300 000 kr" },
+    { id: "storst", prompt: "Vilken post är störst?", kind: "choice", options: ["Skatt", "Löner", "Leverantörer", "Hyra/övrigt"] },
+    { id: "inbet", prompt: "Hur mycket väntas komma in från kunder under samma period? Skriv 0 om inget.", kind: "amount", hint: "t.ex. 50 000 kr" },
+  ],
+  assess(answers) {
+    const cash = amountOf(answers.konto);
+    const need = amountOf(answers.behov);
+    const incoming = amountOf(answers.inbet);
+    const available = cash + incoming;
+    const percent = need > 0 ? Math.min(100, Math.round((available / need) * 100)) : 100;
+    const biggest = (answers.storst ?? "").trim();
+
+    const paragraphs: string[] = [
+      need > 0
+        ? `Med ${kr(cash)} på kontot och ${kr(incoming)} i väntade inbetalningar täcks ${percent} % av de ${kr(need)} som förfaller den närmaste månaden. ${percent >= 100 ? "Det håller på pappret - men bara om inbetalningarna hinner fram före förfallodagarna." : `Det saknas ${kr(Math.max(need - available, 0))} - och det är en bristsiffra som går att arbeta med, inte en dom.`}`
+        : "Utan ett 30-dagarsbehov att räkna mot blir bilden ofullständig - likviditetsplanen ger den.",
+    ];
+    if (biggest === "Skatt") {
+      paragraphs.push(
+        "Att skatten är största posten styr prioriteringen: en obetald skatt aktiverar företrädaransvaret vid förfallodagen (59 kap. skatteförfarandelagen), så anståndsfrågan ska upp först.",
+      );
+    } else if (biggest === "Löner") {
+      paragraphs.push(
+        "Att lönerna är största posten skärper läget: uteblivna löner är en obeståndssignal, och vid rekonstruktion eller konkurs kan den statliga lönegarantin skydda de anställda - det talar för att pröva vägvalet tidigt.",
+      );
+    } else if (biggest === "Leverantörer") {
+      paragraphs.push(
+        "Att leverantörsskulderna är störst är ofta det mest förhandlingsbara läget: betalningsplaner och omförhandlade villkor kräver bara att du agerar innan förtroendet tar slut - och att alla borgenärer behandlas lika.",
+      );
+    } else if (biggest) {
+      paragraphs.push(
+        "Hyra och övriga fasta kostnader är ofta omförhandlingsbara - särskilt när alternativet för motparten är en tom lokal eller en förlorad kund.",
+      );
+    }
+    paragraphs.push("Det här är underlag för beslut – stäm av med revisor eller rådgivare innan ni väljer väg.");
+
+    return withLabel({
+      severity: percent < 50 ? "critical" : percent < 100 ? "serious" : "elevated",
+      paragraphs,
+      snapshot: [
+        {
+          tone: percent < 50 ? "critical" : percent < 100 ? "warning" : "success",
+          label: "Kassan mot 30-dagarsbehovet",
+          note: need > 0 ? `${kr(available)} tillgängligt mot ${kr(need)} som förfaller` : "Behovet är inte fastställt",
+        },
+        { tone: "warning", label: "Största posten", note: biggest ? `${biggest} - den styr vilken åtgärd som går först` : "Inte angiven" },
+        {
+          tone: incoming > 0 ? "warning" : "critical",
+          label: "Inbetalningar",
+          note: incoming > 0 ? `${kr(incoming)} väntas - räkna bara med det som hinner fram` : "Inga väntade inbetalningar under perioden",
+        },
+      ],
+      meter:
+        need > 0
+          ? { label: "Täckning av 30-dagarsbehovet", percent, note: `${kr(available)} tillgängligt av ${kr(need)} som förfaller` }
+          : undefined,
+      plan: [
+        { when: "Idag", label: "Lägg likviditetsplanen - dag för dag, post för post" },
+        { when: "Denna vecka", label: biggest === "Skatt" ? "Förbered anståndsansökan hos Skatteverket" : biggest === "Löner" ? "Pröva vägvalet före lönekörningen" : "Kontakta de största motparterna om betalningsplan" },
+        { when: "Om 7 dagar", label: "Uppföljning mot planen - avvikelser hanteras direkt" },
+      ],
+      actions: [
+        { label: "Lägg likviditetsplanen", href: "/dashboard/liquidity", why: "Dag-för-dag-bilden som visar exakt när det brister och hur mycket." },
+        { label: "Se handlingsalternativen", href: "/dashboard/alternativ", why: "Vilka vägar som står öppna i det här läget, och vad de kräver." },
+        ...(biggest === "Skatt"
+          ? [{ label: "Läs om anstånd hos Skatteverket", href: "/kunskap", why: "Ansökan före förfallodagen flyttar företrädaransvarets prövningspunkt." }]
+          : [{ label: "Hitta rådgivare", href: "/marketplace", why: "Rätt kompetens tidigt minskar risken för dyra felsteg." }]),
+      ],
+      decisionSuggestion:
+        percent < 100 && need > 0
+          ? {
+              title: "Säkra likviditeten för de närmaste 30 dagarna",
+              premise: `Beslutet vilar på uppgifterna i samtalet: ${kr(cash)} i kassa, ${kr(need)} förfaller, ${kr(incoming)} väntas in${biggest ? `, största posten är ${biggest.toLowerCase()}` : ""}. Ändras någon av uppgifterna bör beslutet omprövas.`,
+            }
+          : null,
+    });
+  },
+};
+
+/* Specifika flöden före det breda: "kan inte betala momsen för att kassan
+   är tom" ska börja i skatteflödet, som bär den vassaste fristen. */
+export const DIALOG_FLOWS: DialogFlow[] = [taxFlow, wagesFlow, receivableFlow, enforcementFlow, bankFlow, liquidityFlow];
 
 /* --- motorn ---------------------------------------------------------------- */
 
@@ -438,21 +535,26 @@ export const matchFlow = (text: string): DialogFlow | null =>
   DIALOG_FLOWS.find((flow) => flow.triggers.some((t) => t.test(text))) ?? null;
 
 /** Svar på fritext som inte matchar något flöde. */
+/**
+ * Ingen återvändsgränd: när fritexten inte matchar ett flöde GUIDAR
+ * rådgivaren genom nulägesanalysen - den säger det, och öppnar den
+ * själv. Användaren skickas aldrig iväg med en uppmaning.
+ */
 export const FALLBACK_REPLY = [
-  "Det där behöver utredas bredare än ett snabbt samtal – och en gissning vore fel mot dig.",
-  "Gör den fria nulägesanalysen, så går vi igenom hela situationen: siffrorna, fristerna och alternativen. Den tar 5–10 minuter, och resultatet blir grunden för allt annat i ärendet.",
+  "Då tar vi det från början, tillsammans. Jag guidar dig genom nulägesanalysen – jag ställer frågorna, en i taget, och det tar 5–10 minuter.",
+  "Jag öppnar nulägesanalysen nu. När den är klar fortsätter vi här, med hela bilden på plats.",
 ] as const;
 
-/* --- Clara ----------------------------------------------------------------- */
+/* --- CLEARANCE ----------------------------------------------------------------- */
 
 /**
- * Claras röst regleras av Conversation Constitution
+ * CLEARANCE:s röst regleras av Conversation Constitution
  * (docs/conversation-constitution.md): bekräfta, skapa trygghet, EN
  * fråga i taget, max tre rekommendationer, namnet sparsamt. Texterna
- * här är de enda ställen där Clara presenterar sig - en röst, en källa.
+ * här är de enda ställen där CLEARANCE presenterar sig - en röst, en källa.
  */
 export const CLARA = {
-  name: "Clara",
+  name: "CLEARANCE",
   /** Hälsning i ett ärende som redan finns. Namnet används sparsamt. */
   greeting: (displayName: string | null): string =>
     displayName
@@ -462,13 +564,13 @@ export const CLARA = {
 
 /**
  * Onboardingen: den första upplevelsen är ett samtal, inte ett
- * dashboard. Clara frågar EN sak i taget - namn, företag, situation -
+ * dashboard. CLEARANCE frågar EN sak i taget - namn, företag, situation -
  * och öppnar sedan nulägesanalysen själv. Användaren ska aldrig behöva
  * tänka "var ska jag klicka?".
  */
 export const ONBOARDING = {
   intro: [
-    "Hej. Jag heter Clara och jag hjälper dig genom den här processen.",
+    "Hej. Jag heter CLEARANCE och jag hjälper dig genom den här processen.",
     "Om ditt företag har ekonomiska problem är du inte ensam. Det kan kännas överväldigande, men vi tar en sak i taget – mitt jobb är att hjälpa dig skapa struktur, förstå dina alternativ och dokumentera allt längs vägen.",
     "Låt oss börja. Vad heter du?",
   ],
@@ -483,7 +585,7 @@ export const ONBOARDING = {
   ],
   /**
    * Avslutet: bekräftelse + vad som händer härnäst. Nulägesanalysen är
-   * faktainsamlingen - Clara öppnar den, användaren letar inte.
+   * faktainsamlingen - CLEARANCE öppnar den, användaren letar inte.
    */
   closing: [
     "Tack. Då har jag det jag behöver för att börja.",
@@ -492,7 +594,7 @@ export const ONBOARDING = {
 } as const;
 
 /**
- * Lägesbilden i Claras hälsning: tre områden med ton och not, byggda ur
+ * Lägesbilden i CLEARANCE:s hälsning: tre områden med ton och not, byggda ur
  * ärendets registrerade uppgifter. "Jag har en ganska bra bild av
  * situationen" - visad, inte påstådd.
  */
@@ -530,7 +632,44 @@ export const buildCaseSnapshot = (input: {
 ];
 
 /**
- * Beslutsuppföljningen - minnet som gör Clara till en rådgivare och
+ * "Det viktigaste nu": högst tre numrerade steg, ur ärendets läge.
+ * Ordningen är allvarsordningen - passerade frister före kommande,
+ * skyldigheter före analyser. Varje rad är en väg, inte ett påstående.
+ */
+export const buildPriorities = (input: {
+  coverageRatio: number | null;
+  passedDeadlines: number;
+  daysToNextDeadline: number | null;
+  nextDeadlineLabel: string | null;
+  kbrDone: boolean;
+}): { label: string; href: string }[] => {
+  const items: { label: string; href: string }[] = [];
+  if (input.passedDeadlines > 0) {
+    items.push({
+      label: `Hantera ${input.passedDeadlines === 1 ? "den passerade fristen" : "de passerade fristerna"} i handlingsplanen`,
+      href: "/dashboard",
+    });
+  }
+  if (input.nextDeadlineLabel && (input.daysToNextDeadline ?? 99) <= 14) {
+    items.push({
+      label: `Bestäm åtgärd före ${input.nextDeadlineLabel.toLowerCase()} (om ${input.daysToNextDeadline} dagar)`,
+      href: "/dashboard",
+    });
+  }
+  if (!input.kbrDone) {
+    items.push({ label: "Gör kontrollbalansbedömningen", href: "/kbr" });
+  }
+  if (input.coverageRatio !== null && input.coverageRatio < 50) {
+    items.push({ label: "Se hur länge pengarna räcker", href: "/dashboard/liquidity" });
+  }
+  if (items.length === 0) {
+    items.push({ label: "Håll lägesbilden uppdaterad - gå igenom handlingsplanen", href: "/dashboard" });
+  }
+  return items.slice(0, 3);
+};
+
+/**
+ * Beslutsuppföljningen - minnet som gör CLEARANCE till en rådgivare och
  * inte en chatbot. Frågan byggs ur beslutets premiss: det som gällde
  * när beslutet togs är det som ska prövas mot verkligheten.
  */
@@ -552,7 +691,7 @@ export const decisionCheckIn = (decision: {
 /**
  * "Jag behöver min revisor" är ingen frågeserie och ingen vy - det är en
  * ÅTGÄRD, och åtgärder går genom Action Contract (docs/agent-architecture.md):
- * förstå, kontrollera, bekräfta, utför, verifiera, logga. Clara visar
+ * förstå, kontrollera, bekräfta, utför, verifiera, logga. CLEARANCE visar
  * hela mejlet och exakt vad rollen ger åtkomst till INNAN något skickas.
  * Användaren ska aldrig bli överraskad.
  */
