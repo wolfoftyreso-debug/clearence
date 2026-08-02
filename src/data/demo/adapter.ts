@@ -24,9 +24,11 @@ import type {
   CaseInvitationRecord,
   CaseMemberRecord,
   CaseMessage,
+  CaseNoteRecord,
   CaseRecord,
   ConversationRecord,
   CaseTask,
+  TimeEntryRecord,
   KbrStatus,
   ContactMessageRecord,
   CustomerInvoiceRecord,
@@ -81,6 +83,8 @@ interface DemoState {
   })[];
   contactRequests: (ContactRequestRecord & { preview: unknown; summary: unknown })[];
   usageCharges: UsageChargeRecord[];
+  caseNotes: (CaseNoteRecord & { authorUserId: string })[];
+  timeEntries: (TimeEntryRecord & { userId: string })[];
   /** Byråns egna profiländringar, lagda ovanpå demodatat per profil-id. */
   professionalEdits: Record<string, ProfessionalProfileUpdate>;
 }
@@ -108,6 +112,8 @@ const emptyState = (): DemoState => ({
   profileClaims: [],
   contactRequests: [],
   usageCharges: [],
+  caseNotes: [],
+  timeEntries: [],
   professionalEdits: {},
 });
 
@@ -563,6 +569,37 @@ const seedForAdvisor = (userId: string) => {
     task(taxi.id, "Begär kompletterande balansrapport", 2),
     task(milano.id, "Ring företrädaren om konkursansökan", 0),
     task(elservice.id, "Skicka yttrande till Skatteverket", 3),
+  ];
+  // Klientverktygen förifyllda: en intern anteckning och loggad tid, så
+  // vyn visar hur arbetsmaterialet ser ut i bruk.
+  state.caseNotes = [
+    {
+      id: uid(),
+      caseId: bygg.id,
+      authorUserId: userId,
+      body: "Företrädaren lovade uppdaterad balansrapport till fredag. Följ upp annars.",
+      createdAt: now(),
+    },
+  ];
+  state.timeEntries = [
+    {
+      id: uid(),
+      caseId: bygg.id,
+      userId,
+      minutes: 90,
+      note: "Genomgång av rekonstruktionsplanen",
+      occurredOn: isoDaysFromNow(-1),
+      createdAt: now(),
+    },
+    {
+      id: uid(),
+      caseId: taxi.id,
+      userId,
+      minutes: 45,
+      note: "Avstämning kontrollbalansfrågan",
+      occurredOn: isoDaysFromNow(0),
+      createdAt: now(),
+    },
   ];
 };
 
@@ -1182,6 +1219,66 @@ export const demoAdapter: DataPort = {
         ).length,
         openCases: cases.filter((c) => !c.closedAt).length,
       };
+    },
+  },
+
+  advisorTools: {
+    // Samma regler som radskyddet: bara egna anteckningar och egna
+    // tidsposter, oavsett vad som ligger i tillståndet.
+    async listNotes(caseId) {
+      const me = state.user?.id;
+      return state.caseNotes
+        .filter((n) => n.caseId === caseId && n.authorUserId === me)
+        .map(({ authorUserId, ...note }) => note)
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    },
+    async addNote(caseId, body) {
+      if (!state.user) throw new Error("Inte inloggad");
+      const trimmed = body.trim();
+      if (!trimmed) throw new Error("Tom anteckning");
+      state.caseNotes.push({
+        id: uid(),
+        caseId,
+        authorUserId: state.user.id,
+        body: trimmed,
+        createdAt: now(),
+      });
+      save();
+    },
+    async removeNote(id) {
+      state.caseNotes = state.caseNotes.filter(
+        (n) => !(n.id === id && n.authorUserId === state.user?.id),
+      );
+      save();
+    },
+    async listTime(caseId) {
+      const me = state.user?.id;
+      return state.timeEntries
+        .filter((t) => t.caseId === caseId && t.userId === me)
+        .map(({ userId, ...entry }) => entry)
+        .sort((a, b) => b.occurredOn.localeCompare(a.occurredOn));
+    },
+    async logTime({ caseId, minutes, note, occurredOn }) {
+      if (!state.user) throw new Error("Inte inloggad");
+      if (!Number.isFinite(minutes) || minutes <= 0 || minutes > 1440) {
+        throw new Error("Ogiltig tid");
+      }
+      state.timeEntries.push({
+        id: uid(),
+        caseId,
+        userId: state.user.id,
+        minutes: Math.round(minutes),
+        note: note?.trim() || null,
+        occurredOn: occurredOn ?? isoDaysFromNow(0),
+        createdAt: now(),
+      });
+      save();
+    },
+    async removeTime(id) {
+      state.timeEntries = state.timeEntries.filter(
+        (t) => !(t.id === id && t.userId === state.user?.id),
+      );
+      save();
     },
   },
 

@@ -1377,6 +1377,101 @@ begin
   raise notice 'ok    the north star counts recovered companies for drift';
 end $$;
 
+/* ========================================================================== */
+/* Klientverktygen: interna anteckningar och tidsrapportering                 */
+/* ========================================================================== */
+
+set local role authenticated;
+
+-- Revisorn (4444) skriver en intern anteckning i ärende A. (3333:s
+-- medlemskap är revokerat sedan revokeringstestet längre upp.)
+select pg_temp.as_user('44444444-4444-4444-4444-444444444444');
+insert into public.case_notes (case_id, body)
+values ('aaaaaaaa-0000-0000-0000-000000000001', 'Företrädaren lovade balansrapport på fredag.');
+select pg_temp.check('the author sees their own note',
+  (select count(*) from public.case_notes), 1::bigint);
+
+-- Anteckningen är byråns egen: varken ägaren eller en annan rådgivare ser den.
+select pg_temp.as_user('11111111-1111-1111-1111-111111111111');
+select pg_temp.check('the case owner cannot see an advisor''s internal notes',
+  (select count(*) from public.case_notes), 0::bigint);
+select pg_temp.as_user('22222222-2222-2222-2222-222222222222');
+select pg_temp.check('a user outside the case cannot see them either',
+  (select count(*) from public.case_notes), 0::bigint);
+
+-- Borgenären (5555) får inte lägga arbetsmaterial i akten.
+select pg_temp.as_user('55555555-5555-5555-5555-555555555555');
+do $$
+begin
+  begin
+    insert into public.case_notes (case_id, body)
+    values ('aaaaaaaa-0000-0000-0000-000000000001', 'smyganteckning');
+    raise exception 'FAIL  en borgenär kunde skriva interna anteckningar';
+  exception when others then
+    if sqlerrm like 'FAIL%' then raise; end if;
+    raise notice 'ok    a creditor cannot write internal notes';
+  end;
+end $$;
+
+-- Utanförstående (6666) får inte heller, ens i ett ärende som finns.
+select pg_temp.as_user('66666666-6666-6666-6666-666666666666');
+do $$
+begin
+  begin
+    insert into public.case_notes (case_id, body)
+    values ('aaaaaaaa-0000-0000-0000-000000000001', 'insmugen');
+    raise exception 'FAIL  en utomstående kunde skriva interna anteckningar';
+  exception when others then
+    if sqlerrm like 'FAIL%' then raise; end if;
+    raise notice 'ok    a non-member cannot write internal notes';
+  end;
+end $$;
+
+-- Tidsposter: revisorn (4444) är deltagare och loggar sin tid.
+select pg_temp.as_user('44444444-4444-4444-4444-444444444444');
+insert into public.time_entries (case_id, minutes, note)
+values ('aaaaaaaa-0000-0000-0000-000000000001', 90, 'Granskning av kontrollbalansräkning');
+select pg_temp.check('a participant logs and sees their own time',
+  (select sum(minutes) from public.time_entries), 90::bigint);
+
+-- Noll minuter är ingen tidpost.
+do $$
+begin
+  begin
+    insert into public.time_entries (case_id, minutes)
+    values ('aaaaaaaa-0000-0000-0000-000000000001', 0);
+    raise exception 'FAIL  en tidpost på noll minuter accepterades';
+  exception when others then
+    if sqlerrm like 'FAIL%' then raise; end if;
+    raise notice 'ok    a zero-minute entry is refused';
+  end;
+end $$;
+
+-- Ägaren ser inte revisorns tid - var och en rår över sin egen.
+select pg_temp.as_user('11111111-1111-1111-1111-111111111111');
+select pg_temp.check('time entries are private to their owner',
+  (select count(*) from public.time_entries), 0::bigint);
+
+-- Borgenären kan inte tidrapportera.
+select pg_temp.as_user('55555555-5555-5555-5555-555555555555');
+do $$
+begin
+  begin
+    insert into public.time_entries (case_id, minutes)
+    values ('aaaaaaaa-0000-0000-0000-000000000001', 30);
+    raise exception 'FAIL  en borgenär kunde tidrapportera i ärendet';
+  exception when others then
+    if sqlerrm like 'FAIL%' then raise; end if;
+    raise notice 'ok    a creditor cannot log time on the case';
+  end;
+end $$;
+
+-- Författaren tar bort sin egen anteckning; ingen annan kunde.
+select pg_temp.as_user('44444444-4444-4444-4444-444444444444');
+delete from public.case_notes;
+select pg_temp.check('the author can delete their own note',
+  (select count(*) from public.case_notes), 0::bigint);
+
 reset role;
 select 'ALL RLS TESTS PASSED' as result;
 

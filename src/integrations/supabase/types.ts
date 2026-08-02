@@ -384,6 +384,60 @@ export type Database = {
           },
         ]
       }
+      case_notes: {
+        Row: {
+          id: string
+          case_id: string
+          author_user_id: string
+          body: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          case_id: string
+          author_user_id?: string
+          body: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          case_id?: string
+          author_user_id?: string
+          body?: string
+          created_at?: string
+        }
+        Relationships: []
+      }
+      time_entries: {
+        Row: {
+          id: string
+          case_id: string
+          user_id: string
+          minutes: number
+          note: string | null
+          occurred_on: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          case_id: string
+          user_id?: string
+          minutes: number
+          note?: string | null
+          occurred_on?: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          case_id?: string
+          user_id?: string
+          minutes?: number
+          note?: string | null
+          occurred_on?: string
+          created_at?: string
+        }
+        Relationships: []
+      }
       cases: {
         Row: {
           can_pay_rent: boolean | null

@@ -8,6 +8,8 @@ import type {
   CaseExitReason,
   CaseInvitationRecord,
   CaseMemberRecord,
+  CaseNoteRecord,
+  TimeEntryRecord,
   CaseMessage,
   CaseRecord,
   CaseTask,
@@ -304,6 +306,28 @@ export interface TasksPort {
   setDone(id: string, done: boolean): Promise<void>;
 }
 
+/**
+ * Rådgivarens klientverktyg: interna anteckningar och tidsrapportering.
+ *
+ * Anteckningarna är byråns eget arbetsmaterial och synliga endast för sin
+ * författare; tidsposterna är den inloggades egna. Båda reglerna
+ * upprätthålls i backend - en implementation utan radskydd måste själv
+ * filtrera på inloggad användare.
+ */
+export interface AdvisorToolsPort {
+  listNotes(caseId: string): Promise<CaseNoteRecord[]>;
+  addNote(caseId: string, body: string): Promise<void>;
+  removeNote(id: string): Promise<void>;
+  listTime(caseId: string): Promise<TimeEntryRecord[]>;
+  logTime(input: {
+    caseId: string;
+    minutes: number;
+    note?: string | null;
+    occurredOn?: string;
+  }): Promise<void>;
+  removeTime(id: string): Promise<void>;
+}
+
 export interface MessagesPort {
   /**
    * Meddelanden i ärendet.
@@ -475,6 +499,7 @@ export interface DataPort {
   profile: ProfilePort;
   messages: MessagesPort;
   tasks: TasksPort;
+  advisorTools: AdvisorToolsPort;
   members: MembersPort;
   audit: AuditPort;
   billing: BillingPort;

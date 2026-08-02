@@ -551,6 +551,28 @@ export interface CaseTask {
   createdAt: string;
 }
 
+/**
+ * Intern anteckning i ett ärende. Byråns eget arbetsmaterial: synlig endast
+ * för sin författare - delning sker via meddelanden. Regeln bor i
+ * radskyddet; typen bär därför inget författarfält att visa upp.
+ */
+export interface CaseNoteRecord {
+  id: string;
+  caseId: string;
+  body: string;
+  createdAt: string;
+}
+
+/** Nedlagd tid i ett ärende. Den inloggades egna poster, aldrig andras. */
+export interface TimeEntryRecord {
+  id: string;
+  caseId: string;
+  minutes: number;
+  note: string | null;
+  occurredOn: string;
+  createdAt: string;
+}
+
 /** Vad driftpanelen får veta om en sparad API-nyckel. Aldrig mer. */
 export interface SecretInfo {
   provider: string;

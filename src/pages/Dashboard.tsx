@@ -37,6 +37,7 @@ import {
   ClosedCaseBanner,
   HealthDashboard,
 } from "@/components/dashboard/CaseExit";
+import { AdvisorTools } from "@/components/dashboard/AdvisorTools";
 import { analysisInputFromCase, parseAmount } from "@/lib/caseAnalysis";
 
 
@@ -428,6 +429,10 @@ const Dashboard = () => {
                   <CaseDocuments caseId={latestCase.id} userId={user.id} />
                 </div>
               )}
+
+              {/* Klientverktygen: bara för rådgivarrollen - komponenten
+                  gatear sig själv. */}
+              <AdvisorTools caseId={latestCase.id} />
 
               {/* Quick actions */}
               <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-4">

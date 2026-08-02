@@ -541,6 +541,62 @@ export const supabaseAdapter: DataPort = {
     },
   },
 
+  advisorTools: {
+    // Radskyddet begränsar redan urvalet till författarens/ägarens egna
+    // rader - frågorna här filtrerar bara på ärende.
+    async listNotes(caseId) {
+      const { data, error } = await supabase
+        .from("case_notes")
+        .select("*")
+        .eq("case_id", caseId)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return (data ?? []).map((row) => ({
+        id: row.id,
+        caseId: row.case_id,
+        body: row.body,
+        createdAt: row.created_at,
+      }));
+    },
+    async addNote(caseId, body) {
+      const { error } = await supabase.from("case_notes").insert({ case_id: caseId, body });
+      if (error) throw error;
+    },
+    async removeNote(id) {
+      const { error } = await supabase.from("case_notes").delete().eq("id", id);
+      if (error) throw error;
+    },
+    async listTime(caseId) {
+      const { data, error } = await supabase
+        .from("time_entries")
+        .select("*")
+        .eq("case_id", caseId)
+        .order("occurred_on", { ascending: false });
+      if (error) throw error;
+      return (data ?? []).map((row) => ({
+        id: row.id,
+        caseId: row.case_id,
+        minutes: Number(row.minutes),
+        note: row.note,
+        occurredOn: row.occurred_on,
+        createdAt: row.created_at,
+      }));
+    },
+    async logTime({ caseId, minutes, note, occurredOn }) {
+      const { error } = await supabase.from("time_entries").insert({
+        case_id: caseId,
+        minutes,
+        note: note?.trim() || null,
+        ...(occurredOn ? { occurred_on: occurredOn } : {}),
+      });
+      if (error) throw error;
+    },
+    async removeTime(id) {
+      const { error } = await supabase.from("time_entries").delete().eq("id", id);
+      if (error) throw error;
+    },
+  },
+
   audit: {
     async listByCase(caseId) {
       const { data, error } = await supabase
