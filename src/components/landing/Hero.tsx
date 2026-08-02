@@ -113,10 +113,13 @@ const Hero = () => {
             positioneringen är en del av produkten. */}
         <p className="mx-auto mt-12 max-w-2xl text-center text-base leading-relaxed text-muted-foreground">
           När ett bolag hamnar i ekonomiska problem löper juridik, skatt, bank,
-          personal och myndighetskontakter parallellt. CLEARANCE är
-          sambandscentralen: vad som ska göras, när och varför – med fristerna
-          bevakade och besluten dokumenterade. Ekonomiska problem är också ett
-          juridiskt ansvar, och att agera i tid är ofta avgörande.
+          personal och myndighetskontakter parallellt. CLEARANCE är den
+          digitala krisrådgivaren och kretsens sambandscentral: den hjälper dig
+          fatta rätt beslut, skapar och ordnar dokumentationen automatiskt och
+          följer bolaget från första varningssignalen till återhämtning,
+          rekonstruktion eller avveckling – med fristerna bevakade och besluten
+          dokumenterade. Ekonomiska problem är också ett juridiskt ansvar, och
+          att agera i tid är ofta avgörande.
         </p>
 
         <dl className="mx-auto mt-10 grid max-w-3xl grid-cols-1 gap-px overflow-hidden rounded-md border border-border bg-border sm:grid-cols-3">

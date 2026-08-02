@@ -1679,6 +1679,112 @@ select pg_temp.check('the admin can enable shadow mode',
   (select count(*) from public.billing_plans
    where professional_id = 'f0000000-0000-0000-0000-000000000099' and shadow), 1::bigint);
 
+/* ========================================================================== */
+/* Krisrådgivarens journal och beslutsminnet                                  */
+/* ========================================================================== */
+
+set local role authenticated;
+
+-- Ägaren (1111, skrivroll) journalför ett samtal i ärende A.
+select pg_temp.as_user('11111111-1111-1111-1111-111111111111');
+insert into public.advisor_sessions (id, case_id, flow_id, flow_title, entries)
+values ('d1a10000-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000001',
+        'skatt', 'Skatten kan inte betalas',
+        '[{"at":"2026-08-02T09:12:00Z","who":"user","text":"Jag kan inte betala momsen"}]'::jsonb);
+select pg_temp.check('a write role journals an advisor session',
+  (select count(*) from public.advisor_sessions), 1::bigint);
+
+-- Revisorn (4444, deltagare) läser journalen - samtalen är ärendets berättelse.
+select pg_temp.as_user('44444444-4444-4444-4444-444444444444');
+select pg_temp.check('a case participant reads the session journal',
+  (select count(*) from public.advisor_sessions), 1::bigint);
+
+-- Borgenären (5555) ser ingenting - ärendeåtkomsten utesluter borgenärer.
+select pg_temp.as_user('55555555-5555-5555-5555-555555555555');
+select pg_temp.check('a creditor sees no advisor sessions',
+  (select count(*) from public.advisor_sessions), 0::bigint);
+do $$
+begin
+  begin
+    insert into public.advisor_sessions (case_id, flow_id, flow_title)
+    values ('aaaaaaaa-0000-0000-0000-000000000001', 'skatt', 'smygsamtal');
+    raise exception 'FAIL  en borgenär kunde journalföra samtal';
+  exception when others then
+    if sqlerrm like 'FAIL%' then raise; end if;
+    raise notice 'ok    a creditor cannot write to the journal';
+  end;
+end $$;
+
+-- Utanförstående (6666) ser inte heller något.
+select pg_temp.as_user('66666666-6666-6666-6666-666666666666');
+select pg_temp.check('a non-member sees no advisor sessions',
+  (select count(*) from public.advisor_sessions), 0::bigint);
+
+-- Beslutet protokollförs med premiss av en skrivroll.
+select pg_temp.as_user('11111111-1111-1111-1111-111111111111');
+insert into public.case_decisions (id, case_id, title, rationale, premise)
+values ('d1a20000-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000001',
+        'Hantera skattebristen före förfallodagen',
+        'Beslut efter samtal med rådgivaren.',
+        'Vilar på att 150 000 kr saknas och att inga kundinbetalningar väntas.');
+select pg_temp.check('a write role records a decision',
+  (select count(*) from public.case_decisions), 1::bigint);
+
+-- Deltagaren läser besluten; borgenären gör det inte.
+select pg_temp.as_user('44444444-4444-4444-4444-444444444444');
+select pg_temp.check('a participant reads the decision log',
+  (select count(*) from public.case_decisions), 1::bigint);
+select pg_temp.as_user('55555555-5555-5555-5555-555555555555');
+select pg_temp.check('a creditor sees no decisions',
+  (select count(*) from public.case_decisions), 0::bigint);
+
+-- Beslutets innehåll är fryst: en "rättelse" av titeln avvisas av triggern.
+select pg_temp.as_user('11111111-1111-1111-1111-111111111111');
+do $$
+begin
+  begin
+    update public.case_decisions
+    set title = 'Omskrivet i efterhand', status = 'reconsidered'
+    where id = 'd1a20000-0000-0000-0000-000000000001';
+    raise exception 'FAIL  ett fattat beslut kunde skrivas om';
+  exception when others then
+    if sqlerrm like 'FAIL%' then raise; end if;
+    raise notice 'ok    a recorded decision cannot be rewritten';
+  end;
+end $$;
+
+-- Omprövningen är den enda tillåtna övergången, och den stämplas.
+update public.case_decisions
+set status = 'reconsidered', reconsidered_at = now(),
+    reconsider_note = 'Kunden betalade - premissen håller inte längre.'
+where id = 'd1a20000-0000-0000-0000-000000000001';
+select pg_temp.check('reconsideration is stamped with time and note',
+  (select count(*) from public.case_decisions
+   where id = 'd1a20000-0000-0000-0000-000000000001'
+     and status = 'reconsidered' and reconsidered_at is not null), 1::bigint);
+
+-- Ett omprövat beslut är slutgiltigt omprövat: andra varvet avvisas.
+do $$
+begin
+  begin
+    update public.case_decisions
+    set reconsider_note = 'ändrar noten i efterhand'
+    where id = 'd1a20000-0000-0000-0000-000000000001';
+    raise exception 'FAIL  ett omprövat beslut kunde ändras igen';
+  exception when others then
+    if sqlerrm like 'FAIL%' then raise; end if;
+    raise notice 'ok    a reconsidered decision is final';
+  end;
+end $$;
+
+-- Radering är inte en operation som finns: journal och beslut står kvar.
+delete from public.case_decisions where id = 'd1a20000-0000-0000-0000-000000000001';
+select pg_temp.check('decisions cannot be deleted',
+  (select count(*) from public.case_decisions), 1::bigint);
+delete from public.advisor_sessions where id = 'd1a10000-0000-0000-0000-000000000001';
+select pg_temp.check('journal sessions cannot be deleted',
+  (select count(*) from public.advisor_sessions), 1::bigint);
+
 reset role;
 select 'ALL RLS TESTS PASSED' as result;
 

@@ -2,9 +2,11 @@ import type { CaseRole } from "@/lib/caseRoles";
 import type {
   AccountBillingRecord,
   ApplicationForReview,
+  AdvisorSessionRecord,
   ApplicationRecord,
   AuditEventRecord,
   AuthUser,
+  CaseDecisionRecord,
   CaseExitReason,
   CaseInvitationRecord,
   CaseMemberRecord,
@@ -354,6 +356,28 @@ export interface AdvisorToolsPort {
   removeTime(id: string): Promise<void>;
 }
 
+/**
+ * Krisrådgivarens journal och beslutsminne.
+ *
+ * Samtalen sparas som ärendejournal (inte chatthistorik) och besluten
+ * med sin premiss - omprövningsvillkoret. Åtkomsten följer ärendets
+ * vanliga regler: deltagare läser, skrivbehöriga skriver, borgenärer ser
+ * ingenting. Ett beslut ändras aldrig i efterhand; omprövning är en ny
+ * markering med egen tidsstämpel och not.
+ */
+export interface DialoguePort {
+  listSessions(caseId: string): Promise<AdvisorSessionRecord[]>;
+  saveSession(session: AdvisorSessionRecord): Promise<void>;
+  listDecisions(caseId: string): Promise<CaseDecisionRecord[]>;
+  recordDecision(input: {
+    caseId: string;
+    title: string;
+    rationale: string;
+    premise?: string | null;
+  }): Promise<void>;
+  reconsiderDecision(id: string, note: string): Promise<void>;
+}
+
 export interface MessagesPort {
   /**
    * Meddelanden i ärendet.
@@ -533,6 +557,7 @@ export interface DataPort {
   messages: MessagesPort;
   tasks: TasksPort;
   advisorTools: AdvisorToolsPort;
+  dialogue: DialoguePort;
   members: MembersPort;
   audit: AuditPort;
   billing: BillingPort;

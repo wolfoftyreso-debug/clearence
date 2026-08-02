@@ -7,6 +7,7 @@ import { deriveAuditDetail } from "@/lib/auditDetail";
 import type { DataPort } from "../ports";
 import type {
   AccountBillingRecord,
+  AdvisorSessionRecord,
   ApplicationForReview,
   ApplicationRecord,
   CaseExitReason,
@@ -605,6 +606,82 @@ export const supabaseAdapter: DataPort = {
     },
     async removeTime(id) {
       const { error } = await supabase.from("time_entries").delete().eq("id", id);
+      if (error) throw error;
+    },
+  },
+
+  dialogue: {
+    // Radskyddet i databasen avgör vem som ser vad; frågorna filtrerar
+    // bara på ärende. Sessioner sparas med upsert - samma samtal skrivs
+    // flera gånger medan det pågår.
+    async listSessions(caseId) {
+      const { data, error } = await supabase
+        .from("advisor_sessions")
+        .select("*")
+        .eq("case_id", caseId)
+        .order("started_at", { ascending: false });
+      if (error) throw error;
+      return (data ?? []).map((row) => ({
+        id: row.id,
+        caseId: row.case_id,
+        flowId: row.flow_id,
+        flowTitle: row.flow_title,
+        startedAt: row.started_at,
+        closedAt: row.closed_at,
+        entries: (Array.isArray(row.entries)
+          ? row.entries
+          : []) as AdvisorSessionRecord["entries"],
+      }));
+    },
+    async saveSession(session) {
+      const { error } = await supabase.from("advisor_sessions").upsert({
+        id: session.id,
+        case_id: session.caseId,
+        flow_id: session.flowId,
+        flow_title: session.flowTitle,
+        started_at: session.startedAt,
+        closed_at: session.closedAt,
+        entries: session.entries,
+      });
+      if (error) throw error;
+    },
+    async listDecisions(caseId) {
+      const { data, error } = await supabase
+        .from("case_decisions")
+        .select("*")
+        .eq("case_id", caseId)
+        .order("decided_at", { ascending: false });
+      if (error) throw error;
+      return (data ?? []).map((row) => ({
+        id: row.id,
+        caseId: row.case_id,
+        title: row.title,
+        rationale: row.rationale,
+        premise: row.premise,
+        decidedAt: row.decided_at,
+        status: row.status === "reconsidered" ? ("reconsidered" as const) : ("active" as const),
+        reconsideredAt: row.reconsidered_at,
+        reconsiderNote: row.reconsider_note,
+      }));
+    },
+    async recordDecision({ caseId, title, rationale, premise }) {
+      const { error } = await supabase.from("case_decisions").insert({
+        case_id: caseId,
+        title: title.trim(),
+        rationale: rationale.trim(),
+        premise: premise?.trim() || null,
+      });
+      if (error) throw error;
+    },
+    async reconsiderDecision(id, note) {
+      const { error } = await supabase
+        .from("case_decisions")
+        .update({
+          status: "reconsidered",
+          reconsidered_at: new Date().toISOString(),
+          reconsider_note: note.trim() || null,
+        })
+        .eq("id", id);
       if (error) throw error;
     },
   },

@@ -71,6 +71,7 @@ const Dashboard = () => {
   );
   // Tre insikter räcker som lägesbild; resten på begäran (Excellence rond 2).
   const [allInsights, setAllInsights] = useState(false);
+  const [advisorQuestion, setAdvisorQuestion] = useState("");
   const visibleInsights = allInsights ? insights : insights.slice(0, 3);
 
   const totalDebt = latestCase ? parseAmount(latestCase.totalDebt) : 0;
@@ -188,6 +189,33 @@ const Dashboard = () => {
                   </div>
                 </div>
               )}
+
+              {/* Samtalsingången: en rad, inte en yta. Frågan följer med i
+                  adressen så rådgivaren svarar direkt - dialogen ÄR
+                  gränssnittet, översikten är journalens läsvy. */}
+              <form
+                className="mb-6 flex gap-2"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  const q = advisorQuestion.trim();
+                  navigate(q ? `/dashboard/samtal?q=${encodeURIComponent(q)}` : "/dashboard/samtal");
+                }}
+              >
+                <label htmlFor="advisor-entry" className="sr-only">
+                  Fråga rådgivaren
+                </label>
+                <input
+                  id="advisor-entry"
+                  value={advisorQuestion}
+                  onChange={(e) => setAdvisorQuestion(e.target.value)}
+                  placeholder="Vad behöver du ta tag i? Skriv t.ex. ”jag kan inte betala momsen” …"
+                  autoComplete="off"
+                  className="h-10 min-w-0 flex-1 rounded-md border border-border bg-card px-3.5 text-sm text-foreground shadow-soft placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-accent"
+                />
+                <Button type="submit" variant="accent">
+                  Fråga rådgivaren
+                </Button>
+              </form>
 
               {/* Handlingsplanen först: frågan "vad gör jag, före vilket
                   datum" ska besvaras före all statistik. */}

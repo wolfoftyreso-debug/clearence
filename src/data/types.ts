@@ -617,6 +617,40 @@ export interface TimeEntryRecord {
   createdAt: string;
 }
 
+/**
+ * Ett samtal med krisrådgivaren: användarens beskrivning, frågorna,
+ * svaren och bedömningen - i den ordning de föll. Sparas som journal,
+ * inte som chatthistorik: raderna är ärendets berättelse.
+ */
+export interface AdvisorSessionRecord {
+  id: string;
+  caseId: string;
+  flowId: string;
+  flowTitle: string;
+  startedAt: string;
+  closedAt: string | null;
+  entries: { at: string; who: "user" | "radgivare"; text: string }[];
+}
+
+export type DecisionStatus = "active" | "reconsidered";
+
+/**
+ * Beslutsminnet: ett protokollfört beslut MED sin premiss. Premissen är
+ * omprövningsvillkoret - när verkligheten motsäger den ska beslutet upp
+ * igen, med hänvisning till vad som gällde när det fattades.
+ */
+export interface CaseDecisionRecord {
+  id: string;
+  caseId: string;
+  title: string;
+  rationale: string;
+  premise: string | null;
+  decidedAt: string;
+  status: DecisionStatus;
+  reconsideredAt: string | null;
+  reconsiderNote: string | null;
+}
+
 /** Vad driftpanelen får veta om en sparad API-nyckel. Aldrig mer. */
 export interface SecretInfo {
   provider: string;

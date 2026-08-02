@@ -439,6 +439,68 @@ export type Database = {
         }
         Relationships: []
       }
+      advisor_sessions: {
+        Row: {
+          id: string
+          case_id: string
+          flow_id: string
+          flow_title: string
+          started_at: string
+          closed_at: string | null
+          entries: Json
+        }
+        Insert: {
+          id?: string
+          case_id: string
+          flow_id: string
+          flow_title: string
+          started_at?: string
+          closed_at?: string | null
+          entries?: Json
+        }
+        Update: {
+          id?: string
+          case_id?: string
+          flow_id?: string
+          flow_title?: string
+          started_at?: string
+          closed_at?: string | null
+          entries?: Json
+        }
+        Relationships: []
+      }
+      case_decisions: {
+        Row: {
+          id: string
+          case_id: string
+          decided_by: string
+          title: string
+          rationale: string
+          premise: string | null
+          decided_at: string
+          status: string
+          reconsidered_at: string | null
+          reconsider_note: string | null
+        }
+        Insert: {
+          id?: string
+          case_id: string
+          decided_by?: string
+          title: string
+          rationale: string
+          premise?: string | null
+          decided_at?: string
+          status?: string
+          reconsidered_at?: string | null
+          reconsider_note?: string | null
+        }
+        Update: {
+          status?: string
+          reconsidered_at?: string | null
+          reconsider_note?: string | null
+        }
+        Relationships: []
+      }
       case_notes: {
         Row: {
           id: string

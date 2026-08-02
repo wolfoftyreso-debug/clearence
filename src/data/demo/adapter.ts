@@ -24,6 +24,8 @@ import type {
   CaseInvitationRecord,
   CaseMemberRecord,
   CaseMessage,
+  AdvisorSessionRecord,
+  CaseDecisionRecord,
   CaseNoteRecord,
   CaseRecord,
   FirmMemberRecord,
@@ -98,6 +100,8 @@ interface DemoState {
   }[];
   /** Byråns egna profiländringar, lagda ovanpå demodatat per profil-id. */
   professionalEdits: Record<string, ProfessionalProfileUpdate>;
+  advisorSessions: AdvisorSessionRecord[];
+  caseDecisions: CaseDecisionRecord[];
 }
 
 const emptyState = (): DemoState => ({
@@ -128,6 +132,8 @@ const emptyState = (): DemoState => ({
   firmMembers: [],
   firmInvitations: [],
   professionalEdits: {},
+  advisorSessions: [],
+  caseDecisions: [],
 });
 
 /** Files cannot go in localStorage, so they live for the session only. */
@@ -1477,6 +1483,50 @@ export const demoAdapter: DataPort = {
     },
   },
 
+  dialogue: {
+    async listSessions(caseId) {
+      return state.advisorSessions
+        .filter((s) => s.caseId === caseId)
+        .sort((a, b) => b.startedAt.localeCompare(a.startedAt));
+    },
+    async saveSession(session) {
+      const i = state.advisorSessions.findIndex((s) => s.id === session.id);
+      if (i >= 0) state.advisorSessions[i] = session;
+      else state.advisorSessions.push(session);
+      save();
+    },
+    async listDecisions(caseId) {
+      return state.caseDecisions
+        .filter((d) => d.caseId === caseId)
+        .sort((a, b) => b.decidedAt.localeCompare(a.decidedAt));
+    },
+    async recordDecision({ caseId, title, rationale, premise }) {
+      if (!state.user) throw new Error("Inte inloggad");
+      state.caseDecisions.push({
+        id: uid(),
+        caseId,
+        title: title.trim(),
+        rationale: rationale.trim(),
+        premise: premise?.trim() || null,
+        decidedAt: now(),
+        status: "active",
+        reconsideredAt: null,
+        reconsiderNote: null,
+      });
+      save();
+    },
+    // Omprövningen skriver ALDRIG över beslutet - den lägger en markering
+    // ovanpå. Vad som beslutades, när och på vilken premiss står kvar.
+    async reconsiderDecision(id, note) {
+      const decision = state.caseDecisions.find((d) => d.id === id);
+      if (!decision) throw new Error("Beslutet finns inte");
+      decision.status = "reconsidered";
+      decision.reconsideredAt = now();
+      decision.reconsiderNote = note.trim() || null;
+      save();
+    },
+  },
+
   audit: {
     // Demon har ingen databas med triggrar; loggen härleds ur det som finns
     // i sessionen. Poängen som visas är densamma: vem gjorde vad, när.
@@ -1512,6 +1562,16 @@ export const demoAdapter: DataPort = {
         push("insert", "conversations", conv.id, conv.createdAt, conv.title ? `gruppen "${conv.title}"` : "direkt tråd");
       for (const k of state.kbrAssessments.filter((k) => k.caseId === caseId))
         push("insert", "kbr_assessments", null, k.createdAt, `bedömning: ${k.status}`);
+      // Journalen är beslutsminnets ryggrad: samtalen och besluten är
+      // ärendets berättelse, inte bara datarader.
+      for (const s of state.advisorSessions.filter((x) => x.caseId === caseId)) {
+        push("insert", "advisor_sessions", s.id, s.startedAt, `samtal med rådgivaren: ${s.flowTitle.toLowerCase()}`);
+        if (s.closedAt) push("update", "advisor_sessions", s.id, s.closedAt, `bedömning lämnad: ${s.flowTitle.toLowerCase()}`);
+      }
+      for (const d of state.caseDecisions.filter((x) => x.caseId === caseId)) {
+        push("insert", "case_decisions", d.id, d.decidedAt, `beslut: "${d.title}"`);
+        if (d.reconsideredAt) push("update", "case_decisions", d.id, d.reconsideredAt, `beslutet "${d.title}" omprövades`);
+      }
       return events.sort((a, b) => b.occurredAt.localeCompare(a.occurredAt));
     },
   },
