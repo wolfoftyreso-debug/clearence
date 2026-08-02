@@ -1,9 +1,21 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { data } from "@/data";
 import { buildExecutiveSummary, type ActionHorizon } from "@/lib/executiveSummary";
 import { GlossaryText, SimplerLanguageSuggestion, useLanguageLevel } from "@/components/language/GlossaryText";
 import { LANGUAGE_LEVELS, setLanguageLevel } from "@/lib/language";
+import {
+  PRESENTATION_MODES,
+  getCompactScope,
+  getPresentationMode,
+  setCompactScope,
+  setPresentationMode,
+  toBullets,
+  toCompact,
+  toTimelineRows,
+  type PresentationMode,
+} from "@/lib/presentation";
 import type { CaseRecord } from "@/data/types";
 import type { TimelineEvent } from "@/lib/crisisAnalysis";
 import { ArrowRight, Compass, Activity } from "lucide-react";
@@ -44,6 +56,19 @@ export const AiBriefing = ({ caseRecord, timeline }: AiBriefingProps) => {
   // är detsamma - motorn i src/lib/language.ts anpassar bara språket, och
   // begreppen förblir klickbara på alla nivåer.
   const level = useLanguageLevel();
+  // Presentationsformen och omfånget: samma rapport som text, punktlista
+  // eller tidslinje, kort eller utförlig. Rena transformer - formerna kan
+  // aldrig säga emot varandra.
+  const [mode, setMode] = useState<PresentationMode>(getPresentationMode);
+  const [compact, setCompact] = useState<boolean>(getCompactScope);
+  const chooseMode = (next: PresentationMode) => {
+    setMode(next);
+    setPresentationMode(next);
+  };
+  const chooseCompact = (next: boolean) => {
+    setCompact(next);
+    setCompactScope(next);
+  };
   const { data: tasks } = useQuery({
     queryKey: ["case-tasks", caseRecord.id],
     queryFn: () => data.tasks.listByCase(caseRecord.id),
@@ -130,6 +155,38 @@ export const AiBriefing = ({ caseRecord, timeline }: AiBriefingProps) => {
         ))}
       </div>
 
+      {/* Formväxlingen: text, punktlista eller tidslinje - och omfånget. */}
+      <div className="mt-2 flex flex-wrap items-center gap-1.5" role="group" aria-label="Visningsform för rapporten">
+        <span className="text-xs text-muted-foreground">Visning:</span>
+        {PRESENTATION_MODES.map((option) => (
+          <button
+            key={option.id}
+            type="button"
+            onClick={() => chooseMode(option.id)}
+            aria-pressed={mode === option.id}
+            className={`rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
+              mode === option.id
+                ? "border-foreground/70 bg-foreground text-background"
+                : "border-border bg-card text-muted-foreground hover:border-accent/50"
+            }`}
+          >
+            {option.label}
+          </button>
+        ))}
+        <button
+          type="button"
+          onClick={() => chooseCompact(!compact)}
+          aria-pressed={compact}
+          className={`rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
+            compact
+              ? "border-foreground/70 bg-foreground text-background"
+              : "border-border bg-card text-muted-foreground hover:border-accent/50"
+          }`}
+        >
+          Kort version
+        </button>
+      </div>
+
       <div className="mt-3">
         <SimplerLanguageSuggestion />
       </div>
@@ -139,23 +196,78 @@ export const AiBriefing = ({ caseRecord, timeline }: AiBriefingProps) => {
         className="mt-4 text-base font-medium leading-relaxed text-foreground"
       />
 
-      {summary.sections.map((section) => (
-        <div key={section.id} className="mt-5">
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            {section.title}
-          </h3>
-          {section.paragraphs.map((paragraph) => (
-            <GlossaryText
-              key={paragraph.slice(0, 48)}
-              text={paragraph}
-              className="mt-2 text-sm leading-relaxed text-foreground/90"
-            />
+      {/* Kort version: de tre viktigaste åtgärderna. En delmängd av
+          rapporten, aldrig en omskrivning. */}
+      {compact && (
+        <ul className="mt-4 space-y-1.5">
+          {toCompact(summary).topActions.map((action) => (
+            <li key={`kort-${action.label}`} className="flex items-start gap-3 rounded-md border border-border p-2.5">
+              <span className="mt-0.5 w-16 flex-shrink-0 break-words text-[11px] font-bold uppercase leading-tight tracking-wide text-muted-foreground sm:w-24">
+                {action.horizon}
+              </span>
+              <GlossaryText as="span" text={action.label} className="min-w-0 flex-1 text-sm font-medium text-foreground" />
+            </li>
           ))}
-        </div>
-      ))}
+        </ul>
+      )}
 
-      {/* Prioriterad handlingsplan */}
-      {summary.actions.length > 0 && (
+      {!compact && mode === "text" &&
+        summary.sections.map((section) => (
+          <div key={section.id} className="mt-5">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              {section.title}
+            </h3>
+            {section.paragraphs.map((paragraph) => (
+              <GlossaryText
+                key={paragraph.slice(0, 48)}
+                text={paragraph}
+                className="mt-2 text-sm leading-relaxed text-foreground/90"
+              />
+            ))}
+          </div>
+        ))}
+
+      {!compact && mode === "bullets" &&
+        toBullets(summary).map((section) => (
+          <div key={section.id} className="mt-5">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              {section.title}
+            </h3>
+            <ul className="mt-2 list-disc space-y-1 pl-5">
+              {section.items.map((item) => (
+                <li key={item.slice(0, 48)}>
+                  <GlossaryText as="span" text={item} className="text-sm leading-relaxed text-foreground/90" />
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+
+      {!compact && mode === "timeline" && (
+        <ol className="mt-5 space-y-1.5">
+          {toTimelineRows(summary, timeline, new Date()).map((row, index) => (
+            <li key={`${row.label}-${index}`} className="flex items-start gap-3 rounded-md border border-border p-2.5">
+              <span
+                className={`mt-0.5 w-20 flex-shrink-0 break-words text-[11px] font-bold uppercase leading-tight tracking-wide sm:w-24 ${
+                  row.tone === "critical" ? "text-frist" : row.tone === "warning" ? "text-warning" : "text-muted-foreground"
+                }`}
+              >
+                {row.when}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-medium text-foreground">{row.label}</span>
+                {row.detail && (
+                  <GlossaryText as="span" text={row.detail} className="mt-0.5 block text-xs leading-relaxed text-muted-foreground" />
+                )}
+              </span>
+            </li>
+          ))}
+        </ol>
+      )}
+
+      {/* Prioriterad handlingsplan. I tidslinjeformen är åtgärderna redan
+          invävda i kronologin och i korta versionen är urvalet gjort. */}
+      {!compact && mode !== "timeline" && summary.actions.length > 0 && (
         <div className="mt-5">
           <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             Vad måste göras nu?
