@@ -5,6 +5,8 @@ import { DashboardShell } from "@/components/dashboard/DashboardShell";
 import { Button } from "@/components/ui/button";
 import { data } from "@/data";
 import { countdownTo } from "@/lib/actionPlan";
+import { buildExecutiveSummary } from "@/lib/executiveSummary";
+import { buildPortfolioSummary } from "@/lib/portfolioSummary";
 import { timelineForCase, slugName } from "@/lib/caseAnalysis";
 import { buildCaseBundle, timelineToIcs } from "@/lib/integrations/caseBundle";
 import { downloadTextFile } from "@/lib/integrations/download";
@@ -20,6 +22,7 @@ import {
   FolderDown,
   Loader2,
   Plug,
+  Sparkles,
 } from "lucide-react";
 
 /**
@@ -95,10 +98,39 @@ const PractitionerCases = () => {
 
   const [exportingAll, setExportingAll] = useState(false);
 
-  const openTaskCount = (index: number): number | null => {
-    const q = taskQueries[index];
-    if (!q || !q.data) return null;
-    return q.data.filter((t) => !t.doneAt).length;
+  // Portföljrapporten: arbetsledarens rader och rangordningen "vilket
+  // ärende kräver mig först". Byggd ur samma motorer som ärenderapporten,
+  // så siffrorna aldrig kan säga olika saker.
+  const portfolioCases = (cases ?? []).map((c, index) => {
+    const caseTimeline = timelineForCase(c);
+    const caseTasks = taskQueries[index]?.data ?? [];
+    const summary = buildExecutiveSummary({
+      caseRecord: c,
+      timeline: caseTimeline,
+      tasks: caseTasks,
+      members: [],
+      kbr: kbrQueries[index]?.data ?? null,
+      documentCount: 0,
+      payments: [],
+      now,
+    });
+    return {
+      caseRecord: c,
+      severity: summary.severity,
+      timeline: caseTimeline,
+      openTasks: caseTasks.filter((t) => !t.doneAt).length,
+      openMentions: (mentions ?? []).filter((m) => m.caseId === c.id).length,
+    };
+  });
+  const portfolio = buildPortfolioSummary(portfolioCases, now);
+  const byCaseId = new Map(portfolioCases.map((pc) => [pc.caseRecord.id, pc]));
+  const orderedCases = portfolio.ranked
+    .map((r) => ({ ...r, pc: byCaseId.get(r.caseId) }))
+    .filter((r) => r.pc !== undefined);
+
+  const kbrForCard = (caseId: string) => {
+    const index = (cases ?? []).findIndex((c) => c.id === caseId);
+    return index >= 0 ? (kbrQueries[index]?.data ?? null) : null;
   };
 
   /**
@@ -217,6 +249,25 @@ const PractitionerCases = () => {
           </div>
         ) : (
           <>
+            {/* Portföljrapporten */}
+            <section className="rounded-md border border-border bg-card p-5 shadow-soft">
+              <h2 className="flex items-center gap-2 text-lg font-semibold text-foreground">
+                <Sparkles className="h-5 w-5 text-accent" aria-hidden="true" />
+                Din AI-portföljrapport
+              </h2>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Bygger på samtliga öppna ärenden och uppdateras automatiskt när
+                något ändras.
+              </p>
+              <ul className="mt-3 space-y-1.5">
+                {portfolio.lines.map((line) => (
+                  <li key={line} className="text-sm leading-relaxed text-foreground">
+                    {line}
+                  </li>
+                ))}
+              </ul>
+            </section>
+
             {/* Samlade frister */}
             <section aria-labelledby="deadlines-heading">
               <div className="flex flex-wrap items-center justify-between gap-2">
@@ -285,9 +336,10 @@ const PractitionerCases = () => {
 
             {/* Ärendekorten */}
             <section aria-label="Ärenden" className="space-y-3">
-              {(cases ?? []).map((record, index) => {
-                const nextEvent = timelineForCase(record)[0] ?? null;
-                const tasks = openTaskCount(index);
+              {orderedCases.map(({ pc, reason }) => {
+                const record = pc!.caseRecord;
+                const nextEvent = pc!.timeline[0] ?? null;
+                const tasks = pc!.openTasks;
                 return (
                   <article
                     key={record.id}
@@ -298,11 +350,11 @@ const PractitionerCases = () => {
                         <h3 className="font-medium text-foreground">
                           {record.companyName ?? record.orgNumber}
                         </h3>
-                        {kbrQueries[index]?.data && (
+                        {byCaseId.get(record.id) && kbrForCard(record.id) && (
                           <span
-                            className={`rounded-full border px-2 py-0.5 text-xs font-medium ${KBR_BADGE[kbrQueries[index].data.status].tone}`}
+                            className={`rounded-full border px-2 py-0.5 text-xs font-medium ${KBR_BADGE[kbrForCard(record.id)!.status].tone}`}
                           >
-                            {KBR_BADGE[kbrQueries[index].data.status].label}
+                            {KBR_BADGE[kbrForCard(record.id)!.status].label}
                           </span>
                         )}
                         {mentionCount(record.id) > 0 && (
@@ -317,10 +369,11 @@ const PractitionerCases = () => {
                         {record.recommendationTitle && ` · ${record.recommendationTitle}`}
                       </p>
                       <p className="mt-1 text-xs text-muted-foreground">
+                        <span className="font-medium text-foreground/80">Prioritet: {reason}.</span>{" "}
                         {nextEvent
                           ? `Nästa frist: ${nextEvent.label} ${countdownTo(nextEvent.iso, now).label}`
                           : "Inga kommande frister"}
-                        {tasks !== null && ` · ${tasks} öppna uppgifter`}
+                        {` · ${tasks} öppna uppgifter`}
                       </p>
                     </div>
                     <div className="flex flex-wrap gap-2">

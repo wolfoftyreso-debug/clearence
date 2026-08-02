@@ -63,6 +63,14 @@ export const AiBriefing = ({ caseRecord, timeline }: AiBriefingProps) => {
     queryFn: () => data.payments.listByCase(caseRecord.id),
     retry: false,
   });
+  // Samma ärende, olika vy: rådgivarrollen får juridisk analys och
+  // processläge utöver bolagets rapport. En datamodell, rollanpassad
+  // presentation.
+  const { data: profile } = useQuery({
+    queryKey: ["my-profile"],
+    queryFn: () => data.profile.getMine(),
+    retry: false,
+  });
 
   const summary = buildExecutiveSummary({
     caseRecord,
@@ -73,6 +81,7 @@ export const AiBriefing = ({ caseRecord, timeline }: AiBriefingProps) => {
     documentCount: (documents ?? []).length,
     payments: payments ?? [],
     now: new Date(),
+    audience: profile?.role === "advisor" ? "practitioner" : "company",
   });
 
   const horizons: ActionHorizon[] = ["omedelbart", "idag", "denna vecka", "kan vänta"];

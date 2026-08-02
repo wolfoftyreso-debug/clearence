@@ -61,6 +61,13 @@ export interface SummaryInput {
   documentCount: number;
   payments: PaymentRecord[];
   now: Date;
+  /**
+   * Samma ärende, olika vyer: bolagsledningen får en affärs- och
+   * handlingsorienterad rapport; praktikern (jurist, rekonstruktör,
+   * förvaltare) får dessutom juridisk analys och processläge, med lagrum
+   * utan förenklingar. En datamodell, rollanpassad presentation.
+   */
+  audience?: "company" | "practitioner";
 }
 
 const sek = (value: number): string =>
@@ -318,6 +325,48 @@ export const buildExecutiveSummary = (input: SummaryInput): ExecutiveSummary => 
     { id: "risker", title: "Riskanalys", paragraphs: risks },
     { id: "mojligheter", title: "Möjligheter", paragraphs: opportunities },
   ];
+
+  if (input.audience === "practitioner") {
+    // Praktikervyn: lagrummen rakt, ingen pedagogisk omskrivning.
+    const legal: string[] = [];
+    if (!kbr && (seriousRec || severity === "critical")) {
+      legal.push(
+        "Kontrollbalanspunkten är öppen: ingen KBR-bedömning är registrerad trots att ABL 25 kap. 13 § sannolikt aktualiseras. Medansvarsperioden enligt 18 § löper från försummelsen – ett daterat styrelsebeslut bör säkras omgående.",
+      );
+    } else if (kbr) {
+      legal.push(
+        `KBR-bedömning finns registrerad (status: ${kbr.status}). Kontrollera att stämmospåret enligt 25 kap. 15–16 §§ följs om gränsen passerats.`,
+      );
+    }
+    if (c.canPayTax === false) {
+      legal.push(
+        "Företrädaransvaret enligt 59 kap. 12–13 §§ SFL är aktuellt: verksam åtgärd krävs senast på skattens förfallodag. Rekvisiten prövas mot passivitet – dokumentera bedömningen även om beslutet blir att avvakta.",
+      );
+    }
+    legal.push(
+      "Händelseloggen i ärendet är append-only och tidsstämplad av databasen – användbar som bevisning för när styrelsen insåg respektive agerade.",
+    );
+
+    const process: string[] = [];
+    process.push(
+      activeMembers.length > 1
+        ? `Ärendet delas av ${activeMembers.length} deltagare. ${activeMembers.some((m) => m.role === "auditor") ? "Revisor finns i ärendet." : "Revisor saknas i ärendet – granskningen av en KBR kräver det om bolaget har revisor."}`
+        : "Endast företrädaren är inne i ärendet – överväg att få in styrelse och revisor via inbjudningsflödet innan beslut ska protokollföras.",
+    );
+    process.push(
+      documentCount > 0
+        ? `${documentCount} handlingar finns i akten. Aktexport (JSON) och fristkalender (ICS) kan tas ut för byråsystemet.`
+        : "Akten är tom – begär in kontoutdrag, balans- och resultatrapport samt skattekontoutdrag som första komplettering.",
+    );
+    if (openTasks.length > 0) {
+      process.push(`${openTasks.length} öppna punkter i handlingsplanen; de tre närmaste ingår i prioriteringen ovan.`);
+    }
+
+    sections.push(
+      { id: "juridik", title: "Juridisk analys", paragraphs: legal },
+      { id: "process", title: "Processläge", paragraphs: process },
+    );
+  }
 
   return {
     severity,
