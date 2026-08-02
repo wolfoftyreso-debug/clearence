@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { data } from "@/data";
 import { billingState } from "@/lib/billing";
+import { ProviderLogo } from "@/components/integrations/ProviderLogo";
 import type { ProfessionalTerms, SecretInfo } from "@/data/types";
 import {
   AlertTriangle,
@@ -108,10 +109,13 @@ const ProviderRow = ({ provider, stored }: { provider: (typeof PROVIDERS)[number
 
   return (
     <li className="rounded-md border border-border p-4">
-      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-        <div className="min-w-0">
-          <h3 className="font-medium text-foreground">{provider.name}</h3>
-          <p className="text-xs text-muted-foreground">{provider.note}</p>
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+        <div className="flex min-w-0 items-center gap-3">
+          <ProviderLogo provider={provider.id} />
+          <div className="min-w-0">
+            <h3 className="font-medium text-foreground">{provider.name}</h3>
+            <p className="text-xs text-muted-foreground">{provider.note}</p>
+          </div>
         </div>
         {stored ? (
           <span className="flex items-center gap-1.5 text-sm text-success">

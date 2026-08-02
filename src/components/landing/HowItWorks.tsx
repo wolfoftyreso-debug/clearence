@@ -1,20 +1,9 @@
 const steps = [
   {
     number: "01",
-    title: "Beskriv situationen",
+    title: "Gratis nulägesanalys",
     description:
-      "Du svarar på frågor om bolaget, likviditeten och vilka betalningar som ligger närmast i tiden.",
-    points: [
-      "Företagsuppgifter och bransch",
-      "Kassa, fordringar och skulder",
-      "Förfallodagar för löner, skatt och leverantörer",
-    ],
-  },
-  {
-    number: "02",
-    title: "Få en bedömning",
-    description:
-      "Utifrån dina svar får du en sammanfattning av läget, en tidslinje och de risker som är värda att känna till.",
+      "Beskriv situationen, svara på frågor och ladda upp underlag. Du får en första riskbild och ser vilka alternativ som finns – helt utan kostnad. Tröskeln att söka hjälp tidigt ska vara noll.",
     points: [
       "Bedömning: stabilisering, rekonstruktion eller konkurs",
       "Tidslinje utifrån dina egna förfallodagar",
@@ -22,23 +11,34 @@ const steps = [
     ],
   },
   {
-    number: "03",
-    title: "Räkna på likviditeten",
+    number: "02",
+    title: "Starta ärendet",
     description:
-      "Likviditetsplaneringen går igenom en post i taget och visar hur länge pengarna räcker.",
+      "När bolaget väljer Clearance som sitt operativa system startas ett ärende, och sambandscentralen aktiveras: handlingsplan, frister, dokument, deltagare och uppföljning på ett ställe.",
     points: [
-      "Steg för steg, utan förkunskaper",
-      "Löner med arbetsgivaravgift beräknad",
-      "Datum då kassan tar slut",
+      "Handlingsplan med bevakade frister",
+      "Dokumentmallar och samlad akt",
+      "Styrelse, revisor och rådgivare i samma ärende",
+    ],
+  },
+  {
+    number: "03",
+    title: "Led processen med full kontroll",
+    description:
+      "Juridik, ekonomi, bank, personal och myndigheter löper parallellt. Problemet är sällan att information saknas – det är att ingen har full kontroll. Här hålls allt ihop.",
+    points: [
+      "Kontrolläget visar vad som saknas och vad som är nästa steg",
+      "Likviditetsplanen visar hur länge pengarna räcker",
+      "Händelseloggen dokumenterar varje beslut",
     ],
   },
   {
     number: "04",
-    title: "Ta kontakt med rådgivare",
+    title: "Rätt kompetens vid din sida",
     description:
-      "När du vet vad situationen kräver kan du söka upp rekonstruktörer, jurister och ekonomiska rådgivare.",
+      "Bjud in revisorn och styrelsen till ärendet, och hitta rekonstruktörer och jurister när situationen kräver det – med underlaget redan samlat.",
     points: [
-      "Sök på område och region",
+      "Sök rådgivare på område och region",
       "Skicka förfrågan med ditt underlag",
       "Kostnadsfritt för dig som företagare",
     ],
@@ -52,8 +52,8 @@ const HowItWorks = () => {
         <div className="max-w-2xl">
           <h2 className="text-3xl font-display sm:text-4xl">Så fungerar tjänsten</h2>
           <p className="mt-4 text-lg text-muted-foreground">
-            Fyra steg för att få en tydligare bild av läget och av vilket nästa steg
-            som är rimligt.
+            Gratis första analys. Sedan ett operativt ledningssystem som håller
+            ihop processen – som en sambandscentral för styrelse, VD och ägare.
           </p>
         </div>
 

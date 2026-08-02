@@ -34,12 +34,13 @@ const Hero = () => {
           </h1>
 
           <p className="mt-6 max-w-2xl text-lg leading-relaxed text-muted-foreground">
-            Ekonomiska problem är inte bara en ekonomisk fråga – de är också ett
-            juridiskt ansvar. Många skyldigheter är tidskritiska, och att agera i
-            tid är ofta avgörande. CLEARANCE ger dig som driver aktiebolag
-            överblicken: vad som ska göras, när det ska göras och varför – med
-            fristerna bevakade, besluten dokumenterade och hänvisningar till de
-            regler som gäller.
+            När ett bolag hamnar i ekonomiska problem löper juridik, skatt,
+            bank, personal och myndighetskontakter parallellt – och problemet är
+            sällan att information saknas, utan att ingen längre har full
+            kontroll. CLEARANCE är sambandscentralen: vad som ska göras, när och
+            varför, med fristerna bevakade och besluten dokumenterade.
+            Ekonomiska problem är också ett juridiskt ansvar, och att agera i
+            tid är ofta avgörande.
           </p>
 
           <div className="mt-10 flex flex-col gap-3 sm:flex-row">

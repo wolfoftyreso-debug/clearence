@@ -1,4 +1,5 @@
 import { INTEGRATION_REGISTRY } from "@/lib/integrations/registry";
+import { ProviderLogo, REGISTRY_LOGO_MAP } from "./ProviderLogo";
 import { CheckCircle2, Clock } from "lucide-react";
 
 /**
@@ -28,12 +29,15 @@ export const IntegrationStatus = () => {
           </p>
           <ul className="mt-2 space-y-1.5 text-sm">
             {ready.map((t) => (
-              <li key={t.id} className="flex gap-2 text-foreground">
+              <li key={t.id} className="flex items-center gap-2 text-foreground">
+                {REGISTRY_LOGO_MAP[t.id] && (
+                  <ProviderLogo provider={REGISTRY_LOGO_MAP[t.id]} className="h-6 w-6" />
+                )}
+                <span className="min-w-0 flex-1">{t.name}</span>
                 <CheckCircle2
-                  className="mt-0.5 h-4 w-4 flex-shrink-0 text-success"
+                  className="h-4 w-4 flex-shrink-0 text-success"
                   aria-hidden="true"
                 />
-                <span>{t.name}</span>
               </li>
             ))}
           </ul>
@@ -44,8 +48,12 @@ export const IntegrationStatus = () => {
           </p>
           <ul className="mt-2 space-y-1.5 text-sm">
             {upcoming.map((t) => (
-              <li key={t.id} className="flex gap-2 text-muted-foreground">
-                <Clock className="mt-0.5 h-4 w-4 flex-shrink-0" aria-hidden="true" />
+              <li key={t.id} className="flex items-center gap-2 text-muted-foreground">
+                {REGISTRY_LOGO_MAP[t.id] ? (
+                  <ProviderLogo provider={REGISTRY_LOGO_MAP[t.id]} className="h-6 w-6 opacity-70" />
+                ) : (
+                  <Clock className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
+                )}
                 <span>
                   {t.name}
                   <span className="ml-1.5 rounded-full border border-border bg-card px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide">

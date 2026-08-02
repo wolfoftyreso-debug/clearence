@@ -1,4 +1,32 @@
-# Vision: den digitala infrastrukturen för hantering av företagskriser
+# Vision: sambandscentralen för företag i ekonomisk kris
+
+**Positioneringsbeslut 2026-08-02 (grundaren):** Clearance ska inte
+uppfattas som en juridisk informationssajt eller "kunskapsmotor" utan som
+**företagets sambandscentral** — ett operativt ledningssystem under den
+mest kritiska perioden i bolagets liv. När ett bolag hamnar i problem
+löper juridik, ekonomi, skatt, bokföring, banker, leverantörer, personal,
+myndigheter, styrelseansvar, frister och dokumentation parallellt.
+Problemet är sällan att information saknas — problemet är att ingen längre
+har full kontroll. Clearance återtar kontrollen. Vi säljer inte juridik:
+vi säljer kontroll, struktur, trygghet och handlingskraft. Målet är inte
+bara att ta bolag genom rekonstruktion eller konkurs, utan att hjälpa
+ledningen fatta bättre beslut.
+
+**Flödet:** gratis nulägesanalys först (beskriv situationen, svara på
+frågor, ladda upp material, få riskbild och alternativ — utan kostnad, så
+att tröskeln att söka hjälp tidigt är noll). När bolaget väljer Clearance
+som operativt system startas ärendet och plattformen aktiveras:
+handlingsplan, tidslinje, dokument, deltagare, uppgifter, kommunikation
+och uppföljning. Avgiften faktureras bolaget som en normal administrativ
+kostnad för att leda processen korrekt.
+
+**Affärsmodell — att utreda, priset är en parameter:** fast startavgift,
+månadsabonnemang, processavgift, rekonstruktionspaket, konkurspaket,
+rådgivarpaket. Inget belopp skrivs in i visionen — det valideras mot
+marknaden och styrs i driftpanelen. Systemet fakturerar automatiskt och
+håller reda på betalningsstatus innan nästa steg aktiveras (byggt:
+fakturaserie, utkorg, påminnelser, kontostängning, återöppning vid
+betalning).
 
 *Grundarens formulering, 2026-08-01:*
 

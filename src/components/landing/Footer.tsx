@@ -65,7 +65,7 @@ const Footer = () => {
               <span className="font-display text-xl tracking-tight">CLEARANCE</span>
             </Link>
             <p className="mt-4 max-w-xs text-sm leading-relaxed text-primary-foreground/70">
-              Ett administrativt stöd för svenska aktiebolag i ekonomisk kris. Tjänsten
+              Sambandscentralen för svenska aktiebolag i ekonomisk kris: ett operativt ledningssystem som håller ihop juridik, frister, dokumentation och samverkan. Tjänsten
               hjälper dig strukturera underlaget och förstå vilka alternativ som finns
               – den ersätter inte juridisk eller ekonomisk rådgivning.
             </p>
