@@ -18,9 +18,13 @@ const goto = async (path) => {
   await page.waitForTimeout(900);
 };
 
-// Demo-inloggning
+// Fri demoadress via formuläret: behåller adminrätten i demon, så att
+// sviten kan korsa företags- och driftflöden i en och samma inloggning.
+// Rollkontona (företag/jurist) är avsiktligt INTE drift.
 await goto("/login");
-await page.click('button:has-text("Demo – Företag")');
+await page.fill("#email", "drift@example.invalid");
+await page.fill("#password", "demo123");
+await page.click('button[type="submit"]:has-text("Logga in")');
 await page.waitForTimeout(1200);
 check("demo-inloggning når dashboard", page.url().includes("/dashboard"));
 
@@ -81,7 +85,9 @@ check("Creditsafe under Inom kort", /Creditsafe/i.test(docs), docs.slice(0, 200)
 // 6. Utan ärende: KBR visar guiden i stället för förvalet
 await page.evaluate(() => localStorage.clear());
 await goto("/login");
-await page.click('button:has-text("Demo – Företag")');
+await page.fill("#email", "drift@example.invalid");
+await page.fill("#password", "demo123");
+await page.click('button[type="submit"]:has-text("Logga in")');
 await page.waitForTimeout(1000);
 // töm ärendena direkt i demolagret - och guideutkastet, som annars
 // återupptar på resultatsteget i stället för vägvalet

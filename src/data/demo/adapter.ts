@@ -980,11 +980,15 @@ export const demoAdapter: DataPort = {
       save();
     },
     async amIAdmin() {
-      // I demoläget är varje inloggad användare administratör, så inkorgen
-      // går att titta på. Det är riktigt bara här: i den skarpa adaptern
-      // avgörs det av public.platform_admins, som applikationen inte kan
-      // skriva till.
-      return state.user !== null;
+      // Rollkontona speglar verkligheten: företaget och juristen är INTE
+      // drift, så deras menyer visar rollens värld utan driftsektionen.
+      // Adminkontot är drift, och fria demoadresser behåller adminrätt så
+      // att flöden som korsar roller (anspråk → granskning) kan visas i
+      // en och samma inloggning. I den skarpa adaptern avgörs allt av
+      // public.platform_admins, som applikationen inte kan skriva till.
+      const email = state.user?.email?.toLowerCase();
+      if (!email) return false;
+      return email !== DEMO_ACCOUNTS.company && email !== DEMO_ACCOUNTS.advisor;
     },
     async listAll() {
       return [...state.contactMessages];

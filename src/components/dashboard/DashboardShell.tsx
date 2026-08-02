@@ -67,11 +67,11 @@ const COMPANY_NAV: NavItem[] = [
 ];
 
 const ADVISOR_NAV: NavItem[] = [
-  { icon: Briefcase, label: "Ärendeöversikt", href: "/arenden" },
+  { icon: Briefcase, label: "Klienter", href: "/arenden" },
   { icon: LayoutDashboard, label: "Aktivt ärende", href: "/dashboard" },
-  { icon: Briefcase, label: "Mina förfrågningar", href: "/mina-forfragningar" },
-  { icon: FileText, label: "Min profil", href: "/for-radgivare" },
   { icon: MessageSquare, label: "Meddelanden", href: "/dashboard/meddelanden" },
+  { icon: Briefcase, label: "Mina förfrågningar", href: "/mina-forfragningar" },
+  { icon: FileText, label: "Byråprofil och team", href: "/byraprofil" },
   { icon: Settings, label: "Inställningar", href: "/dashboard/installningar" },
 ];
 

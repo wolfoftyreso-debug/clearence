@@ -53,7 +53,9 @@ const HowItWorks = () => {
           <h2 className="text-3xl font-display sm:text-4xl">Så fungerar tjänsten</h2>
           <p className="mt-4 text-lg text-muted-foreground">
             Gratis första analys. Sedan ett operativt ledningssystem som håller
-            ihop processen – som en sambandscentral för styrelse, VD och ägare.
+            ihop processen – en sambandscentral för hela kretsen kring bolaget:
+            styrelse, VD och ägare tillsammans med revisor, jurist och
+            rekonstruktör, i samma ärende.
           </p>
         </div>
 
