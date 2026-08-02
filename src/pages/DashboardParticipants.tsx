@@ -124,21 +124,21 @@ const DashboardParticipants = () => {
                 {activeMembers.map((member) => (
                   <li
                     key={member.id}
-                    className="flex flex-wrap items-baseline gap-x-3 gap-y-1 rounded-md border border-border bg-card p-4"
+                    className="flex flex-col gap-2 rounded-md border border-border bg-card p-4 sm:flex-row sm:items-start sm:justify-between sm:gap-x-4"
                   >
-                    <div className="min-w-0 flex-1">
-                      <p className="font-medium text-foreground">
+                    <div className="min-w-0">
+                      <p className="truncate font-medium text-foreground">
                         {member.displayName || member.email || "Utan namn"}
                       </p>
                       {member.email && member.displayName && (
-                        <p className="text-xs text-muted-foreground">{member.email}</p>
+                        <p className="truncate text-xs text-muted-foreground">{member.email}</p>
                       )}
                     </div>
-                    <div className="text-right">
+                    <div className="min-w-0 sm:max-w-[16rem] sm:text-right">
                       <p className="text-sm font-medium text-foreground">
                         {CASE_ROLE_LABELS[member.role]}
                       </p>
-                      <p className="max-w-xs text-xs text-muted-foreground">
+                      <p className="text-xs leading-relaxed text-muted-foreground">
                         {CASE_ROLE_DESCRIPTIONS[member.role]}
                       </p>
                     </div>

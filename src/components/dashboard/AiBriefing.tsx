@@ -4,7 +4,7 @@ import { data } from "@/data";
 import { buildExecutiveSummary, type ActionHorizon } from "@/lib/executiveSummary";
 import type { CaseRecord } from "@/data/types";
 import type { TimelineEvent } from "@/lib/crisisAnalysis";
-import { ArrowRight, Compass, Sparkles } from "lucide-react";
+import { ArrowRight, Compass, Activity } from "lucide-react";
 
 /**
  * Systemanalysen: det första som möter användaren efter inloggning.
@@ -90,7 +90,7 @@ export const AiBriefing = ({ caseRecord, timeline }: AiBriefingProps) => {
     <section className="mb-6 rounded-md border border-border bg-card p-5 shadow-soft">
       <div className="flex flex-wrap items-center gap-2">
         <h2 className="flex items-center gap-2 text-lg font-semibold text-foreground">
-          <Sparkles className="h-5 w-5 text-accent" aria-hidden="true" />
+          <Activity className="h-5 w-5 text-accent" aria-hidden="true" />
           Systemanalys
         </h2>
         <span

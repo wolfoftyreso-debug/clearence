@@ -628,14 +628,14 @@ const LiquidityTimeline = () => {
                             <Icon className="w-5 h-5" />
                           </div>
 
-                          <div className="min-w-[7rem] flex-1">
+                          <div className="min-w-0 flex-1 basis-40">
                             <div className="flex items-center gap-2 mb-1">
                               <p className="font-medium text-foreground truncate">{payment.label}</p>
                               {payment.recurring && (
                                 <RefreshCw className="w-3 h-3 text-muted-foreground" />
                               )}
                             </div>
-                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm text-muted-foreground">
                               <span>{format(dueDate, 'd MMMM', { locale: sv })}</span>
                               <span>•</span>
                               <span>{categoryLabels[payment.category]}</span>
@@ -645,7 +645,7 @@ const LiquidityTimeline = () => {
                             </div>
                           </div>
 
-                          <div className="text-right">
+                          <div className="flex-shrink-0 text-right">
                             <p className="font-semibold text-foreground mb-1">
                               -{payment.amount.toLocaleString('sv-SE')} kr
                             </p>
@@ -784,18 +784,18 @@ const LiquidityTimeline = () => {
                             <ArrowDownLeft className="w-5 h-5" />
                           </div>
 
-                          <div className="min-w-[7rem] flex-1">
+                          <div className="min-w-0 flex-1 basis-40">
                             <div className="flex items-center gap-2 mb-1">
                               <p className="font-medium text-foreground truncate">{invoice.label}</p>
                             </div>
-                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                              <span>{invoice.counterpart}</span>
+                            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm text-muted-foreground">
+                              <span className="max-w-full truncate">{invoice.counterpart}</span>
                               <span>•</span>
                               <span>Förfaller {format(new Date(invoice.dueDate), 'd MMM', { locale: sv })}</span>
                             </div>
                           </div>
 
-                          <div className="text-right">
+                          <div className="flex-shrink-0 text-right">
                             <p className="font-semibold text-emerald-600 mb-1">
                               +{invoice.amount.toLocaleString('sv-SE')} kr
                             </p>
@@ -848,18 +848,18 @@ const LiquidityTimeline = () => {
                             <ArrowUpRight className="w-5 h-5" />
                           </div>
 
-                          <div className="min-w-[7rem] flex-1">
+                          <div className="min-w-0 flex-1 basis-40">
                             <div className="flex items-center gap-2 mb-1">
                               <p className="font-medium text-foreground truncate">{invoice.label}</p>
                             </div>
-                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                              <span>{invoice.counterpart}</span>
+                            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm text-muted-foreground">
+                              <span className="max-w-full truncate">{invoice.counterpart}</span>
                               <span>•</span>
                               <span>Förfaller {format(new Date(invoice.dueDate), 'd MMM', { locale: sv })}</span>
                             </div>
                           </div>
 
-                          <div className="text-right">
+                          <div className="flex-shrink-0 text-right">
                             <p className="font-semibold text-foreground mb-1">
                               -{invoice.amount.toLocaleString('sv-SE')} kr
                             </p>

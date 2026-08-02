@@ -8,7 +8,7 @@ import type { CaseRecord } from "@/data/types";
 import type { TimelineEvent } from "@/lib/crisisAnalysis";
 import { matchProfessionals, playbookForTask, type TaskContext } from "@/lib/taskIntelligence";
 import { Link } from "react-router-dom";
-import { ArrowRight, CalendarClock, CheckCircle2, ChevronDown, ListTodo, Loader2, Plus, Wand2 } from "lucide-react";
+import { ArrowRight, CalendarClock, CheckCircle2, ChevronDown, ListTodo, Loader2, Plus, ListChecks } from "lucide-react";
 
 /**
  * Handlingsplanen: ärendets klockor och dess checklista, överst på
@@ -260,7 +260,7 @@ export const ActionPlan = ({ caseRecord, timeline }: ActionPlanProps) => {
                           aria-label={expanded ? "Stäng processen" : "Öppna processen"}
                           className="flex flex-shrink-0 items-center gap-1 rounded-md border border-border px-2 py-1 text-xs text-muted-foreground transition-colors hover:border-accent hover:text-foreground"
                         >
-                          <Wand2 className="h-3.5 w-3.5" aria-hidden="true" />
+                          <ListChecks className="h-3.5 w-3.5" aria-hidden="true" />
                           Så gör du
                           <ChevronDown
                             className={`h-3.5 w-3.5 transition-transform ${expanded ? "rotate-180" : ""}`}

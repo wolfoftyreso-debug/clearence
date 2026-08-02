@@ -8,7 +8,7 @@ import { CASE_ROLE_LABELS } from "@/lib/caseRoles";
 import { downloadTextFile } from "@/lib/integrations/download";
 import { summarizeAuditTrail } from "@/lib/auditDetail";
 import type { AuditEventRecord } from "@/data/types";
-import { Download, History, Loader2, Sparkles } from "lucide-react";
+import { Download, History, Loader2, ClipboardList } from "lucide-react";
 
 /**
  * Händelseloggen - ärendets svarta låda, som läsfönster.
@@ -109,7 +109,7 @@ const DashboardAudit = () => {
 
           <section className="mt-4 rounded-md border border-border bg-card p-4">
             <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
-              <Sparkles className="h-4 w-4 text-accent" aria-hidden="true" />
+              <ClipboardList className="h-4 w-4 text-accent" aria-hidden="true" />
               Systemsammanfattning
             </h2>
             <ul className="mt-2 space-y-1">
