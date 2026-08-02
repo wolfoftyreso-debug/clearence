@@ -103,6 +103,14 @@ Varje bedömning bär sin källa, synligt:
 * 🔴 **Låg** - viktiga uppgifter saknas; CLEARANCE säger det och drar ingen
   slutsats (fallbackens beteende).
 
+## API-first
+
+Allt som går att göra i gränssnittet ska gå att göra via API. Grunden
+finns: hela produkten går genom EN portyta (DataPort) utan bakvägar,
+och kontraktet utåt är api/openapi.json (se docs/api.md) - versionerat,
+statusmärkt (live/beta) och vaktat av tester. Appen är ett av
+gränssnitten; externa system är de andra.
+
 ## De fyra objekten
 
 Allt i systemet ska kunna beskrivas med fyra objekt - inget femte

@@ -1,0 +1,963 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "CLEARANCE Öppna API",
+    "version": "1.0.0-beta",
+    "description": "API-first: allt som går att göra i gränssnittet ska gå att göra via API. Kontraktet bygger på de fyra objekten (samtal, beslut, dokument, uppgifter) plus ärendet. Statusmärkning per operation: `live` är körbar idag, `beta` är kontrakt-först. API:t levererar strukturerad, spårbar ärendedata - aldrig automatiska bedömningar: mottagarens system drar sina egna slutsatser. Bakåtkompatibilitet inom v1: fält läggs till, aldrig bort.",
+    "contact": {
+      "name": "Landvex AB",
+      "url": "https://clearance.se/kontakt"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://api.clearance.se/v1",
+      "description": "Produktion"
+    },
+    {
+      "url": "https://sandbox.api.clearance.se/v1",
+      "description": "Sandbox - demoadapterns datamodell"
+    }
+  ],
+  "security": [
+    {
+      "apiKey": []
+    }
+  ],
+  "paths": {
+    "/cases": {
+      "get": {
+        "operationId": "listCases",
+        "summary": "Lista ärenden kontot har åtkomst till",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "createCase",
+        "summary": "Skapa ärende (motsvarar nulägesanalysens registrering)",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/cases/{caseId}": {
+      "parameters": [
+        {
+          "name": "caseId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "getCase",
+        "summary": "Hämta ärendets nuläge",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "operationId": "updateCase",
+        "summary": "Uppdatera registrerade uppgifter",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/cases/{caseId}/close": {
+      "post": {
+        "operationId": "closeCase",
+        "summary": "Avsluta krisfasen med orsak (stabiliserad, rekonstruktion genomförd, konkurs, likvidation, annat). Ingenting raderas - akten består.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/cases/{caseId}/journal": {
+      "get": {
+        "operationId": "listJournal",
+        "summary": "Arbetsloggen: append-only-journalen, filtrerbar på objekttyp och tidsintervall, exporterbar",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "objectType",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "since",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        ]
+      }
+    },
+    "/cases/{caseId}/documents": {
+      "get": {
+        "operationId": "listDocuments",
+        "summary": "Dokumenten med granskningsstatus",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "uploadDocument",
+        "summary": "Ladda upp dokument till akten",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/documents/{documentId}/review": {
+      "post": {
+        "operationId": "setDocumentReview",
+        "summary": "Granskningsövergång: request/approve/reset. Godkännande kräver rådgivarroll - prövas i backend.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/cases/{caseId}/decisions": {
+      "get": {
+        "operationId": "listDecisions",
+        "summary": "Beslutsminnet: protokollförda beslut med premiss",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "recordDecision",
+        "summary": "Protokollför beslut med premiss (omprövningsvillkoret)",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/decisions/{decisionId}/reconsider": {
+      "post": {
+        "operationId": "reconsiderDecision",
+        "summary": "Ompröva - aldrig ändra: en stämplad markering ovanpå, originalet står kvar",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/cases/{caseId}/tasks": {
+      "get": {
+        "operationId": "listTasks",
+        "summary": "Uppgifterna i handlingsplanen",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "operationId": "updateTasks",
+        "summary": "Bocka av eller delegera uppgifter",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/cases/{caseId}/report": {
+      "get": {
+        "operationId": "getReport",
+        "summary": "Rapporten ur samma datamodell, som JSON eller PDF",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "format",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "json",
+                "pdf"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "/cases/{caseId}/share-links": {
+      "get": {
+        "operationId": "listShareLinks",
+        "summary": "Ärendets live-länkar med åtkomsträkning",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "createShareLink",
+        "summary": "Skapa live-länk (nivå overview/full, tidsbegränsad, återkallbar)",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/share-links/{linkId}": {
+      "delete": {
+        "operationId": "revokeShareLink",
+        "summary": "Återkalla live-länken - omedelbar verkan",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/shared/{token}": {
+      "get": {
+        "operationId": "getSharedCase",
+        "summary": "Live-ärendelänkens maskinläsbara nuläge. Publik: skyddet är tidsgräns, återkallbarhet och åtkomstlogg. Samma tystnad för okända, utgångna och återkallade länkar.",
+        "x-status": "live",
+        "responses": {
+          "200": {
+            "description": "Ärendets nuläge, scopat",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SharedCaseView"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Okänd, utgången eller återkallad länk - samma tystnad"
+          }
+        },
+        "security": [],
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "webhooks": {
+    "document.created": {
+      "post": {
+        "operationId": "whDocumentCreated",
+        "summary": "Ett dokument laddades upp",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "document.review_changed": {
+      "post": {
+        "operationId": "whDocumentReview",
+        "summary": "Granskningsstatus ändrades (för granskning/godkänt/utkast)",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "case.status_changed": {
+      "post": {
+        "operationId": "whCaseStatus",
+        "summary": "Ärendet ändrade status eller avslutades",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "decision.recorded": {
+      "post": {
+        "operationId": "whDecisionRecorded",
+        "summary": "Ett beslut protokollfördes med premiss",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "decision.reconsidered": {
+      "post": {
+        "operationId": "whDecisionReconsidered",
+        "summary": "Ett beslut omprövades",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "report.generated": {
+      "post": {
+        "operationId": "whReportGenerated",
+        "summary": "En rapport färdigställdes",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "task.completed": {
+      "post": {
+        "operationId": "whTaskCompleted",
+        "summary": "En uppgift bockades av",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "apiKey": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "API-nyckel per organisation, hanterad i driftens valv. Samma radskydd som appen: API:t ser det kontots roller ser."
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "required": [
+          "code",
+          "message"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "enum": [
+              "unauthorized",
+              "forbidden",
+              "not_found",
+              "validation_failed",
+              "payment_required",
+              "conflict",
+              "rate_limited",
+              "internal"
+            ]
+          },
+          "message": {
+            "type": "string",
+            "description": "Läsbart, på svenska. Ärligt: rollfel är information, inte teknikfel."
+          }
+        }
+      },
+      "Case": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "orgNumber": {
+            "type": "string"
+          },
+          "companyName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "recommendationType": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "bankruptcy",
+              "reconstruction",
+              "stabilize",
+              null
+            ]
+          },
+          "totalDebt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "quickLiquidationValue": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "closedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "exitReason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "healthMode": {
+            "type": "boolean"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "JournalEvent": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "action": {
+            "type": "string"
+          },
+          "objectType": {
+            "type": "string"
+          },
+          "objectId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "detail": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "Document": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "fileName": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "reviewStatus": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "in_review",
+              "approved"
+            ]
+          },
+          "reviewedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "Decision": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "title": {
+            "type": "string"
+          },
+          "rationale": {
+            "type": "string"
+          },
+          "premise": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Omprövningsvillkoret: det som gällde när beslutet togs."
+          },
+          "decidedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "reconsidered"
+            ]
+          },
+          "reconsideredAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
+      "Task": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "label": {
+            "type": "string"
+          },
+          "dueDate": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date"
+          },
+          "doneAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "assignedTo": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "ShareLink": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "scope": {
+            "type": "string",
+            "enum": [
+              "overview",
+              "full"
+            ]
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "revokedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "accessCount": {
+            "type": "integer",
+            "description": "Varje öppning loggas."
+          }
+        }
+      },
+      "SharedCaseView": {
+        "type": "object",
+        "description": "Exakt samma datamodell som den mänskliga live-vyn. Data - aldrig bedömningar.",
+        "properties": {
+          "scope": {
+            "type": "string",
+            "enum": [
+              "overview",
+              "full"
+            ]
+          },
+          "orgNumber": {
+            "type": "string"
+          },
+          "companyName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "recommendationTitle": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "totalDebt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "quickLiquidationValue": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "documents": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/Document"
+            }
+          }
+        }
+      }
+    }
+  }
+}
