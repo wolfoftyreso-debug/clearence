@@ -1653,6 +1653,32 @@ end $$;
 select pg_temp.check('a removed member leaves the team',
   (select count(*) from public.list_firm_team('f0000000-0000-0000-0000-000000000099')), 1::bigint);
 
+/* ========================================================================== */
+/* Skuggdebiteringen: driftens växel, aldrig byråns                           */
+/* ========================================================================== */
+
+set local role authenticated;
+
+-- En vanlig användare kan inte slå på skuggläget.
+select pg_temp.as_user('22222222-2222-2222-2222-222222222222');
+do $$
+begin
+  begin
+    perform public.set_billing_shadow('f0000000-0000-0000-0000-000000000099', true);
+    raise exception 'FAIL  en icke-administratör kunde sätta skuggläget';
+  exception when others then
+    if sqlerrm like 'FAIL%' then raise; end if;
+    raise notice 'ok    shadow mode requires platform admin';
+  end;
+end $$;
+
+-- Driften (1111) slår på skuggläget; planraden skapas vid behov.
+select pg_temp.as_user('11111111-1111-1111-1111-111111111111');
+select public.set_billing_shadow('f0000000-0000-0000-0000-000000000099', true);
+select pg_temp.check('the admin can enable shadow mode',
+  (select count(*) from public.billing_plans
+   where professional_id = 'f0000000-0000-0000-0000-000000000099' and shadow), 1::bigint);
+
 reset role;
 select 'ALL RLS TESTS PASSED' as result;
 

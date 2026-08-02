@@ -995,6 +995,7 @@ export type Database = {
           monthly_fee_sek: number | null
           plan_kind: string
           professional_id: string
+          shadow: boolean
           unlock_fee_sek: number | null
           updated_at: string
         }
@@ -1003,6 +1004,7 @@ export type Database = {
           monthly_fee_sek?: number | null
           plan_kind?: string
           professional_id: string
+          shadow?: boolean
           unlock_fee_sek?: number | null
           updated_at?: string
         }
@@ -1011,6 +1013,7 @@ export type Database = {
           monthly_fee_sek?: number | null
           plan_kind?: string
           professional_id?: string
+          shadow?: boolean
           unlock_fee_sek?: number | null
           updated_at?: string
         }
@@ -1078,6 +1081,7 @@ export type Database = {
           professional_id: string
           service_code: string
           service_label: string
+          shadow: boolean
           user_id: string
           vat_rate: number
         }
@@ -1094,6 +1098,7 @@ export type Database = {
           professional_id: string
           service_code: string
           service_label: string
+          shadow?: boolean
           user_id: string
           vat_rate?: number
         }
@@ -1211,6 +1216,10 @@ export type Database = {
           role: string
           created_at: string
         }[]
+      }
+      set_billing_shadow: {
+        Args: { p_professional_id: string; p_shadow: boolean }
+        Returns: undefined
       }
       set_plan_approval: {
         Args: { p_case_id: string; p_approved: boolean }

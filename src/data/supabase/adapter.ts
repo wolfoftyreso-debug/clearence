@@ -1127,6 +1127,7 @@ export const supabaseAdapter: DataPort = {
         planKind: row.plan_kind as "per_case" | "subscription" | "usage" | "enterprise",
         unlockFeeSek: row.unlock_fee_sek === null ? null : Number(row.unlock_fee_sek),
         monthlyFeeSek: row.monthly_fee_sek === null ? null : Number(row.monthly_fee_sek),
+        shadow: row.shadow,
       }));
     },
     async setBillingPlan({ professionalId, planKind, unlockFeeSek, monthlyFeeSek }) {
@@ -1143,6 +1144,13 @@ export const supabaseAdapter: DataPort = {
         p_professional_id: professionalId,
         p_hold: hold,
         p_reason: reason ?? null,
+      });
+      if (error) throw error;
+    },
+    async setBillingShadow(professionalId, shadow) {
+      const { error } = await supabase.rpc("set_billing_shadow", {
+        p_professional_id: professionalId,
+        p_shadow: shadow,
       });
       if (error) throw error;
     },
@@ -1640,6 +1648,7 @@ export const supabaseAdapter: DataPort = {
         orgNumber: row.org_number,
         amountOre: Number(row.amount_ore),
         vatRate: Number(row.vat_rate),
+        shadow: row.shadow,
         createdAt: row.created_at,
         invoiceId: row.invoice_id,
         contactRequestId: row.contact_request_id,

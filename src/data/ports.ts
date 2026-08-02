@@ -469,6 +469,8 @@ export interface OpsPort {
       planKind: "per_case" | "subscription" | "usage" | "enterprise";
       unlockFeeSek: number | null;
       monthlyFeeSek: number | null;
+      /** Skuggläge (pilotens spår A): avgifter registreras och visas men faktureras aldrig. */
+      shadow: boolean;
     }[]
   >;
   setBillingPlan(input: {
@@ -482,6 +484,11 @@ export interface OpsPort {
    * nästa avgiftsbelagda köp - pågående arbete påverkas aldrig.
    */
   setBillingHold(professionalId: string, hold: boolean, reason?: string): Promise<void>;
+  /**
+   * Skuggläget per byrå. Stämplas på varje avgift NÄR den uppstår -
+   * att slå av läget efterfakturerar aldrig gamla skuggrader.
+   */
+  setBillingShadow(professionalId: string, shadow: boolean): Promise<void>;
 
   /** North Star och churn: återhämtade, i hälsoläge, dålig churn, öppna. */
   northStarCounts(): Promise<{

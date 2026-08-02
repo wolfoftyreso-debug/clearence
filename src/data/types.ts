@@ -254,6 +254,8 @@ export interface UsageChargeRecord {
   createdAt: string;
   invoiceId: string | null;
   contactRequestId: string | null;
+  /** Skuggdebitering (pilotens spår A): visas med belopp, faktureras aldrig. */
+  shadow: boolean;
 }
 
 export interface RatingRecord {

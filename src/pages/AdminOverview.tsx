@@ -393,7 +393,7 @@ const PlanRow = ({
   plan,
 }: {
   terms: ProfessionalTerms;
-  plan: { planKind: string; unlockFeeSek: number | null; monthlyFeeSek: number | null } | undefined;
+  plan: { planKind: string; unlockFeeSek: number | null; monthlyFeeSek: number | null; shadow: boolean } | undefined;
 }) => {
   const queryClient = useQueryClient();
   const [kind, setKind] = useState(plan?.planKind ?? "per_case");
@@ -414,6 +414,13 @@ const PlanRow = ({
         unlockFeeSek: parse(unlockFee),
         monthlyFeeSek: parse(monthlyFee),
       }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["billing-plans"] }),
+  });
+  // Skuggväxeln (pilotens spår A): registrera och visa, fakturera aldrig.
+  // Egen växel skild från planbytet - den stämplas på framtida rader.
+  const setShadow = useMutation({
+    mutationFn: (shadow: boolean) =>
+      data.ops.setBillingShadow(terms.professionalId, shadow),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["billing-plans"] }),
   });
 
@@ -455,6 +462,16 @@ const PlanRow = ({
       {save.isError && (
         <p className="mt-1 text-xs text-destructive" role="alert">Kunde inte spara planen.</p>
       )}
+      <label className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+        <input
+          type="checkbox"
+          checked={plan?.shadow ?? false}
+          disabled={setShadow.isPending}
+          onChange={(e) => setShadow.mutate(e.target.checked)}
+          className="h-3.5 w-3.5 accent-[hsl(var(--accent))]"
+        />
+        Skuggdebitering (pilotens spår A): avgifter registreras och visas men faktureras aldrig
+      </label>
     </li>
   );
 };

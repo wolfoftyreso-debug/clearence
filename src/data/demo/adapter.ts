@@ -319,11 +319,18 @@ const demoFees = new Map<string, number>();
  */
 const demoPlans = new Map<
   string,
-  { planKind: "per_case" | "subscription" | "usage" | "enterprise"; unlockFeeSek: number | null; monthlyFeeSek: number | null }
+  {
+    planKind: "per_case" | "subscription" | "usage" | "enterprise";
+    unlockFeeSek: number | null;
+    monthlyFeeSek: number | null;
+    /** Skuggläge: registreras och visas, faktureras aldrig (pilotens spår A). */
+    shadow: boolean;
+  }
 >([
-  ["demo-pro-1", { planKind: "per_case", unlockFeeSek: 995, monthlyFeeSek: null }],
-  ["demo-pro-2", { planKind: "per_case", unlockFeeSek: 995, monthlyFeeSek: null }],
-  ["demo-pro-3", { planKind: "subscription", unlockFeeSek: null, monthlyFeeSek: 4900 }],
+  ["demo-pro-1", { planKind: "per_case", unlockFeeSek: 995, monthlyFeeSek: null, shadow: false }],
+  // Juristens egen byrå kör pilotens spår A i demon: skuggdebitering.
+  ["demo-pro-2", { planKind: "per_case", unlockFeeSek: 995, monthlyFeeSek: null, shadow: true }],
+  ["demo-pro-3", { planKind: "subscription", unlockFeeSek: null, monthlyFeeSek: 4900, shadow: false }],
 ]);
 const demoHolds = new Map<string, string>();
 
@@ -741,6 +748,24 @@ const seedForAdvisor = (userId: string) => {
       createdAt: now(),
       acceptedAt: null,
       revokedAt: null,
+    },
+  ];
+  // Skuggdebiteringen i bruk (pilotens spår A): en upplåsning, prissatt
+  // och synlig i debiteringsöversikten - men aldrig fakturerad.
+  state.usageCharges = [
+    {
+      id: uid(),
+      serviceCode: "case_unlock",
+      serviceLabel: "Ärende upplåst",
+      caseType: "reconstruction",
+      companyName: "Demo Bygg AB",
+      orgNumber: "556012-1111",
+      amountOre: 99500,
+      vatRate: 0.25,
+      createdAt: now(),
+      invoiceId: null,
+      contactRequestId: null,
+      shadow: true,
     },
   ];
 };
@@ -1360,11 +1385,22 @@ export const demoAdapter: DataPort = {
       }));
     },
     async setBillingPlan({ professionalId, planKind, unlockFeeSek, monthlyFeeSek }) {
-      demoPlans.set(professionalId, { planKind, unlockFeeSek, monthlyFeeSek });
+      // Skuggläget rör inte planbytet - det är en egen växel.
+      const shadow = demoPlans.get(professionalId)?.shadow ?? false;
+      demoPlans.set(professionalId, { planKind, unlockFeeSek, monthlyFeeSek, shadow });
     },
     async setBillingHold(professionalId, hold, reason) {
       if (hold) demoHolds.set(professionalId, reason?.trim() || "spärrad i demon");
       else demoHolds.delete(professionalId);
+    },
+    async setBillingShadow(professionalId, shadow) {
+      const plan = demoPlans.get(professionalId) ?? {
+        planKind: "per_case" as const,
+        unlockFeeSek: null,
+        monthlyFeeSek: null,
+        shadow: false,
+      };
+      demoPlans.set(professionalId, { ...plan, shadow });
     },
     async northStarCounts() {
       const cases = state.cases;
@@ -2061,6 +2097,7 @@ export const demoAdapter: DataPort = {
             createdAt: now(),
             invoiceId: null,
             contactRequestId: requestId,
+            shadow: plan?.shadow ?? false,
           },
           ...state.usageCharges,
         ];

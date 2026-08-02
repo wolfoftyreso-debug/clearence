@@ -274,8 +274,12 @@ const AdvisorReferrals = () => {
     retry: false,
   });
 
-  const upcoming = charges.filter((c) => c.invoiceId === null);
+  // Skuggrader (pilotens spår A) visas med belopp men faktureras aldrig -
+  // de redovisas separat så att "att fakturera" aldrig ljuger.
+  const upcoming = charges.filter((c) => c.invoiceId === null && !c.shadow);
   const upcomingTotal = upcoming.reduce((sum, c) => sum + c.amountOre, 0);
+  const shadowCharges = charges.filter((c) => c.shadow);
+  const shadowTotal = shadowCharges.reduce((sum, c) => sum + c.amountOre, 0);
 
   const setStatus = useMutation({
     mutationFn: ({ id, status }: { id: string; status: ReferralStatus }) =>
@@ -361,6 +365,31 @@ const AdvisorReferrals = () => {
                 <p className="mt-3 flex justify-between border-t border-border pt-2 text-sm font-medium text-foreground">
                   <span>Att fakturera (exkl. moms)</span>
                   <span className="tabular-nums">{kr(upcomingTotal)}</span>
+                </p>
+              </WizardCard>
+            )}
+
+            {shadowCharges.length > 0 && (
+              <WizardCard>
+                <WizardCardHeader
+                  title="Skuggdebitering – faktureras inte"
+                  description="Ni deltar i pilotens mätspår: varje händelse prissätts och visas här, men ingenting faktureras och ingenting efterfaktureras. Det ni ser är vad det hade kostat."
+                />
+                <ul className="space-y-1">
+                  {shadowCharges.map((charge) => (
+                    <li key={charge.id} className="flex flex-wrap justify-between gap-2 text-sm">
+                      <span className="min-w-0 text-muted-foreground">
+                        {format(new Date(charge.createdAt), "yyyy-MM-dd", { locale: sv })} ·{" "}
+                        {charge.companyName ?? charge.serviceLabel}
+                        {charge.orgNumber ? ` (${charge.orgNumber})` : ""} · {charge.serviceLabel}
+                      </span>
+                      <span className="tabular-nums text-muted-foreground">{kr(charge.amountOre)}</span>
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-3 flex justify-between border-t border-border pt-2 text-sm font-medium text-foreground">
+                  <span>Hade kostat (exkl. moms)</span>
+                  <span className="tabular-nums">{kr(shadowTotal)}</span>
                 </p>
               </WizardCard>
             )}

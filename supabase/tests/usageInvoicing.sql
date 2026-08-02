@@ -114,6 +114,75 @@ begin
   raise notice 'ok 5: körningen är idempotent - en post faktureras en gång';
 end $$;
 
+/* --- skuggdebiteringen (pilotens spår A) ---------------------------------- */
+
+-- En byrå i skuggläge: upplåsningar i juli registreras och visas, men
+-- månadsjobbet får varken fakturera dem eller stämpla invoice_id.
+insert into auth.users (id, email, password_hash) values
+  ('b3333333-3333-3333-3333-333333333333', 'byra3@skugga.se', 'x');
+insert into public.professionals (id, name, company, category, user_id, billing_email) values
+  ('e3333333-0000-0000-0000-000000000003', 'Skugg Juridik', 'Skugg Juridik AB', 'affarsjurist',
+   'b3333333-3333-3333-3333-333333333333', 'ekonomi@skuggjuridik.se');
+insert into public.billing_plans (professional_id, plan_kind, unlock_fee_sek, shadow) values
+  ('e3333333-0000-0000-0000-000000000003', 'per_case', 995, true);
+insert into public.usage_charges
+  (professional_id, user_id, service_code, service_label, company_name, amount_ore, shadow, created_at)
+values
+  ('e3333333-0000-0000-0000-000000000003', 'b3333333-3333-3333-3333-333333333333',
+   'case_unlock', 'Ärende upplåst', 'Skuggkund AB', 99500, true, '2026-07-10T10:00:00+02');
+
+create temp table run3 as
+select * from public.issue_usage_invoices('2026-08-01T07:00:00Z');
+
+do $$
+declare v_count int;
+begin
+  -- Skuggbyrån får ingen faktura, inte ens en överhoppad rad.
+  select count(*) into v_count from run3 where customer_name = 'Skugg Juridik AB';
+  if v_count <> 0 then
+    raise exception 'FAIL  skuggbyrån dök upp i faktureringen (% rader)', v_count;
+  end if;
+  raise notice 'ok 6: en byrå i skuggläge faktureras aldrig';
+
+  -- Skuggraden består, synlig och ofakturerad - det är hela poängen.
+  select count(*) into v_count from public.usage_charges
+  where shadow and invoice_id is not null;
+  if v_count <> 0 then
+    raise exception 'FAIL  % skuggrader fick invoice_id', v_count;
+  end if;
+  select count(*) into v_count from public.usage_charges
+  where professional_id = 'e3333333-0000-0000-0000-000000000003' and shadow;
+  if v_count <> 1 then
+    raise exception 'FAIL  skuggraden saknas (%)', v_count;
+  end if;
+  raise notice 'ok 7: skuggrader förblir synliga och utan invoice_id';
+end $$;
+
+-- Skugg-abonnemang: raden skapas för perioden (synlig i översikten) men
+-- faktureras inte.
+update public.billing_plans
+set plan_kind = 'subscription', unlock_fee_sek = null, monthly_fee_sek = 2900
+where professional_id = 'e3333333-0000-0000-0000-000000000003';
+
+create temp table run4 as
+select * from public.issue_usage_invoices('2026-08-01T08:00:00Z');
+
+do $$
+declare v_count int;
+begin
+  select count(*) into v_count from public.usage_charges
+  where professional_id = 'e3333333-0000-0000-0000-000000000003'
+    and service_code = 'subscription' and period_start = '2026-07-01' and shadow;
+  if v_count <> 1 then
+    raise exception 'FAIL  skugg-abonnemangsraden skapades inte (%)', v_count;
+  end if;
+  select count(*) into v_count from run4 where customer_name = 'Skugg Juridik AB';
+  if v_count <> 0 then
+    raise exception 'FAIL  skugg-abonnemanget fakturerades';
+  end if;
+  raise notice 'ok 8: skugg-abonnemang syns för perioden men faktureras aldrig';
+end $$;
+
 select 'ALL USAGE INVOICING TESTS PASSED' as result;
 
 rollback;
