@@ -25,6 +25,7 @@ import { useAutosavedState } from "@/hooks/useAutosavedState";
 import { ResumeNotice } from "@/components/wizard/ResumeNotice";
 import { SaveWithAccountPrompt } from "@/components/SaveWithAccountPrompt";
 import { analyseCrisis, formatSwedishDate } from "@/lib/crisisAnalysis";
+import { clearOnboarding, readOnboarding } from "@/lib/advisor/onboardingHandoff";
 
 interface FormData {
   // Step 1 - Company
@@ -147,6 +148,28 @@ const CrisisWizard = () => {
   const updateField = useCallback(<K extends keyof FormData>(field: K, value: FormData[K]) => {
     setFormData(prev => ({ ...prev, [field]: value }));
   }, [setFormData]);
+
+  // Grunduppgifterna från onboardingen följer med hit. CLEARANCE lovade
+  // att de sparar tid; att fråga om organisationsnumret en gång till
+  // vore att lära användaren att samtalet inte får konsekvenser.
+  // Körs EN gång, och bara i ett tomt utkast - ett återupptaget utkast
+  // äger sina egna svar.
+  const seeded = useRef(false);
+  useEffect(() => {
+    if (seeded.current) return;
+    seeded.current = true;
+    if (draft.restored) return;
+    const handoff = readOnboarding();
+    if (!handoff) return;
+    setFormData((prev) => {
+      if (prev.orgNumber || prev.manualCompanyName) return prev;
+      return {
+        ...prev,
+        orgNumber: handoff.orgNumber ? formatOrgNumber(handoff.orgNumber) : prev.orgNumber,
+        manualCompanyName: handoff.company || prev.manualCompanyName,
+      };
+    });
+  }, [draft.restored, setFormData]);
 
   // Auto-lookup company when org number is valid.
   // lookupRequestId guards against a slower, stale request overwriting a
@@ -271,8 +294,11 @@ const CrisisWizard = () => {
       setSaving(false);
       setCaseId(created.id);
       setCaseCreated(true);
-      // Sparat på riktigt - utkastet har gjort sitt.
+      // Sparat på riktigt - utkastet har gjort sitt, och grunduppgifterna
+      // från onboardingen bor nu i ärendet. Lämnas de kvar förifyller de
+      // nästa ärende med föregående bolag.
       draft.clear();
+      clearOnboarding();
     } catch (err) {
       console.error('Failed to save case:', err);
       setSaving(false);
@@ -345,6 +371,43 @@ const CrisisWizard = () => {
                 <p className="font-semibold text-foreground">{formData.companyInfo.name}</p>
                 <p className="text-sm text-muted-foreground">{formData.companyInfo.legalForm}</p>
               </div>
+              {/* Övriga registeruppgifter visas bara när registret
+                  faktiskt lämnade dem. Ett fält som gissas är värre än
+                  ett som saknas - användaren litar på det. */}
+              <dl className="space-y-1 text-sm">
+                {formData.companyInfo.registrationYear && (
+                  <div className="flex flex-wrap gap-x-2">
+                    <dt className="text-muted-foreground">Registreringsår:</dt>
+                    <dd className="font-medium text-foreground">{formData.companyInfo.registrationYear}</dd>
+                  </div>
+                )}
+                {formData.companyInfo.boardMembers && formData.companyInfo.boardMembers.length > 0 && (
+                  <div className="flex flex-wrap gap-x-2">
+                    <dt className="text-muted-foreground">Styrelseledamöter:</dt>
+                    <dd className="font-medium text-foreground">{formData.companyInfo.boardMembers.join(", ")}</dd>
+                  </div>
+                )}
+                {formData.companyInfo.fTax !== undefined && (
+                  <div className="flex flex-wrap gap-x-2">
+                    <dt className="text-muted-foreground">F-skatt:</dt>
+                    <dd className="font-medium text-foreground">{formData.companyInfo.fTax ? "Godkänd" : "Ej godkänd"}</dd>
+                  </div>
+                )}
+                {formData.companyInfo.vatRegistered !== undefined && (
+                  <div className="flex flex-wrap gap-x-2">
+                    <dt className="text-muted-foreground">Momsregistrering:</dt>
+                    <dd className="font-medium text-foreground">
+                      {formData.companyInfo.vatRegistered ? "Registrerad" : "Ej registrerad"}
+                    </dd>
+                  </div>
+                )}
+                {formData.companyInfo.status && (
+                  <div className="flex flex-wrap gap-x-2">
+                    <dt className="text-muted-foreground">Status:</dt>
+                    <dd className="font-medium text-foreground">{formData.companyInfo.status}</dd>
+                  </div>
+                )}
+              </dl>
             </div>
           )}
           
@@ -865,7 +928,12 @@ const CrisisWizard = () => {
           </ol>
         </WizardCard>
 
-        {/* Comfort Text - Dynamic based on recommendation */}
+        {/* Sammanhanget till bedömningen: vad läget faktiskt betyder.
+            Rubriken var tidigare en tröstformulering om ensamhet -
+            välmenande, men den talade om känslan i stället för om
+            arbetet, och många företagsledare vill inte bli
+            omhändertagna. Se docs/conversation-constitution.md och
+            tests/tone.ts, som numera stoppar den sortens rubrik. */}
         <WizardCard>
           <div className="flex items-start gap-3">
             <div className="w-10 h-10 rounded-full bg-accent/10 flex items-center justify-center flex-shrink-0">
@@ -873,10 +941,10 @@ const CrisisWizard = () => {
             </div>
             <div>
               <h4 className="font-medium text-foreground mb-2">
-                {recommendation.type === 'stabilize' ? 'Det finns vägar framåt' : 'Du är inte ensam'}
+                {recommendation.type === 'stabilize' ? 'Det finns vägar framåt' : 'Vad det här läget innebär'}
               </h4>
               <p className="text-sm text-muted-foreground leading-relaxed">
-                {recommendation.type === 'stabilize' 
+                {recommendation.type === 'stabilize'
                   ? 'Ett pressat läge behöver inte betyda att bolaget är förlorat, men det avgörs av siffrorna och av hur snabbt du agerar – inte av något vi kan lova här. Likviditetsplanering och tidig dialog med borgenärer är det som brukar ge handlingsutrymme. Vi hjälper dig strukturera nästa steg.'
                   : recommendation.type === 'reconstruction'
                   ? 'Rekonstruktion är ett verktyg för att rädda livskraftiga verksamheter genom att ge tillfälligt skydd mot utmätning medan en plan tas fram tillsammans med borgenärerna.'

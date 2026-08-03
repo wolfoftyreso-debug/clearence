@@ -134,7 +134,10 @@ for (const flow of DIALOG_FLOWS) {
 check("CLEARANCE hälsar med förnamn, sparsamt", CLARA.greeting("Erik Andersson").startsWith("Hej Erik."));
 check("CLEARANCE hälsar utan namn när det saknas", CLARA.greeting(null).startsWith("Hej."));
 check("onboardingen har fem situationsval", ONBOARDING.situations.length === 5);
-check("onboardingen frågar EN sak i taget", ONBOARDING.intro[ONBOARDING.intro.length - 1].includes("Vad heter du?"));
+// Grunduppgifterna frågas i ETT svep - en fråga i taget börjar gälla när
+// frågorna kräver eftertanke, inte när de kräver ifyllning. Formen vaktas
+// i sin helhet av tests/tone.ts.
+check("onboardingen tar grunduppgifterna i ett svep", ONBOARDING.fields.length === 3);
 check("CLEARANCE navigerar själv till nulägesanalysen", ONBOARDING.closing.join(" ").includes("Jag öppnar nu nulägesanalysen"));
 
 const checkIn = decisionCheckIn({

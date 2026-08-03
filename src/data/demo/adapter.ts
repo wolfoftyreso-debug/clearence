@@ -2591,6 +2591,11 @@ export const demoAdapter: DataPort = {
           address: "Exempelgatan 1, 111 22 Stockholm",
           sniCode: "62010",
           sniDescription: "Dataprogrammering",
+          registrationYear: "2014",
+          boardMembers: ["Erik Andersson", "Maria Lindqvist"],
+          fTax: true,
+          vatRegistered: true,
+          status: "Aktivt",
         };
       }
       return null;

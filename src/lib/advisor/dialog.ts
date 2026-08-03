@@ -563,19 +563,65 @@ export const CLARA = {
 } as const;
 
 /**
- * Onboardingen: den första upplevelsen är ett samtal, inte ett
- * dashboard. CLEARANCE frågar EN sak i taget - namn, företag, situation -
- * och öppnar sedan nulägesanalysen själv. Användaren ska aldrig behöva
- * tänka "var ska jag klicka?".
+ * Onboardingen: den första upplevelsen är ett samtal - men ett samtal
+ * som BÖRJAR ARBETA, inte ett som pratar färdigt först.
+ *
+ * Tidigare frågade CLEARANCE en sak i taget redan här: namn, sedan
+ * företag, sedan situation. Det lät omtänksamt och kändes långsamt.
+ * Grunduppgifterna är tre saker en företagare kan svara på i ett svep,
+ * och att stycka dem i tre turer är att lägga till friktion utan att
+ * lägga till förståelse. Därför visas de SAMTIDIGT.
+ *
+ * En fråga i taget gäller fortfarande - från det ögonblick frågorna
+ * kräver eftertanke. Skillnaden är var gränsen går: identitet är
+ * ifyllning, situationen är samtal.
  */
 export const ONBOARDING = {
   intro: [
-    "Hej. Jag heter CLEARANCE och jag hjälper dig genom den här processen.",
-    "Om ditt företag har ekonomiska problem är du inte ensam. Det kan kännas överväldigande, men vi tar en sak i taget – mitt jobb är att hjälpa dig skapa struktur, förstå dina alternativ och dokumentera allt längs vägen.",
-    "Låt oss börja. Vad heter du?",
+    "Hej! Jag heter CLEARANCE och guidar dig genom processen. För att komma igång behöver jag bara några grunduppgifter.",
+    "Många företag hamnar någon gång i en situation där ekonomin behöver analyseras och struktureras. Min uppgift är att hjälpa dig samla rätt information, skapa en tydlig överblick och dokumentera processen på ett sätt som sparar tid och minskar risken för misstag.",
   ],
-  askCompany: (name: string): string => `Tack ${name.split(" ")[0]}. Vilket företag gäller det?`,
-  askSituation: "Tack. Först behöver jag förstå din situation. Vilket av följande stämmer bäst?",
+  /**
+   * De tre fälten, som data: gränssnittet renderar dem, testet räknar
+   * dem, och ingen kan lägga till ett fjärde utan att någon märker det.
+   */
+  fields: [
+    { id: "name", label: "Ditt namn", placeholder: "Förnamn Efternamn", autoComplete: "name" },
+    { id: "company", label: "Företagsnamn", placeholder: "Bolagets namn", autoComplete: "organization" },
+    { id: "orgNumber", label: "Organisationsnummer", placeholder: "XXXXXX-XXXX", autoComplete: "off" },
+  ],
+  submitLabel: "Fortsätt",
+  /**
+   * Efter Fortsätt blir samtalet personligt - och konkret. Namnet
+   * används sparsamt, vid övergångar; det här är en av dem.
+   */
+  confirm: (name: string, company: string, orgNumber: string): string => {
+    const firstName = name.trim().split(/\s+/)[0];
+    const bolag = orgNumber.trim() ? `${company} (${orgNumber.trim()})` : company;
+    return [
+      `Tack ${firstName}. Jag ser att vi nu arbetar med ${bolag}.`,
+      "Min uppgift är att hjälpa dig skapa struktur, dokumentera situationen och ta fram det underlag som behövs.",
+      "Vi tar en fråga i taget och du kan när som helst pausa eller gå tillbaka.",
+    ].join(" ");
+  },
+  /**
+   * Processen i fast ordning. Att visa den är inte dekor: den som ser
+   * hela vägen vet att det tar slut, och vet var hen är just nu.
+   */
+  steps: [
+    { n: 1, label: "Kontaktperson", purpose: "Vem vi skriver till och i vems namn handlingarna upprättas" },
+    { n: 2, label: "Företagsuppgifter", purpose: "Bolaget, formen och de registrerade uppgifterna" },
+    { n: 3, label: "Kort nuläge", purpose: "Vad som gör att du är här" },
+    { n: 4, label: "Prioriterade problem", purpose: "Vad som måste lösas först" },
+    { n: 5, label: "Tidskritiska händelser", purpose: "Frister och datum som styr handlingsutrymmet" },
+    { n: 6, label: "Dokumentinsamling", purpose: "Underlaget som bedömningarna ska vila på" },
+  ],
+  /** Uppslaget mot registret. Sagt först när det faktiskt har hänt. */
+  lookupDone:
+    "Tack. Jag har identifierat företaget och fyllt i grunduppgifterna. Vi kan nu fokusera på själva situationen.",
+  lookupMiss:
+    "Jag hittar inte bolaget i registret just nu. Det stoppar ingenting – vi använder namnet du angav och kompletterar uppgifterna senare.",
+  askSituation: "Steg 3 av 6: kort nuläge. Vilket beskriver läget bäst just nu?",
   situations: [
     { id: "oro", label: "Jag är orolig för ekonomin" },
     { id: "fakturor", label: "Jag kan inte betala vissa fakturor" },
@@ -584,12 +630,13 @@ export const ONBOARDING = {
     { id: "vet-inte", label: "Jag vet inte riktigt vad problemet är" },
   ],
   /**
-   * Avslutet: bekräftelse + vad som händer härnäst. Nulägesanalysen är
-   * faktainsamlingen - CLEARANCE öppnar den, användaren letar inte.
+   * Avslutet: en bekräftelse som är förankrad i vad användaren faktiskt
+   * lämnade - inte tom beröm - och sedan vad som händer härnäst.
+   * CLEARANCE öppnar nulägesanalysen, användaren letar inte.
    */
   closing: [
-    "Tack. Då har jag det jag behöver för att börja.",
-    "Jag öppnar nu nulägesanalysen. Den tar 5–10 minuter och ger oss en gemensam bild av läget – siffrorna, fristerna och alternativen. Jag finns här när den är klar.",
+    "Tack. Med kontaktperson, bolag och en första lägesbeskrivning har vi ett underlag att arbeta vidare från.",
+    "Jag öppnar nu nulägesanalysen, som täcker steg 3–6. Den tar 5–10 minuter och ger oss en gemensam bild av läget – siffrorna, fristerna och alternativen. Du kan när som helst pausa eller gå tillbaka.",
   ],
 } as const;
 

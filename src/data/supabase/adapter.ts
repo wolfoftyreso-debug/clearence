@@ -2200,12 +2200,23 @@ export const supabaseAdapter: DataPort = {
           body: { orgNumber: digits },
         });
         if (error || !data?.name) return null;
+        // De valfria fälten skickas vidare BARA när källan lämnade dem.
+        // Ett tomt registerfält som fylls med "" eller false blir en
+        // uppgift användaren tror är kontrollerad - vi lämnar det
+        // odefinierat i stället, och gränssnittet visar det inte alls.
         return {
           name: data.name,
           legalForm: data.legalForm || "",
           address: data.address || "",
           sniCode: data.sniCode || "",
           sniDescription: data.sniDescription || "",
+          ...(data.registrationYear ? { registrationYear: String(data.registrationYear) } : {}),
+          ...(Array.isArray(data.boardMembers) && data.boardMembers.length > 0
+            ? { boardMembers: data.boardMembers.map(String) }
+            : {}),
+          ...(typeof data.fTax === "boolean" ? { fTax: data.fTax } : {}),
+          ...(typeof data.vatRegistered === "boolean" ? { vatRegistered: data.vatRegistered } : {}),
+          ...(data.status ? { status: String(data.status) } : {}),
         };
       } catch {
         return null;

@@ -332,12 +332,31 @@ export interface NewReferral {
   channel: ReferralChannel;
 }
 
+/**
+ * Vad ett uppslag mot företagsregistret ger tillbaka.
+ *
+ * De fem första fälten är alltid ifyllda när ett bolag hittas. De sex
+ * sista är `undefined` när källan inte lämnade dem - och det är hela
+ * poängen: gränssnittet visar bara det som faktiskt kom tillbaka.
+ * Ett registerfält som gissas är värre än ett som saknas, eftersom
+ * användaren litar på det.
+ */
 export interface CompanyInfo {
   name: string;
   legalForm: string;
   address: string;
   sniCode: string;
   sniDescription: string;
+  /** Registreringsår, som fyrsiffrigt årtal. */
+  registrationYear?: string;
+  /** Styrelseledamöter, i registrets ordning. */
+  boardMembers?: string[];
+  /** Godkänd för F-skatt. `undefined` = källan sa inget. */
+  fTax?: boolean;
+  /** Registrerad för moms. `undefined` = källan sa inget. */
+  vatRegistered?: boolean;
+  /** Bolagets status hos registret, t.ex. "Aktivt". */
+  status?: string;
 }
 
 /**

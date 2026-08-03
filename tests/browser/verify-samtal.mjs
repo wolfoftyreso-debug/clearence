@@ -265,18 +265,23 @@ await page.click('button:has-text("Prata med CLEARANCE")');
 await page.waitForTimeout(1200);
 body = await page.innerText("body");
 check("CLEARANCE presenterar sig", /Jag heter CLEARANCE/i.test(body));
-check("första frågan är namnet", /Vad heter du\?/.test(body));
-await page.fill("#onboarding-input", "Erik Andersson");
-await page.click('button[aria-label="Skicka"]');
+// Grunduppgifterna tas i ETT svep: tre fält, en knapp. Att stycka dem i
+// tre turer var friktion utan förståelse.
+check("de tre fälten visas samtidigt", (await page.locator("#onboarding-name").count()) === 1
+  && (await page.locator("#onboarding-company").count()) === 1
+  && (await page.locator("#onboarding-org").count()) === 1);
+check("gamla en-fråga-i-taget-rutan är borta", (await page.locator("#onboarding-input").count()) === 0);
+check("empatin är nedtonad", !/Du är inte ensam/i.test(body) && !/överväldigande/i.test(body));
+check("situationen normaliseras sakligt", /Många företag hamnar någon gång/.test(body));
+await page.fill("#onboarding-name", "Erik Andersson");
+await page.fill("#onboarding-company", "Eriks Bygg AB");
+await page.click('button:has-text("Fortsätt")');
 await page.waitForTimeout(600);
 body = await page.innerText("body");
 check("namnet används sparsamt (förnamn, en gång)", /Tack Erik\./.test(body) && !/Erik Erik/.test(body));
-check("nästa fråga är företaget", /Vilket företag gäller det\?/.test(body));
-await page.fill("#onboarding-input", "Eriks Bygg AB");
-await page.click('button[aria-label="Skicka"]');
-await page.waitForTimeout(600);
-body = await page.innerText("body");
-check("situationsvalen visas", /Vilket av följande stämmer bäst\?/.test(body) && /orolig för ekonomin/i.test(body));
+check("bekräftelsen nämner bolaget", /Jag ser att vi nu arbetar med Eriks Bygg AB/.test(body));
+check("processen visas i fast ordning", /Kontaktperson/.test(body) && /Dokumentinsamling/.test(body));
+check("situationsvalen visas", /Steg 3 av 6/.test(body) && /orolig för ekonomin/i.test(body));
 await page.click('button:has-text("Jag kan inte betala vissa fakturor")');
 await page.waitForTimeout(800);
 body = await page.innerText("body");
