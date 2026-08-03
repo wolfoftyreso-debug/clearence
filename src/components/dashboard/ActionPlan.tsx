@@ -179,7 +179,7 @@ export const ActionPlan = ({ caseRecord, timeline }: ActionPlanProps) => {
   const done = (tasks ?? []).filter((t) => t.doneAt);
 
   return (
-    <section className="rounded-md border border-border bg-card p-5 shadow-soft">
+    <section id="nasta-steg" className="scroll-mt-20 rounded-md border border-border bg-card p-5 shadow-soft">
       <h2 className="flex flex-wrap items-center gap-2 font-semibold text-foreground">
         <ListTodo className="h-5 w-5 text-accent" aria-hidden="true" />
         Nästa steg
@@ -301,10 +301,12 @@ export const ActionPlan = ({ caseRecord, timeline }: ActionPlanProps) => {
                     : [];
                   return (
                     <li key={task.id} className="rounded-md border border-border p-3">
-                      {/* Rubriken får hela radbredden; expandern står på egen
-                          rad under, indragen i linje med texten. En knapp som
-                          trängs bredvid en tvåradig rubrik var det rörigaste
-                          på hela mobilvyn - lugn slår densitet. */}
+                      {/* Rubriken får hela radbredden; expandern och
+                          delegeringen bor i samma kolumn som etiketten -
+                          indraget kommer ur kompositionen, inte ur en
+                          marginal som härmar checkboxens geometri. En knapp
+                          som trängs bredvid en tvåradig rubrik var det
+                          rörigaste på hela mobilvyn - lugn slår densitet. */}
                       <div className="flex items-start gap-3">
                         <input
                           id={`task-${task.id}`}
@@ -314,19 +316,19 @@ export const ActionPlan = ({ caseRecord, timeline }: ActionPlanProps) => {
                           onChange={() => toggle.mutate({ id: task.id, done: true })}
                           className="mt-0.5 h-4 w-4 flex-shrink-0 rounded border-border accent-accent"
                         />
+                        <div className="min-w-0 flex-1">
                         <label
                           htmlFor={`task-${task.id}`}
-                          className="min-w-0 flex-1 cursor-pointer text-sm leading-relaxed text-foreground"
+                          className="block cursor-pointer text-sm leading-relaxed text-foreground"
                         >
                           {task.label}
                         </label>
-                      </div>
                       <button
                         type="button"
                         onClick={() => setExpandedTask(expanded ? null : task.id)}
                         aria-expanded={expanded}
                         aria-label={expanded ? "Stäng processen" : "Öppna processen"}
-                        className="ml-7 mt-1.5 flex items-center gap-1 text-xs font-medium text-accent transition-colors hover:text-foreground"
+                        className="mt-1.5 flex items-center gap-1 text-xs font-medium text-accent transition-colors hover:text-foreground"
                       >
                         <ListChecks className="h-3.5 w-3.5" aria-hidden="true" />
                         Så gör du
@@ -338,7 +340,7 @@ export const ActionPlan = ({ caseRecord, timeline }: ActionPlanProps) => {
 
                       {/* Delegeringen: pekas på en deltagare, syns för alla. */}
                       {(members ?? []).filter((m) => !m.revokedAt).length > 0 && (
-                        <div className="ml-7 mt-1.5 flex flex-wrap items-center gap-1.5">
+                        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                           <label
                             htmlFor={`assign-${task.id}`}
                             className="text-xs text-muted-foreground"
@@ -365,6 +367,8 @@ export const ActionPlan = ({ caseRecord, timeline }: ActionPlanProps) => {
                           </select>
                         </div>
                       )}
+                        </div>
+                      </div>
 
                       {expanded && (
                         <div className="mt-3 space-y-3 rounded-md bg-secondary/40 p-3">

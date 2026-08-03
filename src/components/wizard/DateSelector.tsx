@@ -34,7 +34,7 @@ export const DateSelector = ({
             type="button"
             onClick={() => onChange(day)}
             className={cn(
-              "px-4 py-2 rounded-lg border text-sm font-medium transition-colors",
+              "px-4 py-2 rounded-md border text-sm font-medium transition-colors",
               value === day
                 ? "bg-accent text-accent-foreground border-accent"
                 : "bg-background border-border text-foreground hover:border-accent/50"
@@ -57,7 +57,7 @@ export const DateSelector = ({
           max={31}
           value={value}
           onChange={(e) => onChange(parseInt(e.target.value) || 1)}
-          className="w-20 px-3 py-2 rounded-lg border border-border bg-background text-foreground text-center focus:outline-none focus:ring-2 focus:ring-accent"
+          className="w-20 px-3 py-2 rounded-md border border-border bg-background text-foreground text-center focus:outline-none focus:ring-2 focus:ring-accent"
         />
       </div>
 

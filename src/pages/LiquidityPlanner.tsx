@@ -493,7 +493,7 @@ const LiquidityPlanner = () => {
         <div className="container px-4 py-3">
           <div className="flex items-center justify-between">
             <button onClick={() => navigate("/")} className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg surface-accent flex items-center justify-center">
+              <div className="w-8 h-8 rounded-md surface-accent flex items-center justify-center">
                 <span className="text-accent-foreground font-bold text-sm">C</span>
               </div>
               <span className="font-display text-lg text-foreground">CLEARANCE</span>
@@ -714,19 +714,19 @@ const ResultView = ({ projection }: { projection: ReturnType<typeof projectLiqui
 
       {/* Key figures */}
       <div className="grid grid-cols-3 gap-3">
-        <div className="p-3 rounded-lg bg-secondary/50 text-center">
+        <div className="p-3 rounded-md bg-secondary/50 text-center">
           <span className="text-xs text-muted-foreground block">In totalt</span>
           <p className="font-semibold text-emerald-600 tabular-nums">
             {projection.totalInflow.toLocaleString("sv-SE")}
           </p>
         </div>
-        <div className="p-3 rounded-lg bg-secondary/50 text-center">
+        <div className="p-3 rounded-md bg-secondary/50 text-center">
           <span className="text-xs text-muted-foreground block">Ut totalt</span>
           <p className="font-semibold text-foreground tabular-nums">
             {projection.totalOutflow.toLocaleString("sv-SE")}
           </p>
         </div>
-        <div className="p-3 rounded-lg bg-secondary/50 text-center">
+        <div className="p-3 rounded-md bg-secondary/50 text-center">
           <span className="text-xs text-muted-foreground block">Lägsta saldo</span>
           <p
             className={`font-semibold tabular-nums ${

@@ -7,7 +7,7 @@ const Stats = () => {
   return (
     <section className="surface-brand py-16 md:py-20">
       <div className="container px-4">
-        <div className="grid grid-cols-1 gap-10 md:grid-cols-12 md:items-center md:gap-12">
+        <div className="grid grid-cols-1 gap-8 md:grid-cols-12 md:items-center md:gap-12">
           <div className="md:col-span-5">
             <p className="font-display text-5xl text-accent md:text-6xl">
               {companies.toLocaleString("sv-SE")}

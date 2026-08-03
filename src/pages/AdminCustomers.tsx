@@ -262,7 +262,7 @@ const OutboxPanel = () => {
   const failedCount = (outbox ?? []).filter((m) => m.status === "failed").length;
 
   return (
-    <section className="mt-10">
+    <section className="mt-12">
       <h2 className="flex items-center gap-2 font-display text-xl text-foreground">
         <Mail className="h-5 w-5 text-accent" aria-hidden="true" />
         Utgående e-post

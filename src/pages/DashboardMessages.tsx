@@ -472,7 +472,7 @@ const DashboardMessages = () => {
           {/* Meddelandena */}
           <div className="mt-4 space-y-3">
             {loadingMessages ? (
-              <div className="flex justify-center py-10">
+              <div className="flex justify-center py-8">
                 <Loader2 className="h-5 w-5 animate-spin text-accent" aria-hidden="true" />
               </div>
             ) : (messages ?? []).length === 0 ? (

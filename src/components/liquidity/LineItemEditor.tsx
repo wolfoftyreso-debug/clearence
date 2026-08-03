@@ -145,7 +145,7 @@ export const LineItemEditor = ({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <div className="flex rounded-lg border border-border overflow-hidden">
+          <div className="flex rounded-md border border-border overflow-hidden">
             <button
               type="button"
               onClick={() => setRecurring(true)}
@@ -175,7 +175,7 @@ export const LineItemEditor = ({
                 max={31}
                 value={dayOfMonth}
                 onChange={(e) => setDayOfMonth(Math.min(31, Math.max(1, parseInt(e.target.value, 10) || 1)))}
-                className="w-16 px-2 py-2 rounded-lg border border-border bg-background text-center"
+                className="w-16 px-2 py-2 rounded-md border border-border bg-background text-center"
                 aria-label="Dag i månaden"
               />
               :e
@@ -185,7 +185,7 @@ export const LineItemEditor = ({
               type="date"
               value={date}
               onChange={(e) => setDate(e.target.value)}
-              className="px-3 py-2 rounded-lg border border-border bg-background text-sm"
+              className="px-3 py-2 rounded-md border border-border bg-background text-sm"
               aria-label="Datum"
             />
           )}

@@ -119,7 +119,7 @@ const Marketplace = () => {
       <Header />
       
       <main className="pt-24 pb-16">
-        <section className="container px-4 mb-10">
+        <section className="container px-4 mb-12">
           <div className="max-w-2xl">
             <h1 className="font-display text-3xl text-foreground sm:text-4xl">
               Hitta rådgivare

@@ -551,7 +551,7 @@ const LiquidityTimeline = () => {
                     <button
                       key={scenario}
                       onClick={() => setActiveScenario(scenario)}
-                      className={`flex items-center gap-2 px-3 py-1.5 rounded-lg transition-colors ${
+                      className={`flex items-center gap-2 px-3 py-1.5 rounded-md transition-colors ${
                         activeScenario === scenario ? 'bg-secondary' : 'hover:bg-secondary/50'
                       }`}
                     >
@@ -762,17 +762,17 @@ const LiquidityTimeline = () => {
 
                 <TabsContent value="in" className="mt-0">
                   <div className="grid grid-cols-2 gap-3 mb-4">
-                    <div className="p-3 bg-emerald-500/10 rounded-lg">
+                    <div className="p-3 bg-emerald-500/10 rounded-md">
                       <p className="text-xs text-muted-foreground mb-1">Väntar betalning</p>
                       <p className="text-lg font-semibold text-emerald-600">+{invoiceStats.incomingTotal.toLocaleString('sv-SE')} kr</p>
                     </div>
-                    <div className="p-3 bg-destructive/10 rounded-lg">
+                    <div className="p-3 bg-destructive/10 rounded-md">
                       <p className="text-xs text-muted-foreground mb-1">Förfallna</p>
                       <p className="text-lg font-semibold text-destructive">{invoiceStats.incomingOverdueTotal.toLocaleString('sv-SE')} kr</p>
                     </div>
                   </div>
 
-                  <div className="divide-y divide-border rounded-lg border border-border">
+                  <div className="divide-y divide-border rounded-md border border-border">
                     {invoices
                       .filter(inv => inv.direction === 'in' && inv.status !== 'paid')
                       .sort((a, b) => a.dueDate.localeCompare(b.dueDate))
@@ -826,17 +826,17 @@ const LiquidityTimeline = () => {
 
                 <TabsContent value="out" className="mt-0">
                   <div className="grid grid-cols-2 gap-3 mb-4">
-                    <div className="p-3 bg-secondary rounded-lg">
+                    <div className="p-3 bg-secondary rounded-md">
                       <p className="text-xs text-muted-foreground mb-1">Att betala</p>
                       <p className="text-lg font-semibold text-foreground">-{invoiceStats.outgoingTotal.toLocaleString('sv-SE')} kr</p>
                     </div>
-                    <div className="p-3 bg-destructive/10 rounded-lg">
+                    <div className="p-3 bg-destructive/10 rounded-md">
                       <p className="text-xs text-muted-foreground mb-1">Förfallna</p>
                       <p className="text-lg font-semibold text-destructive">{invoiceStats.outgoingOverdueTotal.toLocaleString('sv-SE')} kr</p>
                     </div>
                   </div>
 
-                  <div className="divide-y divide-border rounded-lg border border-border">
+                  <div className="divide-y divide-border rounded-md border border-border">
                     {invoices
                       .filter(inv => inv.direction === 'out' && inv.status !== 'paid')
                       .sort((a, b) => a.dueDate.localeCompare(b.dueDate))

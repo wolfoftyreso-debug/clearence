@@ -55,7 +55,7 @@ const Footer = () => {
   return (
     <footer className="bg-primary text-primary-foreground">
       <div className="container px-4 py-12 md:py-16">
-        <div className="grid grid-cols-2 gap-10 md:grid-cols-12 md:gap-8">
+        <div className="grid grid-cols-2 gap-8 md:grid-cols-12 md:gap-8">
           {/* Identity */}
           <div className="col-span-2 md:col-span-3">
             <Link to="/" className="flex items-center gap-2">

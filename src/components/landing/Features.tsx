@@ -82,7 +82,7 @@ const Features = () => {
               <Link
                 key={feature.title}
                 to={feature.to}
-                className="group flex flex-col bg-card p-6 transition-colors hover:bg-secondary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset md:p-7"
+                className="group flex flex-col bg-card p-6 transition-colors hover:bg-secondary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset md:p-6"
               >
                 <Icon className="h-6 w-6 text-accent" aria-hidden="true" />
                 <h3 className="mt-4 text-lg font-semibold text-foreground">

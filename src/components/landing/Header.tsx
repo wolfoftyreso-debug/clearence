@@ -86,21 +86,21 @@ const Header = () => {
             <nav className="flex flex-col gap-2">
               <SectionLink
                 target="features"
-                className="px-4 py-3 text-foreground hover:bg-secondary rounded-lg transition-colors"
+                className="px-4 py-3 text-foreground hover:bg-secondary rounded-md transition-colors"
                 onNavigate={() => setIsMenuOpen(false)}
               >
                 Funktioner
               </SectionLink>
               <SectionLink
                 target="how-it-works"
-                className="px-4 py-3 text-foreground hover:bg-secondary rounded-lg transition-colors"
+                className="px-4 py-3 text-foreground hover:bg-secondary rounded-md transition-colors"
                 onNavigate={() => setIsMenuOpen(false)}
               >
                 Så fungerar det
               </SectionLink>
               <Link
                 to="/om"
-                className="px-4 py-3 text-foreground hover:bg-secondary rounded-lg transition-colors"
+                className="px-4 py-3 text-foreground hover:bg-secondary rounded-md transition-colors"
                 onClick={() => setIsMenuOpen(false)}
               >
                 Om oss

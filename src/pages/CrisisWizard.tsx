@@ -744,7 +744,7 @@ const CrisisWizard = () => {
               {recommendation.timeline.map((event) => (
                 <li key={event.label} className="flex gap-4">
                   <div
-                    className={`w-16 flex-shrink-0 rounded-lg px-2 py-1.5 text-center ${
+                    className={`w-16 flex-shrink-0 rounded-md px-2 py-1.5 text-center ${
                       event.severity === 'critical'
                         ? 'bg-destructive/10 text-destructive'
                         : event.severity === 'warning'
@@ -935,7 +935,7 @@ const CrisisWizard = () => {
               onClick={() => navigate("/")}
               className="flex items-center gap-2"
             >
-              <div className="w-8 h-8 rounded-lg surface-accent flex items-center justify-center">
+              <div className="w-8 h-8 rounded-md surface-accent flex items-center justify-center">
                 <span className="text-accent-foreground font-bold text-sm">C</span>
               </div>
               <span className="font-display text-lg text-foreground">CLEARANCE</span>

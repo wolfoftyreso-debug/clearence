@@ -144,5 +144,48 @@ elegans- och UX-kraven (6–9), rond 4 konsekvens/prestanda/premium (10–14).
 
 ---
 
+# ROND 3 – elegans- och UX-kraven 6–9
+
+**Mätning:** översikten 3 729 px = 4 mobilskärmar - samma nivå som
+rond 2 (3 719 px) trots att en helt ny yta tillkom överst. Det nya
+betalades med en dödad dubblett, inte med mer scroll.
+
+## Åtgärdat i rond 3 (verifierat i kod, mätning och test)
+
+| Krav | Åtgärd |
+|---|---|
+| 6. Spacing-skala | Dokumenterad i docs/design-system.md utifrån produktens faktiska rytm (4/8/12/16/20/24/32 px + sektionssteg 48/64/80) och lintad av tests/spacing.ts: inga frihandsvärden, stegen 7/9/10/11 förbjudna, 14 bara som bottennavens frizon, vendorerade ui-primitiver undantagna. Avvikarna normaliserade: px-7-pillren, gap-10, py-10, mt/mb-10, md:p-7, pb-14 i Hero - och handlingsplanens ml-7 ersattes med komposition (underraderna bor i etikettens kolumn, indraget kommer ur strukturen, inte ur en marginal som härmar checkboxens geometri) |
+| 7. Kortkomposition | Två korttyper fastställda (ytkortet och radkortet, docs/design-system.md); hörnradien rounded-md överallt utanför ui-biblioteket - 30 strö-rounded-lg/xl i KBR, likviditetsvyerna, wizarden, headern och katalogen städade. Vaktas av samma linttest |
+| 8. Första sekunden | "Närmast"-raden överst på översikten: EN rad med närmaste fristen och nedräkningen (eller översta öppna uppgiften när ingen frist väntar), länkad rakt in i planen. Före allt annat - blicken landar på "vad gör jag nu?" innan något annat hinner tala |
+| 9. Ny utvärdering degraderad | Ghost-knapp i stället för accent när ett ärende pågår - "fortsätt där du är" har ingen konkurrent. Utan aktivt ärende är den vägen in och behåller accenten |
+
+Dessutom i ronden: statusbannern på översikten är död - den sa samma
+sak som Systemanalysens allvarsgrad + huvudbudskap direkt under
+(dubblettregeln från rond 1 gäller åt alla håll). Det är därför
+Närmast-raden fick plats utan att mätningen växte.
+
+Verifiering: 25 enhetssviter (tests/spacing.ts ny), verify-rond3.mjs
+(7 kontroller), hela browserbatteriet, mobil- och designvakterna.
+
+## Betyg (rond 3)
+
+| Kategori | Rond 2 | Rond 3 | Domskäl |
+|---|---|---|---|
+| Enkelhet | 9 | **10** | Första skärmen bär nu det ENDA viktigaste nästa steget överst; översikten svarar på en skärm och fördjupar nedåt. Mätningen höll utan informationsförlust |
+| Elegans | 7 | **9** | En skala, en hörnradie, två korttyper - dokumenterat och lintat, inte bara påstått. Kvar till 10: täthetsvariationen mellan de äldre sidorna (likviditetsvyerna är byggda i en annan generation av formspråket) jämnas ut när de sidorna ändå öppnas i rond 4 |
+| UX | 8 | **9** | Krav 8-9 uppfyllda: blicken landar rätt första sekunden och ingen knapp konkurrerar om nästa steg. Kvar till 10: laddögonblicket (krav 12, skeletonkorten) - första sekunden ska hålla även på långsamt nät |
+| Innovation | 9 | 9 | Oförändrad |
+| Konsekvens | 8 | 8 | Orörd (krav 10 väntar) - men spacing-vakten är första halvan av designvaktsutbyggnaden |
+| Prestanda | 8 | 8 | Orörd (krav 11–12 väntar) |
+| Förtroende | 9 | 9 | Inget löfte rubbat: bannerns budskap bor i analysen, ett scroll bort - aldrig raderat |
+| Premiumkänsla | 7 | 7 | Orörd (krav 13–14 väntar) |
+| Skalbarhet | 8 | 8 | Orörd (krav 15 medvetet vilande) |
+| Affärsvärde | 8 | 8 | Oförändrad |
+
+**Sammanvägt: INTE GODKÄND ÄN** - rond 4 tar konsekvens/prestanda/
+premium (kraven 10–14), plus elegansens och UX:ens sista steg.
+
+---
+
 *Gaten stänger först när samtliga kategorier står i 10 - utan tillförd
 komplexitet.*

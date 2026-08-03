@@ -54,7 +54,7 @@ const Hero = () => {
 
   return (
     <section className="border-b border-border bg-secondary/30">
-      <div className="container px-4 pb-14 pt-8 md:pb-20 md:pt-12">
+      <div className="container px-4 pb-12 pt-8 md:pb-20 md:pt-12">
         {/* Avsändaren och taglinen, som referensen: vem talar, till vem. */}
         <p className="max-w-2xl text-lg leading-relaxed text-accent">
           Sambandscentralen vid företagskris – ägare, VD, styrelse, revisor
@@ -81,7 +81,7 @@ const Hero = () => {
             konto, utan meny. Inloggade med pågående ärende fortsätter
             där de slutade i stället för att presenteras igen. */}
         <h1 className="sr-only">CLEARANCE – vägledning vid företagskris</h1>
-        <div className="mx-auto mt-10 max-w-2xl">
+        <div className="mx-auto mt-12 max-w-2xl">
           {user ? (
             <div className="rounded-md border border-border bg-card p-5 text-center shadow-soft">
               <p className="text-base leading-relaxed text-foreground">
@@ -90,7 +90,7 @@ const Hero = () => {
               </p>
               <Link
                 to="/dashboard/samtal"
-                className="mt-4 inline-block rounded-full bg-accent px-7 py-3 text-base font-semibold text-accent-foreground shadow-soft transition-opacity hover:opacity-90"
+                className="mt-4 inline-block rounded-full bg-accent px-8 py-3 text-base font-semibold text-accent-foreground shadow-soft transition-opacity hover:opacity-90"
               >
                 Fortsätt samtalet
               </Link>
@@ -106,13 +106,13 @@ const Hero = () => {
         <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
           <Link
             to="/wizard"
-            className="rounded-full bg-accent px-7 py-3.5 text-base font-semibold text-accent-foreground shadow-soft transition-opacity hover:opacity-90"
+            className="rounded-full bg-accent px-8 py-3.5 text-base font-semibold text-accent-foreground shadow-soft transition-opacity hover:opacity-90"
           >
             Gratis nulägesanalys
           </Link>
           <Link
             to={user ? "/dashboard" : "/login"}
-            className="rounded-full border border-border bg-card px-7 py-3.5 text-base font-semibold text-accent shadow-soft transition-colors hover:border-accent/50"
+            className="rounded-full border border-border bg-card px-8 py-3.5 text-base font-semibold text-accent shadow-soft transition-colors hover:border-accent/50"
           >
             Mina sidor
           </Link>
@@ -140,7 +140,7 @@ const Hero = () => {
           att agera i tid är ofta avgörande.
         </p>
 
-        <dl className="mx-auto mt-10 grid max-w-3xl grid-cols-1 gap-px overflow-hidden rounded-md border border-border bg-border sm:grid-cols-3">
+        <dl className="mx-auto mt-12 grid max-w-3xl grid-cols-1 gap-px overflow-hidden rounded-md border border-border bg-border sm:grid-cols-3">
           {facts.map((fact) => (
             <div key={fact.title} className="flex items-start gap-3 bg-card p-5">
               <fact.icon

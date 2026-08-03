@@ -376,7 +376,7 @@ const KBRModule = () => {
               }`}
             >
               <div className="flex items-start gap-3">
-                <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                <div className={`w-10 h-10 rounded-md flex items-center justify-center flex-shrink-0 ${
                   formData.ambitionLevel === option.value
                     ? 'bg-accent text-accent-foreground'
                     : 'bg-secondary text-muted-foreground'
@@ -440,7 +440,7 @@ const KBRModule = () => {
                     <button
                       key={String(option.value)}
                       onClick={() => updateField('isPartOfLargerStructure', option.value)}
-                      className={`py-2 px-3 rounded-lg border text-sm font-medium transition-colors ${
+                      className={`py-2 px-3 rounded-md border text-sm font-medium transition-colors ${
                         formData.isPartOfLargerStructure === option.value
                           ? 'border-warning bg-warning/20 text-foreground'
                           : 'border-border bg-card text-muted-foreground hover:border-warning/50'
@@ -599,13 +599,13 @@ const KBRModule = () => {
               <p className="text-sm text-muted-foreground mt-1">{kbrAnalysis.message}</p>
               
               <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
-                <div className="p-2 rounded-lg bg-background/50">
+                <div className="p-2 rounded-md bg-background/50">
                   <span className="text-muted-foreground">Eget kapital</span>
                   <p className="font-semibold text-foreground">
                     {kbrAnalysis.equity.toLocaleString('sv-SE')} kr
                   </p>
                 </div>
-                <div className="p-2 rounded-lg bg-background/50">
+                <div className="p-2 rounded-md bg-background/50">
                   <span className="text-muted-foreground">Kapitalandel</span>
                   <p className={`font-semibold ${
                     kbrAnalysis.ratio >= 100 ? 'text-success' :
@@ -720,13 +720,13 @@ const KBRModule = () => {
 
           {/* Key figures */}
           <div className="grid grid-cols-3 gap-3 mb-4">
-            <div className="p-3 rounded-lg bg-background/50 text-center">
+            <div className="p-3 rounded-md bg-background/50 text-center">
               <span className="text-xs text-muted-foreground block">Aktiekapital</span>
               <p className="font-semibold text-foreground">
                 {parseAmount(formData.shareCapital).toLocaleString('sv-SE')} kr
               </p>
             </div>
-            <div className="p-3 rounded-lg bg-background/50 text-center">
+            <div className="p-3 rounded-md bg-background/50 text-center">
               <span className="text-xs text-muted-foreground block">Eget kapital</span>
               <p className={`font-semibold ${
                 kbrAnalysis.equity >= kbrAnalysis.threshold ? 'text-success' : 'text-destructive'
@@ -734,7 +734,7 @@ const KBRModule = () => {
                 {kbrAnalysis.equity.toLocaleString('sv-SE')} kr
               </p>
             </div>
-            <div className="p-3 rounded-lg bg-background/50 text-center">
+            <div className="p-3 rounded-md bg-background/50 text-center">
               <span className="text-xs text-muted-foreground block">KBR-gräns (50%)</span>
               <p className="font-semibold text-foreground">
                 {kbrAnalysis.threshold.toLocaleString('sv-SE')} kr
@@ -908,7 +908,7 @@ const KBRModule = () => {
               onClick={() => navigate("/")}
               className="flex items-center gap-2"
             >
-              <div className="w-8 h-8 rounded-lg surface-accent flex items-center justify-center">
+              <div className="w-8 h-8 rounded-md surface-accent flex items-center justify-center">
                 <span className="text-accent-foreground font-bold text-sm">C</span>
               </div>
               <span className="font-display text-lg text-foreground">CLEARANCE</span>

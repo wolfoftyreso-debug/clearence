@@ -12,15 +12,7 @@ import { InsightList } from "@/components/financial/InsightList";
 import { analyseSnapshot } from "@/lib/financial/insights";
 import { format } from "date-fns";
 import { sv } from "date-fns/locale";
-import {
-  AlertCircle,
-  CheckCircle2,
-  AlertTriangle,
-  CalendarClock,
-  FolderDown,
-  Plus,
-  Loader2,
-} from "lucide-react";
+import { CalendarClock, FolderDown, Plus, Loader2 } from "lucide-react";
 import { data } from "@/data";
 import { useAuth } from "@/hooks/useAuth";
 import type { CaseRecord } from "@/data/types";
@@ -36,17 +28,9 @@ import {
 } from "@/components/dashboard/CaseExit";
 import { AdvisorTools } from "@/components/dashboard/AdvisorTools";
 import { analysisInputFromCase, parseAmount } from "@/lib/caseAnalysis";
+import { countdownTo } from "@/lib/actionPlan";
 
 
-
-const recommendationCopy: Record<
-  NonNullable<CaseRecord["recommendationType"]>,
-  { icon: typeof AlertCircle; className: string }
-> = {
-  bankruptcy: { icon: AlertCircle, className: "bg-destructive/10 border-destructive/30" },
-  reconstruction: { icon: AlertTriangle, className: "bg-warning/10 border-warning/30" },
-  stabilize: { icon: CheckCircle2, className: "bg-success/10 border-success/30" },
-};
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -124,14 +108,44 @@ const Dashboard = () => {
   };
   const liquidationValue = latestCase ? parseAmount(latestCase.quickLiquidationValue) : 0;
 
+  // Första sekunden efter inloggning (Excellence-krav 8): det ENDA
+  // viktigaste nästa steget överst - närmaste fristen, annars översta
+  // öppna uppgiften. Resten av sidan är fördjupning, inte konkurrens.
+  const activeCase = !!latestCase && !latestCase.closedAt && !latestCase.healthMode;
+  const { data: topTasks } = useQuery({
+    queryKey: ["case-tasks", latestCase?.id],
+    queryFn: () => data.tasks.listByCase(latestCase!.id),
+    enabled: activeCase,
+  });
+  const nextStep = useMemo(() => {
+    if (!activeCase || !latestCase) return null;
+    const now = new Date();
+    const upcoming = analyseCrisis(analysisInput(latestCase))
+      .timeline.filter((e) => countdownTo(e.iso, now).tone !== "passed")
+      .sort((a, b) => a.iso.localeCompare(b.iso))[0];
+    if (upcoming) {
+      return {
+        label: upcoming.label,
+        countdown: countdownTo(upcoming.iso, now).label,
+        href: "#frister",
+      };
+    }
+    const topOpen = (topTasks ?? []).find((t) => !t.doneAt);
+    return topOpen ? { label: topOpen.label, countdown: null, href: "#nasta-steg" } : null;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeCase, latestCase, topTasks]);
+
 
 
   return (
     <DashboardShell
       title="Översikt"
       actions={
-        <Button variant="accent" size="sm" asChild>
-          <Link to="/wizard">
+        /* Degraderad när ett ärende pågår (Excellence-krav 9): "fortsätt
+           där du är" ska aldrig konkurrera med en accentknapp som börjar
+           om. Utan aktivt ärende är den vägen in - då får den accenten. */
+        <Button variant={activeCase ? "ghost" : "accent"} size="sm" asChild>
+          <Link to="/wizard" className={activeCase ? "text-muted-foreground" : undefined}>
             <Plus className="h-4 w-4" aria-hidden="true" />
             <span className="hidden sm:inline">Ny utvärdering</span>
           </Link>
@@ -172,29 +186,34 @@ const Dashboard = () => {
             </>
           ) : (
             <>
-              {/* Status banner */}
-              {latestCase.recommendationType && (
-                <div
-                  className={`mb-6 p-4 rounded-md border flex items-start gap-4 ${
-                    recommendationCopy[latestCase.recommendationType].className
-                  }`}
+              {/* Det ENDA viktigaste först: en rad, inte ett kort till.
+                  Sidans allra första blick ska svara på "vad gör jag nu?". */}
+              {nextStep && (
+                <a
+                  href={nextStep.href}
+                  className="mb-6 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border border-l-4 border-accent/40 border-l-accent bg-accent/5 p-3.5 transition-colors hover:bg-accent/10"
                 >
-                  <div className="w-10 h-10 rounded-md bg-foreground/10 flex items-center justify-center flex-shrink-0">
-                    {(() => {
-                      const Icon = recommendationCopy[latestCase.recommendationType].icon;
-                      return <Icon className="w-5 h-5 text-foreground" />;
-                    })()}
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-foreground mb-1">
-                      {latestCase.recommendationTitle}
-                    </h3>
-                    <p className="text-sm text-muted-foreground">
-                      {latestCase.recommendationDescription}
-                    </p>
-                  </div>
-                </div>
+                  <span className="rounded-sm bg-accent px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-accent-foreground">
+                    Närmast
+                  </span>
+                  <span className="min-w-0 flex-1 text-sm font-semibold text-foreground">
+                    {nextStep.label}
+                  </span>
+                  {nextStep.countdown && (
+                    <span className="whitespace-nowrap text-sm font-bold tabular-nums text-accent">
+                      {nextStep.countdown}
+                    </span>
+                  )}
+                  <span className="text-xs font-medium text-accent underline underline-offset-4">
+                    Visa i planen
+                  </span>
+                </a>
               )}
+
+              {/* Statusbannern är död (Excellence rond 3): den sa samma sak
+                  som Systemanalysens allvarsgrad + huvudbudskap direkt under.
+                  Dubblettregeln från rond 1 gäller åt alla håll - budskapet
+                  bor i analysen, ingen annanstans. Återinför den inte. */}
 
               {/* Samtalsingången: en rad, inte en yta. Frågan följer med i
                   adressen så rådgivaren svarar direkt - dialogen ÄR
