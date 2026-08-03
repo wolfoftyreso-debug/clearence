@@ -123,6 +123,24 @@ for (const width of WIDTHS) {
         console.log(`       <${c.tag} class="${c.cls}"> "${c.text}"`);
       }
     }
+
+    // iOS-zoomvakten: ett formulärfält med text under 16 px får Safari
+    // att zooma in vid fokus - och zoomen släpper inte när tangentbordet
+    // stängs, så "mobilanpassningen tappas". Regeln bor i index.css;
+    // här bevisas den på varje sida och bredd.
+    const smallControls = await page.evaluate(() => {
+      return [...document.querySelectorAll("input, select, textarea")]
+        .filter((el) => {
+          const r = el.getBoundingClientRect();
+          return r.width > 0 && r.height > 0 && parseFloat(getComputedStyle(el).fontSize) < 16;
+        })
+        .slice(0, 3)
+        .map((el) => `${el.tagName.toLowerCase()}#${el.id || "?"} ${getComputedStyle(el).fontSize}`);
+    });
+    if (smallControls.length > 0) {
+      failures += 1;
+      console.log(`FAIL ${width}px ${route} — fält under 16px (iOS-zoom): ${smallControls.join(", ")}`);
+    }
   }
   await ctx.close();
 }

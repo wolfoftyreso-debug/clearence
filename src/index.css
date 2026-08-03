@@ -185,6 +185,18 @@
   h1, h2, h3, h4, h5, h6 {
     @apply font-display font-semibold tracking-tight;
   }
+
+  /* iOS zoomar in på fält med text under 16 px vid fokus - och zoomar
+     inte tillbaka när tangentbordet stängs, så hela mobilanpassningen
+     "tappas". Därför är varje formulärfält minst 16 px på små skärmar,
+     oavsett vilken klass någon råkat sätta. Viewport-vägen
+     (maximum-scale=1) valdes bort: den stänger pinch-zoom på Android,
+     och tillgängligheten går före. Vaktas av mobile.mjs. */
+  @media (max-width: 767px) {
+    input, select, textarea {
+      font-size: max(16px, 1em) !important;
+    }
+  }
 }
 
 @layer utilities {
