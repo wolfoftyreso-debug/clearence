@@ -4,11 +4,11 @@ import { ClaraIntro } from "@/components/advisor/ClaraIntro";
 import { Clock, FileText, UserCheck } from "lucide-react";
 
 /**
- * Startsidan: avsändare och tagline överst, ett vänligt bildblock med
- * organiska former kring en egen kompassros - och sedan SAMTALET, som
- * startskärmens enda handling. Sökrutan, pillerknapparna och
- * "Se alla tjänster"-länken är borttagna på uttrycklig begäran, i tur
- * och ordning: allt de gjorde nås genom samtalet eller navigeringen.
+ * Startsidan: avsändare och tagline överst - och sedan SAMTALET, som
+ * startskärmens enda handling. Sökrutan, pillerknapparna,
+ * "Se alla tjänster"-länken och bildblocket med kompassrosen är
+ * borttagna på uttrycklig begäran, i tur och ordning: allt de gjorde
+ * nås genom samtalet eller navigeringen, och dekoren stod i vägen.
  *
  * Varför: målgruppen är företagare i kris. En startsida med EN väg
  * kräver inget val alls - CLEARANCE tar emot direkt.
@@ -32,18 +32,6 @@ const facts = [
   },
 ];
 
-/** Egen kompassros i linjemanér - sambandscentralens symbol, ingen annans. */
-const CompassIllustration = () => (
-  <svg viewBox="0 0 120 120" className="h-full w-full" aria-hidden="true">
-    <circle cx="60" cy="60" r="44" fill="none" stroke="currentColor" strokeWidth="2.5" />
-    <circle cx="60" cy="60" r="4" fill="currentColor" />
-    <path d="M60 22 L67 53 L60 60 L53 53 Z" fill="currentColor" />
-    <path d="M60 98 L53 67 L60 60 L67 67 Z" fill="none" stroke="currentColor" strokeWidth="2" />
-    <path d="M22 60 L53 53 M98 60 L67 67" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-    <path d="M33 33 L46 46 M87 87 L74 74 M87 33 L74 46 M33 87 L46 74" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" opacity="0.5" />
-  </svg>
-);
-
 const Hero = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -58,20 +46,9 @@ const Hero = () => {
           konkursförvaltare eller finansiär
         </p>
 
-        {/* Bildblocket: organiska former i våra färger kring kompassrosen. */}
-        <div className="relative mx-auto mt-8 h-56 w-72 sm:h-64 sm:w-80" aria-hidden="true">
-          <div
-            className="absolute -left-4 top-0 h-28 w-32 bg-warning/60"
-            style={{ borderRadius: "58% 42% 55% 45% / 55% 48% 52% 45%" }}
-          />
-          <div
-            className="absolute -right-2 bottom-0 h-32 w-36 bg-accent/25"
-            style={{ borderRadius: "45% 55% 48% 52% / 52% 45% 55% 48%" }}
-          />
-          <div className="absolute left-1/2 top-1/2 flex h-44 w-44 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-card p-8 text-accent shadow-soft sm:h-52 sm:w-52">
-            <CompassIllustration />
-          </div>
-        </div>
+        {/* Bildblocket (kompassrosen med organiska former) är borttaget på
+            uttrycklig begäran: samtalet ska mötas direkt, utan dekor före.
+            Återinför det inte. */}
 
         {/* Det första mötet ÄR samtalet. CLEARANCE tar emot direkt - utan
             konto, utan meny. Inloggade med pågående ärende fortsätter
