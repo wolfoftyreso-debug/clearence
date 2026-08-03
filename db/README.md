@@ -52,7 +52,12 @@ API:et ansluter som `app_user`. Den rollen får **aldrig** äga en tabell och **
 
 Egen. Lösenordshash med argon2id (eller bcrypt) i API:et; databasen har ingen funktion som kan hasha eller verifiera ett lösenord, så en databaskompromiss ger ingen verifieringsorakel. Sessionstoken lagras bara som SHA-256 — en databasdump får inte vara en uppsättning fungerande sessioner.
 
-BankID hör hemma här när signering byggs, och är då ett externt beroende som är oundvikligt.
+Signering är byggd i egen regi (docs/signering.md): en enkel elektronisk
+signatur som kopplar en namngiven person till ett exakt innehåll vid en
+exakt tidpunkt, kontrollerbart i efterhand. BankID är BORTVALT - det
+kräver avtal och kostar per signering, och skulle ha hållit funktionen
+låst på obestämd tid. Kravet på en avancerad signatur, om det uppstår,
+blir ett eget beslut med egen kostnad.
 
 ### 3. Filer
 
@@ -99,7 +104,6 @@ ovan säger vad som ska ersätta vad; `infra/` säger exakt hur det reses.
 | Beroende | Oundvikligt? | Motivering |
 |---|---|---|
 | AWS (EC2/RDS/S3/SES/KMS) | Ja | Det är plattformen |
-| BankID | Ja, för signering | Finns ingen självhostad motsvarighet |
 | Fortnox/Visma m.fl. | Bara om kunden vill | Frivillig integration, en per adapter |
 | Bolagsverket | Nej, men | Ersätter manuell inmatning av företagsuppgifter |
 

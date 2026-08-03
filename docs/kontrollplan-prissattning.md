@@ -22,7 +22,7 @@ bygger på det som faktiskt levereras.
 | 2 | Hittar CLEARANCE | Snabbt begripa vad tjänsten gör | Skepsis + hopp | Startsida i myndighetsuppställning, sök, kunskapsbank (källhänvisad, publik) | Sökmotorer | Företagaren |
 | 3 | Gratis nulägesanalys | Få en ärlig lägesbild utan motprestation | Lättnad: "någon strukturerar detta" | Utvärderingsguiden (5–10 min, ingen inloggning), krisanalysmotorn, rapport som PDF | – | Företagaren |
 | 4 | Registrering | Spara läget och aktivera ärendet | Beslut: "jag tar tag i det" | Konto, ärende skapas, autospar, gratisvecka startar | E-post (SES) | Företagaren |
-| 5 | Identifiering | Veta vem som företräder bolaget | Trygghet | I dag: e-post + roller i ärendet. Förberett: BankID (nyckelplats i driftpanelen, avtal krävs) | BankID *(förberett)* | Företagaren |
+| 5 | Identifiering | Veta vem som företräder bolaget | Trygghet | E-post + roller i ärendet, och egen signering med förseglat innehåll (docs/signering.md) | Egen signering *(byggd)* | Företagaren |
 | 6 | Import av data | Slippa skriva in det som redan finns | "Det gick fortare än jag trodde" | SIE-import → KBR-förifyllnad, dokumentuppladdning, skattekontoexport (manuell) | Fortnox/Visma *(förberedda)*, Skatteverket *(manuellt utdrag)* | Företagaren, ev. redovisningskonsult |
 | 7 | Riskanalys | Veta exakt var bolaget står | "Nu förstår jag läget" | Systemanalysen (deterministisk, rollanpassad, 4 språknivåer, 3 visningsformer), KBR-bedömning, likviditetsprognos, täckningsgrad | Creditsafe *(daglig bevakning, nyckel krävs)* | Företagaren, styrelsen |
 | 8 | Prioritering | Veta vad som är först | Kontroll ersätter panik | Frister med nedräkning + NÄRMAST-markering, notiscentret (aggregerar allt), handlingsplanens horisonter | – | Företagaren |
@@ -101,7 +101,7 @@ Skala: frekvens (dagligen/veckovis/per händelse/engång), kritikalitet och vär
 | AWS RDS/S3 | Databas, dokumentlager | Kontinuerlig | Kritisk | **Byggd** (självhostat spår, RLS-testat) |
 | Creditsafe | Daglig kreditbevakning | Dagligen/bolag | Hög | **Byggd** – väntar nyckel/avtal |
 | Kalender (ICS-export) | Frister till användarens kalender | Per ärende | Medel | **Byggd** |
-| BankID | Identifiering, signering av protokoll | Per händelse | Hög | Förberedd (nyckelplats, flöde ej aktivt) – avtal krävs |
+| Egen signering | Signering av protokoll och handlingar | Ingen | – | **Byggd.** Enkel elektronisk signatur, ingen leverantör, ingen avgift per signering |
 | Fortnox / Visma eEkonomi | Bokföringsdata direkt i stället för SIE | Per ärende | Hög | Förberedd ("Inom kort") – avtal krävs |
 | Bolagsverket | Företagsuppgifter vid utvärdering | Per ärende | Medel | Förberedd – avtal krävs |
 | Skatteverket (skattekonto) | Skattekontoläge | Veckovis | Hög | Manuellt utdrag i dag; API-antagande dokumenterat |
@@ -175,7 +175,7 @@ kostnadsdrivare som i dag är **noll**.
 | LLM/extern AI | – | **0 kr** | Deterministiska motorer. Största strukturella kostnadsfördelen – analyser kan vara obegränsade utan marginalkostnad |
 | Infrastruktur (RDS, S3, SES, beräkning) | Fast + svagt rörlig | Enstaka kr/bolag/mån vid låg volym; faller med skala | Byggd för självhostning, ingen Supabase-licens |
 | Creditsafe-slagningar | Rörlig per bolag/dag | Avtalsfråga – **största rörliga posten**; systemet begränsar redan till 1 slagning/bolag/dygn | Behöver avtalspris innan modellen låses |
-| BankID | Rörlig per identifiering | ~kr-nivå per användning, avtal krävs | Slås på per händelse |
+| ~~BankID~~ | — | — | **Bortvalt.** Signering byggd i egen regi, ingen rörlig kostnad (docs/signering.md) |
 | E-post | Rörlig | Öresnivå (SES) | Försumbar |
 | PDF/dokument | – | 0 kr rörligt | Egen skrivare |
 | Manuell granskning (ansökningar, profilanspråk/KYC, support) | Mänsklig, rörlig per händelse | **Största mänskliga posten**; minuter–timmar per granskning | Bör bäras av byråsidan i modellen |
@@ -197,7 +197,7 @@ kostnadsdrivare som i dag är **noll**.
 | Antal analyser/rapporter/PDF:er | ✅ (händelseloggen) | **Nej – marginalkostnad 0 och straffar kontrollbeteendet vi vill uppmuntra** |
 | Dokumentlagring (GB) | ✅ | Endast som skälighetstak |
 | Kreditbevakade bolag | ✅ | Ja – speglar faktisk rörlig kostnad (Creditsafe) |
-| BankID-signeringar | Förberedd | Ja, som händelseavgift till självkostnad+marginal |
+| Signeringar | **Byggd** | Nej – ingen rörlig kostnad att täcka |
 | Omsättning/balansomslutning | Delvis (utvärderingens fält) | Möjlig proxys för segmentspris – kräver verifierbar källa (Bolagsverket) |
 
 **Princip ur kartan:** mät aldrig det som är gratis att producera och kritiskt att
@@ -241,7 +241,7 @@ verkligt levererat värde.
 | Success fee (företag) | Maximal upplevd rättvisa | **Juridisk gråzon vid obestånd** (avgift villkorad av utfall när borgenärer står före), svårmätt "success", incitamentsrisk | Ev. avgränsat (t.ex. genomförd rekonstruktion) **efter juridisk prövning** | Konkursnära lägen |
 | Omsättnings-/balansbaserad (företag) | Skalar med bärkraft, upplevs rättvis | Kräver verifierbar källa; tröskeleffekter | Segmentera grundavgiften i 2–3 band | Som exakt formel |
 | Kredit-/riskbaserad | – | Att prissätta efter hur illa kunden ligger till är fel signal för ett kontrollvarumärke | – | Alltid (varumärkesskäl) |
-| Transaktionsbaserad (BankID, bevakning) | Speglar verklig rörlig kostnad | Nickel-and-diming-risk | Självkostnadsnära påslag, bakas i grundavgift upp till tak | Som synlig micro-debitering |
+| Transaktionsbaserad (bevakning) | Speglar verklig rörlig kostnad | Nickel-and-diming-risk | Självkostnadsnära påslag, bakas i grundavgift upp till tak | Som synlig micro-debitering |
 | **Hybrid: låg fast företagsavgift + värdehändelser på byråsidan + licens för storbyrå** | Pressat bolag möter låg tröskel; intäkten följer värdet; båda sidor rationella | Kräver stark byråsida | **Detta är vad plattformen redan implementerar som parametrar** | – |
 
 ### Bedömning av hypotesen "låg fast avgift + intäkt vid värdehändelser"
@@ -265,7 +265,6 @@ parametersättning.**
 |---|---|---|---|
 | 1 | Bankgiro + bekräftad momsregistrering/F-skatt (Landvex) | Administrativ | **All fakturering, båda sidor** |
 | 2 | Creditsafe-avtal med styckpris | Avtal | Rörlig kostnadskalkyl + bevakning som mervärde |
-| 3 | BankID-avtal med styckpris | Avtal | Identifieringens händelseavgift |
 | 4 | Fortnox/Visma/Bolagsverket-avtal | Avtal | Importvärdet i företagsavgiften |
 | 5 | Betalningsviljedata: 10–15 intervjuer per sida (företagare i kris, byråer) | Marknad | Nivåsättning av grundavgift och upplåsningsavgift |
 | 6 | Volymantaganden: förfrågningar/ärende, upplåsningsgrad, byråtäthet | Marknad | Byråsidans intäktsprognos |

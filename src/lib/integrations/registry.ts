@@ -240,19 +240,13 @@ export const INTEGRATION_REGISTRY: IntegrationTarget[] = [
       "aggregator - båda är yttre beroenden som bryter mot produktens " +
       "grundprincip och måste beslutas som uttryckligt undantag.",
   },
-  {
-    id: "bankid",
-    name: "BankID (signering)",
-    category: "identitet",
-    status: "avtal",
-    value:
-      "Signering av styrelseprotokoll, fullmakter och ansökningar - de " +
-      "dokument dokumentmotorn producerar.",
-    builtToday: "",
-    nextStep:
-      "Avtal via bank eller återförsäljare. Redan noterat i db/README.md som " +
-      "det oundvikliga undantaget.",
-  },
+  // BankID är BORTVALT. Signering byggs i egen regi som en enkel
+  // elektronisk signatur (src/lib/signing.ts, docs/signering.md): den
+  // kopplar en namngiven person till ett exakt innehåll vid en exakt
+  // tidpunkt, kontrollerbart i efterhand, utan avtal och utan avgift per
+  // signering. Behöver en kund senare en avancerad signatur är det ett
+  // eget beslut med egen kostnad - inte något vi väntar på för att kunna
+  // leverera signering alls.
 ];
 
 /** Det som går att använda idag, utan att vänta på någon annan. */

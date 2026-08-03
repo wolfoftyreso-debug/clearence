@@ -2123,6 +2123,56 @@ export const supabaseAdapter: DataPort = {
 
       return signed.signedUrl;
     },
+    async listSignatures(documentId: string) {
+      const { data: rows, error } = await supabase
+        .from("document_signatures")
+        .select("*")
+        .eq("document_id", documentId)
+        .order("signed_at", { ascending: true });
+      if (error) throw error;
+      return (rows ?? []).map((r) => ({
+        id: r.id,
+        documentId: r.document_id,
+        signerUserId: r.signer_user_id,
+        signerName: r.signer_name,
+        signerEmail: r.signer_email,
+        statementVersion: r.statement_version,
+        statementText: r.statement_text,
+        contentSha256: r.content_sha256,
+        signedAt: r.signed_at,
+      }));
+    },
+    async sign(input) {
+      // Tidpunkten och behörighetsprövningen bor i funktionen. En
+      // signatur vars tidsstämpel klienten satt bevisar ingenting.
+      const { data: row, error } = await supabase
+        .rpc("sign_document", {
+          p_document_id: input.documentId,
+          p_signer_name: input.signerName,
+          p_content_sha256: input.contentSha256,
+          p_statement_version: input.statementVersion,
+          p_statement_text: input.statementText,
+        })
+        .single();
+      if (error) throw error;
+      const r = row as {
+        id: string; document_id: string; signer_user_id: string; signer_name: string;
+        signer_email: string; statement_version: string; statement_text: string;
+        content_sha256: string; signed_at: string;
+      };
+      return {
+        id: r.id,
+        documentId: r.document_id,
+        signerUserId: r.signer_user_id,
+        signerName: r.signer_name,
+        signerEmail: r.signer_email,
+        statementVersion: r.statement_version,
+        statementText: r.statement_text,
+        contentSha256: r.content_sha256,
+        signedAt: r.signed_at,
+      };
+    },
+
     async setReview(id, action) {
       // Rollprövningen bor i funktionen: godkännande kräver rådgivarroll.
       const { error } = await supabase.rpc("set_document_review", {

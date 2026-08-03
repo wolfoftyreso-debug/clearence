@@ -18,6 +18,7 @@
 import type { DataPort } from "../ports";
 import type {
   ApiKeyRecord,
+  DocumentSignature,
   AccountBillingRecord,
   AuditEventRecord,
   ApplicationForReview,
@@ -109,6 +110,7 @@ interface DemoState {
   shareLinks: (CaseShareLinkRecord & { accessLog: string[] })[];
   /** API-nycklarna: bara prefix och metadata - hemligheten lagras aldrig. */
   apiKeys: ApiKeyRecord[];
+  documentSignatures: DocumentSignature[];
   companyPlanBusinessExVatSek: number | null;
   companyPlanEnterpriseExVatSek: number | null;
 }
@@ -146,6 +148,7 @@ const emptyState = (): DemoState => ({
   companyPlanMonthlyExVatSek: null,
   shareLinks: [],
   apiKeys: [],
+  documentSignatures: [],
   companyPlanBusinessExVatSek: null,
   companyPlanEnterpriseExVatSek: null,
 });
@@ -1732,6 +1735,11 @@ export const demoAdapter: DataPort = {
           push("update", "case_documents", d.id, d.reviewRequestedAt, `${d.fileName} skickades för granskning`);
         if (d.reviewedAt)
           push("update", "case_documents", d.id, d.reviewedAt, `${d.fileName} godkändes`);
+        // Signeringen hör hemma i journalen: en signatur som inte syns
+        // på tidslinjen har inte hänt, ur användarens synvinkel.
+        for (const sig of state.documentSignatures.filter((x) => x.documentId === d.id)) {
+          push("signed", "case_documents", d.id, sig.signedAt, `${d.fileName} signerades av ${sig.signerName}`);
+        }
       }
       for (const i of state.caseInvitations.filter((i) => i.caseId === caseId)) {
         push("insert", "case_invitations", i.id, i.createdAt, `${i.email} som ${CASE_ROLE_LABELS[i.role].toLowerCase()}`);
@@ -2502,6 +2510,37 @@ export const demoAdapter: DataPort = {
       if (!file) return null;
       return URL.createObjectURL(file);
     },
+    async listSignatures(documentId: string) {
+      return state.documentSignatures
+        .filter((s) => s.documentId === documentId)
+        .sort((a, b) => a.signedAt.localeCompare(b.signedAt));
+    },
+    async sign(input) {
+      if (!state.user) throw new Error("Inte inloggad");
+      const doc = state.documents.find((d) => d.id === input.documentId);
+      if (!doc) throw new Error("Handlingen finns inte");
+      if (doc.reviewStatus === "draft") throw new Error("Ett utkast kan inte signeras");
+      if (state.documentSignatures.some(
+        (s) => s.documentId === input.documentId && s.signerUserId === state.user!.id,
+      )) {
+        throw new Error("Du har redan signerat den här handlingen");
+      }
+      const record: DocumentSignature = {
+        id: crypto.randomUUID(),
+        documentId: input.documentId,
+        signerUserId: state.user.id,
+        signerName: input.signerName.trim(),
+        signerEmail: state.user.email ?? "",
+        statementVersion: input.statementVersion,
+        statementText: input.statementText,
+        contentSha256: input.contentSha256.toLowerCase(),
+        signedAt: now(),
+      };
+      state.documentSignatures.push(record);
+      save();
+      return record;
+    },
+
     async setReview(id, action) {
       const doc = state.documents.find((d) => d.id === id);
       if (!doc) throw new Error("Dokumentet finns inte");

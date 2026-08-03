@@ -20,7 +20,6 @@ const BRAND: Record<string, { bg: string; fg: string; initials: string; name: st
   kronofogden: { bg: "#005596", fg: "#ffffff", initials: "Kf", name: "Kronofogden" },
   fortnox: { bg: "#00623a", fg: "#ffffff", initials: "F", name: "Fortnox" },
   visma: { bg: "#c8102e", fg: "#ffffff", initials: "V", name: "Visma" },
-  bankid: { bg: "#183e4f", fg: "#ffffff", initials: "ID", name: "BankID" },
   ses: { bg: "#232f3e", fg: "#ff9900", initials: "@", name: "E-postutskick" },
 };
 

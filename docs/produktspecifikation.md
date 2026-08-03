@@ -259,7 +259,7 @@ En felräknad omröstning som systemet presenterat som ett avgörande är den v�
 **Att bygga**
 - **Versionskedja.** Idag är varje fil fristående. Behövs: `document` med `document_version[]`, aktuell version, diff av metadata, spårbar ersättningshistorik.
 - **Diarieföring.** Löpnummer per ärende, oföränderligt, som kan citeras i skrift.
-- **Signering.** BankID för svenska parter. Signeringsordning för flerpartsdokument.
+- **Signering.** Egen enkel elektronisk signatur, byggd (docs/signering.md). Kvar att bygga: signeringsordning för flerpartsdokument.
 - **Kvittens.** Vem har tagit del av vad, och när.
 - Delningsregler per part och per roll
 - Checksumma per version, för att kunna visa att en fil inte ändrats
@@ -428,7 +428,7 @@ Prioritetsordning. Bygg inget här förrän arbetsflödet fungerar manuellt.
 |---|---|---|---|
 | Bank: kontoutdrag som CSV | Högt | **Klart** | Finns |
 | Fortnox / Visma (reskontror, saldon) | Högt | Hög — serversidig OAuth2 | v2. Porten är definierad i `src/data/accounting.ts` |
-| BankID-signering | Högt | Medel | v2 |
+| Signering av handlingar | Högt | Låg | **Byggd** – egen, utan leverantörsavtal |
 | E-post och SMS med leveranskvittens | Högt | Låg | MVP |
 | Bolagsverket, företagsuppgifter | Medel | Medel | v2 |
 | Bank via PSD2 | Medel | Hög | v3 |
@@ -470,7 +470,7 @@ Utanför MVP: omröstning, signering, integrationer, avancerade scenarier.
 
 ### v2 — nästa 12 veckor
 
-Möten och kallelser med kvittens · Omröstningsflöde med konfigurerbara trösklar · BankID-signering · Fortnox/Visma · Scenariojämförelse · Intressentkarta · Rapportpaket för rekonstruktör · Exportarkiv.
+Möten och kallelser med kvittens · Omröstningsflöde med konfigurerbara trösklar · Fortnox/Visma · Scenariojämförelse · Intressentkarta · Rapportpaket för rekonstruktör · Exportarkiv.
 
 ### v3
 

@@ -28,9 +28,8 @@ interface ProfessionalCardProps {
  *
  * Anspråket är starten på en manuell granskning: vi kontrollerar
  * företrädarrätten innan profilen kopplas till ett konto och märks
- * Verifierad. BankID-legitimering kopplas på när avtalet finns - flödet
- * är byggt för att källan och identifieringen ska kunna bytas utan att
- * göras om.
+ * Verifierad. Kontrollen är manuell med flit: den prövar
+ * företrädarrätt, vilket ingen legitimationstjänst gör åt oss.
  */
 const ClaimSection = ({ professional, myClaim }: { professional: ProfessionalRecord; myClaim: ProfileClaimRecord | null }) => {
   const { user } = useAuth();

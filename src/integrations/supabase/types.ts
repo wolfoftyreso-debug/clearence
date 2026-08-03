@@ -479,6 +479,22 @@ export type Database = {
         Update: never
         Relationships: []
       }
+      document_signatures: {
+        Row: {
+          id: string
+          document_id: string
+          signer_user_id: string
+          signer_name: string
+          signer_email: string
+          statement_version: string
+          statement_text: string
+          content_sha256: string
+          signed_at: string
+        }
+        Insert: never
+        Update: never
+        Relationships: []
+      }
       api_keys: {
         Row: {
           id: string
@@ -1378,6 +1394,26 @@ export type Database = {
           secret: string
           created_at: string
         }[]
+      }
+      sign_document: {
+        Args: {
+          p_document_id: string
+          p_signer_name: string
+          p_content_sha256: string
+          p_statement_version: string
+          p_statement_text: string
+        }
+        Returns: {
+          id: string
+          document_id: string
+          signer_user_id: string
+          signer_name: string
+          signer_email: string
+          statement_version: string
+          statement_text: string
+          content_sha256: string
+          signed_at: string
+        }
       }
       api_journal: {
         Args: { p_key: string; p_case_id: string }

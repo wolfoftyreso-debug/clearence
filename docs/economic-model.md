@@ -36,7 +36,7 @@ ingen LLM, egen PDF-motor, inga tredjepartsbibliotek med avgift.
 | Beräkning/lagring/e-post | marginell | < 5 kr | [ANTAGANDE, konservativt] |
 | Kreditbevakning | c_cs × 30 slagningar (max 1/dygn [FAKTA – byggd spärr]) | c_cs = avtalsfråga; 2–10 kr/slagning ger 60–300 kr/mån | [ANTAGANDE → ersätts av avtal] |
 | Analyser, rapporter, PDF:er, notiser | 0 × obegränsad användning | **0 kr** | [FAKTA – deterministiska motorer] |
-| BankID | c_id per händelse, ej per månad | ~2–5 kr/händelse | [ANTAGANDE → avtal] |
+| Signering | Egen, ingen styckkostnad | 0 kr/händelse | **Byggd** (docs/signering.md) |
 | **Rörlig kostnad V_f** | | **< 5 kr utan bevakning; 65–305 kr med daglig bevakning** | |
 
 **Slutsats 1:** kreditbevakningen är hela den rörliga kostnadsbilden på
@@ -159,7 +159,7 @@ siffror: hälsonivån är inte en bisyssla, den är fjärdedelen.
 | L_kris | Längre ärende = mer A-intäkt men långsammare B-omsättning | Mäts från dag 1 [byggd data] |
 | k (hälsokonvertering) | Hela RLV-term 4 | Kräver hälsonivån byggd |
 | c_cs (Creditsafe) | Enda kostnadsposten som kan störa A-marginalen | Avtal |
-| Persontid per KYC/granskning | Skalgräns för byråsidans tillväxt | Processdesign, ev. BankID-automation |
+| Persontid per KYC/granskning | Skalgräns för byråsidans tillväxt | Processdesign och fler granskare |
 
 ---
 

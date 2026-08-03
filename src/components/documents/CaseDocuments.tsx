@@ -6,6 +6,7 @@ import type { DocumentKind, DocumentRecord } from "@/data/types";
 import { format } from "date-fns";
 import { sv } from "date-fns/locale";
 import { openFileUrl } from "@/lib/integrations/download";
+import { DocumentSigning } from "./DocumentSigning";
 import {
   AlertTriangle,
   Download,
@@ -55,6 +56,17 @@ const formatSize = (bytes: number): string => {
 
 export const CaseDocuments = ({ caseId, userId }: CaseDocumentsProps) => {
   const queryClient = useQueryClient();
+  // Namnet på signaturen föreslås ur profilen, men skrivs alltid av
+  // användaren själv - ett förifyllt fält som ingen rör är ett klick.
+  const { data: signerProfile } = useQuery({
+    queryKey: ["my-profile"],
+    queryFn: () => data.profile.getMine(),
+    retry: false,
+  });
+  const { data: signingCase } = useQuery({
+    queryKey: ["latest-case-for-signing", caseId],
+    queryFn: () => data.cases.getLatest(),
+  });
   const inputRef = useRef<HTMLInputElement>(null);
   const kindId = useId();
 
@@ -283,6 +295,15 @@ export const CaseDocuments = ({ caseId, userId }: CaseDocumentsProps) => {
                     </button>
                   )}
                 </div>
+                {/* Signeringen: rådgivarens stämpel är en kvalitetskontroll,
+                    signaturen är undertecknarens egen viljehandling. De är
+                    med flit två olika saker och grindar inte varandra. */}
+                <DocumentSigning
+                  document_={document_}
+                  defaultName={signerProfile?.displayName ?? ""}
+                  companyName={signingCase?.companyName ?? null}
+                  orgNumber={signingCase?.orgNumber ?? null}
+                />
               </div>
               <div className="flex flex-shrink-0 gap-1">
                 <Button

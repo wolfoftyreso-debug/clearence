@@ -782,3 +782,19 @@ export interface ApiKeyRecord {
   lastUsedAt: string | null;
   revokedAt: string | null;
 }
+
+/**
+ * En signatur på en handling: vem, vilket innehåll (SHA-256), när, och
+ * exakt vad som intygades. Oföränderlig - raden skrivs en gång.
+ */
+export interface DocumentSignature {
+  id: string;
+  documentId: string;
+  signerUserId: string;
+  signerName: string;
+  signerEmail: string;
+  statementVersion: string;
+  statementText: string;
+  contentSha256: string;
+  signedAt: string;
+}

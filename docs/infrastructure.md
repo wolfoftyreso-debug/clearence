@@ -127,8 +127,10 @@ i resurser:
 * **En eller två NAT.** `single_nat_gateway = true` halverar den fasta
   kostnaden men gör en zon till en gemensam felpunkt. Ska bli `false`
   inför skarp drift med betalande kunder.
-* **BankID** hör hemma vid signering och är då ett oundvikligt externt
-  beroende.
+* **Avancerad signatur.** Signeringen är byggd i egen regi som en enkel
+  elektronisk signatur (docs/signering.md). Om en kund kräver en
+  avancerad eller kvalificerad signatur blir det ett eget beslut med
+  egen kostnad - inte något plattformen väntar på idag.
 
 ---
 

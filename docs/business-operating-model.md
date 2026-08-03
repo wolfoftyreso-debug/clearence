@@ -61,7 +61,7 @@ hjälp av CLEARANCE** (§10).
 |---|---|---|
 | O1 | **Förtroende är produkten** | Ingen data lämnar servern; delning kräver uttryckligt samtycke; varje delning redovisas |
 | O2 | **Juridisk korrekthet före tillväxt** | Rådgivningsgränsen står i varje dokument; sanktionerade formuleringar; borgenärsisolering i databasen |
-| O3 | **Kontroll före automation** | Autoslutförande av uppgifter sker bara när stegen bevisligen genomförts; KYC är manuell tills BankID-avtal finns |
+| O3 | **Kontroll före automation** | Autoslutförande av uppgifter sker bara när stegen bevisligen genomförts; KYC är manuell med flit - den prövar företrädarrätt, vilket ingen legitimationstjänst gör åt oss |
 | O4 | **Transparens före optimering** | Debiteringsöversikt före faktura; pris före klick; avböj gratis; inga tysta överhopp – allt rapporteras med skäl |
 | O5 | **Determinism före generativt** | Samma indata ger samma rapport; varje mening testad; ett LLM-införande är ett styrelsebeslut, inte en feature |
 | O6 | **Inget försvinner tyst** | Append-only-logg; frysning i stället för radering; misslyckade utskick syns tills de hanterats |
@@ -107,7 +107,7 @@ när organisationen växer.*
 |---|---|---|---|---|---|---|
 | **Produkt** | Pilotdata, kundfeedback, roadmap §6 | Skeppade funktioner med tester | Leveranstakt; andel funktioner med bevisad ekonomisk effekt | CPO/teknik | Nyckelpersonberoende (en utvecklingslinje) | Hög: 20 testsviter, designvakter, två DB-miljöer i CI-form |
 | **Marknad** | Kunskapsartiklar, SEO, gratisanalysen | Genomförda analyser → konton | Analyser/vecka; q (analys→konto) | Tillväxtansvarig | Fel kanalantagande; CAC okänd | Medel: innehåll manuellt, tratten mätbar i systemet |
-| **Partner** | Förifyllda profiler, anspråk, ansökningar, avtal | Verifierade byråer med satta planer | Aktiva byråer; f (upplåsningsgrad); tid-till-verifiering | Partneransvarig | KYC-kön blir flaskhals; Creditsafe/BankID-avtal drar ut | Medel: flöden byggda, granskning manuell (avsiktligt, O3) |
+| **Partner** | Förifyllda profiler, anspråk, ansökningar, avtal | Verifierade byråer med satta planer | Aktiva byråer; f (upplåsningsgrad); tid-till-verifiering | Partneransvarig | KYC-kön blir flaskhals; Creditsafe-avtalet drar ut | Medel: flöden byggda, granskning manuell (avsiktligt, O3) |
 | **Drift** | Driftpanelens köer (ansökningar, anspråk, utkorg, kunder) | Beslut, nycklar, fakturor, återöppningar | KYC-kö < 48 h; 0 ohanterade driftlarm | Operations | Tyst kö-tillväxt | Hög: jobb, påminnelser, stängning, omskick automatiserade; besluten mänskliga |
 | **Ekonomi** | `usage_charges`, fakturaserien, kostnadsavtal | Samlingsfakturor, styrpaneler, EM/UE-uppdateringar | Fakturerat/mån; bruttomarginal/ström; DSO | CFO (deltid först) | Fakturering blockerad (bankgiro/momsreg); kreditförluster byrå | Hög: hela kedjan händelse→faktura är kod |
 | **Juridik** | Insolvensprövning, avtal, namnfråga, GDPR | Godkända avgiftsmodeller, partneravtal, varumärke | 0 öppna blockerande juridikpunkter | Extern jurist → bolagsjurist | Success-fee/avgifter mot obestånd klandras; namnkollision | Låg (och ska så vara) |
@@ -143,7 +143,7 @@ Prioritet = ekonomisk effekt ÷ byggkostnad, med G6-kolumnen som veto-fråga.
 | **Hälsonivån** (efterlevnads-/bevakningsläge) | Största obelånade RLV-termen: 38 % av vinnarresans värde (UE §3) | Bärare av G6 | Produktdesign | **P1** |
 | Gratisanalysens rapportkvalitet (iterativt) | Driver q – enda hävstången mot anskaffningsförlusten (UE §1) | Neutral | – | P1 (löpande) |
 | Förhandsvisningens kvalitet (iterativt) | Driver f – störst hävstång i hela modellen (EM §7) | Ja | Pilotdata | P1 (löpande) |
-| BankID i KYC + signering | Löser enda skalgränsen (persontid) + premiumström | Ja | Avtal | P2 |
+| ~~BankID~~ | **Bortvalt.** Signering byggd i egen regi utan avtal och utan avgift per gång (docs/signering.md); KYC förblir manuell för att den prövar företrädarrätt | – | – | – |
 | Fortnox/Visma direktimport | Sänker tröskeln in (q) och höjer underlagskvaliteten (f) | Ja | Avtal | P2 |
 | Kontorsstruktur (flera handläggare/byrå) | Öppnar ström D (enterprise) | Ja | Design | P3 |
 | Flerspråk (en → ar/uk) | Marknadsbreddning; störst social effekt | Ja | Översättningsprocess | P3 |
@@ -187,7 +187,7 @@ som önskemål.
 | 2 | Avgifter mot obeståndsnära bolag klandras (återvinning/skälighet) | Juridik | Medel | Modell + rykte | Extern jurist | Insolvensprövning före pilot; låg platt A-avgift; A1-frågan |
 | 3 | Hönan-ägget: tunn katalog → låg f | Marknad/Partner | Medel | Hävstången uteblir | Partneransvarig | Förifyllda profiler + anspråk (byggt); handplockad pilotkohort |
 | 4 | Nyckelpersonberoende i utveckling | Teknik/Org | Hög | Leveransstopp | Styrelse | Testsviterna + dokumentationen är avlastningen; rekrytering vid pilotbevis |
-| 5 | KYC-kön växer tyst | Drift | Medel | Byråtillväxt stannar | Operations | KPI 13 med larmgräns; BankID-automation P2 |
+| 5 | KYC-kön växer tyst | Drift | Medel | Byråtillväxt stannar | Operations | KPI 13 med larmgräns; fler granskare vid behov |
 | 6 | "AI"-förväntan urholkar determinism-löftet (O5) | Produkt/AI | Medel | Förtroende + kostnadsbas | CPO | LLM-införande = styrelsebeslut med egen riskanalys |
 | 7 | Namnkollision (Clearance/Clarence) | Juridik | Medel | Omprofilering | Grundaren | Varumärkessökning före publik lansering |
 | 8 | Creditsafe-beroende (pris/villkor ändras) | Partner | Låg–medel | A-marginalen | Partneransvarig | Pluggbar källa i arkitekturen (byggt); UC som alternativ |
@@ -201,7 +201,7 @@ som önskemål.
 | Kvartal | Mål | Leveranser | KPI-mål | Beslutspunkter |
 |---|---|---|---|---|
 | **Q1 – Grund** | Pilotbar plattform + juridisk grund | Bankgiro/momsreg klart; insolvensprövning; exitorsak (P0); hälsonivå MVP (P1); intervjuguider + 10+10 intervjuer | Dashboard-KPI 1–8, 13 live | A1 (avgift vid konkurs); pilotparametrar; namnfrågan |
-| **Q2 – Pilot** | Verklig användning, verkliga fakturor | 15–25 företagsärenden, 5–10 byråer med satta planer; första samlingsfakturorna; tidsloggning KYC | q, f, L_kris mätta på riktigt; 0 ohanterade driftlarm | Creditsafe- och BankID-avtal tecknas eller omplaneras |
+| **Q2 – Pilot** | Verklig användning, verkliga fakturor | 15–25 företagsärenden, 5–10 byråer med satta planer; första samlingsfakturorna; tidsloggning KYC | q, f, L_kris mätta på riktigt; 0 ohanterade driftlarm | Creditsafe-avtalet tecknas eller omplaneras |
 | **Q3 – Validering** | Antaganden → fakta; pris sätts | EM/UE uppdaterade med pilotdata; **Prissättning v1.0** (kort); hälsonivå v1 med första konverteringarna; NPS-enkät | Payback ≤ 1 mån bekräftad; f ≥ basantagande; k första mätning | Go/no-go skala; rekrytering utveckling |
 | **Q4 – Skala** | Flywheelen snurrar av egen kraft | Marknadsmotor på (innehållskalender); Fortnox/Visma-import; kontorsstruktur → enterprise-pilot 1–2 kedjor | Analyser/vecka ×3; byråretention > 90 %; North Star-mätningen börjar | Ström D-prislogik; organisationens första anställningar |
 

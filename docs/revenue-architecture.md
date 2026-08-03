@@ -109,11 +109,11 @@ produktyta och G6:s bärare på företagssidan.
 | Fråga | Svar |
 |---|---|
 | **Vem betalar?** | Primärt byrån; i utvalda fall företaget (t.ex. signering) – aldrig så att G1 bryts. |
-| **För vad?** | Händelser med **verklig rörlig kostnad** hos tredje part: BankID-identifiering/signering, daglig kreditbevakning (Creditsafe), framtida direktintegrationer (Fortnox/Visma-koppling, byråsystems-API). |
+| **För vad?** | Händelser med **verklig rörlig kostnad** hos tredje part: daglig kreditbevakning (Creditsafe), framtida direktintegrationer (Fortnox/Visma-koppling, byråsystems-API). Signering hör INTE hit - den är byggd i egen regi och kostar oss ingenting per gång (docs/signering.md). |
 | **När?** | Per händelse eller som tillval per månad – på samma samlingsfaktura (raderna finns redan som `usage_charges`-typer att utöka). |
 | **Varför rättvist?** | Avgiften speglar en kostnad som faktiskt uppstår hos leverantören + skälig marginal. Transparent: raden visar vad som utlöste den. |
 | **Vad får de tillbaka?** | Juridiskt starkare signaturer, tidig varning vid kreditförsämring, noll dubbelinmatning. |
-| **Status i plattformen** | Kreditbevakningen byggd (väntar avtal/nyckel). BankID förberedd. Integrationsramen ("Inom kort") byggd. Debiteringsraden och samlingsfakturan byggda. |
+| **Status i plattformen** | Kreditbevakningen byggd (väntar avtal/nyckel). Signeringen byggd, utan leverantör. Integrationsramen ("Inom kort") byggd. Debiteringsraden och samlingsfakturan byggda. |
 | **Mätpunkt** | Signeringar, bevakade bolag × dagar, aktiva integrationer. |
 | **Risker** | **Nickel-and-diming** – tio små avgifter känns värre än en stor. Mitigering: baka in upp till tak i grund-/byråavgiften, visa premiumhändelser som ingår innan de debiteras separat. Blockeras av luckorna 2–4 (avtalspriser). |
 
@@ -190,7 +190,7 @@ kontorsstruktur.
 | 1 | **Economic Model v1.0** (`docs/economic-model.md`): cost-to-serve, marginaler, break-even som parametriserad modell | Detta dokument |
 | 2 | Insolvensrättslig prövning av företagssidans avgifter (inkl. designfråga A1) | Jurist |
 | 3 | Bankgiro + momsreg/F-skatt bekräftas | Landvex admin |
-| 4 | Avtalspriser: Creditsafe, BankID, Fortnox/Visma | Partnerförhandling |
+| 4 | Avtalspriser: Creditsafe, Fortnox/Visma | Partnerförhandling |
 | 5 | Betalningsviljeintervjuer, 10–15 per sida, guider ur värdedrivarna | Marknad |
 | 6 | Pilot med verkliga kunder (parametrar i driftpanelen; ett segmentband, en byråkohort) | 1–5 |
 | 7 | Exitorsak börjar registreras (bra churn- och G6-mätningen) | Liten migration |

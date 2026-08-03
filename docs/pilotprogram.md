@@ -115,7 +115,7 @@ Allt nedan finns redan byggt om inte annat anges.
 | Andel lyckade utfall, k (hälsonivån) | Exitorsaker + hälsoläge | `north_star_counts()` |
 | A-/U-nivåernas acceptans | Skuggdebitering + faktisk betalning + slutintervju | `usage_charges`, reskontran, intervju |
 | Persontid per granskning | Manuell loggning per händelse | Driftens anteckning (räcker för pilot) |
-| c_cs, c_id (Creditsafe, BankID) | Avtalsfakturor under piloten | Leverantörsfakturor |
+| c_cs (Creditsafe) | Avtalsfakturor under piloten | Leverantörsfakturor |
 
 **Veckorytm:** driften läser Statistik + North Star-raden varje måndag
 och för pilotlogg (avvikelser, citat, incidenter). Ingen ny

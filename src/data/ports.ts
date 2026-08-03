@@ -30,6 +30,7 @@ import type {
   ProfessionalTerms,
   SecretInfo,
   ApiKeyRecord,
+  DocumentSignature,
   UserProfile,
   UserRole,
   ContactMessageRecord,
@@ -274,6 +275,22 @@ export interface DocumentsPort {
    * Rollprövningen sker i backend; varje övergång journalförs.
    */
   setReview(id: string, action: "request" | "approve" | "reset"): Promise<void>;
+  /**
+   * Signeringen: en enkel elektronisk signatur som förseglar innehållet.
+   *
+   * Klienten räknar fram kontrollsumman ur de bytes den faktiskt visar
+   * för användaren - det är den handlingen som signeras, inte en rad i
+   * en tabell. Backend prövar behörighet och status, sätter tidpunkten
+   * och journalför. Ett utkast kan aldrig signeras.
+   */
+  listSignatures(documentId: string): Promise<DocumentSignature[]>;
+  sign(input: {
+    documentId: string;
+    signerName: string;
+    contentSha256: string;
+    statementVersion: string;
+    statementText: string;
+  }): Promise<DocumentSignature>;
 }
 
 export interface FinancialPort {

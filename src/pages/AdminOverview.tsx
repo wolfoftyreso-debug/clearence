@@ -48,7 +48,6 @@ const PROVIDERS: { id: string; name: string; note: string }[] = [
   { id: "bolagsverket", name: "Bolagsverket", note: "Företagsuppgifter vid utvärderingen." },
   { id: "fortnox", name: "Fortnox", note: "Bokföringsdata direkt, i stället för SIE-fil." },
   { id: "visma", name: "Visma eEkonomi", note: "Bokföringsdata direkt, i stället för SIE-fil." },
-  { id: "bankid", name: "BankID", note: "Underskrift av styrelsedokument." },
   { id: "ses", name: "E-postutskick (SES)", note: "Arbetarens avsändarkonto för fakturor och påminnelser." },
 ];
 

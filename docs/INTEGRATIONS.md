@@ -25,7 +25,7 @@ byggs när partneravtalen finns, ovanpå samma domänmodeller.
 ## Kräver avtal innan kod skrivs
 
 Fortnox, Visma (developer-avtal + OAuth), Bolagsverket (API-registrering),
-BankID (avtal via bank). Domänmodellerna och portarna är redan byggda -
+Creditsafe (avtal). Domänmodellerna och portarna är redan byggda -
 avtalen är flaskhalsen, och de ägs av Landvex.
 
 ## Blockerat tills namngivet beslut

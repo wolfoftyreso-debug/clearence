@@ -70,7 +70,7 @@ L_kris = 8 mån · 2 upplåsningar (rekonstruktör + revisor) · 2 premiumhände
 | 3 | Upplåsning: rekonstruktör | ~0 | 1 000 | +1 235 |
 | 4 | Månad 2–4 (ansökan, förhandling) | 45 | 1 500 | +2 690 |
 | 5 | Upplåsning: revisor | ~0 | 1 000 | +3 690 |
-| 6 | 2 BankID-signeringar (netto) | – | +20 | +3 710 |
+| 6 | 2 signeringar (egen, ingen styckkostnad) | – | 0 | +3 690 |
 | 7 | Månad 5–8 (plan fastställs, genomförs) | 60 | 2 000 | +5 650 |
 | 8 | Exit ur krisen → **konvertering till hälsonivån** | ~0 | 0 | +5 650 |
 | 9 | Hälsonivå 18 mån (bevakning veckovis inbakad [designval EM §1.2]) | ~180 | 3 600 (H) | **+9 070** |
@@ -118,7 +118,7 @@ Ingen resa är förlustbringande, men framgång är strukturellt mångfalt mer v
 **Läsning:** byråenheten har engångskostnad (KYC) och därefter ~95 % marginal
 per händelse [EM §5]. Vid n = 6 upplåsningar/år är relationen värd ~6 000 kr/år
 mot ~1 000 kr i totala kostnader. **KYC-persontiden är den enda
-skalbegränsningen** – därav BankID-automation som framtida investering med
+skalbegränsningen** – därav fler granskare som framtida investering med
 direkt enhetsavkastning.
 
 ---
@@ -130,7 +130,7 @@ direkt enhetsavkastning.
 | **Var förloras pengar?** | Endast i tittarledet (−50 kr/analys som inte konverterar) och byråers KYC före första upplåsning. Båda är medvetna investeringar med känd payback-mekanism. |
 | **Var tjänas de?** | Månad 1 på företagssidan (payback direkt), varje upplåsning (ren marginal), och – störst per resa – hälsonivån. |
 | **Vilka steg måste optimeras?** | (1) Analys→konto-konverteringen q: enda hävstången mot anskaffningsförlusten. (2) Upplåsningsgraden f: varje procentenhet är ren marginal. (3) Kris→hälsa-konverteringen k: 38 % av G6-vinnarresans värde. |
-| **Vilka funktioner ger högst avkastning per byggd krona?** | 1. **Förhandsvisningen** (byggd, testad) – driver f. 2. **Hälsonivån** (obyggd) – störst obelånad RLV-term; nu även enhetsbevisad. 3. **Gratisanalysens rapportkvalitet** (byggd) – driver q. 4. **BankID-automation av KYC** (avtal) – löser den enda skalgränsen. |
+| **Vilka funktioner ger högst avkastning per byggd krona?** | 1. **Förhandsvisningen** (byggd, testad) – driver f. 2. **Hälsonivån** (obyggd) – störst obelånad RLV-term; nu även enhetsbevisad. 3. **Gratisanalysens rapportkvalitet** (byggd) – driver q. 4. **Fler granskare i KYC-kön** – löser den enda skalgränsen; automation hjälper inte, eftersom kontrollen prövar företrädarrätt. |
 | **Payback-punkter** | Företagsresan: månad 1. Byrårelationen: första upplåsningen. Ingen enhet kräver månader av tålamod – ovanligt för plattformsaffärer och en direkt följd av noll marginalkostnad [FAKTA]. |
 
 ---

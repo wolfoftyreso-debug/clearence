@@ -2082,6 +2082,100 @@ select pg_temp.check('a revoked key gets the same silence',
                              'aaaaaaaa-0000-0000-0000-000000000001') is null), true);
 set local role authenticated;
 
+-- ===== Signeringen: oföränderlig, behörighetsprövad, journalförd =====
+
+select pg_temp.as_user('11111111-1111-1111-1111-111111111111');
+
+insert into public.case_documents (id, case_id, user_id, kind, file_name, file_size, mime_type, storage_path, source, review_status)
+values ('d0c50000-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000001',
+        '11111111-1111-1111-1111-111111111111', 'other', 'styrelseprotokoll.pdf', 1024,
+        'application/pdf', 'aaaaaaaa-0000-0000-0000-000000000001/protokoll.pdf', 'manual', 'draft');
+
+-- Ett utkast kan inte signeras.
+do $$
+begin
+  begin
+    perform public.sign_document(
+      'd0c50000-0000-0000-0000-000000000001', 'Erik Lindqvist',
+      repeat('a', 64), '1.0', 'Jag intygar …');
+    raise exception 'FAIL  ett utkast kunde signeras';
+  exception when others then
+    if sqlerrm like 'FAIL%' then raise; end if;
+    raise notice 'ok    a draft cannot be signed';
+  end;
+end $$;
+
+update public.case_documents set review_status = 'in_review'
+where id = 'd0c50000-0000-0000-0000-000000000001';
+
+select pg_temp.check('the representative signs the document',
+  (select signer_name from public.sign_document(
+     'd0c50000-0000-0000-0000-000000000001', '  Erik Lindqvist  ',
+     repeat('a', 64), '1.0', 'Jag intygar att jag har läst handlingen …')),
+  'Erik Lindqvist'::text);
+
+select pg_temp.check('the server sets the time, not the client',
+  (select signed_at between now() - interval '1 minute' and now() + interval '1 minute'
+   from public.document_signatures), true);
+select pg_temp.check('the statement text is copied into the row',
+  (select statement_text like 'Jag intygar%' from public.document_signatures), true);
+
+-- Samma person signerar inte två gånger - "senaste signaturen" får inte
+-- bli ett sätt att skriva om historien.
+do $$
+begin
+  begin
+    perform public.sign_document(
+      'd0c50000-0000-0000-0000-000000000001', 'Erik Lindqvist',
+      repeat('b', 64), '1.0', 'Jag intygar …');
+    raise exception 'FAIL  samma person kunde signera två gånger';
+  exception when others then
+    if sqlerrm like 'FAIL%' then raise; end if;
+    raise notice 'ok    the same person signs a document once';
+  end;
+end $$;
+
+-- Signaturen är oföränderlig och raderas aldrig. Skyddet är dubbelt:
+-- RLS har ingen update- eller delete-policy, så satserna träffar noll
+-- rader, och triggern stoppar den som ändå tar sig förbi. Testet mäter
+-- RESULTATET - att raden står kvar orörd - inte vilket av de två lagren
+-- som råkade svara först.
+update public.document_signatures set signer_name = 'Någon annan';
+select pg_temp.check('a signature cannot be altered',
+  (select signer_name from public.document_signatures), 'Erik Lindqvist'::text);
+
+delete from public.document_signatures;
+select pg_temp.check('a signature cannot be deleted',
+  (select count(*) from public.document_signatures), 1::bigint);
+
+-- Signeringen syns i journalen. En signatur som inte finns där har inte
+-- hänt, ur användarens synvinkel.
+select pg_temp.check('the signature is in the journal',
+  (select count(*) from public.audit_events
+   where action = 'signed' and object_id = 'd0c50000-0000-0000-0000-000000000001'), 1::bigint);
+
+-- Borgenären ser varken signaturen eller kan skapa en.
+select pg_temp.as_user('55555555-5555-5555-5555-555555555555');
+select pg_temp.check('a creditor sees no signatures',
+  (select count(*) from public.document_signatures), 0::bigint);
+do $$
+begin
+  begin
+    perform public.sign_document(
+      'd0c50000-0000-0000-0000-000000000001', 'Borgenären',
+      repeat('c', 64), '1.0', 'Jag intygar …');
+    raise exception 'FAIL  en borgenär kunde signera bolagets handling';
+  exception when others then
+    if sqlerrm like 'FAIL%' then raise; end if;
+    raise notice 'ok    a creditor cannot sign the company documents';
+  end;
+end $$;
+
+-- Kretsens revisor (4444) ser signaturen - hen är deltagare i ärendet.
+select pg_temp.as_user('44444444-4444-4444-4444-444444444444');
+select pg_temp.check('the auditor in the circle sees the signature',
+  (select count(*) from public.document_signatures), 1::bigint);
+
 reset role;
 select 'ALL RLS TESTS PASSED' as result;
 
