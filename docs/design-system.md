@@ -24,16 +24,16 @@ ingen följer. Alla nya ytor använder stegen nedan; frihandsvärden
 **Sektionssteg** (mellan ytor på publika sidor): 48/64/80 px
 (`*-12`, `*-16`, `*-20`).
 
-**Tillåtna undantag**, båda med skäl som inte är smak:
+**Tillåtet undantag**, med ett skäl som inte är smak:
 
-* `pb-14` - frizonen under den fasta bottennavigeringen (matchar
-  navens höjd, inte en rytm).
 * `src/components/ui/` - vendorerade primitiver (shadcn) granskas
   inte; de bär bibliotekets egna mått.
 
-**Förbjudna steg:** 7, 9, 10, 11 (28/36/40/44 px) och alla
+**Förbjudna steg:** 7, 9, 10, 11, 14 (28/36/40/44/56 px) och alla
 frihandsvärden. De låg utspridda i produkten (px-7-piller, gap-10,
-py-10-spinnrar) och är normaliserade till skalan.
+py-10-spinnrar) och är normaliserade till skalan. (14 var tidigare
+tillåtet som frizon under startsidans bottennavigering - naven är
+borttagen, så undantaget är det också.)
 
 ## Kortkompositionen: två korttyper, aldrig fler per sida
 

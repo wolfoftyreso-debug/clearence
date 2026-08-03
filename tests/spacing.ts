@@ -5,8 +5,9 @@
  * Vaktar tre regler i all egen kod (vendorerade src/components/ui
  * undantaget):
  *  1. Inga frihandsvärden i spacing-utilities (p-[18px], mt-[13px]).
- *  2. Inga förbjudna steg: 7, 9, 10, 11 (28/36/40/44 px). Steget 14
- *     tillåts ENDAST som pb-14 - frizonen under bottennavigeringen.
+ *  2. Inga förbjudna steg: 7, 9, 10, 11, 14 (28/36/40/44/56 px).
+ *     (14 var frizonen under startsidans bottennavigering - naven är
+ *     borttagen, så undantaget är det också.)
  *  3. Hörnradien är rounded-md: rounded-lg/xl/2xl är städade och
  *     återinförs inte utanför ui-biblioteket.
  */
@@ -42,11 +43,10 @@ check("källfilerna hittades", files.length > 50, files.length);
 
 const SPACING = "(?:p|px|py|pt|pb|pl|pr|m|mx|my|mt|mb|ml|mr|gap|gap-x|gap-y|space-x|space-y)";
 const freehand = new RegExp(`\\b${SPACING}-\\[`);
-const banned = new RegExp(`\\b${SPACING}-(?:7|9|10|11)\\b`);
-const fourteen = new RegExp(`\\b(?:p|px|py|pt|pl|pr|m|mx|my|mt|mb|ml|mr|gap|space-x|space-y)-14\\b`);
+const banned = new RegExp(`\\b${SPACING}-(?:7|9|10|11|14)\\b`);
 const radius = /\brounded-(?:lg|xl|2xl)\b/;
 
-const offenders: Record<string, string[]> = { freehand: [], banned: [], fourteen: [], radius: [] };
+const offenders: Record<string, string[]> = { freehand: [], banned: [], radius: [] };
 for (const file of files) {
   const rel = file.slice(file.indexOf("src"));
   const lines = readFileSync(file, "utf8").split("\n");
@@ -54,14 +54,12 @@ for (const file of files) {
     if (!/className/.test(line) && !/^\s*["'`]/.test(line.trim())) return;
     if (freehand.test(line)) offenders.freehand.push(`${rel}:${i + 1}`);
     if (banned.test(line)) offenders.banned.push(`${rel}:${i + 1}`);
-    if (fourteen.test(line)) offenders.fourteen.push(`${rel}:${i + 1}`);
     if (radius.test(line)) offenders.radius.push(`${rel}:${i + 1}`);
   });
 }
 
 check("inga frihandsvärden i spacing", offenders.freehand.length === 0, offenders.freehand);
-check("inga förbjudna steg (7/9/10/11)", offenders.banned.length === 0, offenders.banned);
-check("14 används bara som pb-14 (bottennavens frizon)", offenders.fourteen.length === 0, offenders.fourteen);
+check("inga förbjudna steg (7/9/10/11/14)", offenders.banned.length === 0, offenders.banned);
 check("hörnradien är rounded-md utanför ui-biblioteket", offenders.radius.length === 0, offenders.radius);
 
 console.log(`\n${passed} passed, ${failed} failed`);

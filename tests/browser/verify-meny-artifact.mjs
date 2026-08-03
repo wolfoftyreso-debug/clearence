@@ -5,9 +5,9 @@
  * publiceras - samma princip som notisklickssviten: testbygget kan dölja
  * fel som bara finns i hash-läget eller med demobannerns bottninset.
  *
- *  1. Startsidans bottennav: Meny-panelen öppnas ovanför bannern och
- *     länkarna navigerar; Inställningar visar språkvalet; Logga in leder
- *     till inloggningen.
+ *  1. Startsidan: bottennavigeringen är BORTA (på uttrycklig begäran) -
+ *     headerns hamburgermeny bär navigeringen: den öppnas, länkarna
+ *     navigerar och Logga in leder till inloggningen.
  *  2. Inloggat läge: hamburgermenyn öppnar sidomenyn, länkarna navigerar
  *     och menyn stängs efter klick.
  */
@@ -44,31 +44,28 @@ const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
 page.setDefaultTimeout(20000);
 
-// 1. Startsidans bottennav.
+// 1. Startsidan: bottennaven är borta, headermenyn bär navigeringen.
 await page.goto(`${BASE}#/`, { waitUntil: "domcontentloaded" });
 await page.waitForTimeout(1200);
 
-await page.locator('nav button:has-text("Meny")').click();
+const bottomNavCount = await page.locator('nav button:has-text("Tjänster")').count();
+check("bottennavigeringen är borta", bottomNavCount === 0, String(bottomNavCount));
+
+await page.locator('header button[aria-label="Toggle menu"]').click();
 await page.waitForTimeout(600);
-const menuPanel = await page.evaluate(() => {
-  const heading = [...document.querySelectorAll("h2")].find((h) => h.textContent?.trim() === "Meny");
-  const rect = heading?.closest("div")?.getBoundingClientRect();
-  return rect ? { top: rect.top, visible: rect.top > 0 && rect.top < window.innerHeight } : null;
-});
-check("Meny-panelen öppnas synligt", Boolean(menuPanel?.visible), JSON.stringify(menuPanel));
-await page.click('a:has-text("Kunskapsbank")');
+// .last(): desktopnavens dolda tvilling matchar också - mobilmenyn
+// renderas sist.
+const omLink = page.locator('header nav a:has-text("Om oss")').last();
+check("headermenyn öppnas", await omLink.isVisible());
+await omLink.click();
 await page.waitForTimeout(1100);
-check("menylänken navigerar", (await page.evaluate(() => location.hash)).startsWith("#/kunskap"));
+check("menylänken navigerar", (await page.evaluate(() => location.hash)).startsWith("#/om"));
 
 await page.goto(`${BASE}#/`, { waitUntil: "domcontentloaded" });
 await page.waitForTimeout(1000);
-await page.locator('nav button:has-text("Inställningar")').click();
+await page.locator('header button[aria-label="Toggle menu"]').click();
 await page.waitForTimeout(600);
-// Rubriken renderas med CSS uppercase - innerText följer det.
-let body = await page.innerText("body");
-check("Inställningar visar språkvalet", /inställningar · språk/i.test(body));
-
-await page.locator('nav button:has-text("Logga in")').click();
+await page.locator('header nav a:has-text("Logga in")').last().click();
 await page.waitForTimeout(1100);
 check("Logga in leder till inloggningen", (await page.evaluate(() => location.hash)).startsWith("#/login"));
 

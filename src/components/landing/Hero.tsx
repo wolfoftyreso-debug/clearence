@@ -76,8 +76,8 @@ const Hero = () => {
         {/* Pillerknapparna ("Gratis nulägesanalys", "Mina sidor") och
             "Se alla tjänster"-länken är borttagna på uttrycklig begäran,
             precis som sökrutan före dem: samtalet är startskärmens ENDA
-            handling. Analysen nås genom samtalet, Mina sidor och sök via
-            navigeringen, tjänsterna genom att scrolla. Återinför inget. */}
+            handling. Analysen nås genom samtalet, inloggningen via
+            headerns meny, tjänsterna genom att scrolla. Återinför inget. */}
 
         {/* Varför tjänsten finns - flyttad under blicken men inte borttagen:
             positioneringen är en del av produkten. */}
