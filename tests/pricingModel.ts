@@ -60,6 +60,18 @@ check("Start säger vad som INTE ingår", PLAN_TIERS[0].excludes.length >= 3);
 check("reservvärden för alla nivåer", DEFAULT_COMPANY_PLAN.businessExVatSek === 2780 && DEFAULT_COMPANY_PLAN.enterpriseExVatSek === 4500);
 check("nivåbelopp formateras svenskt", formatMonthly(2780) === "2 780 kr/mån + moms");
 check("nivåerna knyts aldrig till omsättning", !/omsättning/i.test(JSON.stringify(PLAN_TIERS)));
+/* Ekonomisystemskopplingen: ENDAST Business och Enterprise (uttrycklig
+   begäran). Start och Standard säger båda att den inte ingår. */
+check(
+  "ekonomisystemskoppling ingår inte under Business",
+  PLAN_TIERS.slice(0, 2).every(
+    (t) => !t.includes.some((i) => /ekonomisystem/i.test(i)) && t.excludes.some((e) => /ekonomisystem/i.test(e)),
+  ),
+);
+check(
+  "ekonomisystemskoppling ingår i Business och Enterprise",
+  PLAN_TIERS.slice(2).every((t) => t.includes.some((i) => /ekonomisystem/i.test(i))),
+);
 
 /* --- tonen: inbjudan, inte inlåsning --------------------------------------- */
 

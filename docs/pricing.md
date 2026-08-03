@@ -45,14 +45,18 @@ med priset ur driftparametern.
   dokument. Ingen export, ingen delning, ingen ekonomisystemskoppling.
 * **Clearance Standard – 985 kr/mån + moms.** Små och medelstora
   företag: obegränsad dialog, dokumentgenerering och arkiv,
-  ärendehistorik, export, delning, e-post till rådgivare,
+  ärendehistorik, export, delning, e-post till rådgivare. Ingen
   ekonomisystemskoppling.
 * **Clearance Business – 2 780 kr/mån + moms.** Större komplexitet:
-  flera användare och bolag, behörighetsstyrning, styrelseportal,
+  flera användare och bolag, ekonomisystemskoppling (Fortnox/Visma
+  när avtalen är på plats), behörighetsstyrning, styrelseportal,
   avancerade arbetsflöden, utökade integrationer, prioriterad support.
 * **Clearance Enterprise – 4 500 kr/mån + moms, eller offert.**
-  Anpassade integrationer, API, fler roller, avancerad loggning,
-  dedikerad onboarding, anpassad support.
+  Ekonomisystemskoppling, anpassade integrationer, API, fler roller,
+  avancerad loggning, dedikerad onboarding, anpassad support.
+
+Ekonomisystemskopplingen ligger ENDAST i Business och Enterprise
+(uttrycklig begäran, vaktad av tests/pricingModel.ts).
 
 **Nivåerna knyts till funktioner, användare och integrationsbehov -
 aldrig till omsättning.** Två bolag med samma omsättning kan ha helt

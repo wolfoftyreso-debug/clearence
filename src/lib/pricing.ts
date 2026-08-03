@@ -61,9 +61,10 @@ export const PLAN_TIERS = [
       "Obegränsad dialog och full handlingsplan",
       "Dokumentgenerering, arkiv och ärendehistorik",
       "Export, delning och e-post till rådgivare",
-      "Ekonomisystemskoppling (Fortnox/Visma när avtalen är på plats)",
     ],
-    excludes: [],
+    // Ekonomisystemskopplingen bor i Business och Enterprise - ENDAST
+    // där, på uttrycklig begäran. Flytta inte ner den igen.
+    excludes: ["Ingen ekonomisystemskoppling"],
   },
   {
     id: "business",
@@ -71,6 +72,7 @@ export const PLAN_TIERS = [
     audience: "Företag med större komplexitet",
     includes: [
       "Flera användare och flera bolag",
+      "Ekonomisystemskoppling (Fortnox/Visma när avtalen är på plats)",
       "Behörighetsstyrning och styrelseportal",
       "Avancerade arbetsflöden och utökade integrationer",
       "Prioriterad support",
@@ -82,7 +84,7 @@ export const PLAN_TIERS = [
     name: "Clearance Enterprise",
     audience: "Större bolag med särskilda krav",
     includes: [
-      "Anpassade integrationer och API",
+      "Ekonomisystemskoppling, anpassade integrationer och API",
       "Fler användare och roller",
       "Avancerad loggning",
       "Dedikerad onboarding och anpassad support",
