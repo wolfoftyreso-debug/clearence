@@ -157,8 +157,9 @@ const ApiDocs = () => {
                 </li>
               ))}
               <li>
-                API-nycklar per organisation, hanterade i driftens valv - aldrig
-                läsbara i efterhand, bara utbytbara.
+                API-nycklar per organisation: skapas under Inställningar i
+                inloggat läge, visas en enda gång och lagras bara som hash -
+                aldrig läsbara i efterhand, bara utbytbara och återkallbara.
               </li>
               <li>
                 Samma radskydd som appen: API:t ser exakt det kontots roller

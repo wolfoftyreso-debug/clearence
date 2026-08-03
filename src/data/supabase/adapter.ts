@@ -622,6 +622,49 @@ export const supabaseAdapter: DataPort = {
     },
   },
 
+  apiKeys: {
+    async listMine() {
+      const { data: rows, error } = await supabase
+        .from("api_keys")
+        .select("id, label, key_prefix, created_at, last_used_at, revoked_at")
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return (rows ?? []).map((r) => ({
+        id: r.id,
+        label: r.label,
+        keyPrefix: r.key_prefix,
+        createdAt: r.created_at,
+        lastUsedAt: r.last_used_at,
+        revokedAt: r.revoked_at,
+      }));
+    },
+    async create(label: string) {
+      // RPC:n genererar och hashar i databasen - hemligheten passerar
+      // aldrig nagon annan lagring och returneras EN gang.
+      const { data: rows, error } = await supabase.rpc("create_api_key", { p_label: label });
+      if (error) throw error;
+      const row = (rows as { id: string; key_prefix: string; secret: string; created_at: string }[])[0];
+      return {
+        record: {
+          id: row.id,
+          label,
+          keyPrefix: row.key_prefix,
+          createdAt: row.created_at,
+          lastUsedAt: null,
+          revokedAt: null,
+        },
+        secret: row.secret,
+      };
+    },
+    async revoke(id: string) {
+      const { error } = await supabase
+        .from("api_keys")
+        .update({ revoked_at: new Date().toISOString() })
+        .eq("id", id);
+      if (error) throw error;
+    },
+  },
+
   shares: {
     async list(caseId) {
       const { data: links, error } = await supabase

@@ -17,6 +17,7 @@
 
 import type { DataPort } from "../ports";
 import type {
+  ApiKeyRecord,
   AccountBillingRecord,
   AuditEventRecord,
   ApplicationForReview,
@@ -106,6 +107,8 @@ interface DemoState {
   /** Företagsplanernas månadsavgifter (exkl. moms) - driftparametrar, aldrig kod. */
   companyPlanMonthlyExVatSek: number | null;
   shareLinks: (CaseShareLinkRecord & { accessLog: string[] })[];
+  /** API-nycklarna: bara prefix och metadata - hemligheten lagras aldrig. */
+  apiKeys: ApiKeyRecord[];
   companyPlanBusinessExVatSek: number | null;
   companyPlanEnterpriseExVatSek: number | null;
 }
@@ -142,6 +145,7 @@ const emptyState = (): DemoState => ({
   caseDecisions: [],
   companyPlanMonthlyExVatSek: null,
   shareLinks: [],
+  apiKeys: [],
   companyPlanBusinessExVatSek: null,
   companyPlanEnterpriseExVatSek: null,
 });
@@ -1541,6 +1545,38 @@ export const demoAdapter: DataPort = {
       state.timeEntries = state.timeEntries.filter(
         (t) => !(t.id === id && t.userId === state.user?.id),
       );
+      save();
+    },
+  },
+
+  apiKeys: {
+    async listMine() {
+      return [...state.apiKeys].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    },
+    async create(label: string) {
+      if (!state.user) throw new Error("Inte inloggad");
+      // Hemligheten genereras, visas en gang och lagras ALDRIG - demon
+      // foljer valvets regler: bara prefix och metadata blir kvar.
+      const bytes = new Uint8Array(24);
+      crypto.getRandomValues(bytes);
+      const secret = "clr_" + Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+      const record: ApiKeyRecord = {
+        id: crypto.randomUUID(),
+        label,
+        keyPrefix: secret.slice(0, 12),
+        createdAt: now(),
+        lastUsedAt: null,
+        revokedAt: null,
+      };
+      state.apiKeys.unshift(record);
+      save();
+      return { record, secret };
+    },
+    async revoke(id: string) {
+      const key = state.apiKeys.find((k) => k.id === id);
+      if (!key) throw new Error("Nyckeln finns inte");
+      if (key.revokedAt) throw new Error("En återkallad nyckel förblir återkallad");
+      key.revokedAt = now();
       save();
     },
   },

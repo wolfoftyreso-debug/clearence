@@ -29,6 +29,7 @@ import type {
   OutboundEmailRecord,
   ProfessionalTerms,
   SecretInfo,
+  ApiKeyRecord,
   UserProfile,
   UserRole,
   ContactMessageRecord,
@@ -570,6 +571,17 @@ export interface SharesPort {
   fetch(token: string): Promise<SharedCaseView | null>;
 }
 
+/**
+ * API-nycklarna för det öppna API:t. Samma regler som driftens valv:
+ * hemligheten returneras EN gång vid skapandet, lagras bara som hash
+ * och kan aldrig läsas igen - bara återkallas (aldrig raderas).
+ */
+export interface ApiKeysPort {
+  listMine(): Promise<ApiKeyRecord[]>;
+  create(label: string): Promise<{ record: ApiKeyRecord; secret: string }>;
+  revoke(id: string): Promise<void>;
+}
+
 export interface AuditPort {
   /**
    * Händelseloggen, nyast först. Append-only i databasen - det här är
@@ -608,6 +620,7 @@ export interface DataPort {
   members: MembersPort;
   audit: AuditPort;
   shares: SharesPort;
+  apiKeys: ApiKeysPort;
   billing: BillingPort;
   ops: OpsPort;
   cases: CasesPort;

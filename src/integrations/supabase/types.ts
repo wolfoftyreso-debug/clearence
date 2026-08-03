@@ -479,6 +479,23 @@ export type Database = {
         Update: never
         Relationships: []
       }
+      api_keys: {
+        Row: {
+          id: string
+          owner_user_id: string
+          label: string
+          key_prefix: string
+          key_hash: string
+          created_at: string
+          last_used_at: string | null
+          revoked_at: string | null
+        }
+        Insert: never
+        Update: {
+          revoked_at?: string | null
+        }
+        Relationships: []
+      }
       app_settings: {
         Row: {
           key: string
@@ -1352,6 +1369,15 @@ export type Database = {
       fetch_shared_case: {
         Args: { p_token: string }
         Returns: Json
+      }
+      create_api_key: {
+        Args: { p_label: string }
+        Returns: {
+          id: string
+          key_prefix: string
+          secret: string
+          created_at: string
+        }[]
       }
       north_star_counts: {
         Args: Record<PropertyKey, never>

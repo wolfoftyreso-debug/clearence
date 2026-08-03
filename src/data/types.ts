@@ -768,3 +768,17 @@ export interface AuditEventRecord {
   detail: string | null;
   occurredAt: string;
 }
+
+/**
+ * En API-nyckel för det öppna API:t, som ägaren ser den: prefix och
+ * metadata - ALDRIG hemligheten. Den returneras EN gång vid skapandet
+ * och lagras bara som hash.
+ */
+export interface ApiKeyRecord {
+  id: string;
+  label: string;
+  keyPrefix: string;
+  createdAt: string;
+  lastUsedAt: string | null;
+  revokedAt: string | null;
+}

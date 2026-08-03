@@ -1975,6 +1975,60 @@ select pg_temp.check('an expired link is silent',
   (select public.fetch_shared_case('11ee0000-0000-0000-0000-000000000002') is null), true);
 set local role authenticated;
 
+-- ===== API-nycklarna: hemligheten lagras aldrig, återkallelse är enda ändringen =====
+
+select pg_temp.as_user('11111111-1111-1111-1111-111111111111');
+
+-- Skapandet går genom RPC:n och returnerar hemligheten EN gång.
+create temp table pg_temp.created_key as
+select * from public.create_api_key('Byråsystemets nyckel');
+
+select pg_temp.check('the api key secret is returned once',
+  (select secret like 'clr\_%' escape '\' from pg_temp.created_key), true);
+select pg_temp.check('the stored row carries hash, never the secret',
+  (select count(*) from public.api_keys
+   where key_hash = encode(digest((select secret from pg_temp.created_key), 'sha256'), 'hex')
+     and key_prefix = left((select secret from pg_temp.created_key), 12)), 1::bigint);
+select pg_temp.check('the secret itself is nowhere in the table',
+  (select count(*) from public.api_keys
+   where key_hash = (select secret from pg_temp.created_key)
+      or key_prefix = (select secret from pg_temp.created_key)), 0::bigint);
+
+-- Grannen ser inte nyckeln.
+select pg_temp.as_user('55555555-5555-5555-5555-555555555555');
+select pg_temp.check('another user sees no foreign api keys',
+  (select count(*) from public.api_keys), 0::bigint);
+
+-- Etiketten och hashen är frysta; bara återkallelsen släpps igenom.
+select pg_temp.as_user('11111111-1111-1111-1111-111111111111');
+do $$
+begin
+  begin
+    update public.api_keys set label = 'Omdöpt';
+    raise exception 'FAIL  en api-nyckels etikett kunde ändras';
+  exception when others then
+    if sqlerrm like 'FAIL%' then raise; end if;
+    raise notice 'ok    an api key is immutable except revocation';
+  end;
+end $$;
+
+update public.api_keys set revoked_at = now()
+where id = (select id from pg_temp.created_key);
+select pg_temp.check('the owner revokes the key',
+  (select count(*) from public.api_keys where revoked_at is not null), 1::bigint);
+
+-- En återkallad nyckel väcks aldrig igen.
+do $$
+begin
+  begin
+    update public.api_keys set revoked_at = null;
+    raise exception 'FAIL  en återkallad api-nyckel kunde väckas';
+  exception when others then
+    if sqlerrm like 'FAIL%' then raise; end if;
+    raise notice 'ok    a revoked api key stays revoked';
+  end;
+end $$;
+
 reset role;
 select 'ALL RLS TESTS PASSED' as result;
 

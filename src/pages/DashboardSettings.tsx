@@ -19,7 +19,9 @@ import {
   PresentationSection,
 } from "@/components/settings/PreferenceSections";
 import type { CustomerInvoiceRecord } from "@/data/types";
-import { CheckCircle2, Download, Loader2, Receipt } from "lucide-react";
+import { LockedFeature, useEntitlements } from "@/components/billing/LockedFeature";
+import { Link } from "react-router-dom";
+import { CheckCircle2, Copy, Download, KeyRound, Loader2, Receipt } from "lucide-react";
 
 /**
  * Kontot: uppgifter, läge och alla fakturor och kvitton.
@@ -36,6 +38,140 @@ const STATUS_LABEL: Record<CustomerInvoiceRecord["status"], string> = {
   issued: "Obetald",
   paid: "Betald",
   cancelled: "Makulerad",
+};
+
+/**
+ * API-nycklarna för det öppna API:t. Valvets regler i gränssnittet:
+ * hemligheten visas EN gång vid skapandet och kan därefter aldrig
+ * läsas igen - bara återkallas. Bakom betalväggen: API-åtkomst är
+ * delning av ärendedata till externa system.
+ */
+const ApiKeysSection = () => {
+  const queryClient = useQueryClient();
+  const { ready, exportAndSharing } = useEntitlements();
+  const [label, setLabel] = useState("");
+  const [freshSecret, setFreshSecret] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const { data: keys } = useQuery({
+    queryKey: ["my-api-keys"],
+    queryFn: () => data.apiKeys.listMine(),
+    enabled: ready && exportAndSharing,
+  });
+
+  const create = useMutation({
+    mutationFn: (l: string) => data.apiKeys.create(l),
+    onSuccess: (result) => {
+      setLabel("");
+      setFreshSecret(result.secret);
+      setCopied(false);
+      queryClient.invalidateQueries({ queryKey: ["my-api-keys"] });
+    },
+  });
+  const revoke = useMutation({
+    mutationFn: (id: string) => data.apiKeys.revoke(id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["my-api-keys"] }),
+  });
+
+  if (ready && !exportAndSharing) {
+    return <LockedFeature title="API-nycklar för det öppna API:t" />;
+  }
+
+  return (
+    <WizardCard>
+      <WizardCardHeader
+        title="API-nycklar"
+        description="För att koppla egna system till det öppna API:t. Nyckeln visas en enda gång när den skapas – därefter kan den aldrig läsas igen, bara bytas ut."
+      />
+      <p className="text-sm text-muted-foreground">
+        Vad API:t kan göra står på{" "}
+        <Link to="/api" className="font-medium text-accent underline-offset-4 hover:underline">
+          utvecklarsidan
+        </Link>
+        . Nyckeln ser exakt det ditt konto ser – varken mer eller mindre.
+      </p>
+
+      {freshSecret && (
+        <div className="mt-4 rounded-md border border-warning/50 bg-warning/10 p-4">
+          <p className="text-sm font-semibold text-foreground">
+            Här är din nya nyckel – spara den nu.
+          </p>
+          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+            Av säkerhetsskäl visas den aldrig igen. Tappas den bort återkallar du
+            den och skapar en ny.
+          </p>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <code data-fresh-secret className="min-w-0 break-all rounded-sm bg-card px-2 py-1 text-sm text-foreground">
+              {freshSecret}
+            </code>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                void navigator.clipboard?.writeText(freshSecret).then(() => setCopied(true));
+              }}
+            >
+              <Copy className="h-3.5 w-3.5" aria-hidden="true" />
+              {copied ? "Kopierad" : "Kopiera"}
+            </Button>
+            <Button type="button" variant="ghost" size="sm" onClick={() => setFreshSecret(null)}>
+              Jag har sparat den
+            </Button>
+          </div>
+        </div>
+      )}
+
+      <form
+        className="mt-4 flex flex-wrap gap-2"
+        onSubmit={(e) => {
+          e.preventDefault();
+          const l = label.trim();
+          if (l.length >= 3) create.mutate(l);
+        }}
+      >
+        <label htmlFor="api-key-label" className="sr-only">
+          Vad nyckeln ska användas till
+        </label>
+        <Input
+          id="api-key-label"
+          value={label}
+          onChange={(e) => setLabel(e.target.value)}
+          placeholder="T.ex. Byråsystemet eller Ekonomisystemet"
+          className="min-w-0 flex-1"
+        />
+        <Button type="submit" variant="accent" disabled={label.trim().length < 3 || create.isPending}>
+          <KeyRound className="h-4 w-4" aria-hidden="true" />
+          Skapa nyckel
+        </Button>
+      </form>
+
+      {(keys ?? []).length > 0 && (
+        <ul className="mt-4 divide-y divide-border/60">
+          {(keys ?? []).map((k) => (
+            <li key={k.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2.5">
+              <code className="text-sm text-foreground">{k.keyPrefix}…</code>
+              <span className="min-w-0 flex-1 text-sm text-muted-foreground">{k.label}</span>
+              {k.revokedAt ? (
+                <span className="rounded-full border border-border bg-secondary px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                  Återkallad
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => revoke.mutate(k.id)}
+                  disabled={revoke.isPending}
+                  className="text-xs font-medium text-destructive underline-offset-4 hover:underline"
+                >
+                  Återkalla
+                </button>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </WizardCard>
+  );
 };
 
 const DashboardSettings = () => {
@@ -120,6 +256,7 @@ const DashboardSettings = () => {
         <PresentationSection />
         <ActiveCaseSection />
         <NotificationSection />
+        <ApiKeysSection />
 
         <WizardCard>
           <WizardCardHeader
