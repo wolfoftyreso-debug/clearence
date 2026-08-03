@@ -1,21 +1,17 @@
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
-import { SectionLink } from "./HowItWorksLink";
 import { ClaraIntro } from "@/components/advisor/ClaraIntro";
 import { Clock, FileText, UserCheck } from "lucide-react";
 
 /**
- * Startsidan, uppställd som myndighetstjänsterna företagare redan kan:
- * avsändare och tagline överst, ett vänligt bildblock med organiska
- * former, frågan "Vad vill du göra?", en stor sökruta, två pillerknappar
- * och länken till alla tjänster. Samma struktur - våra färger, vårt
- * innehåll och inte en lånad pixel: formerna är CSS, illustrationen är en
- * egen kompassros.
+ * Startsidan: avsändare och tagline överst, ett vänligt bildblock med
+ * organiska former kring en egen kompassros - och sedan SAMTALET, som
+ * startskärmens enda handling. Sökrutan, pillerknapparna och
+ * "Se alla tjänster"-länken är borttagna på uttrycklig begäran, i tur
+ * och ordning: allt de gjorde nås genom samtalet eller navigeringen.
  *
- * Varför den uppställningen: målgruppen är företagare i kris som redan
- * navigerar verksamt.se och myndigheternas tjänster. En startsida som
- * beter sig som de sidorna kräver ingen inlärning - frågan, sökrutan och
- * knapparna gör jobbet.
+ * Varför: målgruppen är företagare i kris. En startsida med EN väg
+ * kräver inget val alls - CLEARANCE tar emot direkt.
  */
 
 const facts = [
@@ -100,32 +96,11 @@ const Hero = () => {
           )}
         </div>
 
-        {/* Sökrutan är borttagen härifrån på uttrycklig begäran: samtalet
-            ÄR ingången. Sök finns kvar i bottennavigeringen för den som
-            letar något specifikt. */}
-        <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
-          <Link
-            to="/wizard"
-            className="rounded-full bg-accent px-8 py-3.5 text-base font-semibold text-accent-foreground shadow-soft transition-opacity hover:opacity-90"
-          >
-            Gratis nulägesanalys
-          </Link>
-          <Link
-            to={user ? "/dashboard" : "/login"}
-            className="rounded-full border border-border bg-card px-8 py-3.5 text-base font-semibold text-accent shadow-soft transition-colors hover:border-accent/50"
-          >
-            Mina sidor
-          </Link>
-        </div>
-
-        <p className="mt-6 text-center">
-          <SectionLink
-            target="features"
-            className="text-lg font-semibold text-accent underline underline-offset-4"
-          >
-            Se alla tjänster
-          </SectionLink>
-        </p>
+        {/* Pillerknapparna ("Gratis nulägesanalys", "Mina sidor") och
+            "Se alla tjänster"-länken är borttagna på uttrycklig begäran,
+            precis som sökrutan före dem: samtalet är startskärmens ENDA
+            handling. Analysen nås genom samtalet, Mina sidor och sök via
+            navigeringen, tjänsterna genom att scrolla. Återinför inget. */}
 
         {/* Varför tjänsten finns - flyttad under blicken men inte borttagen:
             positioneringen är en del av produkten. */}
