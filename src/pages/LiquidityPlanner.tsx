@@ -37,16 +37,7 @@ import {
   LineChart as LineChartIcon,
   AlertTriangle,
 } from "lucide-react";
-import {
-  Area,
-  AreaChart,
-  CartesianGrid,
-  ReferenceLine,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
+import { ChartSlot } from "@/components/liquidity/ChartSlot";
 import { format } from "date-fns";
 import { sv } from "date-fns/locale";
 
@@ -740,44 +731,15 @@ const ResultView = ({ projection }: { projection: ReturnType<typeof projectLiqui
 
       {/* Chart */}
       <div className="h-[280px]">
-        <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={projection.days} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-            <defs>
-              <linearGradient id="planGradient" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="hsl(var(--accent))" stopOpacity={0.3} />
-                <stop offset="95%" stopColor="hsl(var(--accent))" stopOpacity={0} />
-              </linearGradient>
-            </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-            <XAxis
-              dataKey="label"
-              tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
-              tickLine={false}
-              interval={13}
-            />
-            <YAxis
-              tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
-              tickLine={false}
-              tickFormatter={(v) => `${Math.round(v / 1000)}k`}
-            />
-            <Tooltip
-              formatter={(value: number) => [`${value.toLocaleString("sv-SE")} kr`, "Saldo"]}
-              contentStyle={{
-                backgroundColor: "hsl(var(--card))",
-                border: "1px solid hsl(var(--border))",
-                borderRadius: "8px",
-              }}
-            />
-            <ReferenceLine y={0} stroke="hsl(var(--destructive))" strokeDasharray="5 5" />
-            <Area
-              type="monotone"
-              dataKey="balance"
-              stroke="hsl(var(--accent))"
-              strokeWidth={2}
-              fill="url(#planGradient)"
-            />
-          </AreaChart>
-        </ResponsiveContainer>
+        <ChartSlot
+          data={projection.days}
+          dataKey="balance"
+          xKey="label"
+          color="hsl(var(--accent))"
+          tooltipLabel="Saldo"
+          xTickInterval={13}
+          tickFontSize={11}
+        />
       </div>
     </div>
   );

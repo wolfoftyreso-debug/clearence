@@ -245,7 +245,7 @@ const ProfessionalCard = ({
         {/* Fixed Prices */}
         {professional.fixedPrices.length > 0 && (
           <div className="bg-secondary/50 rounded-md p-3 space-y-2">
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Fasta priser</p>
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Fasta priser</p>
             <div className="space-y-1.5">
               {professional.fixedPrices.slice(0, 3).map((price, index) => (
                 <div key={index} className="flex justify-between items-center text-sm">

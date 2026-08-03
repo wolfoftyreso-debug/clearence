@@ -40,10 +40,10 @@ const AdminCompanies = () => {
     <DashboardShell title="Företag">
       <div className="mx-auto max-w-3xl space-y-8">
         <header>
-          <h1 className="flex items-center gap-2 text-2xl font-semibold text-foreground">
+          <h2 className="flex items-center gap-2 text-2xl font-semibold text-foreground">
             <Building2 className="h-6 w-6 text-accent" aria-hidden="true" />
             Företag
-          </h1>
+          </h2>
           <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
             Företagskontona och ärendeläget i stort. Driften ser konton och
             aggregat – aldrig in i bolagens ärenden; den gränsen sätter

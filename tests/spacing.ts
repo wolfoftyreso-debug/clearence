@@ -10,6 +10,13 @@
  *     borttagen, så undantaget är det också.)
  *  3. Hörnradien är rounded-md: rounded-lg/xl/2xl är städade och
  *     återinförs inte utanför ui-biblioteket.
+ *
+ * Plus typografirevisionen (Excellence-krav 10):
+ *  4. Uppercase har exakt två recept - etiketten
+ *     (font-semibold + tracking-wider) och chipen
+ *     (font-bold + tracking-wide). Inga tredje varianter.
+ *  5. Shellen äger sidans h1: en sida som använder DashboardShell
+ *     renderar aldrig en egen <h1> - innehållsrubriker är h2.
  */
 
 import { readdirSync, readFileSync, statSync } from "node:fs";
@@ -46,21 +53,42 @@ const freehand = new RegExp(`\\b${SPACING}-\\[`);
 const banned = new RegExp(`\\b${SPACING}-(?:7|9|10|11|14)\\b`);
 const radius = /\brounded-(?:lg|xl|2xl)\b/;
 
-const offenders: Record<string, string[]> = { freehand: [], banned: [], radius: [] };
+const offenders: Record<string, string[]> = {
+  freehand: [],
+  banned: [],
+  radius: [],
+  uppercase: [],
+  doubleH1: [],
+};
 for (const file of files) {
   const rel = file.slice(file.indexOf("src"));
-  const lines = readFileSync(file, "utf8").split("\n");
+  const content = readFileSync(file, "utf8");
+  const lines = content.split("\n");
   lines.forEach((line, i) => {
-    if (!/className/.test(line) && !/^\s*["'`]/.test(line.trim())) return;
-    if (freehand.test(line)) offenders.freehand.push(`${rel}:${i + 1}`);
-    if (banned.test(line)) offenders.banned.push(`${rel}:${i + 1}`);
-    if (radius.test(line)) offenders.radius.push(`${rel}:${i + 1}`);
+    if (/className/.test(line) || /^\s*["'`]/.test(line.trim())) {
+      if (freehand.test(line)) offenders.freehand.push(`${rel}:${i + 1}`);
+      if (banned.test(line)) offenders.banned.push(`${rel}:${i + 1}`);
+      if (radius.test(line)) offenders.radius.push(`${rel}:${i + 1}`);
+      if (/\buppercase\b/.test(line)) {
+        const label = /font-semibold/.test(line) && /tracking-wider/.test(line);
+        const chip = /font-bold/.test(line) && /tracking-wide\b/.test(line);
+        if (!label && !chip) offenders.uppercase.push(`${rel}:${i + 1}`);
+      }
+    }
   });
+  if (
+    /from "@\/components\/dashboard\/DashboardShell"/.test(content) &&
+    /<h1[\s>]/.test(content)
+  ) {
+    offenders.doubleH1.push(rel);
+  }
 }
 
 check("inga frihandsvärden i spacing", offenders.freehand.length === 0, offenders.freehand);
 check("inga förbjudna steg (7/9/10/11/14)", offenders.banned.length === 0, offenders.banned);
 check("hörnradien är rounded-md utanför ui-biblioteket", offenders.radius.length === 0, offenders.radius);
+check("uppercase följer etikett- eller chipreceptet", offenders.uppercase.length === 0, offenders.uppercase);
+check("shellen äger h1 - sidorna använder h2", offenders.doubleH1.length === 0, offenders.doubleH1);
 
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);

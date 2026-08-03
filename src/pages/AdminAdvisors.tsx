@@ -54,10 +54,10 @@ const AdminAdvisors = () => {
     <DashboardShell title="Rådgivare">
       <div className="mx-auto max-w-3xl space-y-6">
         <header>
-          <h1 className="flex items-center gap-2 text-2xl font-semibold text-foreground">
+          <h2 className="flex items-center gap-2 text-2xl font-semibold text-foreground">
             <Scale className="h-6 w-6 text-accent" aria-hidden="true" />
             Rådgivare
-          </h1>
+          </h2>
           <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
             Katalogen per kategori, med verifiering och avtalsläge. Planer,
             avgifter och anspråk ändras i{" "}

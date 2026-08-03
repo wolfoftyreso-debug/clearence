@@ -56,7 +56,7 @@ export const IntegrationStatus = () => {
                 )}
                 <span>
                   {t.name}
-                  <span className="ml-1.5 rounded-full border border-border bg-card px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide">
+                  <span className="ml-1.5 rounded-full border border-border bg-card px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide">
                     Inom kort
                   </span>
                 </span>

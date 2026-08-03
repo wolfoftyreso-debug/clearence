@@ -28,16 +28,7 @@ import {
   Loader2,
   ArrowRight,
 } from "lucide-react";
-import {
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  ReferenceLine,
-  Area,
-  AreaChart,
-} from "recharts";
+import { ChartSlot } from "@/components/liquidity/ChartSlot";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format, addDays, isBefore, startOfDay } from "date-fns";
 import { sv } from "date-fns/locale";
@@ -499,46 +490,13 @@ const LiquidityTimeline = () => {
                   cut the left edge off the dashboard on a phone. */}
               <div className="overflow-x-auto">
                 <div className="h-[300px] min-w-[340px] md:h-[400px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={cashflowData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                    <defs>
-                      <linearGradient id="colorCashflow" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor={scenarioConfig[activeScenario].color} stopOpacity={0.3}/>
-                        <stop offset="95%" stopColor={scenarioConfig[activeScenario].color} stopOpacity={0}/>
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                    <XAxis
-                      dataKey="date"
-                      tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }}
-                      tickLine={false}
-                      axisLine={{ stroke: 'hsl(var(--border))' }}
-                    />
-                    <YAxis
-                      tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }}
-                      tickLine={false}
-                      axisLine={{ stroke: 'hsl(var(--border))' }}
-                      tickFormatter={(value) => `${(value / 1000).toFixed(0)}k`}
-                    />
-                    <Tooltip
-                      formatter={(value: number) => [`${value.toLocaleString('sv-SE')} kr`, scenarioConfig[activeScenario].label]}
-                      labelStyle={{ color: 'hsl(var(--foreground))' }}
-                      contentStyle={{
-                        backgroundColor: 'hsl(var(--card))',
-                        border: '1px solid hsl(var(--border))',
-                        borderRadius: '8px',
-                      }}
-                    />
-                    <ReferenceLine y={0} stroke="hsl(var(--destructive))" strokeDasharray="5 5" />
-                    <Area
-                      type="monotone"
-                      dataKey={activeScenario}
-                      stroke={scenarioConfig[activeScenario].color}
-                      strokeWidth={2}
-                      fill="url(#colorCashflow)"
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
+                  <ChartSlot
+                    data={cashflowData}
+                    dataKey={activeScenario}
+                    xKey="date"
+                    color={scenarioConfig[activeScenario].color}
+                    tooltipLabel={scenarioConfig[activeScenario].label}
+                  />
                 </div>
               </div>
 

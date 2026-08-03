@@ -237,9 +237,14 @@ const AdminInbox = () => {
                   <Inbox className="mx-auto h-6 w-6 text-muted-foreground" aria-hidden="true" />
                   <p className="mt-3 text-muted-foreground">
                     {messages && messages.length > 0
-                      ? "Inget öppet just nu."
-                      : "Inga meddelanden än."}
+                      ? "Inget öppet just nu - de avslutade ärendena finns kvar."
+                      : "Kontaktförfrågningar och partnersvar dyker upp här när de kommer in."}
                   </p>
+                  {messages && messages.length > 0 && (
+                    <Button variant="outline" size="sm" className="mt-4" onClick={() => setShowClosed(true)}>
+                      Visa avslutade
+                    </Button>
+                  )}
                 </div>
               ) : (
                 <ul className="mt-8 space-y-4">

@@ -108,7 +108,7 @@ export const useInlineReport = (): {
   const viewer =
     html === null && pdf === null ? null : (
       <div
-        className="fixed inset-0 z-50 flex flex-col bg-background"
+        className="panel-reveal fixed inset-0 z-50 flex flex-col bg-background"
         role="dialog"
         aria-modal="true"
         aria-label="Rapport"

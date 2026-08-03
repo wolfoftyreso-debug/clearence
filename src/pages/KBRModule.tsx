@@ -387,7 +387,7 @@ const KBRModule = () => {
                   <h4 className="font-medium text-foreground">
                     {option.title}
                     {option.value === suggestedAmbition && (
-                      <span className="ml-2 rounded-full border border-accent/40 bg-accent/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-accent">
+                      <span className="ml-2 rounded-full border border-accent/40 bg-accent/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-accent">
                         Föreslås för dig
                       </span>
                     )}

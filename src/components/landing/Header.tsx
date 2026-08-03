@@ -82,7 +82,7 @@ const Header = () => {
 
         {/* Mobile Navigation */}
         {isMenuOpen && (
-          <div className="md:hidden py-4 border-t border-border animate-fade-in">
+          <div className="md:hidden py-4 border-t border-border panel-reveal">
             <nav className="flex flex-col gap-2">
               <SectionLink
                 target="features"

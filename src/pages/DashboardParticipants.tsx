@@ -292,7 +292,7 @@ const DashboardParticipants = () => {
     <DashboardShell title="Deltagare">
       <div className="mx-auto max-w-3xl space-y-8">
         <header>
-          <h1 className="text-2xl font-semibold text-foreground">Deltagare</h1>
+          <h2 className="text-2xl font-semibold text-foreground">Deltagare</h2>
           <p className="mt-1 text-sm text-muted-foreground">
             Vilka som ser ärendet, och med vilken behörighet.
           </p>

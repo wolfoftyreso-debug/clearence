@@ -1,3 +1,4 @@
+import { Skeleton } from "@/components/ui/skeleton";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQueries, useQuery } from "@tanstack/react-query";
@@ -285,7 +286,7 @@ const PractitionerCases = () => {
     <DashboardShell title="Ärendeöversikt">
       <div className="mx-auto max-w-3xl space-y-8">
         <header>
-          <h1 className="text-2xl font-semibold text-foreground">Ärendeöversikt</h1>
+          <h2 className="text-2xl font-semibold text-foreground">Ärendeöversikt</h2>
           <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
             Alla ärenden du har åtkomst till, med fristerna på tvärs. Byggd för
             rekonstruktörens och förvaltarens vardag: närmaste klocka först,
@@ -294,7 +295,17 @@ const PractitionerCases = () => {
         </header>
 
         {isLoading ? (
-          <Loader2 className="h-6 w-6 animate-spin text-accent" aria-hidden="true" />
+          /* Skelett i klientlistans form i stället för spinner
+             (Excellence-krav 12). */
+          <div aria-busy="true" aria-label="Klientlistan läses in" className="space-y-3">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="rounded-md border border-border bg-card p-5">
+                <Skeleton className="h-5 w-56" />
+                <Skeleton className="mt-3 h-4 w-full" />
+                <Skeleton className="mt-2 h-4 w-2/3" />
+              </div>
+            ))}
+          </div>
         ) : (cases ?? []).length === 0 ? (
           <div className="rounded-md border border-border bg-card p-6">
             <Briefcase className="h-6 w-6 text-muted-foreground" aria-hidden="true" />

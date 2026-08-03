@@ -54,7 +54,7 @@ const Pricing = () => {
                 tier.id === "standard" ? "border-accent/50 shadow-soft" : "border-border"
               }`}
             >
-              <p className="text-sm font-semibold uppercase tracking-wider text-accent">
+              <p className="text-xs font-semibold uppercase tracking-wider text-accent">
                 {tier.name}
               </p>
               <p className="mt-2 font-display text-2xl text-foreground">{priceFor(tier.id)}</p>

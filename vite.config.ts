@@ -15,4 +15,22 @@ export default defineConfig(({ mode }) => ({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        // Huvudchunken under 400 kB (Excellence-krav 11): ramverket och
+        // datalagret bor i egna, långlivat cachade chunkar. Diagrammen
+        // (recharts) splittras redan via ChartSlots lazy-import.
+        manualChunks: (id) => {
+          if (!id.includes("node_modules")) return undefined;
+          if (/node_modules\/(react|react-dom|react-router|react-router-dom|scheduler)\//.test(id)) {
+            return "vendor-react";
+          }
+          if (id.includes("node_modules/@supabase/")) return "vendor-supabase";
+          if (id.includes("node_modules/@radix-ui/")) return "vendor-radix";
+          return undefined;
+        },
+      },
+    },
+  },
 }));

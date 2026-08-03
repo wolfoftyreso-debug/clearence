@@ -1,3 +1,4 @@
+import { Skeleton } from "@/components/ui/skeleton";
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Link, useNavigate } from "react-router-dom";
@@ -12,7 +13,7 @@ import { InsightList } from "@/components/financial/InsightList";
 import { analyseSnapshot } from "@/lib/financial/insights";
 import { format } from "date-fns";
 import { sv } from "date-fns/locale";
-import { CalendarClock, FolderDown, Plus, Loader2 } from "lucide-react";
+import { CalendarClock, FolderDown, Plus } from "lucide-react";
 import { data } from "@/data";
 import { useAuth } from "@/hooks/useAuth";
 import type { CaseRecord } from "@/data/types";
@@ -154,8 +155,21 @@ const Dashboard = () => {
     >
       <div className="mx-auto max-w-5xl">
           {isLoading ? (
-            <div className="flex items-center justify-center py-24">
-              <Loader2 className="w-6 h-6 animate-spin text-accent" />
+            /* Skelett i sidans form i stället för spinner (Excellence-
+               krav 12): Närmast-raden, analysen och planen tecknas innan
+               datat kommit - inget hopp när innehållet landar. */
+            <div aria-busy="true" aria-label="Översikten läses in">
+              <Skeleton className="h-12 w-full" />
+              <div className="mt-6 rounded-md border border-border bg-card p-5 shadow-soft">
+                <Skeleton className="h-6 w-48" />
+                <Skeleton className="mt-3 h-4 w-full" />
+                <Skeleton className="mt-2 h-4 w-3/4" />
+              </div>
+              <div className="mt-6 rounded-md border border-border bg-card p-5 shadow-soft">
+                <Skeleton className="h-6 w-40" />
+                <Skeleton className="mt-3 h-16 w-full" />
+                <Skeleton className="mt-2 h-16 w-full" />
+              </div>
             </div>
           ) : !latestCase ? (
             /* Första mötet är ett samtal, inte ett tomt dashboard: CLEARANCE

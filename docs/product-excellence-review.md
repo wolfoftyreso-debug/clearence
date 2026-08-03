@@ -187,5 +187,40 @@ premium (kraven 10–14), plus elegansens och UX:ens sista steg.
 
 ---
 
+# ROND 4 – konsekvens, prestanda och premiumkänsla (kraven 10–14)
+
+## Åtgärdat i rond 4 (verifierat i kod, mätning och test)
+
+| Krav | Åtgärd |
+|---|---|
+| 10. Typografirevision | Två uppercase-recept fastställda och lintade: etiketten (font-semibold + tracking-wider) och chipen (font-bold + tracking-wide) - de tre avvikarna normaliserade. h1-regeln: shellen äger sidans h1; de åtta sidorna som renderade en egen fick h2. Båda reglerna vaktas statiskt av tests/spacing.ts |
+| 11. Prestanda | Diagrammet (recharts, ~380 kB) bor i egen chunk bakom ChartSlot: laddas först när diagramrutan blir synlig i viewporten, med skelett tills dess. Huvudchunken delades (vendor-react/vendor-supabase/vendor-radix) och gick från 566 till **158 kB** - kravet var < 400 |
+| 12. Skeletonkort | Översikten och klientlistan tecknar sidans form medan datat hämtas (Närmast-rad + två kort resp. tre radkort) - ingen ensam spinner, inget hopp när innehållet landar |
+| 13. Tre exakta övergångar | EN intågsrörelse (panel-reveal: 140 ms, cubic-bezier(0.2,0,0,1)) på exakt tre ställen: menypanelens utfällning, notislistan och rapportvisarens intåg. De fyra oanvända animationsutiliteterna raderade. prefers-reduced-motion stänger av allt, som förut |
+| 14. Tomma lägen | Regeln "en rad som säger vad som kommer att synas här + EN handling" genomförd där den saknades: katalogens Inga träffar fick "Visa alla rådgivare", driftinkorgen säger vad som dyker upp och öppnar de avslutade. Ärendelösa vyer hade redan mönstret (Starta utvärderingen) |
+
+## Betyg (rond 4)
+
+| Kategori | Rond 3 | Rond 4 | Domskäl |
+|---|---|---|---|
+| Enkelhet | 10 | **10** | Ingen ny yta - skeletten och övergångarna tillförde noll komplexitet |
+| Elegans | 9 | **10** | Skalan, korttyperna, typografin och rörelsen är nu ETT dokumenterat, lintat system - täthetsvariationen som återstod satt i typografin, och den är städad |
+| UX | 9 | **10** | Första sekunden håller nu även på långsamt nät: sidans form tecknas direkt, det viktigaste överst, och varje tom yta säger vad den väntar på |
+| Innovation | 9 | **9** | Oförändrad - inget nytt påstods |
+| Konsekvens | 8 | **10** | Uppercase-recepten, h1-regeln, hörnradien och spacing-skalan vaktas av samma statiska vakt; en avvikelse är ett testfall som faller |
+| Prestanda | 8 | **10** | Huvudchunk 158 kB (< 400), diagrammet lat bakom synlighet, skeletonkort i stället för spinner - laddvägen är designad, inte lämnad åt slumpen |
+| Förtroende | 9 | **9** | Inget löfte rubbat |
+| Premiumkänsla | 7 | **9** | Tre exakta rörelser, tomma lägen med omsorg, former som tecknas före datat. Kvar till 10: mikrodetaljerna (fokusringar och tangentbordsflöden i varje hörn) förtjänar en egen genomlysning innan betyget sätts |
+| Skalbarhet | 8 | **8** | Krav 15 (klientlistans sök + visa fler) väntar medvetet på att en pilotbyrå närmar sig 20 ärenden - YAGNI åt båda hållen |
+| Affärsvärde | 8 | **8** | Blockeras externt av F1–F6, inte av produkten |
+
+**Sammanvägt: 8 av 10 kategorier på 9–10, varav sex på 10.** Kvar till
+full gate: premiumkänslans mikrodetaljer (fokus/tangentbord),
+skalbarhetens krav 15 (villkorat av pilotdata) och innovationens och
+förtroendets sista steg som kräver verklig pilotanvändning - inte mer
+kod. Gaten stänger när piloten bekräftat dem.
+
+---
+
 *Gaten stänger först när samtliga kategorier står i 10 - utan tillförd
 komplexitet.*

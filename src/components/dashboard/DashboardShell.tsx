@@ -297,7 +297,7 @@ const NotificationBell = () => {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full z-50 mt-1 w-80 max-w-[calc(100vw-2rem)] rounded-md border border-border bg-card p-2 shadow-medium">
+        <div className="panel-reveal absolute right-0 top-full z-50 mt-1 w-80 max-w-[calc(100vw-2rem)] rounded-md border border-border bg-card p-2 shadow-medium">
           <p className="px-2 py-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             Notiser
           </p>

@@ -197,8 +197,19 @@ const Marketplace = () => {
             <div className="rounded-md border border-border bg-card p-8">
               <h3 className="text-lg font-semibold text-foreground">Inga träffar</h3>
               <p className="mt-1 text-muted-foreground">
-                Prova en annan sökning, kategori eller ort.
+                Här visas rådgivare som matchar sökningen, kategorin och orten.
               </p>
+              <Button
+                variant="outline"
+                className="mt-4"
+                onClick={() => {
+                  setSearchQuery("");
+                  setCategoryFilter("all");
+                  setLocationFilter("");
+                }}
+              >
+                Visa alla rådgivare
+              </Button>
             </div>
           ) : (
             <>
