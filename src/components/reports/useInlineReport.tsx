@@ -59,7 +59,9 @@ export const useInlineReport = (): {
 } => {
   const [model, setModel] = useState<ReportModel | null>(null);
   const [html, setHtml] = useState<string | null>(null);
-  const [pdf, setPdf] = useState<{ url: string; title: string } | null>(null);
+  const [pdf, setPdf] = useState<{ url: string; title: string; blob: Blob; fileName: string } | null>(
+    null,
+  );
   const frameRef = useRef<HTMLIFrameElement>(null);
 
   const open = (next: ReportModel) => {
@@ -84,8 +86,34 @@ export const useInlineReport = (): {
     setHtml(null);
     setPdf((prev) => {
       if (prev) URL.revokeObjectURL(prev.url);
-      return { url, title };
+      return { url, title, blob, fileName };
     });
+  };
+
+  /**
+   * "Spara filen" i inbäddat läge. iOS-fallet från verkligheten: PDF:en
+   * VISAS i lagret, men iOS ritar den utan egen spara-knapp - "det går
+   * inte att spara". Delningsmenyn (Web Share med fil) är den väg iOS
+   * faktiskt erbjuder: därifrån finns "Spara i Filer", AirDrop och
+   * e-post. Där delning med fil inte stöds försöker vi vanlig
+   * nedladdning - alltid en synlig väg, aldrig en död knapp.
+   */
+  const savePdf = async (current: { blob: Blob; fileName: string; title: string }) => {
+    const file = new File([current.blob], current.fileName, { type: "application/pdf" });
+    const nav = navigator as Navigator & {
+      canShare?: (data: { files: File[] }) => boolean;
+      share?: (data: { files: File[]; title?: string }) => Promise<void>;
+    };
+    if (nav.canShare?.({ files: [file] }) && nav.share) {
+      try {
+        await nav.share({ files: [file], title: current.title });
+        return;
+      } catch {
+        // Avbruten delning är ett val, inte ett fel - och faller
+        // delningen ändå, står nedladdningsförsöket nedanför.
+      }
+    }
+    triggerDownload(current.blob, current.fileName);
   };
 
   const openPdf = (next: ReportModel) => {
@@ -117,6 +145,12 @@ export const useInlineReport = (): {
           <p className="min-w-0 flex-1 truncate font-medium text-foreground">
             {pdf?.title ?? model?.meta.documentTitle ?? "Rapport"}
           </p>
+          {pdf !== null && (
+            <Button type="button" variant="accent" size="sm" onClick={() => void savePdf(pdf)}>
+              <Download className="h-4 w-4" aria-hidden="true" />
+              Spara filen
+            </Button>
+          )}
           {html !== null && model !== null && (
             <>
               <Button type="button" variant="accent" size="sm" onClick={() => openPdf(model)}>
@@ -145,9 +179,9 @@ export const useInlineReport = (): {
 
         {pdf !== null && (
           <p className="border-b border-border bg-secondary/40 px-4 py-2 text-xs leading-relaxed text-muted-foreground">
-            PDF:en är skapad och visas nedan - spara den med nedladdningsknappen
-            i PDF-visaren. I inbäddade vyer kan direktnedladdning vara blockerad,
-            därför visas filen här i stället för att ingenting händer.
+            PDF:en är skapad och visas nedan. Tryck på{" "}
+            <span className="font-medium text-foreground">Spara filen</span> så
+            öppnas delningsmenyn - välj t.ex. "Spara i Filer" på mobilen.
           </p>
         )}
 

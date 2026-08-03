@@ -58,6 +58,12 @@ const dialogText = await inner.locator('[role="dialog"]').innerText().catch(() =
 check("inbäddat: PDF-läget öppnas med förklaring", /PDF:en är skapad och visas nedan/i.test(dialogText), dialogText.slice(0, 150));
 const pdfFrame = await inner.locator('[role="dialog"] iframe').getAttribute("src").catch(() => null);
 check("inbäddat: visaren pekar på PDF-blobben", (pdfFrame ?? "").startsWith("blob:"), String(pdfFrame));
+// iOS-fallet: PDF-lagret utan spara-väg är en död knapp. "Spara filen"
+// öppnar delningsmenyn (Web Share med fil) eller faller till nedladdning.
+check("inbäddat: Spara filen-knappen finns i PDF-läget",
+  (await inner.locator('[role="dialog"] button:has-text("Spara filen")').count()) > 0);
+check("inbäddat: förklaringen pekar på Spara filen",
+  /Spara filen/.test(dialogText) && /delningsmenyn/i.test(dialogText), dialogText.slice(0, 200));
 
 await browser.close();
 console.log(`\n${passed} passed, ${failed} failed`);
