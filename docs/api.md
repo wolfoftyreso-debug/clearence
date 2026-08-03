@@ -36,6 +36,10 @@ Byggda på de fyra objekten + ärendet:
 
 * **Ärenden** - skapa, hämta, uppdatera, avsluta (med orsak), arkivera.
 * **Journal/arbetslogg** - läsa, filtrera (typ, tidsintervall), exportera.
+  Läsningen är **live idag** (api_journal): autentiseras med API-nyckel,
+  okänd/återkallad nyckel och ärenden utan åtkomst får samma tystnad,
+  varje verifierat anrop stämplar nyckelns last_used_at, och raderna
+  levereras utan before/after-ögonblicksbilder.
 * **Dokument** - ladda upp, hämta, granskningsstatus
   (utkast/för granskning/godkänt), versionering (planerad).
 * **Beslut** - läsa, protokollföra med premiss, ompröva (aldrig ändra).

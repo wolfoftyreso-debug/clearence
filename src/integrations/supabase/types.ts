@@ -1379,6 +1379,10 @@ export type Database = {
           created_at: string
         }[]
       }
+      api_journal: {
+        Args: { p_key: string; p_case_id: string }
+        Returns: Json
+      }
       north_star_counts: {
         Args: Record<PropertyKey, never>
         Returns: {

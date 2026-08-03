@@ -146,7 +146,7 @@
       "get": {
         "operationId": "listJournal",
         "summary": "Arbetsloggen: append-only-journalen, filtrerbar på objekttyp och tidsintervall, exporterbar",
-        "x-status": "beta",
+        "x-status": "live",
         "responses": {
           "200": {
             "description": "OK"
@@ -178,7 +178,8 @@
               "format": "date-time"
             }
           }
-        ]
+        ],
+        "description": "LIVE: autentiseras med API-nyckel (Authorization: Bearer clr_...). Nyckeln ser exakt det ägarens konto ser. Okänd eller återkallad nyckel och ärenden utan åtkomst får samma tystnad. Journalen levereras som händelserader - utan before/after-ögonblicksbilder och aldrig automatiska bedömningar."
       }
     },
     "/cases/{caseId}/documents": {

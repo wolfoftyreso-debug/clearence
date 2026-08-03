@@ -2029,6 +2029,59 @@ begin
   end;
 end $$;
 
+-- ===== Journal-endpointen: läsning med API-nyckel, ingen session =====
+
+select pg_temp.as_user('11111111-1111-1111-1111-111111111111');
+create temp table pg_temp.journal_key as
+select * from public.create_api_key('Journalläsaren');
+-- Hemligheten läggs i en sessionsvariabel: anon-rollen får inte läsa
+-- temptabellen (och ska inte heller behöva - ett externt system har
+-- bara själva nyckeln).
+select set_config('app.test_api_key', (select secret from pg_temp.journal_key), false);
+
+-- Ett externt system utan session läser journalen med nyckeln.
+set local role anon;
+select set_config('request.jwt.claims', '', true);
+select pg_temp.check('an api key reads the journal without a session',
+  (select (public.api_journal(current_setting('app.test_api_key'),
+                              'aaaaaaaa-0000-0000-0000-000000000001')
+           -> 'events') is not null), true);
+select pg_temp.check('the journal carries event rows',
+  (select jsonb_array_length(public.api_journal(current_setting('app.test_api_key'),
+                              'aaaaaaaa-0000-0000-0000-000000000001')
+           -> 'events') > 0), true);
+select pg_temp.check('the journal never carries before/after snapshots',
+  (select position('"before"' in
+     public.api_journal(current_setting('app.test_api_key'),
+                        'aaaaaaaa-0000-0000-0000-000000000001')::text) = 0), true);
+
+-- Ett ärende nyckelns ägare inte har åtkomst till: samma tystnad.
+select pg_temp.check('a foreign case gets the same silence',
+  (select public.api_journal(current_setting('app.test_api_key'),
+                             'bbbbbbbb-0000-0000-0000-000000000001') is null), true);
+
+-- En okänd nyckel: samma tystnad.
+select pg_temp.check('an unknown key gets the same silence',
+  (select public.api_journal('clr_feedfacefeedfacefeedfacefeedfacefeedfacefeedface',
+                             'aaaaaaaa-0000-0000-0000-000000000001') is null), true);
+
+-- Användningen stämplas, ägaren ser att nyckeln lever.
+set local role authenticated;
+select pg_temp.as_user('11111111-1111-1111-1111-111111111111');
+select pg_temp.check('a verified call stamps last_used_at',
+  (select last_used_at is not null from public.api_keys
+   where id = (select id from pg_temp.journal_key)), true);
+
+-- En återkallad nyckel tystnar omedelbart.
+update public.api_keys set revoked_at = now()
+where id = (select id from pg_temp.journal_key);
+set local role anon;
+select set_config('request.jwt.claims', '', true);
+select pg_temp.check('a revoked key gets the same silence',
+  (select public.api_journal(current_setting('app.test_api_key'),
+                             'aaaaaaaa-0000-0000-0000-000000000001') is null), true);
+set local role authenticated;
+
 reset role;
 select 'ALL RLS TESTS PASSED' as result;
 

@@ -70,6 +70,11 @@ for (const [path, methods] of Object.entries(spec.paths)) {
 }
 check("operations-id:na är unika", new Set(ops.map((o) => o.id)).size === ops.length);
 check("live-länkens läsning är live idag", (spec.paths["/shared/{token}"].get as { "x-status": string })["x-status"] === "live");
+/* Journalen är den första nyckelburna resursen i drift (api_journal). */
+const journalOp = spec.paths["/cases/{caseId}/journal"].get as { "x-status": string; description?: string };
+check("journalens läsning är live idag", journalOp["x-status"] === "live");
+check("journalens datagräns är utskriven", /utan before\/after|aldrig automatiska bedömningar/i.test(journalOp.description ?? ""));
+check("journalens tystnadsprincip är utskriven", /samma tystnad/i.test(journalOp.description ?? ""));
 
 /* Realtiden: webhooks för journalens händelser. */
 for (const event of [
