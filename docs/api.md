@@ -1,6 +1,6 @@
 # Öppet API
 
-**Version 1.0 · Kontraktet finns i api/openapi.json och vaktas av
+**Version 1.1 · Kontraktet finns i api/openapi.json, renderas publikt på /api och vaktas av
 tester. Status per resurs: `live` (körbar idag) eller `beta`
 (kontrakt-först, implementeras bakom samma kontrakt).**
 

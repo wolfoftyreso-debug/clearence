@@ -21,6 +21,7 @@ const serviceLinks = [
 const providerLinks = [
   { to: "/for-radgivare", label: "Anslut dig som rådgivare" },
   { to: "/mina-forfragningar", label: "Mina förfrågningar" },
+  { to: "/api", label: "Öppet API för utvecklare" },
 ];
 
 const authorities = [

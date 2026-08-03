@@ -16,6 +16,7 @@ import { Loader2 } from "lucide-react";
 const Index = lazy(() => import("./pages/Index"));
 const About = lazy(() => import("./pages/About"));
 const Knowledge = lazy(() => import("./pages/Knowledge"));
+const ApiDocs = lazy(() => import("./pages/ApiDocs"));
 const Login = lazy(() => import("./pages/Login"));
 const CrisisWizard = lazy(() => import("./pages/CrisisWizard"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
@@ -74,6 +75,7 @@ const App = () => (
                 <Route path="/" element={<Index />} />
                 <Route path="/om" element={<About />} />
                 <Route path="/kunskap" element={<Knowledge />} />
+                <Route path="/api" element={<ApiDocs />} />
                 <Route path="/kunskap/:slug" element={<Knowledge />} />
                 <Route path="/login" element={<Login />} />
                 <Route path="/wizard" element={<CrisisWizard />} />

@@ -22,7 +22,7 @@ page.on("console", (m) => {
 });
 page.on("pageerror", (e) => consoleErrors.push(`pageerror: ${String(e).slice(0, 160)}`));
 
-const routesAnon = ["/", "/om", "/marketplace", "/kunskap", "/login", "/lank/okand", "/for-radgivare", "/kontakt"];
+const routesAnon = ["/", "/om", "/marketplace", "/kunskap", "/login", "/lank/okand", "/api", "/for-radgivare", "/kontakt"];
 for (const r of routesAnon) {
   await page.goto(`${BASE}${r}`, { waitUntil: "domcontentloaded" });
   await page.waitForTimeout(900);
