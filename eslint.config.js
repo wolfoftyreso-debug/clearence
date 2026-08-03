@@ -20,6 +20,15 @@ export default tseslint.config(
     rules: {
       ...reactHooks.configs.recommended.rules,
       "react-refresh/only-export-components": ["warn", { allowConstantExport: true }],
+      // Mönstret "plocka bort ett fält innan det lämnar adaptern" -
+      // const { authorUserId, ...note } = row - är AVSIKTLIGT och används
+      // för att hemlighålla kolumner som inte hör hemma i klienten.
+      // Utan ignoreRestSiblings flaggas varje sådan rad som ett fel, och
+      // en lint med förutsägbara falsklarm är en lint ingen kör.
+      "@typescript-eslint/no-unused-vars": [
+        "error",
+        { ignoreRestSiblings: true, argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
+      ],
     },
   },
 );

@@ -26,7 +26,7 @@ export type PdfFont = "regular" | "bold" | "italic";
  * hade gett tätare rader, inte säkrare.
  */
 const charWidth = (ch: string, bold: boolean): number => {
-  if (/[iíìîjl.,:;'’!|()[\]{}\/\\ ]/.test(ch)) return bold ? 300 : 278;
+  if (/[iíìîjl.,:;'’!|()[\]{}/\\ ]/.test(ch)) return bold ? 300 : 278;
   if (/[ftr-]/.test(ch)) return bold ? 360 : 333;
   if (/[mwMW@ÅÄÖÆØ]/.test(ch)) return bold ? 900 : 850;
   if (/[A-ZÉÜ0-9åäöéü]/.test(ch)) return bold ? 700 : 640;

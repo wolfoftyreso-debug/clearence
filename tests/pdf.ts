@@ -230,7 +230,7 @@ const timeBasis = buildTimeBasisReport({
   generatedAt: "2026-08-02T12:00:00.000Z",
 });
 // 120 min à 1800 kr/h = 3600 kr netto; moms 25 % = 900 kr; brutto 4500 kr.
-const tbText = JSON.stringify(timeBasis).replace(/ /g, " ");
+const tbText = JSON.stringify(timeBasis).replace(/\u00A0/g, " ")  // NBSP explicit: osynliga tecken i en regex är en bugg som väntar;
 check("tidsunderlag: nettot beräknas ur minuter och timpris", tbText.includes("3 600 kr"));
 check("tidsunderlag: moms och brutto stämmer", tbText.includes("4 500 kr"));
 check("tidsunderlag: timpriset skrivs ut som byråns egen uppgift",

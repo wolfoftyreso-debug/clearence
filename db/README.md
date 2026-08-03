@@ -7,8 +7,8 @@ Beslut: allt körs i egen AWS-miljö. Inga externa beroenden utanför den om det
 `npm run test:selfhosted` reser en **ren Postgres utan en rad Supabase** — ingen `storage`-vidhäftning som används, ingen Supabase-auth, identiteten levererad som vårt eget API kommer att leverera den — applicerar samtliga migrationer och kör hela RLS-sviten.
 
 ```
-Självhostat:   229/229
-Supabase-shim: 229/229   (regression, samma svit)
+Självhostat:   240/240
+Supabase-shim: 240/240   (regression, samma svit)
 ```
 
 Det betyder att flytten **inte försvagar radscopingen**. Det är den enda garanti som räknas här, eftersom felet annars är osynligt: förlorad radscoping *fails open* — frågorna fortsätter fungera och börjar returnera andra bolags insolvensdata.
@@ -125,4 +125,4 @@ npm run test:selfhosted   # ren Postgres, ingen Supabase
 npm run test:rls          # Supabase-shim, regression
 ```
 
-Båda ska ge `ALL RLS TESTS PASSED` och samma antal `ok` (229 i skrivande stund). Går de isär har radscopingen ändrats i den ena miljön, och det ska stoppa en release.
+Båda ska ge `ALL RLS TESTS PASSED` och samma antal `ok` (240 i skrivande stund). Går de isär har radscopingen ändrats i den ena miljön, och det ska stoppa en release.

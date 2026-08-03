@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import {
   ArrowRight,
@@ -91,16 +91,32 @@ const CrisisWizard = () => {
   const [resumeDismissed, setResumeDismissed] = useState(false);
   const currentStep = draft.value.step;
   const formData = draft.value.form;
-  const setCurrentStep = (next: number | ((prev: number) => number)) =>
-    draft.setValue((prev) => ({
-      ...prev,
-      step: typeof next === "function" ? next(prev.step) : next,
-    }));
-  const setFormData = (next: FormData | ((prev: FormData) => FormData)) =>
-    draft.setValue((prev) => ({
-      ...prev,
-      form: typeof next === "function" ? next(prev.form) : next,
-    }));
+  // Plockas ut en gång: setValue är memoiserad i useAutosavedState, men
+  // draft.setValue som medlemsåtkomst tvingar beroendet till hela draft,
+  // som byter identitet vid varje rendering.
+  const { setValue: setDraft } = draft;
+  // Båda wrapparna memoiseras mot draft.setValue, som i sin tur är
+  // memoiserad med tom beroendelista i useAutosavedState. Utan det får
+  // de ny identitet vid varje rendering - och eftersom updateField
+  // bygger på setFormData, och slagningseffekten beror på updateField,
+  // hade effekten kört om vid varje rendering och slagit mot
+  // Bolagsverket i en loop. Kedjan måste vara stabil hela vägen.
+  const setCurrentStep = useCallback(
+    (next: number | ((prev: number) => number)) =>
+      setDraft((prev) => ({
+        ...prev,
+        step: typeof next === "function" ? next(prev.step) : next,
+      })),
+    [setDraft],
+  );
+  const setFormData = useCallback(
+    (next: FormData | ((prev: FormData) => FormData)) =>
+      setDraft((prev) => ({
+        ...prev,
+        form: typeof next === "function" ? next(prev.form) : next,
+      })),
+    [setDraft],
+  );
   const resetDraft = () => {
     draft.clear();
     draft.setValue({ step: 0, form: initialFormData });
@@ -120,9 +136,17 @@ const CrisisWizard = () => {
 
   const totalSteps = 4;
 
-  const updateField = <K extends keyof FormData>(field: K, value: FormData[K]) => {
+  // useCallback med tom beroendelista: funktionen läser aldrig state
+  // direkt (setFormData får en uppdateringsfunktion), så identiteten kan
+  // vara stabil. Det är inte kosmetika - utan den skapas updateField om
+  // vid varje rendering, och den som "rättar" varningen nedan genom att
+  // lägga till beroendet får en oändlig slagningsloop mot Bolagsverket.
+  // setFormData kommer från useAutosavedState och är memoiserad där med
+  // tom beroendelista - identiteten ändras aldrig, så beroendet kan
+  // deklareras ärligt utan att skapa en ny funktion vid varje rendering.
+  const updateField = useCallback(<K extends keyof FormData>(field: K, value: FormData[K]) => {
     setFormData(prev => ({ ...prev, [field]: value }));
-  };
+  }, [setFormData]);
 
   // Auto-lookup company when org number is valid.
   // lookupRequestId guards against a slower, stale request overwriting a
@@ -147,7 +171,7 @@ const CrisisWizard = () => {
       updateField('companyInfo', null);
       updateField('companyLookupStatus', 'idle');
     }
-  }, [formData.orgNumber]);
+  }, [formData.orgNumber, updateField]);
 
   const handleOrgNumberChange = (value: string) => {
     const formatted = formatOrgNumber(value);
