@@ -496,6 +496,28 @@ const seedForUser = (userId: string) => {
   // läge, samma bild som krisanalysen. Badgen, notisen och hälsovyn har
   // därmed något att visa direkt.
   state.kbrAssessments = [{ caseId: demoCase.id, status: "critical", createdAt: now() }];
+  // Ett protokollfört beslut vars villkor INTE längre håller: det togs när
+  // tillgångarna täckte minst 45 % av skulderna, och de täcker nu 30 %.
+  // Utan det här hade omprövningsbevakningen varit en funktion man måste
+  // ta CLEARANCE på orden om att den finns.
+  state.caseDecisions = [
+    {
+      id: `demo-decision-${demoCase.id}`,
+      caseId: demoCase.id,
+      title: "Avvakta med rekonstruktionsansökan",
+      rationale:
+        "Beslut efter samtal med rådgivaren. Bolaget avvaktar och arbetar med betalningsvillkor i stället, i väntan på att kundfordringarna löses in.",
+      premise:
+        "Beslutet vilar på att tillgångarna täcker minst 45 % av skulderna, vilket de gjorde när beslutet fattades.",
+      decidedAt: new Date(Date.now() - 18 * 24 * 60 * 60 * 1000).toISOString(),
+      status: "active",
+      reconsideredAt: null,
+      reconsiderNote: null,
+      watch: { signal: "skuldtackning", comparator: "minst", threshold: 45 },
+      watchAckObservation: null,
+      watchAckAt: null,
+    },
+  ];
 };
 
 /**
@@ -1675,12 +1697,21 @@ export const demoAdapter: DataPort = {
       else state.advisorSessions.push(session);
       save();
     },
+    // Kopior, inte levande referenser till state.
+    //
+    // Adaptern ändrar beslut PÅ PLATS (omprövning, kvittering). Lämnades
+    // referenserna ut rakt av höll frågecachen samma objekt som
+    // ändringen träffade - den nya datan blev identisk med den gamla,
+    // React Query såg ingen skillnad och vyn ritades aldrig om. En
+    // riktig backend returnerar alltid färska objekt; demon ska bete sig
+    // likadant, annars är den inte en demo av samma produkt.
     async listDecisions(caseId) {
       return state.caseDecisions
         .filter((d) => d.caseId === caseId)
-        .sort((a, b) => b.decidedAt.localeCompare(a.decidedAt));
+        .sort((a, b) => b.decidedAt.localeCompare(a.decidedAt))
+        .map((d) => ({ ...d, watch: d.watch ? { ...d.watch } : null }));
     },
-    async recordDecision({ caseId, title, rationale, premise }) {
+    async recordDecision({ caseId, title, rationale, premise, watch }) {
       if (!state.user) throw new Error("Inte inloggad");
       state.caseDecisions.push({
         id: uid(),
@@ -1692,6 +1723,9 @@ export const demoAdapter: DataPort = {
         status: "active",
         reconsideredAt: null,
         reconsiderNote: null,
+        watch: watch ?? null,
+        watchAckObservation: null,
+        watchAckAt: null,
       });
       save();
     },
@@ -1703,6 +1737,19 @@ export const demoAdapter: DataPort = {
       decision.status = "reconsidered";
       decision.reconsideredAt = now();
       decision.reconsiderNote = note.trim() || null;
+      save();
+    },
+    // "Beslutet står fast." Kvitterar mot observationen, inte mot
+    // beslutet - samma regel som i databasfunktionen, så demon och
+    // skarpa läget aldrig kan bete sig olika.
+    async acknowledgePremise(id, observation) {
+      const decision = state.caseDecisions.find((d) => d.id === id);
+      if (!decision) throw new Error("Beslutet finns inte");
+      if (decision.status === "reconsidered") throw new Error("Ett omprövat beslut kvitteras inte");
+      if (!decision.watch) throw new Error("Beslutet har inget bevakat villkor att kvittera");
+      if (!observation.trim()) throw new Error("Kvitteringen måste säga vad som gällde");
+      decision.watchAckObservation = observation.trim().slice(0, 500);
+      decision.watchAckAt = now();
       save();
     },
   },

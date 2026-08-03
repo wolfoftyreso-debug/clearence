@@ -146,6 +146,37 @@ Regeln: CLEARANCE refererar bara till sådant som står i journalen. Minnet är
 databasens, inte en kontextruta - det är därför det aldrig glömmer och
 aldrig minns fel.
 
+### Premissen bevakas, den arkiveras inte
+
+Ett beslut protokollförs med sin premiss, och premissen får ett **mätbart
+villkor**: skuldtäckningen är minst 45 %, lönerna går att betala, inga
+frister har passerat. Villkoret räknas om mot ärendets egna siffror, och
+när det inte längre håller tar CLEARANCE upp beslutet igen:
+
+> *"Den 16 juli beslutade ni: ”Avvakta med rekonstruktionsansökan”.
+> Villkoret ni satte var: skuldtäckningen är minst 45 %. Skuldtäckningen
+> är 30 %. Vill du ompröva beslutet, eller står det fast?"*
+
+Fyra regler bär den:
+
+1. **Villkoret väljs, det gissas inte.** Premissen är fritext skriven av
+   en människa. Att tolka "prognosen visade positivt kassaflöde inom sex
+   veckor" till en siffra vore att hitta på, och ett beslutsunderlag som
+   hittar på är sämre än inget. CLEARANCE föreslår villkor som är sanna
+   **just nu**, så användaren bekräftar verkligheten i stället för att
+   uppfinna en tröskel.
+2. **Tre lägen, aldrig fyra.** Villkoret håller, det är motsagt, eller så
+   går det inte att avgöra för att uppgiften saknas. "Vet inte" sägs rakt
+   ut och tolkas aldrig som "allt är bra".
+3. **Båda dörrarna är öppna.** *Ompröva beslutet* och *Beslutet står
+   fast* står bredvid varandra. CLEARANCE flaggar; bolaget beslutar.
+4. **Villkoret fryses med beslutet.** Tröskeln går inte att flytta i
+   efterhand - då vore beslutsminnet en anteckningsbok, inte ett minne.
+
+Och att låta beslutet stå fast tystar inte frågan för gott: kvitteringen
+är knuten till *observationen*. Den som svarat vid 30 % får vara ifred
+vid 30 %, och hör av oss igen vid 12 %.
+
 ## Navigeringen
 
 Användaren ska aldrig behöva tänka "var ska jag klicka?". CLEARANCE
@@ -214,4 +245,8 @@ tur och rådgivningsgränsen i varje bedömning. Tonaliteten vaktas av
 `tests/tone.ts` (69 kontroller), som söker igenom all egen källkod efter
 tom beröm och sentimentalitet, och av
 `tests/browser/verify-clara-start.mjs` (36 kontroller) genom hela
-onboardingen. En regel som inte testas är en åsikt.*
+onboardingen. Omprövningsbevakningen vaktas av `tests/premiseWatch.ts`
+(44 kontroller), `tests/browser/verify-omprovning.mjs` (22 kontroller)
+och 13 databaskontroller i båda miljöerna - inklusive att tröskeln inte
+går att flytta i efterhand och att en borgenär aldrig kan svara å
+bolagets vägnar. En regel som inte testas är en åsikt.*

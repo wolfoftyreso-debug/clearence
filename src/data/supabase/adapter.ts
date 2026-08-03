@@ -811,14 +811,30 @@ export const supabaseAdapter: DataPort = {
         status: row.status === "reconsidered" ? ("reconsidered" as const) : ("active" as const),
         reconsideredAt: row.reconsidered_at,
         reconsiderNote: row.reconsider_note,
+        // Halva villkoret är inget villkor: databasen har ett check som
+        // ser till att de tre fälten följs åt, och läsningen litar inte
+        // på det ändå - ett premature "bevakat" är värre än "bevakas ej".
+        watch:
+          row.watch_signal && row.watch_comparator
+            ? {
+                signal: row.watch_signal,
+                comparator: row.watch_comparator,
+                threshold: row.watch_threshold === null ? null : Number(row.watch_threshold),
+              }
+            : null,
+        watchAckObservation: row.watch_ack_observation ?? null,
+        watchAckAt: row.watch_ack_at ?? null,
       }));
     },
-    async recordDecision({ caseId, title, rationale, premise }) {
+    async recordDecision({ caseId, title, rationale, premise, watch }) {
       const { error } = await supabase.from("case_decisions").insert({
         case_id: caseId,
         title: title.trim(),
         rationale: rationale.trim(),
         premise: premise?.trim() || null,
+        watch_signal: watch?.signal ?? null,
+        watch_comparator: watch?.comparator ?? null,
+        watch_threshold: watch?.threshold ?? null,
       });
       if (error) throw error;
     },
@@ -831,6 +847,15 @@ export const supabaseAdapter: DataPort = {
           reconsider_note: note.trim() || null,
         })
         .eq("id", id);
+      if (error) throw error;
+    },
+    // Genom funktionen, aldrig genom en uppdatering: kvitteringen ska
+    // journalföras i samma transaktion som den sätts.
+    async acknowledgePremise(id, observation) {
+      const { error } = await supabase.rpc("acknowledge_premise", {
+        p_decision_id: id,
+        p_observation: observation,
+      });
       if (error) throw error;
     },
   },

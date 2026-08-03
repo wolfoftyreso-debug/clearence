@@ -80,8 +80,13 @@ check("beslutet listas med premiss", /Fattade beslut/i.test(body) && /Beslutet v
 await page.click('button:has-text("Avsluta samtalet")');
 await page.waitForTimeout(600);
 body = await page.innerText("body");
-check("avslutet kvitterar arbetet", /Bra arbetat/i.test(body) && /protokollfört beslutet/i.test(body));
-check("avslutet lovar kontinuitet", /fortsätter vi där vi slutade/i.test(body));
+// Kvittot ska räkna upp vad som GJORDES - inte berömma den som gjorde
+// det. Kontrollen är därför formulerad som principen, inte som en exakt
+// mening: den ska överleva en omskrivning men fånga att berömmet smyger
+// tillbaka. Se docs/conversation-constitution.md och tests/tone.ts.
+check("avslutet kvitterar arbetet", /vad vi har gjort/i.test(body) && /protokollfört beslutet/i.test(body));
+check("avslutet berömmer inte användaren", !/bra (jobbat|arbetat)|du gör rätt|duktig/i.test(body));
+check("avslutet lovar kontinuitet", /börjar vi där vi slutade/i.test(body));
 
 // 4b. Minnet: CLEARANCE följer upp beslutet mot premissen vid nästa besök.
 await page.goto(`${BASE}/dashboard/samtal`, { waitUntil: "domcontentloaded" });

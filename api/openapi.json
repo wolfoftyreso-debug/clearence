@@ -269,7 +269,7 @@
       },
       "post": {
         "operationId": "recordDecision",
-        "summary": "Protokollför beslut med premiss (omprövningsvillkoret)",
+        "summary": "Protokollför beslut med premiss och mätbart villkor",
         "x-status": "beta",
         "responses": {
           "200": {
@@ -483,6 +483,29 @@
             }
           }
         ]
+      }
+    },
+    "/decisions/{decisionId}/acknowledge-premise": {
+      "post": {
+        "operationId": "acknowledgePremise",
+        "summary": "Beslutet står fast trots motsagt villkor - kvitteras mot observationen och journalförs",
+        "description": "Tystar inte bevakningen för gott: kvitteringen gäller den observation som angavs, så frågan kommer tillbaka när läget ändras igen. Själva utvärderingen av villkoret görs av mottagaren - API:t levererar villkoret och siffrorna, aldrig en färdig bedömning.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
       }
     }
   },
@@ -821,7 +844,7 @@
               "string",
               "null"
             ],
-            "description": "Omprövningsvillkoret: det som gällde när beslutet togs."
+            "description": "Omprövningsvillkoret i ord: det som gällde när beslutet togs. Fritext, skriven av en människa."
           },
           "decidedAt": {
             "type": "string",
@@ -835,6 +858,57 @@
             ]
           },
           "reconsideredAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "watch": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "Den del av premissen som går att räkna om. Null = premissen bevakas inte, och det sägs rakt ut i gränssnittet i stället för att antydas.",
+            "properties": {
+              "signal": {
+                "type": "string",
+                "enum": [
+                  "loner",
+                  "skatt",
+                  "skuldtackning",
+                  "passerade_frister",
+                  "hyra",
+                  "leverantorer",
+                  "skuld"
+                ]
+              },
+              "comparator": {
+                "type": "string",
+                "enum": [
+                  "minst",
+                  "hogst",
+                  "sant",
+                  "falskt"
+                ]
+              },
+              "threshold": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "description": "Tröskeln för minst/högst. Null för de booleska villkoren."
+              }
+            }
+          },
+          "watchAckObservation": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Observationen som kvitterades med \"beslutet står fast\". Kvitteringen är knuten till observationen, inte till beslutet: frågan kommer tillbaka när läget ändras igen."
+          },
+          "watchAckAt": {
             "type": [
               "string",
               "null"

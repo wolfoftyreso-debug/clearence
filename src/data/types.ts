@@ -658,6 +658,33 @@ export interface AdvisorSessionRecord {
 
 export type DecisionStatus = "active" | "reconsidered";
 
+/** Storheterna en premiss kan bevakas mot. Samma siffror som lägesbilden. */
+export type PremiseSignal =
+  | "loner"
+  | "skatt"
+  | "skuldtackning"
+  | "passerade_frister"
+  | "hyra"
+  | "leverantorer"
+  | "skuld";
+
+export type PremiseComparator = "minst" | "hogst" | "sant" | "falskt";
+
+/**
+ * Det mätbara villkoret under premissen.
+ *
+ * Premissen är skriven på svenska av en människa; villkoret är den del
+ * av den som går att räkna om. Att i stället gissa vad fritexten betyder
+ * i siffror vore att hitta på - och ett beslutsunderlag som hittar på är
+ * sämre än inget.
+ */
+export interface PremiseWatch {
+  signal: PremiseSignal;
+  comparator: PremiseComparator;
+  /** Tröskeln för minst/högst. Null för de booleska villkoren. */
+  threshold: number | null;
+}
+
 /**
  * Beslutsminnet: ett protokollfört beslut MED sin premiss. Premissen är
  * omprövningsvillkoret - när verkligheten motsäger den ska beslutet upp
@@ -673,6 +700,16 @@ export interface CaseDecisionRecord {
   status: DecisionStatus;
   reconsideredAt: string | null;
   reconsiderNote: string | null;
+  /** Villkoret som bevakas. Null = premissen bevakas inte, och det sägs. */
+  watch: PremiseWatch | null;
+  /**
+   * Den observation användaren senast kvitterade som "beslutet står
+   * fast". Kopplad till observationen, inte till beslutet: den som
+   * svarat vid 42 % ska inte tjatas på vid 42 %, men ska höra av oss
+   * igen vid 18 %.
+   */
+  watchAckObservation: string | null;
+  watchAckAt: string | null;
 }
 
 /** Vad driftpanelen får veta om en sparad API-nyckel. Aldrig mer. */

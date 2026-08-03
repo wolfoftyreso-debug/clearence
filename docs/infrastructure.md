@@ -106,7 +106,7 @@ i resurser:
 
 | Del | Status |
 |---|---|
-| Migrationerna och radskyddet | **Byggt.** 240 kontroller, gröna i *båda* miljöerna |
+| Migrationerna och radskyddet | **Byggt.** 253 kontroller, gröna i *båda* miljöerna |
 | Självhostad Postgres utan Supabase | **Bevisat.** `npm run test:selfhosted` reser ren Postgres och kör hela sviten |
 | E-postarbetaren | **Byggd.** TypeScript, bundlas med `npm run build:worker` |
 | Webbappen | **Byggd.** Noll externa anrop, verifierat (`test:external`, 9/9 sidor) |

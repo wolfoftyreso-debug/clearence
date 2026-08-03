@@ -7,6 +7,7 @@ import type {
   AuditEventRecord,
   AuthUser,
   CaseDecisionRecord,
+  PremiseWatch,
   CaseExitReason,
   CaseInvitationRecord,
   CaseMemberRecord,
@@ -400,8 +401,18 @@ export interface DialoguePort {
     title: string;
     rationale: string;
     premise?: string | null;
+    /** Det mätbara villkoret. Utelämnat = premissen bevakas inte. */
+    watch?: PremiseWatch | null;
   }): Promise<void>;
   reconsiderDecision(id: string, note: string): Promise<void>;
+  /**
+   * "Beslutet står fast" trots att villkoret är motsagt.
+   *
+   * Observationen sparas som kvitteringens fingeravtryck, så frågan
+   * kommer tillbaka när läget ändras igen men inte däremellan. Att bara
+   * tysta flaggan vore ett sätt att tappa bort sitt eget beslut.
+   */
+  acknowledgePremise(id: string, observation: string): Promise<void>;
 }
 
 export interface MessagesPort {

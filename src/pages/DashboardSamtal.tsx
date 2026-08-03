@@ -27,6 +27,15 @@ import {
   type SnapshotRow,
 } from "@/lib/advisor/dialog";
 import { OPTIONS_STANCE } from "@/lib/advisor/options";
+import {
+  NO_WATCH_LABEL,
+  WATCH_STATE_LABEL,
+  describeWatch,
+  evaluatePremise,
+  premiseFlags,
+  proposeWatches,
+  type PremiseFacts,
+} from "@/lib/advisor/premiseWatch";
 import { buildWorkingModel, sinceLastVisit } from "@/lib/advisor/memory";
 import { ClaraIntro } from "@/components/advisor/ClaraIntro";
 import { useEntitlements } from "@/components/billing/LockedFeature";
@@ -197,6 +206,18 @@ const DashboardSamtal = () => {
     const daysToNextDeadline = upcoming.length ? upcoming[0].countdown.daysLeft : null;
     return {
       coverageRatio,
+      // Underlaget omprövningsbevakningen räknar mot. Byggt HÄR, ur samma
+      // siffror som lägesbilden - bevakningen får aldrig ha en egen
+      // sanning om ärendet.
+      facts: {
+        coverageRatio,
+        totalDebt: totalDebt > 0 ? totalDebt : null,
+        canPaySalary: latestCase.canPaySalary,
+        canPayTax: latestCase.canPayTax,
+        canPayRent: latestCase.canPayRent,
+        canPaySuppliers: latestCase.canPaySuppliers,
+        passedDeadlines,
+      } as PremiseFacts,
       nextDeadline: upcoming.length
         ? { label: upcoming[0].label, daysLeft: upcoming[0].countdown.daysLeft }
         : null,
@@ -490,6 +511,16 @@ const DashboardSamtal = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params, latestCase]);
 
+  // Villkoret som ska bevakas. CLEARANCE föreslår det som ÄR sant nu, så
+  // användaren bekräftar i stället för att hitta på ett tröskelvärde -
+  // men valet är hens, och "bevaka inte" är ett riktigt alternativ som
+  // sägs rakt ut i stället för att döljas.
+  const watchOptions = useMemo(
+    () => (caseSnapshot ? proposeWatches(caseSnapshot.facts) : []),
+    [caseSnapshot],
+  );
+  const [watchChoice, setWatchChoice] = useState<number>(0);
+
   const recordDecision = useMutation({
     mutationFn: () =>
       data.dialogue.recordDecision({
@@ -497,6 +528,7 @@ const DashboardSamtal = () => {
         title: assessment!.decisionSuggestion!.title,
         rationale: `Beslut efter samtal med rådgivaren (${flow?.title.toLowerCase() ?? "samtal"}). ${assessment!.paragraphs[0]}`,
         premise: assessment!.decisionSuggestion!.premise,
+        watch: watchOptions[watchChoice] ?? null,
       }),
     onSuccess: () => {
       setDecisionSaved(true);
@@ -521,6 +553,21 @@ const DashboardSamtal = () => {
     },
   });
 
+  // Omprövningsbevakningen: de beslut vars villkor inte längre håller.
+  // Härledd, aldrig lagrad - en flagga som sparas blir en flagga som
+  // ligger kvar efter att läget rättat till sig.
+  const flags = useMemo(
+    () => (caseSnapshot ? premiseFlags(decisions ?? [], caseSnapshot.facts) : []),
+    [decisions, caseSnapshot],
+  );
+  const acknowledge = useMutation({
+    mutationFn: ({ id, observation }: { id: string; observation: string }) =>
+      data.dialogue.acknowledgePremise(id, observation),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["case-decisions", latestCase?.id] });
+    },
+  });
+
   const swedishDateTime = useMemo(
     () => (iso: string) =>
       new Date(iso).toLocaleDateString("sv-SE", { day: "numeric", month: "short", year: "numeric" }),
@@ -541,6 +588,75 @@ const DashboardSamtal = () => {
           />
         ) : (
           <>
+            {/* Omprövningen ligger FÖRE samtalet, inte i en lista längre
+                ned: ett beslut som vilar på en premiss som inte längre
+                gäller är det viktigaste CLEARANCE vet om ärendet just nu.
+                Två dörrar, båda öppna - CLEARANCE omprövar aldrig
+                bolagets beslut åt bolaget. */}
+            {flags.length > 0 && (
+              <section
+                aria-labelledby="omprovning-heading"
+                className="mb-4 rounded-md border border-warning/50 bg-warning/5 p-5"
+              >
+                <h2
+                  id="omprovning-heading"
+                  className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-warning"
+                >
+                  <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
+                  Premissen har ändrats
+                </h2>
+                <ul className="mt-3 space-y-4">
+                  {flags.map((flag) => (
+                    <li key={flag.decisionId}>
+                      <p className="text-sm leading-relaxed text-foreground">{flag.message}</p>
+                      {reconsiderFor === flag.decisionId ? (
+                        <form
+                          className="mt-3 flex flex-col gap-2 sm:flex-row"
+                          onSubmit={(e) => {
+                            e.preventDefault();
+                            reconsider.mutate({ id: flag.decisionId, note: reconsiderNote });
+                          }}
+                        >
+                          <Input
+                            value={reconsiderNote}
+                            onChange={(e) => setReconsiderNote(e.target.value)}
+                            placeholder="Vad har ändrats?"
+                            aria-label="Skäl för omprövning"
+                          />
+                          <Button type="submit" size="sm" variant="accent" disabled={reconsider.isPending}>
+                            Ompröva
+                          </Button>
+                        </form>
+                      ) : (
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <Button size="sm" variant="accent" onClick={() => setReconsiderFor(flag.decisionId)}>
+                            Ompröva beslutet
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={acknowledge.isPending}
+                            onClick={() =>
+                              acknowledge.mutate({
+                                id: flag.decisionId,
+                                observation: flag.evaluation.observation,
+                              })
+                            }
+                          >
+                            Beslutet står fast
+                          </Button>
+                        </div>
+                      )}
+                      <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+                        Står beslutet fast noteras det i journalen. Frågan kommer tillbaka
+                        om läget ändras igen – inte däremellan.
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+
             {/* Samtalet */}
             {/* Samtalet fyller ytan: minsta höjd nära hela fönstret och
                 inmatningen längst ned - en arbetsyta, inte en widget. */}
@@ -958,6 +1074,37 @@ const DashboardSamtal = () => {
                       </h3>
                       <p className="mt-2 text-sm font-medium text-foreground">{assessment.decisionSuggestion.title}</p>
                       <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{assessment.decisionSuggestion.premise}</p>
+                      {watchOptions.length > 0 && (
+                        /* Villkoret gör premissen bevakningsbar. Förslagen
+                           är de som ÄR sanna nu, så det som ska bekräftas
+                           är verkligheten - inte en gissad tröskel. */
+                        <div className="mt-3">
+                          <label
+                            htmlFor="premiss-villkor"
+                            className="block text-xs font-medium text-foreground"
+                          >
+                            Bevaka premissen mot
+                          </label>
+                          <select
+                            id="premiss-villkor"
+                            value={watchChoice}
+                            onChange={(e) => setWatchChoice(Number(e.target.value))}
+                            className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent"
+                          >
+                            {watchOptions.map((option, i) => (
+                              <option key={`${option.signal}-${option.comparator}`} value={i}>
+                                {describeWatch(option)}
+                              </option>
+                            ))}
+                            <option value={-1}>{NO_WATCH_LABEL}</option>
+                          </select>
+                          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                            {watchOptions[watchChoice]
+                              ? "Stämmer i dag. CLEARANCE hör av sig när det inte längre gör det."
+                              : "Beslutet sparas med sin premiss, men ingen bevakning kopplas till den."}
+                          </p>
+                        </div>
+                      )}
                       <Button
                         size="sm"
                         variant="accent"
@@ -999,7 +1146,10 @@ const DashboardSamtal = () => {
                       say([
                         {
                           who: "radgivare",
-                          text: `Bra arbetat. Vi har:\n${done.join("\n")}\nAllt är journalfört. Nästa gång fortsätter vi där vi slutade.`,
+                          // Avslutet berömde tidigare användaren. En
+                          // bekräftelse ska säga vad arbetet gav, inte
+                          // att någon var duktig - se tests/tone.ts.
+                          text: `Det här är vad vi har gjort:\n${done.join("\n")}\nAllt är journalfört, så nästa gång börjar vi där vi slutade i stället för om.`,
                         },
                       ]);
                       setFlow(null);
@@ -1085,6 +1235,29 @@ const DashboardSamtal = () => {
                       {d.premise && (
                         <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">{d.premise}</p>
                       )}
+                      {/* Bevakningens läge, per beslut. Tre lägen, aldrig
+                          fyra: "går inte att avgöra" är ett eget svar och
+                          döljs inte bakom "villkoret håller". */}
+                      {d.status === "active" && caseSnapshot && (() => {
+                        if (!d.watch) {
+                          return (
+                            <p className="mt-1.5 text-xs text-muted-foreground">{NO_WATCH_LABEL}</p>
+                          );
+                        }
+                        const evaluation = evaluatePremise(d.watch, caseSnapshot.facts);
+                        const tone =
+                          evaluation.state === "contradicted"
+                            ? "text-warning"
+                            : evaluation.state === "holds"
+                              ? "text-success"
+                              : "text-muted-foreground";
+                        return (
+                          <p className={`mt-1.5 text-xs ${tone}`}>
+                            {describeWatch(d.watch)} · {WATCH_STATE_LABEL[evaluation.state]}
+                            <span className="text-muted-foreground"> ({evaluation.observation.toLowerCase()})</span>
+                          </p>
+                        );
+                      })()}
                       {d.status === "reconsidered" ? (
                         <p className="mt-2 rounded-md bg-secondary/40 p-2.5 text-xs leading-relaxed text-muted-foreground">
                           Omprövat{d.reconsiderNote ? `: ${d.reconsiderNote}` : "."}

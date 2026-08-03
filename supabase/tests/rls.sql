@@ -2176,6 +2176,154 @@ select pg_temp.as_user('44444444-4444-4444-4444-444444444444');
 select pg_temp.check('the auditor in the circle sees the signature',
   (select count(*) from public.document_signatures), 1::bigint);
 
+
+-- ===== Omprövningsbevakningen: villkoret fryses, kvitteringen prövas =====
+--
+-- Villkoret är en del av beslutet. Kan någon flytta tröskeln i efterhand
+-- tills premissen "håller" igen är beslutsminnet en anteckningsbok, inte
+-- ett minne - och då finns det ingen anledning att lita på det.
+
+select pg_temp.as_user('11111111-1111-1111-1111-111111111111');
+
+insert into public.case_decisions (id, case_id, title, rationale, premise,
+                                   watch_signal, watch_comparator, watch_threshold)
+values ('dec50000-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000001',
+        'Avvakta med rekonstruktionsansökan', 'Beslut efter samtal.',
+        'Beslutet vilar på att tillgångarna täcker minst 45 % av skulderna.',
+        'skuldtackning', 'minst', 45);
+
+select pg_temp.check('a decision can be recorded with a watched condition',
+  (select watch_threshold from public.case_decisions
+    where id = 'dec50000-0000-0000-0000-000000000001'), 45::numeric);
+
+-- Ett halvt villkor ser bevakat ut utan att vara det.
+do $$
+begin
+  begin
+    insert into public.case_decisions (case_id, title, rationale, watch_signal)
+    values ('aaaaaaaa-0000-0000-0000-000000000001', 'Halvt villkor', 'Skäl.', 'skuldtackning');
+    raise exception 'FAIL  ett halvt villkor accepterades';
+  exception when others then
+    if sqlerrm like 'FAIL%' then raise; end if;
+    raise notice 'ok    half a condition is refused';
+  end;
+end $$;
+
+-- Ett numeriskt villkor utan tröskel, och ett booleskt MED tröskel, är
+-- båda obegripliga för utvärderingen.
+do $$
+begin
+  begin
+    insert into public.case_decisions (case_id, title, rationale, watch_signal, watch_comparator)
+    values ('aaaaaaaa-0000-0000-0000-000000000001', 'Utan tröskel', 'Skäl.', 'skuldtackning', 'minst');
+    raise exception 'FAIL  ett numeriskt villkor utan tröskel accepterades';
+  exception when others then
+    if sqlerrm like 'FAIL%' then raise; end if;
+    raise notice 'ok    a numeric condition without a threshold is refused';
+  end;
+end $$;
+
+do $$
+begin
+  begin
+    insert into public.case_decisions (case_id, title, rationale, watch_signal, watch_comparator, watch_threshold)
+    values ('aaaaaaaa-0000-0000-0000-000000000001', 'Boolesk med tröskel', 'Skäl.', 'loner', 'sant', 3);
+    raise exception 'FAIL  ett booleskt villkor med tröskel accepterades';
+  exception when others then
+    if sqlerrm like 'FAIL%' then raise; end if;
+    raise notice 'ok    a boolean condition with a threshold is refused';
+  end;
+end $$;
+
+-- Tröskeln går inte att flytta i efterhand. Det här är hela poängen.
+do $$
+begin
+  begin
+    update public.case_decisions set watch_threshold = 10
+     where id = 'dec50000-0000-0000-0000-000000000001';
+    raise exception 'FAIL  tröskeln kunde flyttas i efterhand';
+  exception when others then
+    if sqlerrm like 'FAIL%' then raise; end if;
+    raise notice 'ok    the threshold cannot be moved after the fact';
+  end;
+end $$;
+
+select pg_temp.check('the condition still says what it said',
+  (select watch_threshold from public.case_decisions
+    where id = 'dec50000-0000-0000-0000-000000000001'), 45::numeric);
+
+-- Kvitteringen: sätts, journalförs, och säger vad som gällde.
+select public.acknowledge_premise('dec50000-0000-0000-0000-000000000001',
+  'Skuldtäckningen är 30 %');
+
+select pg_temp.check('the acknowledgement records what was observed',
+  (select watch_ack_observation from public.case_decisions
+    where id = 'dec50000-0000-0000-0000-000000000001'), 'Skuldtäckningen är 30 %'::text);
+select pg_temp.check('the acknowledgement is timestamped by the server',
+  (select watch_ack_at is not null from public.case_decisions
+    where id = 'dec50000-0000-0000-0000-000000000001'), true);
+select pg_temp.check('the acknowledgement is in the journal',
+  (select count(*) from public.audit_events
+    where action = 'premise_acknowledged'
+      and object_id = 'dec50000-0000-0000-0000-000000000001'), 1::bigint);
+
+-- En tom kvittering säger ingenting och är därför ingen kvittering.
+do $$
+begin
+  begin
+    perform public.acknowledge_premise('dec50000-0000-0000-0000-000000000001', '   ');
+    raise exception 'FAIL  en tom kvittering accepterades';
+  exception when others then
+    if sqlerrm like 'FAIL%' then raise; end if;
+    raise notice 'ok    an empty acknowledgement is refused';
+  end;
+end $$;
+
+-- Ett beslut utan villkor har ingenting att kvittera.
+insert into public.case_decisions (id, case_id, title, rationale)
+values ('dec50000-0000-0000-0000-000000000002', 'aaaaaaaa-0000-0000-0000-000000000001',
+        'Beslut utan bevakning', 'Skäl.');
+do $$
+begin
+  begin
+    perform public.acknowledge_premise('dec50000-0000-0000-0000-000000000002', 'Något');
+    raise exception 'FAIL  ett obevakat beslut kunde kvitteras';
+  exception when others then
+    if sqlerrm like 'FAIL%' then raise; end if;
+    raise notice 'ok    a decision without a condition cannot be acknowledged';
+  end;
+end $$;
+
+-- Borgenären kan aldrig svara å bolagets vägnar att ett beslut står fast.
+select pg_temp.as_user('55555555-5555-5555-5555-555555555555');
+do $$
+begin
+  begin
+    perform public.acknowledge_premise('dec50000-0000-0000-0000-000000000001', 'Står fast');
+    raise exception 'FAIL  en borgenär kunde kvittera bolagets beslut';
+  exception when others then
+    if sqlerrm like 'FAIL%' then raise; end if;
+    raise notice 'ok    a creditor cannot acknowledge on the company behalf';
+  end;
+end $$;
+
+-- Ett omprövat beslut kvitteras inte - då vore "står fast" ett svar på
+-- en fråga som redan är besvarad tvärtom.
+select pg_temp.as_user('11111111-1111-1111-1111-111111111111');
+update public.case_decisions
+   set status = 'reconsidered', reconsidered_at = now(), reconsider_note = 'Läget ändrades.'
+ where id = 'dec50000-0000-0000-0000-000000000001';
+do $$
+begin
+  begin
+    perform public.acknowledge_premise('dec50000-0000-0000-0000-000000000001', 'Står fast');
+    raise exception 'FAIL  ett omprövat beslut kunde kvitteras';
+  exception when others then
+    if sqlerrm like 'FAIL%' then raise; end if;
+    raise notice 'ok    a reconsidered decision cannot be acknowledged';
+  end;
+end $$;
+
 reset role;
 select 'ALL RLS TESTS PASSED' as result;
 

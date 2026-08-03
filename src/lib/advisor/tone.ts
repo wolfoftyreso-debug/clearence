@@ -81,6 +81,11 @@ export const isGrounded = (text: string): boolean =>
  */
 export const EMPTY_PRAISE: readonly { pattern: RegExp; instead: string }[] = [
   { pattern: /\bbra jobbat\b/i, instead: GROUNDED_CONFIRMATION.uppgift },
+  // "Bra arbetat" satt kvar i samtalsavslutet efter första ronden, för
+  // att mönstret bara sökte efter "jobbat". En regel är exakt så bra som
+  // dess formuleringar - därför står varianterna här, inte i huvudet.
+  { pattern: /\bbra arbetat\b/i, instead: GROUNDED_CONFIRMATION.uppgift },
+  { pattern: /\bvad bra\b/i, instead: GROUNDED_CONFIRMATION.uppgift },
   { pattern: /\bperfekt\b/i, instead: GROUNDED_CONFIRMATION.siffror },
   { pattern: /\bdu gör rätt\b/i, instead: GROUNDED_CONFIRMATION.beslut },
   { pattern: /\bdu verkar (väldigt |mycket )?kunnig\b/i, instead: GROUNDED_CONFIRMATION.beskrivning },
