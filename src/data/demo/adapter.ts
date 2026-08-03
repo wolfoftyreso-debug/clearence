@@ -1271,6 +1271,28 @@ export const demoAdapter: DataPort = {
       return state.billing;
     },
     async listMyInvoices() {
+      // Demokunden är betalande - då finns det också en betald faktura
+      // med kvitto, så fakturakortet och PDF:erna kan demonstreras.
+      if (state.user && state.customerInvoices.length === 0) {
+        const issued = new Date(Date.now() - 20 * 86400000).toISOString();
+        state.customerInvoices.push({
+          id: crypto.randomUUID(),
+          userId: state.user.id,
+          invoiceNumber: "CL-2026-0141",
+          issuedAt: issued,
+          dueAt: new Date(Date.now() + 10 * 86400000).toISOString(),
+          netOre: 98500,
+          vatOre: 24625,
+          grossOre: 123125,
+          vatRate: 0.25,
+          description: "Clearance Standard – månadsavgift",
+          status: "paid",
+          paidAt: new Date(Date.now() - 12 * 86400000).toISOString(),
+          paymentReference: "CL-2026-0141",
+          receiptNumber: "KV-2026-0138",
+        });
+        save();
+      }
       return [...state.customerInvoices].sort((a, b) => b.issuedAt.localeCompare(a.issuedAt));
     },
     async getCompanyPlan() {

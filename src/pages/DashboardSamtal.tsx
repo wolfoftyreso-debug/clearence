@@ -37,7 +37,9 @@ import { analyseCrisis } from "@/lib/crisisAnalysis";
 import { analysisInputFromCase, parseAmount } from "@/lib/caseAnalysis";
 import { countdownTo } from "@/lib/actionPlan";
 import type { AdvisorSessionRecord } from "@/data/types";
-import { ArrowRight, Compass, FileCheck2, Gavel, RotateCcw, Send } from "lucide-react";
+import { useInlineReport } from "@/components/reports/useInlineReport";
+import { buildInvoiceDocument, invoiceFromCustomerRecord } from "@/lib/reports/invoiceDocuments";
+import { ArrowRight, Compass, FileCheck2, FileText, Gavel, RotateCcw, Send } from "lucide-react";
 
 /* --- Conversation UI-blocken: rätt medium för budskapet -------------------- */
 
@@ -47,15 +49,18 @@ const SNAPSHOT_DOT: Record<SnapshotRow["tone"], string> = {
   success: "bg-success",
 };
 
-/** Lägesbilden: områden med ton och not - prioritering man ser, inte läser. */
+/** Lägesbilden: områden med ton och not - prioritering man ser, inte läser.
+    Medvetet PLATTA rader (inga kortramar): det här är nuläge att läsa, inte
+    knappar att klicka. Handlingarna bor under "Det viktigaste nu" och ser
+    ut som länkar - blanda aldrig ihop de två uttrycken. */
 const SnapshotList = ({ rows }: { rows: SnapshotRow[] }) => (
-  <ul className="space-y-1.5">
+  <ul className="divide-y divide-border/60">
     {rows.map((row) => (
-      <li key={row.label} className="flex items-start gap-2.5 rounded-md border border-border p-2.5">
+      <li key={row.label} className="flex items-start gap-2.5 py-2">
         <span className={`mt-1.5 h-2 w-2 flex-shrink-0 rounded-full ${SNAPSHOT_DOT[row.tone]}`} aria-hidden="true" />
-        <span className="min-w-0">
-          <span className="block text-sm font-medium text-foreground">{row.label}</span>
-          <span className="block text-xs leading-relaxed text-muted-foreground">{row.note}</span>
+        <span className="min-w-0 flex-1">
+          <span className="text-sm font-medium text-foreground">{row.label}</span>
+          <span className="text-sm text-muted-foreground"> – {row.note}</span>
         </span>
       </li>
     ))}
@@ -503,6 +508,9 @@ const DashboardSamtal = () => {
   const [reconsiderNote, setReconsiderNote] = useState("");
   const [checkInDone, setCheckInDone] = useState<"stands" | "changed" | null>(null);
   const [invoiceCard, setInvoiceCard] = useState<import("@/data/types").CustomerInvoiceRecord | null>(null);
+  // Fakturans PDF öppnas direkt i samtalet - samma dokumentbygge som
+  // Inställningar, så samma faktura aldrig kan se olika ut på två ställen.
+  const { open: openInline, viewer: reportViewer } = useInlineReport();
   const activeDecision = (decisions ?? []).find((d) => d.status === "active") ?? null;
   const reconsider = useMutation({
     mutationFn: ({ id, note }: { id: string; note: string }) => data.dialogue.reconsiderDecision(id, note),
@@ -582,7 +590,10 @@ const DashboardSamtal = () => {
                         </div>
                       </div>
 
-                      {/* Morgonbriefingens kärna: högst tre numrerade steg. */}
+                      {/* Morgonbriefingens kärna: högst tre numrerade steg.
+                          Det här är samtalets HANDLINGAR och ska se klickbara
+                          ut - accentram, accentsiffra och alltid synlig pil.
+                          Nuläget ovanför är medvetet platt; håll kontrasten. */}
                       <div>
                         <h3 className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
                           Det viktigaste nu
@@ -592,15 +603,15 @@ const DashboardSamtal = () => {
                             <li key={item.label}>
                               <Link
                                 to={item.href}
-                                className="group flex items-center gap-3 rounded-md border border-border p-2.5 transition-colors hover:border-accent"
+                                className="group flex items-center gap-3 rounded-md border border-accent/40 bg-accent/5 p-2.5 transition-colors hover:bg-accent/10"
                               >
-                                <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-secondary text-xs font-bold text-foreground">
+                                <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-accent text-xs font-bold text-accent-foreground">
                                   {i + 1}
                                 </span>
-                                <span className="min-w-0 flex-1 text-sm font-medium text-foreground">
+                                <span className="min-w-0 flex-1 text-sm font-medium text-foreground underline-offset-4 group-hover:underline">
                                   {item.label}
                                 </span>
-                                <ArrowRight className="h-4 w-4 flex-shrink-0 opacity-0 transition-opacity group-hover:opacity-100" aria-hidden="true" />
+                                <ArrowRight className="h-4 w-4 flex-shrink-0 text-accent" aria-hidden="true" />
                               </Link>
                             </li>
                           ))}
@@ -805,12 +816,31 @@ const DashboardSamtal = () => {
                       <dd className="font-medium text-foreground">{invoiceCard.dueAt.slice(0, 10)}</dd>
                     </div>
                   </dl>
-                  <Link
-                    to="/dashboard/installningar"
-                    className="mt-3 inline-block text-sm font-medium text-accent underline-offset-4 hover:underline"
-                  >
-                    Alla fakturor och kvitton
-                  </Link>
+                  <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        openInline(
+                          buildInvoiceDocument(
+                            invoiceFromCustomerRecord(invoiceCard, {
+                              name: profile?.displayName || user?.email || "Kund",
+                              email: user?.email ?? "",
+                            }),
+                          ),
+                        )
+                      }
+                      className="inline-flex items-center gap-1.5 text-sm font-medium text-accent underline-offset-4 hover:underline"
+                    >
+                      <FileText className="h-4 w-4" aria-hidden="true" />
+                      Öppna PDF
+                    </button>
+                    <Link
+                      to="/dashboard/installningar"
+                      className="text-sm font-medium text-accent underline-offset-4 hover:underline"
+                    >
+                      Alla fakturor och kvitton
+                    </Link>
+                  </div>
                 </div>
               )}
 
@@ -1095,6 +1125,7 @@ const DashboardSamtal = () => {
           </>
         )}
       </div>
+      {reportViewer}
     </DashboardShell>
   );
 };

@@ -11,9 +11,42 @@
  */
 
 import type { Invoice } from "../invoice";
-import { formatOre, lineTotalOre } from "../invoice";
-import { formatAddress, paymentAccounts } from "../company";
+import { formatOre, lineTotalOre, VAT_RATE } from "../invoice";
+import { COMPANY, formatAddress, paymentAccounts } from "../company";
+import type { CustomerInvoiceRecord } from "@/data/types";
 import type { ReportModel, TableRow } from "./types";
+
+/**
+ * Bygger fakturamodellen ur den lagrade kundfakturan - delad av
+ * Inställningar och samtalets fakturakort, så att samma faktura aldrig
+ * kan se olika ut på två ställen. Beloppen läses från raden och räknas
+ * inte om: en faktura som skrivs ut om ett år måste visa vad som
+ * fakturerades då, inte vad samma tjänst hade kostat idag.
+ */
+export const invoiceFromCustomerRecord = (
+  record: CustomerInvoiceRecord,
+  customer: { name: string; email: string },
+): Invoice => ({
+  invoiceNumber: record.invoiceNumber,
+  issuedAt: record.issuedAt,
+  dueAt: record.dueAt,
+  seller: COMPANY,
+  customer: { name: customer.name, orgNumber: null, email: customer.email, address: null },
+  lines: [
+    {
+      description: record.description,
+      quantity: 1,
+      unitPriceOre: record.netOre,
+    },
+  ],
+  note: null,
+  totals: {
+    netOre: record.netOre,
+    vatOre: record.vatOre,
+    grossOre: record.grossOre,
+    vatRate: record.vatRate || VAT_RATE,
+  },
+});
 
 const swedishDate = (iso: string): string => {
   const d = new Date(iso);

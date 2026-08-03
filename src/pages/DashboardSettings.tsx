@@ -7,9 +7,9 @@ import { WizardCard, WizardCardHeader } from "@/components/wizard/WizardCard";
 import { useAuth } from "@/hooks/useAuth";
 import { data } from "@/data";
 import { billingMessage, billingState, TRIAL_DAYS } from "@/lib/billing";
-import { COMPANY, paymentAccounts } from "@/lib/company";
-import { formatOre, VAT_RATE } from "@/lib/invoice";
-import { buildInvoiceDocument, buildReceiptDocument } from "@/lib/reports/invoiceDocuments";
+import { paymentAccounts } from "@/lib/company";
+import { formatOre } from "@/lib/invoice";
+import { buildInvoiceDocument, buildReceiptDocument, invoiceFromCustomerRecord } from "@/lib/reports/invoiceDocuments";
 import { useInlineReport } from "@/components/reports/useInlineReport";
 import { LanguageLevelPicker } from "@/components/language/GlossaryText";
 import {
@@ -37,38 +37,6 @@ const STATUS_LABEL: Record<CustomerInvoiceRecord["status"], string> = {
   paid: "Betald",
   cancelled: "Makulerad",
 };
-
-/**
- * Bygger dokumentet ur den lagrade fakturan.
- *
- * Beloppen läses från raden och räknas inte om. En faktura som skrivs ut om
- * ett år måste visa vad som fakturerades då, inte vad samma tjänst hade
- * kostat idag.
- */
-const invoiceFromRecord = (
-  record: CustomerInvoiceRecord,
-  customer: { name: string; email: string },
-) => ({
-  invoiceNumber: record.invoiceNumber,
-  issuedAt: record.issuedAt,
-  dueAt: record.dueAt,
-  seller: COMPANY,
-  customer: { name: customer.name, orgNumber: null, email: customer.email, address: null },
-  lines: [
-    {
-      description: record.description,
-      quantity: 1,
-      unitPriceOre: record.netOre,
-    },
-  ],
-  note: null,
-  totals: {
-    netOre: record.netOre,
-    vatOre: record.vatOre,
-    grossOre: record.grossOre,
-    vatRate: record.vatRate || VAT_RATE,
-  },
-});
 
 const DashboardSettings = () => {
   const { open: openInline, viewer: reportViewer } = useInlineReport();
@@ -117,13 +85,13 @@ const DashboardSettings = () => {
   const customerName = profile?.displayName || user?.email || "Kund";
 
   const printInvoice = (record: CustomerInvoiceRecord) => {
-    const invoice = invoiceFromRecord(record, { name: customerName, email: user?.email ?? "" });
+    const invoice = invoiceFromCustomerRecord(record, { name: customerName, email: user?.email ?? "" });
     openInline(buildInvoiceDocument(invoice));
   };
 
   const printReceipt = (record: CustomerInvoiceRecord) => {
     if (!record.paidAt || !record.receiptNumber) return;
-    const invoice = invoiceFromRecord(record, { name: customerName, email: user?.email ?? "" });
+    const invoice = invoiceFromCustomerRecord(record, { name: customerName, email: user?.email ?? "" });
     openInline(
       buildReceiptDocument(invoice, {
         paidAt: record.paidAt,

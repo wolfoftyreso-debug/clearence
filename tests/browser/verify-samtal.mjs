@@ -141,6 +141,21 @@ await page.waitForTimeout(800);
 body = await page.innerText("body");
 check("fakturafrågan startar inte kundflödet", !/obetalda fordran/i.test(body));
 check("fakturasvaret pekar på Inställningar", /Ingen faktura är utställd ännu|Alla fakturor och kvitton/i.test(body));
+// Fakturans PDF öppnas direkt i samtalet - samma dokument som Inställningar.
+if (await page.locator('button:has-text("Öppna PDF")').count()) {
+  await page.click('button:has-text("Öppna PDF")');
+  await page.waitForTimeout(900);
+  const dialog = await page.locator('[role="dialog"][aria-label="Rapport"]').innerText();
+  check("fakturans PDF öppnas i samtalet", /Faktura/i.test(dialog) && /Ladda ner PDF/i.test(dialog));
+  // Dokumentet renderas i en iframe (srcDoc) - läs innehållet därifrån.
+  const doc = await page.frameLocator('[role="dialog"] iframe').locator("body").innerText();
+  check("fakturadokumentet bär säljaren", /Landvex/i.test(doc) && /moms/i.test(doc), doc.slice(0, 120));
+  await page.click('button:has-text("Stäng")').catch(() => page.keyboard.press("Escape"));
+  await page.waitForTimeout(400);
+} else {
+  check("fakturans PDF öppnas i samtalet", false, "Öppna PDF-knappen saknas");
+  check("fakturadokumentet bär säljaren", false);
+}
 
 // 7c. Lägesbilden i hälsningen: visad, inte påstådd - med analys som panel.
 await page.goto(`${BASE}/dashboard/samtal`, { waitUntil: "domcontentloaded" });
@@ -152,6 +167,17 @@ check("analysempanelen finns i samtalet", /Visa analys/.test(body));
 check("CLEARANCE har namn i rubriken", /CLEARANCE – din krisrådgivare/i.test(body));
 check("lägesbilden har rubrik och källa", /Läget just nu/i.test(body) && /ur ärendets registrerade uppgifter/i.test(body));
 check("Det viktigaste nu är numrerat", /Det viktigaste nu/i.test(body) && (await page.locator('ol a:has-text("kontrollbalansbedömningen"), ol a:has-text("handlingsplanen"), ol a:has-text("pengarna räcker")').count()) > 0);
+// CTA mot nuläge: lägesraderna är platta (inte klickbara kort), medan
+// prioriteterna bär accentram och pil - det ska SYNAS vad som är handling.
+const snapshotBordered = await page.evaluate(() => {
+  const heading = [...document.querySelectorAll("h3")].find((h) => /Läget just nu/i.test(h.textContent ?? ""));
+  const list = heading?.closest("div")?.parentElement?.querySelector("ul");
+  if (!list) return null;
+  return [...list.querySelectorAll("li")].some((li) => getComputedStyle(li).borderTopWidth !== "0px" && getComputedStyle(li).borderLeftWidth !== "0px");
+});
+check("nuläget är platt - inga kortramar att vilja klicka på", snapshotBordered === false, String(snapshotBordered));
+const ctaAccent = await page.locator('ol a[class*="border-accent"]').count();
+check("prioriteterna ser klickbara ut (accentram)", ctaAccent > 0, String(ctaAccent));
 check("chipsen har ledtext", /Eller välj det som stämmer bäst/i.test(body));
 // Ärendeminnet i hälsningen: sedan sist ur journalen + öppen arbetsmodell.
 check("sedan sist-briefingen visas", /Sedan vi pratades vid har följande hänt/i.test(body));
