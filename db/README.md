@@ -7,8 +7,8 @@ Beslut: allt körs i egen AWS-miljö. Inga externa beroenden utanför den om det
 `npm run test:selfhosted` reser en **ren Postgres utan en rad Supabase** — ingen `storage`-vidhäftning som används, ingen Supabase-auth, identiteten levererad som vårt eget API kommer att leverera den — applicerar samtliga migrationer och kör hela RLS-sviten.
 
 ```
-Självhostat:   45/45
-Supabase-shim: 45/45   (regression, samma svit)
+Självhostat:   229/229
+Supabase-shim: 229/229   (regression, samma svit)
 ```
 
 Det betyder att flytten **inte försvagar radscopingen**. Det är den enda garanti som räknas här, eftersom felet annars är osynligt: förlorad radscoping *fails open* — frågorna fortsätter fungera och börjar returnera andra bolags insolvensdata.
@@ -88,6 +88,12 @@ Arbetaren är TypeScript (`db/worker/email-worker.ts`) och bundlas med `npm run 
 
 Stängningsjobbet `close_overdue_accounts()` är idempotent, jämför svenska kalenderdagar (fristen ska inte bero på vilket klockslag fakturan råkade ställas ut), rör aldrig ett betalt konto och raderar ingenting. Testat i `supabase/tests/billingJob.sql`, i båda miljöerna.
 
+## Infrastrukturen som kod
+
+Terraform för hela miljön finns i `infra/`, och kartan över hur delarna
+hänger ihop med produktens flöden i `docs/infrastructure.md`. Tabellen
+ovan säger vad som ska ersätta vad; `infra/` säger exakt hur det reses.
+
 ## Externa beroenden, och varför
 
 | Beroende | Oundvikligt? | Motivering |
@@ -115,4 +121,4 @@ npm run test:selfhosted   # ren Postgres, ingen Supabase
 npm run test:rls          # Supabase-shim, regression
 ```
 
-Båda ska ge `ALL RLS TESTS PASSED` och 45 `ok`. Går de isär har radscopingen ändrats i den ena miljön, och det ska stoppa en release.
+Båda ska ge `ALL RLS TESTS PASSED` och samma antal `ok` (229 i skrivande stund). Går de isär har radscopingen ändrats i den ena miljön, och det ska stoppa en release.

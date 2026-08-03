@@ -1,0 +1,35 @@
+# Kopiera till terraform.tfvars och fyll i. Filen med riktiga värden är
+# INTE hemlig (inga lösenord här - de bor i Secrets Manager), men den är
+# miljöspecifik och versionshanteras inte.
+
+domain_name       = "clearance.se"
+mail_from_address = "faktura@clearance.se"
+
+# Route53-zonen för domänen. Lämna tom första gången om domänen ännu inte
+# är delegerad till AWS - då skapas inga DNS-poster, och certifikatet
+# väntar på validering tills posterna läggs in för hand.
+hosted_zone_id = ""
+
+aws_region  = "eu-north-1"
+environment = "prod"
+
+# Databasen. t4g.small räcker långt in i piloten; RDS byter klass utan
+# att data flyttas.
+db_instance_class        = "db.t4g.small"
+db_allocated_storage     = 50
+db_backup_retention_days = 14
+db_multi_az              = true
+
+# API-tjänsten och arbetaren startar först när avbilderna finns i ECR.
+# Se docs/infrastructure.md, avsnittet "Vad som saknas".
+enable_compute = false
+# api_image    = "123456789012.dkr.ecr.eu-north-1.amazonaws.com/clearance-api:sha-abc123"
+# worker_image = "123456789012.dkr.ecr.eu-north-1.amazonaws.com/clearance-worker:sha-abc123"
+
+alert_email        = "drift@clearance.se"
+log_retention_days = 90
+
+# En NAT i stället för två: halverar den fasta kostnaden, men gör en zon
+# till en gemensam punkt som kan falla. Sätt false inför skarp drift med
+# betalande kunder.
+single_nat_gateway = true
