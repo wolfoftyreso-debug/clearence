@@ -103,6 +103,23 @@ const startOfToday = (): Date => {
   return d;
 };
 
+/**
+ * Nivån då kapitalbristflaggan tänds - täckningsgrad under 50 %.
+ *
+ * Detta är ett PRODUKTBESLUT, inte en rättsregel. Lagen frågar efter eget
+ * kapital mot registrerat aktiekapital; det vi har att gå på i det här
+ * skedet är snabbavyttringsvärde mot total skuld. Talen mäter olika
+ * saker, och gränsen är därför en avvägning: sätts den högre tänds
+ * flaggan för bolag som är helt friska, sätts den lägre missas fall där
+ * styrelsens ansvar redan löper.
+ *
+ * Konstanten står ensam och namngiven för att den ska gå att ändra på ett
+ * ställe efter en verklig bedömning - inte hittas som en 0.5 mitt i en
+ * villkorssats. Flaggans text skriver ut både den uppmätta procenten och
+ * den här gränsen, så att den som läser den ser vad den vilar på.
+ */
+export const KBR_COVERAGE_THRESHOLD = 0.5;
+
 /** Next time this day-of-month falls, clamped into short months. */
 export const nextOccurrence = (dayOfMonth: number, from: Date = startOfToday()): Date => {
   const clampInto = (year: number, month: number) => {
@@ -342,20 +359,24 @@ export const analyseCrisis = (input: AnalysisInput): CrisisAnalysis => {
    * betalning FALLERAT.
    *
    * Täckningsgraden är en INDIKATION, inte en beräkning av eget kapital:
-   * den jämför snabbavyttringsvärde med total skuld, och tröskeln är satt
-   * lågt (under halva skulden) för att bara fånga de tydliga fallen.
-   * Flaggan säger därför "kan behöva prövas" och pekar på modulen som
-   * gör den riktiga bedömningen - den påstår inte att kapitalbrist
-   * föreligger.
+   * den jämför snabbavyttringsvärde med total skuld. Flaggan säger därför
+   * "kan behöva prövas" och pekar på modulen som gör den riktiga
+   * bedömningen - den påstår inte att kapitalbrist föreligger.
+   *
+   * Tröskeln står i KBR_COVERAGE_THRESHOLD, på ett ställe och namngiven,
+   * eftersom nivån är ett produktbeslut och inte en rättsregel. Texten
+   * nedan skriver ut både den uppmätta procenten och gränsen, så att den
+   * som läser flaggan ser vad den faktiskt bygger på och kan bedöma om
+   * nivån är rimlig för sitt bolag.
    */
-  const thinCoverage = ratio !== null && ratio < 0.5;
+  const thinCoverage = ratio !== null && ratio < KBR_COVERAGE_THRESHOLD;
   if (thinCoverage && type !== "bankruptcy" && solvency.indication !== "likely_insolvent") {
     riskFlags.push({
       id: "kbr-tackning",
       severity: "warning",
       title: "Kontrollbalansräkningen kan behöva prövas",
       body:
-        "Tillgångarna täcker mindre än hälften av skulderna. Det säger inget säkert om det egna kapitalet, men skyldigheten att upprätta kontrollbalansräkning inträder redan vid skäl att ANTA att kapitalet understiger halva aktiekapitalet - alltså innan det syns i betalningarna. Gör bedömningen och datera den; ett daterat beslut är det som skyddar styrelsen.",
+        `Det du snabbt kan sälja täcker omkring ${Math.round((ratio ?? 0) * 100)} % av skulderna. Flaggan tänds under ${Math.round(KBR_COVERAGE_THRESHOLD * 100)} %, och den jämförelsen mäter tillgångar mot skulder - inte eget kapital mot aktiekapital, som är det lagen faktiskt frågar efter. Den säger alltså inget säkert om ditt egna kapital. Men skyldigheten att upprätta kontrollbalansräkning inträder redan vid skäl att ANTA att kapitalet understiger halva aktiekapitalet - alltså innan det syns i betalningarna. Gör bedömningen och datera den; ett daterat beslut är det som skyddar styrelsen.`,
       legalRef: LEGAL_REFS.controlBalanceSheet,
     });
   }

@@ -10,7 +10,7 @@
  * which half to trust.
  */
 
-import { analyseCrisis } from "../src/lib/crisisAnalysis";
+import { analyseCrisis, KBR_COVERAGE_THRESHOLD } from "../src/lib/crisisAnalysis";
 import type { CrisisAnalysis } from "../src/lib/crisisAnalysis";
 
 let pass = 0, fail = 0;
@@ -151,6 +151,39 @@ const stepsText = reconstruction.nextSteps.map(s => s.text).join(" ");
 ok("rekonstruktionssteget anger 2022:964",
   !/1996:764/.test(stepsText) && (stepsText.includes("2022:964") || reconstruction.type !== "reconstruction"),
   stepsText.slice(0, 160));
+
+/* --- the capital-shortfall flag shows its working ------------------------- */
+
+// A director reading this flag has to be able to judge whether the level is
+// right for their company. That is impossible if the flag hides both the
+// measured figure and the threshold it was compared against - and it is
+// dishonest if it lets the reader believe equity was measured. It was not.
+const thin = run({ totalDebt: 4_000_000, quickLiquidationValue: 1_200_000 });
+const kbrFlag = thin.riskFlags.find((f) => f.id === "kbr-tackning");
+ok("tunn täckning utan betalningsproblem flaggas", !!kbrFlag);
+ok("flaggan skriver ut den uppmätta procenten", /\b30 %/.test(kbrFlag?.body ?? ""), kbrFlag?.body);
+ok(
+  "flaggan skriver ut gränsen den jämfördes mot",
+  new RegExp(`${Math.round(KBR_COVERAGE_THRESHOLD * 100)} %`).test(kbrFlag?.body ?? ""),
+  kbrFlag?.body,
+);
+ok(
+  "flaggan säger vad den INTE mätte",
+  /inte eget kapital mot aktiekapital/.test(kbrFlag?.body ?? ""),
+  kbrFlag?.body,
+);
+ok(
+  "flaggan påstår inte att kapitalbrist föreligger",
+  /kan behöva prövas/.test(kbrFlag?.title ?? "") && !/kapitalbrist föreligger/.test(kbrFlag?.body ?? ""),
+  kbrFlag?.title,
+);
+// Precis över gränsen ska den vara tyst - annars är tröskeln bara pynt.
+ok(
+  "täckning över gränsen ger ingen flagga",
+  !run({ totalDebt: 1_000_000, quickLiquidationValue: 600_000 }).riskFlags.some(
+    (f) => f.id === "kbr-tackning",
+  ),
+);
 
 /* --- deadlines are real dates -------------------------------------------- */
 

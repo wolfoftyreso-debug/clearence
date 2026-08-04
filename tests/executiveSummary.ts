@@ -1,5 +1,5 @@
 /**
- * Tester för AI-lägesrapporten.
+ * Tester för systemanalysens lägesrapport.
  *
  * Det som testas är rapportens LÖFTEN: att allvarsgraden speglar datan,
  * att prioriteringen sätter det passerade först, att möjlighetsavsnittet
@@ -112,6 +112,57 @@ const opp = worst.sections.find((s) => s.id === "mojligheter");
 check("möjlighetsavsnittet finns även i värsta läget", (opp?.paragraphs.length ?? 0) > 0);
 check("strukturen lyfts som styrka", JSON.stringify(opp).includes("styrka"));
 check("lönegarantin nämns när lönerna är i fara", JSON.stringify(worst.sections).includes("lönegaranti"));
+
+/* --- brådskan sitter i läget, inte bara i kalendern --------------------------- */
+// Rapporten satte tidigare "omedelbart" enbart på passerade datum. Ett
+// konkursnära bolag utan en enda passerad frist fick därför noll punkter
+// överst - fast analysen bredvid sa "omgående". Två svar om samma dygn.
+check(
+  "konkursläget får punkter under omedelbart utan passerade datum",
+  worst.actions.some((a) => a.horizon === "omedelbart"),
+  JSON.stringify(worst.actions.map((a) => a.horizon)),
+);
+check(
+  "den omedelbara punkten är samtalet, inte formalian",
+  worst.actions[0]?.horizon === "omedelbart" && /konkursförvaltare|affärsjurist/.test(worst.actions[0].label),
+  worst.actions[0]?.label,
+);
+check(
+  "den omedelbara punkten leder någonstans",
+  worst.actions[0]?.href === "/marketplace",
+  String(worst.actions[0]?.href),
+);
+
+// Löner OCH skatt stoppar samtidigt: analysen kallar det immediate även när
+// bedömningen blir rekonstruktion. Rapporten ska följa med.
+const bothStop = buildExecutiveSummary(
+  input({
+    caseRecord: baseCase({
+      canPaySalary: false,
+      canPayTax: false,
+      recommendationType: "reconstruction",
+    }),
+  }),
+);
+check(
+  "löner och skatt samtidigt ger omedelbar prioritet",
+  bothStop.actions.some((a) => a.horizon === "omedelbart"),
+  JSON.stringify(bothStop.actions.map((a) => a.horizon)),
+);
+check(
+  "rekonstruktionsläget kallar inte in en konkursförvaltare",
+  !/konkursförvaltare/.test(bothStop.actions[0]?.label ?? ""),
+  bothStop.actions[0]?.label,
+);
+
+// Och lika viktigt: ordet ska inte devalveras. Ett läge som analysen kallar
+// weeks får inte ha något överst.
+const oneStop = buildExecutiveSummary(input({ caseRecord: baseCase({ canPaySuppliers: false }) }));
+check(
+  "en enda utebliven betalning ger ingen omedelbar punkt",
+  !oneStop.actions.some((a) => a.horizon === "omedelbart"),
+  JSON.stringify(oneStop.actions.map((a) => a.horizon)),
+);
 
 /* --- rekommendationen motiveras ---------------------------------------------- */
 for (const [type, marker] of [

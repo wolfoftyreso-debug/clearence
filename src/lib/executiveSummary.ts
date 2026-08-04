@@ -199,7 +199,46 @@ export const buildExecutiveSummary = (input: SummaryInput): ExecutiveSummary => 
   );
 
   /* --- 3. prioriterad handlingsplan ------------------------------------------ */
+
+  /**
+   * Brådskan i LÄGET, inte bara i kalendern.
+   *
+   * "Omedelbart" sattes tidigare uteslutande av ett passerat datum. Ett
+   * bolag som varken kunde betala löner eller skatt fick därför noll
+   * punkter överst - samtidigt som analysen på samma sida sa att saken
+   * bör bedömas inom dagar, inte veckor. Rapporten och analysen får inte
+   * säga olika saker om samma dygn.
+   *
+   * Villkoret nedan är analysens egen definition av "immediate", ordagrant
+   * återgiven från crisisAnalysis.ts: löner OCH skatt stoppar (båda
+   * grenarna där sätter immediate), eller bedömningen är konkurs. Ändras
+   * den ena måste den andra följa med - därför står källan utskriven här,
+   * och därför larmar genomgången om de börjar glida isär.
+   */
+  const immediateByAnalysis =
+    c.recommendationType === "bankruptcy" ||
+    (c.canPaySalary === false && c.canPayTax === false);
+  const immediate = immediateByAnalysis || passed.length > 0;
+
   const actions: SummaryAction[] = [];
+  if (immediateByAnalysis) {
+    // Det som faktiskt är omedelbart i ett sådant läge är inte en blankett
+    // utan ett samtal: den som ska bedöma om verksamheten kan räddas eller
+    // avvecklas ordnat behöver se ärendet nu. Att lägga en formalia överst
+    // vore att prioritera fel dygn.
+    actions.push({
+      horizon: "omedelbart",
+      label:
+        c.recommendationType === "bankruptcy"
+          ? "Tala med en konkursförvaltare eller affärsjurist idag"
+          : "Låt en rekonstruktör se ärendet inom dagar",
+      why:
+        c.recommendationType === "bankruptcy"
+          ? "Varken löner eller skatt kan hållas och tillgångarna täcker en mindre del av skulderna. Att fortsätta driva verksamheten vidare i det läget kan öka företrädarnas personliga ansvar."
+          : "Löner och skatt stoppar samtidigt. Det är den kombination som gör frågan om rekonstruktion till en dagsfråga, inte en veckofråga.",
+      href: "/marketplace",
+    });
+  }
   for (const x of passed) {
     actions.push({
       horizon: "omedelbart",
@@ -210,7 +249,7 @@ export const buildExecutiveSummary = (input: SummaryInput): ExecutiveSummary => 
   }
   if (c.canPayTax === false) {
     actions.push({
-      horizon: passed.length > 0 ? "omedelbart" : "idag",
+      horizon: immediate ? "omedelbart" : "idag",
       label: "Bestäm åtgärd före skattens förfallodag",
       why: "Skyddet mot personligt betalningsansvar ligger i en verksam åtgärd senast på förfallodagen.",
       href: "/kunskap/foretradaransvar",

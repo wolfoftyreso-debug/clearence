@@ -160,6 +160,12 @@ for (const scenario of SCENARIOS) {
   if (!summary.headline.trim()) flag("rapporten saknar rubrik");
   const badHref = summary.actions.filter((a) => a.href && !routeExists(a.href));
   if (badHref.length) flag(`åtgärd pekar på okänd sida: ${badHref.map((a) => a.href).join(", ")}`);
+  // Analysen och rapporten står bredvid varandra på samma sida. Säger den
+  // ena "inom dagar, inte veckor" måste den andra ha något överst.
+  const immediateActions = summary.actions.filter((a) => a.horizon === "omedelbart").length;
+  if (analysis.urgency === "immediate" && immediateActions === 0) {
+    flag("analysen säger omedelbart men rapporten har noll omedelbara punkter");
+  }
 
   /* Klockan */
   const notifications = buildNotifications({
