@@ -357,7 +357,10 @@ await page.click('button:has-text("Jag kan inte betala vissa fakturor")');
 await page.waitForTimeout(800);
 body = await page.innerText("body");
 check("CLEARANCE navigerar själv", /Jag öppnar nu nulägesanalysen/i.test(body));
-await page.waitForTimeout(3000);
+// Förberedelsen står framme innan vyn byts, och pausen räcker för att
+// läsa den. Se docs/design-system.md, "Förbered användaren".
+check("övergången förbereder på nulägesanalysen", /Det här är klart/i.test(body) && /Så lång tid tar det/i.test(body));
+await page.waitForTimeout(5400);
 check("nulägesanalysen öppnades", page.url().includes("/wizard"));
 
 await browser.close();

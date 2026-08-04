@@ -274,9 +274,13 @@ bekräftelsen före frågorna, taket på tre rekommendationer, en fråga per
 tur och rådgivningsgränsen i varje bedömning. Tonaliteten vaktas av
 `tests/tone.ts` (69 kontroller), som söker igenom all egen källkod efter
 tom beröm och sentimentalitet, och av
-`tests/browser/verify-clara-start.mjs` (36 kontroller) genom hela
+`tests/browser/verify-clara-start.mjs` (43 kontroller) genom hela
 onboardingen. Omprövningsbevakningen vaktas av `tests/premiseWatch.ts`
 (44 kontroller), `tests/browser/verify-omprovning.mjs` (22 kontroller)
 och 13 databaskontroller i båda miljöerna - inklusive att tröskeln inte
 går att flytta i efterhand och att en borgenär aldrig kan svara å
-bolagets vägnar. En regel som inte testas är en åsikt.*
+bolagets vägnar. Förberedelseregeln vaktas av `tests/prepare.ts` (139
+kontroller) och `tests/browser/verify-forbered.mjs` (17 kontroller),
+som kräver att varje övergång är hel och inkopplad och att inget naket
+väntebesked skrivs någon annanstans. En regel som inte testas är en
+åsikt.*
