@@ -50,6 +50,70 @@ avatarer (`rounded-full`) och statuschips (`rounded-sm`);
 `rounded-lg`/`rounded-xl` utanför ui-biblioteket är städade och
 återinförs inte.
 
+## Förbered användaren
+
+Ingen ny vy ska någonsin kännas oväntad. Målgruppen är människor mitt i
+en ekonomisk kris, och för dem är **förutsägbarhet viktigare än
+hastighet**. Fyra frågor får aldrig lämnas obesvarade när något ändras
+på skärmen:
+
+> Varför händer det här? · Vem ska se informationen? ·
+> Vad kommer att hända nu? · Hur lång tid tar nästa steg?
+
+Varje gång användaren lämnar ett steg visas därför ett kort
+övergångsmeddelande med fyra delar, alltid i den här ordningen:
+
+1. **Det här är klart** - bekräfta vad som just slutfördes.
+2. **Nu händer detta** - nästa steg, i en mening.
+3. **Därför frågar vi** - syftet, så uppgiften inte känns godtycklig.
+4. **Så lång tid tar det** - "cirka två minuter", "fyra frågor kvar".
+
+En femte del, **Vem ser uppgifterna**, tas med när svaret delas med
+någon annan än användaren själv - och utelämnas annars. En rad som
+säger "ingen annan ser detta" på varje steg blir brus, och brus läses
+inte alls.
+
+Delarna 1 och 3 är det som skiljer principen från en vanlig
+förloppsindikator. Den som vet *vad* som blev klart och *varför* nästa
+fråga ställs upplever att systemet leder - inte att processen händer
+med hen.
+
+### Fyra bindande regler
+
+1. Ingen ny fråga utan en kort introduktion om ämnet.
+2. Ingen ny sektion utan ett övergångsmeddelande.
+3. Ingen extern kontroll eller datainsamling utan att användaren får
+   veta vad som sker.
+4. Ingen väntetid utan att användaren får veta vad systemet arbetar med.
+
+Regel 3 och 4 gäller väntetexterna. Ett besked som bara säger att något
+hämtas svarar inte på någon av de fyra frågorna: det ska stå **vad** som
+hämtas, **varifrån** och ungefär **hur länge** - särskilt när uppgiften
+lämnar produkten, för då är det inte längre bara väntan utan en extern
+kontroll användaren har rätt att känna till.
+
+### Formen
+
+Övergångsrutan är **läsning, inte handling**: sekundär bakgrund, ingen
+ram som liknar de klickbara korten, ingen accentkulör som konkurrerar
+med knappen som faktiskt för användaren vidare. Samma regel som
+lägesbilden på översikten. Den står **före** knappen som byter steg -
+en förklaring som kommer när vyn redan har ändrats är ingen
+förberedelse, då har överraskningen redan hänt.
+
+Byter vyn av sig själv ska pausen räcka för att läsa hela rutan, och det
+ska finnas en knapp för den som redan har läst.
+
+### Var reglerna bor
+
+Texterna och kontrollerna: `src/lib/advisor/prepare.ts`.
+Rutan: `src/components/advisor/TransitionNotice.tsx`.
+Vakten: `tests/prepare.ts` (`npm run test:prepare`) - den kräver att
+varje övergång har alla fyra delar, en konkret tidsangivelse och ett
+syfte som inte bara upprepar nästa steg, att varje övergång faktiskt är
+inkopplad någonstans, och att inget naket väntebesked skrivs utanför
+`prepare.ts`.
+
 ## Regeln bakom reglerna
 
 Skalan finns för att en sida ska kännas komponerad, inte staplad.

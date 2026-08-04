@@ -4,6 +4,8 @@ import { Input } from "@/components/ui/input";
 import { ONBOARDING } from "@/lib/advisor/dialog";
 import { saveOnboarding } from "@/lib/advisor/onboardingHandoff";
 import { formatOrgNumber, lookupCompany, validateOrgNumber } from "@/lib/orgNumber";
+import { WAITS, waitText } from "@/lib/advisor/prepare";
+import { TransitionNotice } from "@/components/advisor/TransitionNotice";
 import type { CompanyInfo } from "@/data/types";
 import { Check } from "lucide-react";
 
@@ -71,6 +73,15 @@ export const ClaraIntro = ({ onDone }: { onDone: (name: string | null) => void }
   // rör vi det aldrig - registret vinner inte över en människa.
   const companyTouched = useRef(false);
   const lookupRequest = useRef(0);
+  const handoffTimer = useRef<number | null>(null);
+
+  // Lämnar användaren sidan mitt i pausen ska timern dö med komponenten.
+  useEffect(
+    () => () => {
+      if (handoffTimer.current !== null) window.clearTimeout(handoffTimer.current);
+    },
+    [],
+  );
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ block: "nearest" });
@@ -145,8 +156,19 @@ export const ClaraIntro = ({ onDone }: { onDone: (name: string | null) => void }
       orgNumber: orgNumber.trim(),
       situation: label,
     });
-    // CLEARANCE navigerar - efter en paus lång nog att hinna läsa avslutet.
-    window.setTimeout(() => onDone(name.trim() || null), 2600);
+    // CLEARANCE navigerar - efter en paus lång nog att hinna läsa både
+    // avslutet och förberedelsen. Pausen växte när övergångsrutan kom
+    // in: en förklaring som hinner försvinna innan den är läst är ingen
+    // förberedelse. Den som redan läst behöver inte vänta ut den -
+    // knappen nedan tar en vidare direkt.
+    handoffTimer.current = window.setTimeout(() => onDone(name.trim() || null), 5200);
+  };
+
+  /** Hoppa över resten av pausen. Städar timern så vi inte navigerar två gånger. */
+  const goNow = () => {
+    if (handoffTimer.current !== null) window.clearTimeout(handoffTimer.current);
+    handoffTimer.current = null;
+    onDone(name.trim() || null);
   };
 
   return (
@@ -220,6 +242,18 @@ export const ClaraIntro = ({ onDone }: { onDone: (name: string | null) => void }
         </div>
       )}
 
+      {stage === "done" && (
+        /* Övergången till nulägesanalysen. Vyn byts av sig själv efter
+           ett par sekunder, och ett vybyte som användaren inte bad om är
+           precis det tillfälle då förberedelsen behövs mest. */
+        <div className="mt-4">
+          <TransitionNotice id="onboarding-till-nulage" />
+          <Button variant="accent" onClick={goNow} className="mt-3">
+            Öppna nulägesanalysen
+          </Button>
+        </div>
+      )}
+
       {stage === "form" && (
         /* Tre fält på en gång. Att stycka dem i tre turer hade lagt till
            friktion utan att lägga till förståelse. */
@@ -282,7 +316,7 @@ export const ClaraIntro = ({ onDone }: { onDone: (name: string | null) => void }
             </p>
           )}
           {lookupStatus === "loading" && !orgNumberInvalid && (
-            <p className="text-sm text-muted-foreground">Hämtar företagsuppgifter…</p>
+            <p className="text-sm text-muted-foreground">{waitText(WAITS.companyLookup)}</p>
           )}
 
           {companyInfo && lookupStatus === "success" && (

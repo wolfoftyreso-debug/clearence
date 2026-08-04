@@ -572,6 +572,11 @@ export type Database = {
           status: string
           reconsidered_at: string | null
           reconsider_note: string | null
+          watch_signal: string | null
+          watch_comparator: string | null
+          watch_threshold: number | null
+          watch_ack_observation: string | null
+          watch_ack_at: string | null
         }
         Insert: {
           id?: string
@@ -584,11 +589,21 @@ export type Database = {
           status?: string
           reconsidered_at?: string | null
           reconsider_note?: string | null
+          watch_signal?: string | null
+          watch_comparator?: string | null
+          watch_threshold?: number | null
+          watch_ack_observation?: string | null
+          watch_ack_at?: string | null
         }
         Update: {
           status?: string
           reconsidered_at?: string | null
           reconsider_note?: string | null
+          watch_signal?: string | null
+          watch_comparator?: string | null
+          watch_threshold?: number | null
+          watch_ack_observation?: string | null
+          watch_ack_at?: string | null
         }
         Relationships: []
       }
@@ -1636,6 +1651,10 @@ export type Database = {
           display_name: string | null
           invoice_number: string | null
         }[]
+      }
+      acknowledge_premise: {
+        Args: { p_decision_id: string; p_observation: string }
+        Returns: undefined
       }
     }
     Enums: {

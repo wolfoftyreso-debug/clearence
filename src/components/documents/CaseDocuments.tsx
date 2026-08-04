@@ -7,6 +7,7 @@ import { format } from "date-fns";
 import { sv } from "date-fns/locale";
 import { openFileUrl } from "@/lib/integrations/download";
 import { DocumentSigning } from "./DocumentSigning";
+import { WAITS, waitText } from "@/lib/advisor/prepare";
 import {
   AlertTriangle,
   Download,
@@ -224,7 +225,7 @@ export const CaseDocuments = ({ caseId, userId }: CaseDocumentsProps) => {
       </div>
 
       {isLoading ? (
-        <p className="p-5 text-sm text-muted-foreground">Hämtar handlingar…</p>
+        <p className="p-5 text-sm text-muted-foreground">{waitText(WAITS.documents)}</p>
       ) : !documents || documents.length === 0 ? (
         <p className="p-5 text-sm text-muted-foreground">
           Inga handlingar uppladdade än. Ett kontoutdrag och den senaste

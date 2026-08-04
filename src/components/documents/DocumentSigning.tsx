@@ -18,6 +18,7 @@ import {
 import { buildSignatureCertificate } from "@/lib/reports/signatureDocument";
 import { useInlineReport } from "@/components/reports/useInlineReport";
 import { FileCheck2, PenLine, ShieldCheck, ShieldAlert, ShieldQuestion } from "lucide-react";
+import { WAITS, waitText } from "@/lib/advisor/prepare";
 
 /**
  * Signeringen av en handling.
@@ -233,7 +234,7 @@ export const DocumentSigning = ({
             ) : hashState === "failed" ? (
               "Handlingens innehåll kan inte läsas i den här sessionen, så det går inte att försegla."
             ) : (
-              "Förseglar innehållet …"
+              waitText(WAITS.documentHash)
             )}
           </p>
 

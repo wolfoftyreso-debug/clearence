@@ -90,7 +90,22 @@ await page.waitForTimeout(900);
 body = await page.innerText("body");
 check("avslutet är förankrat i det användaren lämnade", /har vi ett underlag att arbeta vidare från/.test(body));
 check("inget tomt beröm i avslutet", !/Bra jobbat|Perfekt!|Du gör rätt/i.test(body));
-await page.waitForTimeout(2800);
+
+// "Förbered användaren": vybytet sker av sig självt, och då ska de fyra
+// frågorna vara besvarade INNAN vyn byts - inte efteråt.
+check("övergången säger vad som blev klart", /Det här är klart/i.test(body));
+check("övergången säger vad som händer nu", /Nu händer detta/i.test(body));
+check("övergången säger varför vi frågar", /Därför frågar vi/i.test(body));
+check("övergången säger hur lång tid det tar", /Så lång tid tar det/i.test(body));
+check("övergången säger vem som ser uppgifterna", /Vem ser uppgifterna/i.test(body));
+check("tidsangivelsen är konkret, inte 'det går snabbt'", /fem minuter/i.test(body));
+check(
+  "den som redan läst kan gå vidare direkt",
+  (await page.locator('button:has-text("Öppna nulägesanalysen")').count()) === 1,
+);
+
+// Pausen före nulägesanalysen rymmer nu även övergångsrutan.
+await page.waitForTimeout(5400);
 check("CLEARANCE öppnar nulägesanalysen", page.url().includes("/wizard"));
 
 // 4. Löftet hålls: uppgifterna följer med, guiden frågar inte igen.

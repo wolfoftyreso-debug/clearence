@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { Json } from "@/integrations/supabase/types";
+import { parsePremiseWatch } from "../premise";
 import { nextInvoiceNumber } from "@/lib/invoice";
 import { invoiceEmail, receiptEmail } from "@/lib/email/messages";
 import { COMPANY } from "@/lib/company";
@@ -814,14 +815,7 @@ export const supabaseAdapter: DataPort = {
         // Halva villkoret är inget villkor: databasen har ett check som
         // ser till att de tre fälten följs åt, och läsningen litar inte
         // på det ändå - ett premature "bevakat" är värre än "bevakas ej".
-        watch:
-          row.watch_signal && row.watch_comparator
-            ? {
-                signal: row.watch_signal,
-                comparator: row.watch_comparator,
-                threshold: row.watch_threshold === null ? null : Number(row.watch_threshold),
-              }
-            : null,
+        watch: parsePremiseWatch(row.watch_signal, row.watch_comparator, row.watch_threshold),
         watchAckObservation: row.watch_ack_observation ?? null,
         watchAckAt: row.watch_ack_at ?? null,
       }));

@@ -130,6 +130,36 @@ frågorna.
 * Användaren ska känna sig **lugnare efter varje svar än före.**
 * Clarhet före råd: CLEARANCE ger aldrig en rekommendation innan den
   förstått situationen.
+* **Förbered användaren.** Ingen ny fråga utan en kort introduktion om
+  ämnet, ingen ny sektion utan ett övergångsmeddelande, ingen extern
+  kontroll eller datainsamling utan att användaren får veta vad som
+  sker, och ingen väntetid utan att användaren får veta vad systemet
+  arbetar med. Se nedan.
+
+## Förbered användaren
+
+För någon mitt i en ekonomisk kris är **förutsägbarhet viktigare än
+hastighet**. Fyra frågor får aldrig lämnas obesvarade när något ändras:
+
+> Varför händer det här? · Vem ska se informationen? ·
+> Vad kommer att hända nu? · Hur lång tid tar nästa steg?
+
+Varje gång användaren lämnar ett steg kommer därför ett kort
+övergångsmeddelande: **det här är klart** · **nu händer detta** ·
+**därför frågar vi** · **så lång tid tar det** - och, när svaret delas
+med någon annan än användaren själv, **vem som ser uppgifterna**.
+
+Bekräftelsen i första delen lyder under förankringsregeln ovan: den
+säger vad som blev gjort, aldrig att någon var duktig.
+
+Poängen är inte information för sin egen skull. Den som vet *vad* som
+blev klart och *varför* nästa fråga ställs känner att systemet leder dem
+genom processen - i stället för att processen händer med dem.
+
+Reglerna är kod, inte ambition: `src/lib/advisor/prepare.ts` bär
+texterna och kontrollerna, `tests/prepare.ts` faller om en övergång
+saknar en del, saknar en konkret tidsangivelse, bara upprepar sig, eller
+om ett naket väntebesked skrivs någon annanstans i produkten.
 
 ## Minnet
 

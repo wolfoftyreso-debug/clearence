@@ -9,7 +9,7 @@
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.node.json",
-    "test": "npm run lint && npm run test:bank && npm run test:reports && npm run test:financial && npm run test:crisis && npm run test:billing && npm run test:email && npm run test:integrations && npm run test:sie && npm run test:actionplan && npm run test:templates && npm run test:knowledge && npm run test:summary && npm run test:portfolio && npm run test:audit && npm run test:tasks && npm run test:pdf && npm run test:notifications && npm run test:leads && npm run test:language && npm run test:presentation && npm run test:advisor && npm run test:options && npm run test:pricing && npm run test:apispec && npm run test:spacing && npm run test:signing && npm run test:tone && npm run test:premiss && npm run test:awsadapter",
+    "test": "npm run lint && npm run typecheck && npm run test:bank && npm run test:reports && npm run test:financial && npm run test:crisis && npm run test:billing && npm run test:email && npm run test:integrations && npm run test:sie && npm run test:actionplan && npm run test:templates && npm run test:knowledge && npm run test:summary && npm run test:portfolio && npm run test:audit && npm run test:tasks && npm run test:pdf && npm run test:notifications && npm run test:leads && npm run test:language && npm run test:presentation && npm run test:advisor && npm run test:options && npm run test:pricing && npm run test:apispec && npm run test:spacing && npm run test:signing && npm run test:tone && npm run test:premiss && npm run test:awsadapter && npm run test:prepare",
     "test:crisis": "esbuild tests/crisisAnalysis.ts --bundle --platform=node --format=cjs --outfile=node_modules/.cache/test-crisis.cjs --log-level=error && node node_modules/.cache/test-crisis.cjs",
     "test:rls": "bash supabase/tests/run.sh",
     "infra:fmt": "terraform -chdir=infra fmt -check -recursive",
@@ -48,7 +48,8 @@
     "test:pricing": "esbuild tests/pricingModel.ts --bundle --platform=node --format=cjs --outfile=node_modules/.cache/test-pricing.cjs --log-level=error && node node_modules/.cache/test-pricing.cjs",
     "test:options": "esbuild tests/options.ts --bundle --platform=node --format=cjs --outfile=node_modules/.cache/test-options.cjs --log-level=error && node node_modules/.cache/test-options.cjs",
     "test:advisor": "esbuild tests/advisor.ts --bundle --platform=node --format=cjs --outfile=node_modules/.cache/test-advisor.cjs --log-level=error && node node_modules/.cache/test-advisor.cjs",
-    "test:presentation": "esbuild tests/presentation.ts --bundle --platform=node --format=cjs --outfile=node_modules/.cache/test-presentation.cjs --log-level=error && node node_modules/.cache/test-presentation.cjs"
+    "test:presentation": "esbuild tests/presentation.ts --bundle --platform=node --format=cjs --outfile=node_modules/.cache/test-presentation.cjs --log-level=error && node node_modules/.cache/test-presentation.cjs",
+    "test:prepare": "esbuild tests/prepare.ts --bundle --platform=node --format=cjs --outfile=node_modules/.cache/test-prepare.cjs --log-level=error && node node_modules/.cache/test-prepare.cjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

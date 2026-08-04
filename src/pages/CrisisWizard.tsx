@@ -26,6 +26,8 @@ import { ResumeNotice } from "@/components/wizard/ResumeNotice";
 import { SaveWithAccountPrompt } from "@/components/SaveWithAccountPrompt";
 import { analyseCrisis, formatSwedishDate } from "@/lib/crisisAnalysis";
 import { clearOnboarding, readOnboarding } from "@/lib/advisor/onboardingHandoff";
+import { WAITS, waitText, type TransitionId } from "@/lib/advisor/prepare";
+import { TransitionNotice } from "@/components/advisor/TransitionNotice";
 
 interface FormData {
   // Step 1 - Company
@@ -136,6 +138,14 @@ const CrisisWizard = () => {
   const { user } = useAuth();
 
   const totalSteps = 4;
+
+  // Vilken övergång som hör till vilket steg. Som data, så en ny sida i
+  // guiden inte kan glömma sin förberedelse utan att någon märker det.
+  const STEG_OVERGANG: TransitionId[] = [
+    "nulage-foretag-till-betalningar",
+    "nulage-betalningar-till-skulder",
+    "nulage-skulder-till-bedomning",
+  ];
 
   // useCallback med tom beroendelista: funktionen läser aldrig state
   // direkt (setFormData får en uppdateringsfunktion), så identiteten kan
@@ -356,8 +366,12 @@ const CrisisWizard = () => {
           
           {formData.companyLookupStatus === 'loading' && (
             <div className="flex items-center justify-center gap-2 text-muted-foreground py-2">
-              <Loader2 className="w-4 h-4 animate-spin" />
-              <span className="text-sm">Hämtar företagsinfo...</span>
+              <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
+              {/* Regel 3 och 4 i "Förbered användaren": ett besked som
+                  bara säger "Hämtar…" svarar inte på någon av de fyra
+                  frågorna. Uppgiften lämnar dessutom produkten, och då
+                  har användaren rätt att veta vart. */}
+              <span className="text-sm">{waitText(WAITS.companyLookup)}</span>
             </div>
           )}
           
@@ -974,6 +988,12 @@ const CrisisWizard = () => {
           />
         ) : (
           <div className="space-y-3">
+            {/* Sista övergången i guiden. Att spara är det steg där
+                uppgifterna slutar vara ett utkast i webbläsaren och blir
+                ett ärende som bevakas - och där någon annan kan komma
+                att se dem. Då ska båda de sakerna stå framme innan
+                knappen trycks, inte efteråt. */}
+            <TransitionNotice id="bedomning-till-arende" />
             <label className="flex items-start gap-3 cursor-pointer">
               <input
                 type="checkbox"
@@ -1068,6 +1088,16 @@ const CrisisWizard = () => {
           {currentStep === 2 && renderStep3()}
           {currentStep === 3 && renderStep4()}
         </div>
+
+        {/* "Förbered användaren": rutan står FÖRE knappen som byter steg,
+            inte efter bytet. En förklaring som kommer när vyn redan har
+            ändrats är ingen förberedelse - då har överraskningen redan
+            hänt. Se docs/design-system.md och src/lib/advisor/prepare.ts. */}
+        {currentStep < 3 && canProceed() && (
+          <div className="mb-4">
+            <TransitionNotice id={STEG_OVERGANG[currentStep]} />
+          </div>
+        )}
 
         {/* Navigation */}
         {currentStep < 3 && (

@@ -9,6 +9,7 @@ import ProfessionalCard from "@/components/marketplace/ProfessionalCard";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Search, Filter, Users, Briefcase, Scale, Calculator, CreditCard } from "lucide-react";
+import { WAITS, waitText } from "@/lib/advisor/prepare";
 
 type CategoryFilter = 'all' | 'konkursforvaltare' | 'rekonstruktor' | 'revisor' | 'affarsjurist' | 'kreditbolag';
 
@@ -191,7 +192,7 @@ const Marketplace = () => {
         <section className="container px-4">
           {professionalsLoading ? (
             <div className="py-12">
-              <p className="text-muted-foreground">Hämtar rådgivare…</p>
+              <p className="text-muted-foreground">{waitText(WAITS.advisors)}</p>
             </div>
           ) : filteredProfessionals.length === 0 ? (
             <div className="rounded-md border border-border bg-card p-8">

@@ -33,6 +33,7 @@ import { SiePrefill } from "@/components/documents/SiePrefill";
 import { useAutosavedState } from "@/hooks/useAutosavedState";
 import { ResumeNotice } from "@/components/wizard/ResumeNotice";
 import { SaveWithAccountPrompt } from "@/components/SaveWithAccountPrompt";
+import { WAITS, waitText } from "@/lib/advisor/prepare";
 
 // KBR Status types
 type KBRStatus = 'not_required' | 'warning' | 'required' | 'critical';
@@ -483,7 +484,7 @@ const KBRModule = () => {
         {formData.companyLookupStatus === 'loading' && (
           <div className="mt-3 flex items-center gap-2 text-muted-foreground">
             <div className="w-4 h-4 border border-accent border-t-transparent rounded-full animate-spin" />
-            <span className="text-sm">Hämtar bolagsinfo...</span>
+            <span className="text-sm">{waitText(WAITS.companyLookup)}</span>
           </div>
         )}
         
