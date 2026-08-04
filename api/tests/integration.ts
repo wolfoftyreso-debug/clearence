@@ -385,6 +385,89 @@ check("ingen bedömning ger null, inte 404", kbrUtan.status === 200 && kbrUtan.b
 const meddelanden = await call("GET", `/v1/cases/${CASE_A}/messages`, { token: agnesToken });
 check("meddelandena hämtas", meddelanden.status === 200 && Array.isArray(meddelanden.body.messages), meddelanden.body);
 
+/* --- 5d. Skrivvägarna ------------------------------------------------------ */
+//
+// Radskyddets skrivpolicyer avgör om något får ske. En nekad skrivning
+// träffar NOLL rader i stället för att kasta fel, så kontrollerna mäter
+// utfallet - ändrades något? - och inte vilket lager som sa nej.
+
+const nyUppgift = await call("POST", `/v1/cases/${CASE_A}/tasks`, {
+  token: agnesToken,
+  body: { label: "Ring revisorn", dueDate: null },
+});
+check("uppgiften läggs till", nyUppgift.status === 201 && nyUppgift.body.label === "Ring revisorn", nyUppgift.body);
+check("den nya uppgiften är inte avbockad", nyUppgift.body.doneAt === null);
+const taskId = nyUppgift.body.id as string;
+
+const frammandeUppgift = await call("POST", `/v1/cases/${CASE_B}/tasks`, {
+  token: agnesToken,
+  body: { label: "Uppgift i annans ärende" },
+});
+check("man kan inte lägga uppgifter i någon annans ärende", frammandeUppgift.status >= 400, frammandeUppgift);
+
+const bockad = await call("POST", `/v1/tasks/${taskId}/done`, { token: agnesToken, body: { done: true } });
+check("uppgiften bockas av", bockad.status === 200 && typeof bockad.body.doneAt === "string", bockad.body);
+// Vem OCH när, tillsammans: ett halvt svar på "vem gjorde vad när" är
+// inget svar, och tidsstämpeln sätts av servern - inte av klienten.
+check("avbockningen bär vem som gjorde det", bockad.body.doneBy === AGNES, bockad.body);
+check(
+  "tidpunkten kommer från servern, inte från klienten",
+  new Date(bockad.body.doneAt as string).getTime() > Date.now() - 60_000,
+  bockad.body.doneAt,
+);
+
+const angrad = await call("POST", `/v1/tasks/${taskId}/done`, { token: agnesToken, body: { done: false } });
+check("avbockningen går att ångra", angrad.body.doneAt === null && angrad.body.doneBy === null, angrad.body);
+check(
+  "done måste vara ett ja eller nej",
+  (await call("POST", `/v1/tasks/${taskId}/done`, { token: agnesToken, body: { done: "kanske" } })).status === 400,
+);
+check(
+  "en utomstående kan inte bocka av uppgiften",
+  (await call("POST", `/v1/tasks/${taskId}/done`, { token: bertilToken, body: { done: true } })).status === 404,
+);
+
+const tilldelad = await call("POST", `/v1/tasks/${taskId}/assign`, { token: agnesToken, body: { userId: AGNES } });
+check("uppgiften går att delegera", tilldelad.status === 200 && tilldelad.body.assignedTo === AGNES, tilldelad.body);
+check(
+  "tilldelningen går att ta bort",
+  ((await call("POST", `/v1/tasks/${taskId}/assign`, { token: agnesToken, body: { userId: null } })).body).assignedTo === null,
+);
+
+const skickat = await call("POST", `/v1/cases/${CASE_A}/messages`, {
+  token: agnesToken,
+  body: { body: "Har vi fått svar från banken?" },
+});
+check("meddelandet skickas", skickat.status === 201 && skickat.body.body === "Har vi fått svar från banken?", skickat.body);
+check("avsändaren sätts av servern", skickat.body.authorUserId === AGNES, skickat.body);
+check(
+  "en utomstående kan inte skriva i ärendet",
+  (await call("POST", `/v1/cases/${CASE_A}/messages`, { token: bertilToken, body: { body: "Hej" } })).status >= 400,
+);
+check(
+  "meddelandet syns i tråden efteråt",
+  ((await call("GET", `/v1/cases/${CASE_A}/messages`, { token: agnesToken })).body.messages as Json[])
+    .some((m) => m.body === "Har vi fått svar från banken?"),
+);
+
+// Granskningsstämpeln: godkännande kräver rådgivarroll, och den regeln
+// bor i databasfunktionen - API:t gör ingen egen bedömning vid sidan om.
+const doc = await call("GET", `/v1/cases/${CASE_A}/documents`, { token: agnesToken });
+const docId = (doc.body.documents as Json[])[0]?.id as string;
+const begard = await call("POST", `/v1/documents/${docId}/review`, {
+  token: agnesToken,
+  body: { action: "request" },
+});
+check("granskning går att begära", begard.status === 200, begard.body);
+check(
+  "okänd åtgärd avvisas",
+  (await call("POST", `/v1/documents/${docId}/review`, { token: agnesToken, body: { action: "radera" } })).status === 400,
+);
+check(
+  "företagaren kan inte godkänna sitt eget underlag",
+  (await call("POST", `/v1/documents/${docId}/review`, { token: agnesToken, body: { action: "approve" } })).status >= 400,
+);
+
 /* --- 6. Indata som inte duger --------------------------------------------- */
 
 const badUuid = await call("GET", "/v1/cases/inte-ett-id", { token: agnesToken });

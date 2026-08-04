@@ -1,6 +1,7 @@
 import type { DataPort } from "./ports";
 import { supabaseAdapter } from "./supabase/adapter";
 import { demoAdapter } from "./demo/adapter";
+import { awsAdapter } from "./aws/adapter";
 
 /**
  * Whether this build runs entirely in the browser against invented data.
@@ -24,7 +25,25 @@ export const IS_DEMO = import.meta.env.VITE_DEMO_MODE === "true";
  * using auth.uid(), which does not exist outside Supabase. Losing it fails
  * open: queries keep working and start returning other users' data.
  */
-export const data: DataPort = IS_DEMO ? demoAdapter : supabaseAdapter;
+/**
+ * Vilken backend bygget pratar med.
+ *
+ * `aws` väljer CLEARANCE eget API (src/data/aws/adapter.ts). Den
+ * migreringen är halvfärdig med flit och säger det själv: de portar som
+ * ännu inte flyttat delegeras öppet till supabase-adaptern, och listan
+ * över vad som ÄR flyttat står i MIGRATED_PORTS.
+ *
+ * Läses vid byggtid, som demoflaggan: en bunt byggd utan flaggan kan
+ * inte pratas över till en annan backend i efterhand.
+ */
+export const BACKEND = IS_DEMO
+  ? "demo"
+  : import.meta.env.VITE_DATA_ADAPTER === "aws"
+    ? "aws"
+    : "supabase";
+
+export const data: DataPort =
+  BACKEND === "demo" ? demoAdapter : BACKEND === "aws" ? awsAdapter : supabaseAdapter;
 
 if (IS_DEMO) {
   // Loud on purpose. Anyone seeing this in a console on a real deployment is

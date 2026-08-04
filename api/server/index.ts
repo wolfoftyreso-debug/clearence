@@ -532,6 +532,108 @@ router.get("/v1/cases/:caseId/kbr", async (req) => {
   };
 });
 
+/* --- Skrivvägarna ----------------------------------------------------------
+ *
+ * Samma princip som läsningarna: ingen where-sats på användaren.
+ * Radskyddets INSERT- och UPDATE-policyer avgör om skrivningen får ske,
+ * och en skrivning som inte får ske träffar noll rader. Därför prövas
+ * utfallet - "ändrades något?" - och inte vilket lager som sa nej.
+ */
+
+router.post("/v1/cases/:caseId/tasks", async (req) => {
+  const caller = await authenticate(req);
+  const caseId = uuidParam(req, "caseId");
+  const label = str(req.body, "label", { max: 300 });
+  const dueDateRaw = (req.body as Record<string, unknown> | undefined)?.dueDate;
+  if (dueDateRaw !== undefined && dueDateRaw !== null && typeof dueDateRaw !== "string") {
+    throw badRequest('Fältet "dueDate" ska vara ett datum som text, eller utelämnas.');
+  }
+  const row = await withUser(caller.userId, async (tx) => {
+    const { rows } = await tx.query(
+      `insert into public.case_tasks (case_id, label, due_date, source)
+       values ($1, $2, $3, 'manual') returning *`,
+      [caseId, label, (dueDateRaw as string | undefined) ?? null],
+    );
+    return rows[0] ?? null;
+  });
+  if (!row) throw forbidden("Uppgiften kunde inte läggas till i det här ärendet.");
+  return { status: 201, body: toTask(row) };
+});
+
+router.post("/v1/tasks/:taskId/done", async (req) => {
+  const caller = await authenticate(req);
+  const taskId = uuidParam(req, "taskId");
+  const doneRaw = (req.body as Record<string, unknown> | undefined)?.done;
+  if (typeof doneRaw !== "boolean") throw badRequest('Fältet "done" ska vara true eller false.');
+  const row = await withUser(caller.userId, async (tx) => {
+    // Tidpunkten sätts av SERVERN, aldrig av klienten: en tidsstämpel som
+    // den som bockar av får välja är inte bevis på när något gjordes.
+    // Vem OCH när sätts tillsammans - ett halvt svar på "vem gjorde vad
+    // när" är inget svar (samma regel som tabellens check-villkor).
+    const { rows } = await tx.query(
+      doneRaw
+        ? `update public.case_tasks set done_at = now(), done_by = $2 where id = $1 returning *`
+        : `update public.case_tasks set done_at = null, done_by = null where id = $1 returning *`,
+      doneRaw ? [taskId, caller.userId] : [taskId],
+    );
+    return rows[0] ?? null;
+  });
+  if (!row) throw notFound("Uppgiften finns inte, eller är inte din.");
+  return { status: 200, body: toTask(row) };
+});
+
+router.post("/v1/tasks/:taskId/assign", async (req) => {
+  const caller = await authenticate(req);
+  const taskId = uuidParam(req, "taskId");
+  const raw = (req.body as Record<string, unknown> | undefined)?.userId;
+  if (raw !== null && typeof raw !== "string") {
+    throw badRequest('Fältet "userId" ska vara ett id, eller null för att ta bort tilldelningen.');
+  }
+  if (typeof raw === "string" && !UUID.test(raw)) throw badRequest('"userId" är inte ett giltigt id.');
+  const row = await withUser(caller.userId, async (tx) => {
+    const { rows } = await tx.query(
+      "update public.case_tasks set assigned_to = $2 where id = $1 returning *",
+      [taskId, raw],
+    );
+    return rows[0] ?? null;
+  });
+  if (!row) throw notFound("Uppgiften finns inte, eller är inte din.");
+  return { status: 200, body: toTask(row) };
+});
+
+router.post("/v1/cases/:caseId/messages", async (req) => {
+  const caller = await authenticate(req);
+  const caseId = uuidParam(req, "caseId");
+  const body = str(req.body, "body", { max: 8000 });
+  const row = await withUser(caller.userId, async (tx) => {
+    const { rows } = await tx.query(
+      `insert into public.case_messages (case_id, author_user_id, body)
+       values ($1, $2, $3)
+       returning id, case_id, conversation_id, body, author_user_id, created_at`,
+      [caseId, caller.userId, body],
+    );
+    return rows[0] ?? null;
+  });
+  if (!row) throw forbidden("Meddelandet kunde inte skickas i det här ärendet.");
+  return { status: 201, body: toMessage(row) };
+});
+
+router.post("/v1/documents/:documentId/review", async (req) => {
+  const caller = await authenticate(req);
+  const documentId = uuidParam(req, "documentId");
+  const action = str(req.body, "action", { max: 20 });
+  if (!["request", "approve", "reset"].includes(action)) {
+    throw badRequest('Fältet "action" ska vara request, approve eller reset.');
+  }
+  // Genom funktionen: rollprövningen (godkännande kräver rådgivarroll)
+  // bor där, inte här. Ett API som gör sin egen bedömning vid sidan om
+  // blir en andra sanning som glider isär från den första.
+  await withUser(caller.userId, async (tx) => {
+    await tx.query("select public.set_document_review($1, $2)", [documentId, action]);
+  });
+  return { status: 200, body: { reviewed: true } };
+});
+
 /* --- Servern --------------------------------------------------------------- */
 
 /**
