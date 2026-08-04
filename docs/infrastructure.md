@@ -91,10 +91,17 @@ i resurser:
 1. **Databasen är aldrig publik.** Radskydd hjälper inte mot någon som
    kan ansluta som ägaren. `publicly_accessible = false`, egna datasubnät
    utan default-route.
-2. **API:et ansluter som `app_user`** — som varken äger en tabell eller
-   har `BYPASSRLS`. Båda stänger av radscopingen *tyst*, och tyst är det
-   farliga: frågorna fortsätter fungera och börjar returnera andra bolags
-   insolvensdata.
+2. **API:et kör som `authenticated`** — en roll som varken äger en tabell
+   eller har `BYPASSRLS`. Båda stänger av radscopingen *tyst*, och tyst är
+   det farliga: frågorna fortsätter fungera och börjar returnera andra
+   bolags insolvensdata. Rollen sätts med `set local role` i varje
+   transaktion (`api/server/db.ts`).
+
+   Varför `authenticated` och inte `app_user`, som den här raden sa förut:
+   tabellrättigheterna är skrivna till `authenticated`, som är **medlem** i
+   `app_user` och därmed ärver nedåt, inte uppåt. `app_user` ensamt saknar
+   select och faller på 42501. `app_user` är kvar som den roll som
+   definierar begränsningen.
 3. **`set_config('app.user_id', ..., true)`** — transaktionslokalt, i
    samma transaktion som frågorna. Sessionslokalt på en poolad anslutning
    läcker föregående requests identitet till nästa.
@@ -107,12 +114,14 @@ i resurser:
 | Del | Status |
 |---|---|
 | Migrationerna och radskyddet | **Byggt.** 253 kontroller, gröna i *båda* miljöerna |
-| Självhostad Postgres utan Supabase | **Bevisat.** `npm run test:selfhosted` reser ren Postgres och kör hela sviten |
+| Självhostad Postgres utan Supabase | **Bevisat.** `npm run test:selfhosted` reser ren Postgres och kör hela sviten. Rättat: tabellrättigheterna kom tidigare från RLS-svitens egen blanka grant, aldrig från `db/bootstrap.sql` - självhostat hade första frågan fallit på 42501. Nu delas de ut i bootstrap, och `npm run test:api` bevisar det utan att någon testfil städar först |
 | E-postarbetaren | **Byggd.** TypeScript, bundlas med `npm run build:worker` |
 | Webbappen | **Byggd.** Noll externa anrop, verifierat (`test:external`, 9/9 sidor) |
 | Terraform för nät, databas, lagring, CDN, e-post, hemligheter, larm | **Skrivet** i `infra/` — `terraform fmt` går igenom |
-| **API:et (`awsAdapter` mot DataPort)** | **Saknas.** Klienten pratar idag PostgREST via Supabase-klienten. `DataPort` är hela kontraktet — en adapter plus en rad i `src/data/index.ts` |
-| **Egen autentisering** | **Schema klart** (`auth.sessions`, token som SHA-256), API saknas. Argon2id i API:et |
+| **API:et: identitet, sessioner, ärenden, journal, beslut** | **Byggt.** `api/server/`, node:http med **ett** beroende (`pg`). `npm run build:api` bygger, `npm run test:api` kör 47 kontroller mot riktig Postgres — inklusive att identiteten inte läcker mellan samtidiga requests |
+| **API:et: resten av `DataPort`** | **Saknas.** Dokument, uppgifter, meddelanden, fakturering. Samma mönster som skivan ovan — det som var osäkert är avklarat |
+| **`awsAdapter` i klienten** | **Saknas.** Klienten pratar fortfarande PostgREST via Supabase-klienten. En adapter mot `DataPort` plus en rad i `src/data/index.ts` |
+| **Egen autentisering** | **Byggt.** Inloggning, sessioner och utloggning i `api/server/auth.ts`. KDF är `scrypt` ur Node själv, inte Argon2id: en nativ modul hade gett API:t en byggkedja att sitta fast i, och hashformatet bär sina parametrar så ett byte blir ett nytt prefix, inte en migrering |
 | **S3-signering** | `app.may_read_document()` klar, signeringskoden saknas |
 | **`lookup-company`** | Finns som Supabase edge function, ska bli endpoint i eget API |
 | **Applicerad infrastruktur** | **Nej.** Inget AWS-konto är kopplat. `infra/` är kartan och beställningen, inte ett kvitto |

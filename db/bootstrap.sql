@@ -95,9 +95,15 @@ comment on function auth.uid() is
 create table if not exists auth.users (
   id uuid primary key default gen_random_uuid(),
   email citext unique not null,
-  -- Argon2id or bcrypt, produced by the API. The database never sees a
-  -- password and has no function that could hash or verify one, so a database
-  -- compromise does not hand over a verification oracle.
+  -- Producerad av API:et (api/server/auth.ts), i formatet
+  -- `scrypt$N$r$p$salt$hash`. Databasen ser aldrig ett lösenord och har
+  -- ingen funktion som kan hasha eller verifiera ett, så ett intrång i
+  -- databasen delar inte ut ett verifieringsorakel på köpet.
+  --
+  -- scrypt och inte Argon2id: Argon2 kräver en nativ modul som ska byggas
+  -- vid installation, och API:et har med flit exakt ett beroende. Hashen
+  -- bär sina egna parametrar, så en höjd kostnad - eller ett byte till
+  -- Argon2id - blir ett nytt prefix och inte en migrering.
   password_hash text not null,
   email_confirmed_at timestamptz,
   created_at timestamptz not null default now(),
@@ -131,3 +137,44 @@ create index if not exists sessions_expiry_idx on auth.sessions (expires_at)
 revoke all on auth.users, auth.sessions from public, app_anon, app_user, anon, authenticated;
 
 grant usage on schema app, auth, public to app_anon, app_user, anon, authenticated;
+
+/* -------------------------------------------------------------------------- */
+/* Table privileges                                                           */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Rättigheterna som Supabase delade ut åt oss.
+ *
+ * Radskyddet avgör VILKA RADER en roll ser. Innan dess måste rollen ha
+ * rätt att röra tabellen över huvud taget - och de rättigheterna kom i
+ * Supabase från plattformens default privileges, inte från vår kod.
+ * Självhostat fanns de ingenstans: första frågan hade fallit på 42501,
+ * och migrationerna hade sett ut att fungera ända tills något faktiskt
+ * försökte läsa.
+ *
+ * Att bristen inte syntes i testerna är själva lärdomen: RLS-sviten
+ * delar med flit ut en blank grant för att pröva att append-only-löftena
+ * inte vilar på en revoke (supabase/tests/rls.sql). Den grantsen lagade
+ * i praktiken produktionskonfigurationen åt oss, varje körning. Det som
+ * upptäckte det var det egna API:t - första riktiga klienten som gick
+ * mot databasen utan att en testfil hade städat före den.
+ *
+ * `alter default privileges` och inte `grant on all tables`: bootstrap
+ * körs FÖRE migrationerna, så det finns inga tabeller att grantera ännu.
+ * Raderna nedan gäller allt som migrationerna sedan skapar.
+ *
+ * Att `delete` ingår är avsiktligt: journalen, besluten och signaturerna
+ * skyddas av att det saknas delete-POLICY och av triggrar, inte av en
+ * utebliven grant. Det prövas i båda miljöerna.
+ */
+alter default privileges in schema public
+  grant select, insert, update, delete on tables to authenticated;
+alter default privileges in schema public
+  grant usage, select on sequences to authenticated;
+alter default privileges in schema public
+  grant execute on functions to anon, authenticated;
+
+-- Och för det som redan finns när bootstrap körs om mot en befintlig
+-- databas. Idempotent, och gör om-körningen ofarlig.
+grant select, insert, update, delete on all tables in schema public to authenticated;
+grant usage, select on all sequences in schema public to authenticated;
