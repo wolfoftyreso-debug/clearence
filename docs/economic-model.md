@@ -37,12 +37,23 @@ ingen LLM, egen PDF-motor, inga tredjepartsbibliotek med avgift.
 | Kreditbevakning | c_cs × 30 slagningar (max 1/dygn [FAKTA – byggd spärr]) | c_cs = avtalsfråga; 2–10 kr/slagning ger 60–300 kr/mån | [ANTAGANDE → ersätts av avtal] |
 | Analyser, rapporter, PDF:er, notiser | 0 × obegränsad användning | **0 kr** | [FAKTA – deterministiska motorer] |
 | Signering | Egen, ingen styckkostnad | 0 kr/händelse | **Byggd** (docs/signering.md) |
-| **Rörlig kostnad V_f** | | **< 5 kr utan bevakning; 65–305 kr med daglig bevakning** | |
+| SMS-aviseringar | c_sms × utskick, endast Business/Enterprise | c_sms ≈ 0,35 kr/segment [ANTAGANDE]; taket är byggt in i produkten, se nedan | **Byggd** (docs/aviseringar.md) |
+| **Rörlig kostnad V_f** | | **< 5 kr utan bevakning; 65–305 kr med daglig bevakning; + SMS på de betalda nivåerna** | |
 
-**Slutsats 1:** kreditbevakningen är hela den rörliga kostnadsbilden på
+**Slutsats 1:** kreditbevakningen är den DOMINERANDE rörliga kostnaden på
 företagssidan. Den ska därför vara (a) premiumtillval eller (b) inkluderad med
 frekvensstyrning (t.ex. veckovis i grundnivån, daglig i hälsonivån/premium) –
 ett produktbeslut modellen flaggar, inte avgör.
+
+**Slutsats 1b:** SMS är den enda andra rörliga styckkostnaden, och den är
+liten men inte noll - vilket gör den till den första kostnad som växer med
+hur mycket kunden använder produkten. Tre saker håller den nere, och alla tre
+är byggda och testade: engångsgarantin (samma händelse ger ett utskick, aldrig
+fler), fristpåminnelsens tre trösklar i stället för ett besked per dag, och
+förvalet "bara när något krävs av dig". Ett realistiskt ärende ger enstaka SMS
+i månaden, inte dagliga. Det som ÄNNU inte finns är ett hårt tak per mottagare
+och dygn - engångsgarantin skyddar mot att samma besked upprepas, inte mot att
+tjugo olika kommer samtidigt. Det taket bör byggas innan volymen är verklig.
 
 ### 1.3 Rörlig kostnad per värdehändelse (byråsidan)
 

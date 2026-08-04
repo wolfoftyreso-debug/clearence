@@ -61,6 +61,10 @@ import type {
   RatingRecord,
   ReferralRecord,
   ReferralStatus,
+  NotificationPrefsRecord,
+  NotificationPrefsInput,
+  VerifiedPhoneRecord,
+  NotificationDeliveryRecord,
 } from "./types";
 import type { FinancialSnapshot } from "@/lib/financial/model";
 
@@ -610,6 +614,37 @@ export interface ApiKeysPort {
   revoke(id: string): Promise<void>;
 }
 
+/**
+ * Aviseringarna: användarens val, numret och kvittona.
+ *
+ * Porten skriver aldrig händelser. De skapas av enqueue_notification() i
+ * databasen och av arbetaren - en klient som kunde skapa aviseringar
+ * kunde skicka SMS i någon annans namn.
+ */
+export interface NotificationSettingsPort {
+  /** Valen. Null när användaren aldrig rört dem: då gäller förvalen. */
+  getPrefs(): Promise<NotificationPrefsRecord | null>;
+  savePrefs(input: NotificationPrefsInput): Promise<void>;
+
+  /** Numret, maskerat och med verifieringsstatus. Null = inget nummer. */
+  getPhone(): Promise<VerifiedPhoneRecord | null>;
+  /**
+   * Steg 1. Numret normaliseras och koden hashas INNAN den lämnar
+   * klienten - databasen ska aldrig ha sett klartexten.
+   */
+  startPhoneVerification(rawPhone: string): Promise<void>;
+  /** Steg 2. False = fel kod, utgången kod eller för många försök. */
+  confirmPhoneVerification(code: string): Promise<boolean>;
+  removePhone(): Promise<void>;
+
+  /**
+   * Kvittona för de senaste aviseringarna: vad som gick ut, på vilken
+   * kanal, och skälet när något inte gjorde det. Det är svaret på
+   * "varför fick jag inget SMS".
+   */
+  listRecentDeliveries(limit?: number): Promise<NotificationDeliveryRecord[]>;
+}
+
 export interface AuditPort {
   /**
    * Händelseloggen, nyast först. Append-only i databasen - det här är
@@ -649,6 +684,7 @@ export interface DataPort {
   audit: AuditPort;
   shares: SharesPort;
   apiKeys: ApiKeysPort;
+  notificationSettings: NotificationSettingsPort;
   billing: BillingPort;
   ops: OpsPort;
   cases: CasesPort;

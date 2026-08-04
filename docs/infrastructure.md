@@ -71,9 +71,10 @@ flowchart TB
 | **Hemligheterna** | Secrets Manager + KMS | Anslutningssträngarna. Integrationsnycklarnas **plats** — värdet sätts i driftpanelen, aldrig i kod |
 | **Spåren** | CloudWatch, CloudTrail, S3-åtkomstloggar | Vem gjorde vad, i appen (journalen) och i driften (CloudTrail) |
 
-## De sex körningarna
+## De sju körningarna
 
-Arbetaren (`db/worker/email-worker.ts`) körs som schemalagda
+Arbetarna (`db/worker/email-worker.ts` och
+`db/worker/notification-worker.ts`) körs som schemalagda
 Fargate-uppgifter. Tiderna står i `infra/main.tf` som data, inte utspridda
 i resurser:
 
@@ -85,6 +86,12 @@ i resurser:
 | `--credit` | 05:30 | Högst en kreditslagning per bolag och dygn — varje kostar |
 | `--invoice-referrals` | 1:a kl. 06 | Föregående månads förmedlingsfakturor |
 | `--invoice-usage` | 1:a kl. 07 | En samlingsfaktura per byrå |
+| `notification-worker` | var 5:e minut | Aviseringskön. Beslut per rad, uppskjutning vid tyst tid — se `docs/aviseringar.md` |
+
+Aviseringsarbetaren behöver utöver `DATABASE_URL`, `SES_REGION` och
+`MAIL_FROM` en SMS-nyckel i `integration_secrets` under `46elks`. Saknas
+den skickas inga SMS, och varje rad får skälet utskrivet i driftpanelen —
+den låtsas aldrig ha skickat.
 
 ## Fyra regler infrastrukturen inte får bryta
 

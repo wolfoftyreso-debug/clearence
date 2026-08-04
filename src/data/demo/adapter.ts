@@ -16,7 +16,21 @@
  */
 
 import type { DataPort } from "../ports";
+import {
+  hashCode,
+  isVerificationCode,
+  maskPhone,
+  normalisePhone,
+} from "@/lib/notifications/phone";
+
+/**
+ * Demons verifieringskod. Fast och utskriven i gränssnittet - demon har
+ * ingen telefon att skicka till, och en kod ingen kan få vore en vägg.
+ */
+export const DEMO_VERIFICATION_CODE = "123456";
 import type {
+  NotificationPrefsRecord,
+  NotificationDeliveryRecord,
   ApiKeyRecord,
   DocumentSignature,
   AccountBillingRecord,
@@ -110,6 +124,14 @@ interface DemoState {
   shareLinks: (CaseShareLinkRecord & { accessLog: string[] })[];
   /** API-nycklarna: bara prefix och metadata - hemligheten lagras aldrig. */
   apiKeys: ApiKeyRecord[];
+  notificationPrefs: NotificationPrefsRecord | null;
+  /**
+   * Demons telefon. Koden lagras som HASH även här - demoläget får
+   * gärna vara påhittat, men det ska inte lära någon fel om hur
+   * hemligheter hanteras.
+   */
+  phone: { e164: string; codeSha256: string | null; verified: boolean } | null;
+  deliveries: NotificationDeliveryRecord[];
   documentSignatures: DocumentSignature[];
   companyPlanBusinessExVatSek: number | null;
   companyPlanEnterpriseExVatSek: number | null;
@@ -148,6 +170,9 @@ const emptyState = (): DemoState => ({
   companyPlanMonthlyExVatSek: null,
   shareLinks: [],
   apiKeys: [],
+  notificationPrefs: null,
+  phone: null,
+  deliveries: [],
   documentSignatures: [],
   companyPlanBusinessExVatSek: null,
   companyPlanEnterpriseExVatSek: null,
@@ -1289,6 +1314,8 @@ export const demoAdapter: DataPort = {
         // kunna demonstreras. Låst läge nås genom att nollställa paidAt.
         state.billing = {
           userId: state.user.id,
+          // Demon kör Business, så SMS-kanalen går att prova.
+          planId: "business" as const,
           startedAt: now(),
           dueAt: null,
           paidAt: now(),
@@ -1571,6 +1598,44 @@ export const demoAdapter: DataPort = {
         (t) => !(t.id === id && t.userId === state.user?.id),
       );
       save();
+    },
+  },
+
+  notificationSettings: {
+    async getPrefs() {
+      return state.notificationPrefs ? { ...state.notificationPrefs } : null;
+    },
+    async savePrefs(input) {
+      state.notificationPrefs = { ...input };
+    },
+    async getPhone() {
+      if (!state.phone) return null;
+      return {
+        masked: maskPhone(state.phone.e164),
+        verified: state.phone.verified,
+        awaitingCode: !state.phone.verified && state.phone.codeSha256 !== null,
+      };
+    },
+    async startPhoneVerification(rawPhone: string) {
+      const e164 = normalisePhone(rawPhone);
+      if (!e164) throw new Error("Skriv ett svenskt mobilnummer, till exempel 070-123 45 67.");
+      // Demon har ingen telefon att skicka till, så koden är fast och
+      // står i gränssnittet. Den lagras ändå som hash: skulle någon en
+      // dag kopiera demoadaptern som mall ska mallen vara rätt.
+      state.phone = { e164, codeSha256: await hashCode(DEMO_VERIFICATION_CODE), verified: false };
+    },
+    async confirmPhoneVerification(code: string) {
+      if (!state.phone || state.phone.codeSha256 === null) return false;
+      if (!isVerificationCode(code)) return false;
+      if ((await hashCode(code)) !== state.phone.codeSha256) return false;
+      state.phone = { ...state.phone, codeSha256: null, verified: true };
+      return true;
+    },
+    async removePhone() {
+      state.phone = null;
+    },
+    async listRecentDeliveries(limit = 20) {
+      return state.deliveries.slice(0, limit).map((d) => ({ ...d }));
     },
   },
 

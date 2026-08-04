@@ -51,7 +51,12 @@ export const PLAN_TIERS = [
       "Grundläggande analys och lägesbild",
       "Skapa dokument och handlingsplan",
     ],
-    excludes: ["Ingen export", "Ingen delning", "Ingen ekonomisystemskoppling"],
+    excludes: [
+      "Ingen export",
+      "Ingen delning",
+      "Ingen ekonomisystemskoppling",
+      "Inga aviseringar utanför appen",
+    ],
   },
   {
     id: "standard",
@@ -64,7 +69,7 @@ export const PLAN_TIERS = [
     ],
     // Ekonomisystemskopplingen bor i Business och Enterprise - ENDAST
     // där, på uttrycklig begäran. Flytta inte ner den igen.
-    excludes: ["Ingen ekonomisystemskoppling"],
+    excludes: ["Ingen ekonomisystemskoppling", "Inga SMS-aviseringar"],
   },
   {
     id: "business",
@@ -74,6 +79,7 @@ export const PLAN_TIERS = [
       "Flera användare och flera bolag",
       "Ekonomisystemskoppling (Fortnox/Visma när avtalen är på plats)",
       "Behörighetsstyrning och styrelseportal",
+      "SMS-aviseringar vid frister och åtgärder",
       "Avancerade arbetsflöden och utökade integrationer",
       "Prioriterad support",
     ],
@@ -87,6 +93,7 @@ export const PLAN_TIERS = [
       "Ekonomisystemskoppling, anpassade integrationer och API",
       "Fler användare och roller",
       "Avancerad loggning",
+      "SMS-aviseringar vid frister och åtgärder",
       "Dedikerad onboarding och anpassad support",
     ],
     excludes: [],

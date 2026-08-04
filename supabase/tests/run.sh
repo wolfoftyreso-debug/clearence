@@ -23,3 +23,5 @@ $PSQL -d "$DB" -f supabase/tests/billingJob.sql 2>&1 | grep -E "^(NOTICE|ERROR|p
 $PSQL -d "$DB" -f supabase/tests/referralInvoicing.sql 2>&1 | grep -E "^(NOTICE|ERROR|psql:)|ALL REFERRAL" | sed 's/^NOTICE:  //'
 
 $PSQL -d "$DB" -f supabase/tests/usageInvoicing.sql 2>&1 | grep -E "^(NOTICE|ERROR|psql:)|ALL USAGE" | sed 's/^NOTICE:  //'
+
+$PSQL -d "$DB" -f supabase/tests/notifications.sql 2>&1 | grep -E "^(NOTICE|ERROR|psql:)|ALL NOTIFICATION" | sed 's/^NOTICE:  //'

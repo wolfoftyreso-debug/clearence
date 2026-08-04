@@ -8,6 +8,7 @@ import { data } from "@/data";
 import { billingState } from "@/lib/billing";
 import { ProviderLogo } from "@/components/integrations/ProviderLogo";
 import type { ProfessionalTerms, ProfileClaimForReview, SecretInfo } from "@/data/types";
+import { SMS_SECRET_PROVIDER } from "@/lib/notifications/events";
 import {
   AlertTriangle,
   Banknote,
@@ -49,6 +50,13 @@ const PROVIDERS: { id: string; name: string; note: string }[] = [
   { id: "fortnox", name: "Fortnox", note: "Bokföringsdata direkt, i stället för SIE-fil." },
   { id: "visma", name: "Visma eEkonomi", note: "Bokföringsdata direkt, i stället för SIE-fil." },
   { id: "ses", name: "E-postutskick (SES)", note: "Arbetarens avsändarkonto för fakturor och påminnelser." },
+  {
+    id: SMS_SECRET_PROVIDER,
+    name: "SMS-utskick",
+    // Formatet står här för att det inte går att gissa: nyckeln är två
+    // uppgifter i ett fält, och fel format ger ett tyst nej i kön.
+    note: 'SMS-aviseringar för Business och Enterprise. Skrivs som "användarnamn:lösenord".',
+  },
 ];
 
 const swedishDate = (iso: string) =>

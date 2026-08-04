@@ -1,6 +1,16 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { Json } from "@/integrations/supabase/types";
 import { parsePremiseWatch } from "../premise";
+import type { NotificationDeliveryRecord, NotificationPrefsRecord } from "../types";
+import {
+  VERIFICATION_TTL_MINUTES,
+  generateCode,
+  hashCode,
+  isVerificationCode,
+  maskPhone,
+  normalisePhone,
+  verificationSms,
+} from "@/lib/notifications/phone";
 import { nextInvoiceNumber } from "@/lib/invoice";
 import { invoiceEmail, receiptEmail } from "@/lib/email/messages";
 import { COMPANY } from "@/lib/company";
@@ -126,6 +136,7 @@ const sanitiseFileName = (name: string): string => {
 
 const toBilling = (row: {
   user_id: string;
+  plan_id?: string | null;
   started_at: string;
   due_at: string | null;
   paid_at: string | null;
@@ -133,6 +144,13 @@ const toBilling = (row: {
   note: string | null;
 }): AccountBillingRecord => ({
   userId: row.user_id,
+  // Reserven är standard, samma som kolumnens default. Ett okänt värde
+  // ska falla NEDÅT: att gissa fel uppåt vore att dela ut en betald
+  // kanal gratis.
+  planId:
+    row.plan_id === "start" || row.plan_id === "business" || row.plan_id === "enterprise"
+      ? row.plan_id
+      : "standard",
   startedAt: row.started_at,
   dueAt: row.due_at,
   paidAt: row.paid_at,
@@ -620,6 +638,104 @@ export const supabaseAdapter: DataPort = {
     async removeTime(id) {
       const { error } = await supabase.from("time_entries").delete().eq("id", id);
       if (error) throw error;
+    },
+  },
+
+  notificationSettings: {
+    async getPrefs() {
+      const { data: rows, error } = await supabase
+        .from("notification_prefs")
+        .select("level, email_enabled, sms_enabled, quiet_start_hour, quiet_end_hour")
+        .maybeSingle();
+      if (error) throw error;
+      if (!rows) return null;
+      return {
+        level: rows.level as NotificationPrefsRecord["level"],
+        emailEnabled: rows.email_enabled,
+        smsEnabled: rows.sms_enabled,
+        quietStartHour: rows.quiet_start_hour,
+        quietEndHour: rows.quiet_end_hour,
+      };
+    },
+    async savePrefs(input) {
+      const { data: auth } = await supabase.auth.getUser();
+      const userId = auth.user?.id;
+      if (!userId) throw new Error("Inte inloggad");
+      const { error } = await supabase.from("notification_prefs").upsert({
+        user_id: userId,
+        level: input.level,
+        email_enabled: input.emailEnabled,
+        sms_enabled: input.smsEnabled,
+        quiet_start_hour: input.quietStartHour,
+        quiet_end_hour: input.quietEndHour,
+        updated_at: new Date().toISOString(),
+      });
+      if (error) throw error;
+    },
+    async getPhone() {
+      const { data: row, error } = await supabase
+        .from("verified_phones")
+        .select("e164, verified_at, code_expires_at")
+        .maybeSingle();
+      if (error) throw error;
+      if (!row) return null;
+      return {
+        // Maskerat, alltid. Hela numret lämnar aldrig databasen till en vy.
+        masked: maskPhone(row.e164),
+        verified: row.verified_at !== null,
+        awaitingCode:
+          row.verified_at === null &&
+          row.code_expires_at !== null &&
+          new Date(row.code_expires_at) > new Date(),
+      };
+    },
+    async startPhoneVerification(rawPhone: string) {
+      const e164 = normalisePhone(rawPhone);
+      if (!e164) throw new Error("Skriv ett svenskt mobilnummer, till exempel 070-123 45 67.");
+      // Koden genereras och hashas HÄR. Databasen får hashen, telefonen
+      // får klartexten, och ingen lagring ser båda.
+      const code = generateCode();
+      const { error } = await supabase.rpc("start_phone_verification", {
+        p_e164: e164,
+        p_code_sha256: await hashCode(code),
+        p_ttl_minutes: VERIFICATION_TTL_MINUTES,
+      });
+      if (error) throw error;
+      // Numret skickas INTE med: funktionen läser anroparens egen rad,
+      // annars vore den en SMS-bombare med inloggning.
+      const { error: queueError } = await supabase.rpc("queue_verification_sms", {
+        p_body: verificationSms(code),
+      });
+      if (queueError) throw queueError;
+    },
+    async confirmPhoneVerification(code: string) {
+      if (!isVerificationCode(code)) return false;
+      const { data, error } = await supabase.rpc("confirm_phone_verification", {
+        p_code_sha256: await hashCode(code),
+      });
+      if (error) throw error;
+      return data === true;
+    },
+    async removePhone() {
+      const { error } = await supabase.rpc("remove_phone");
+      if (error) throw error;
+    },
+    async listRecentDeliveries(limit = 20) {
+      const { data: rows, error } = await supabase
+        .from("notification_deliveries")
+        .select("id, channel, status, suppressed_reason, last_error, created_at, sent_at, notification_events(title)")
+        .order("created_at", { ascending: false })
+        .limit(limit);
+      if (error) throw error;
+      return (rows ?? []).map((r) => ({
+        id: r.id,
+        channel: r.channel,
+        status: r.status,
+        title: (r.notification_events as { title: string } | null)?.title ?? "Avisering",
+        createdAt: r.created_at,
+        sentAt: r.sent_at,
+        reason: r.suppressed_reason ?? r.last_error ?? null,
+      })) as NotificationDeliveryRecord[];
     },
   },
 

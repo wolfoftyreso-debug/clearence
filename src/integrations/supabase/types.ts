@@ -208,17 +208,20 @@ export type Database = {
           due_at: string | null
           note: string | null
           paid_at: string | null
+          plan_id: string
           started_at: string
           user_id: string
         }
         Insert: {
           user_id: string
+          plan_id?: string
         }
         Update: {
           closed_at?: string | null
           due_at?: string | null
           note?: string | null
           paid_at?: string | null
+          plan_id?: string
         }
         Relationships: []
       }
@@ -1288,6 +1291,129 @@ export type Database = {
         }
         Relationships: []
       }
+      notification_events: {
+        Row: {
+          id: string
+          user_id: string
+          case_id: string | null
+          kind: string
+          severity: string
+          title: string
+          body: string
+          href: string
+          dedupe_key: string
+          created_at: string
+          read_at: string | null
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          case_id?: string | null
+          kind: string
+          severity: string
+          title: string
+          body: string
+          href: string
+          dedupe_key: string
+          created_at?: string
+          read_at?: string | null
+        }
+        Update: {
+          read_at?: string | null
+        }
+        Relationships: []
+      }
+      notification_deliveries: {
+        Row: {
+          id: string
+          event_id: string
+          channel: "inapp" | "email" | "sms" | "push"
+          status: "pending" | "sent" | "failed" | "suppressed"
+          attempts: number
+          last_error: string | null
+          suppressed_reason: string | null
+          deferred_until: string | null
+          created_at: string
+          sent_at: string | null
+        }
+        Insert: {
+          id?: string
+          event_id: string
+          channel: "inapp" | "email" | "sms" | "push"
+          status?: "pending" | "sent" | "failed" | "suppressed"
+          attempts?: number
+          last_error?: string | null
+          suppressed_reason?: string | null
+          deferred_until?: string | null
+          created_at?: string
+          sent_at?: string | null
+        }
+        Update: {
+          status?: "pending" | "sent" | "failed" | "suppressed"
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notification_deliveries_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "notification_events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      notification_prefs: {
+        Row: {
+          user_id: string
+          level: string
+          email_enabled: boolean
+          sms_enabled: boolean
+          quiet_start_hour: number
+          quiet_end_hour: number
+          updated_at: string
+        }
+        Insert: {
+          user_id: string
+          level?: string
+          email_enabled?: boolean
+          sms_enabled?: boolean
+          quiet_start_hour?: number
+          quiet_end_hour?: number
+          updated_at?: string
+        }
+        Update: {
+          level?: string
+          email_enabled?: boolean
+          sms_enabled?: boolean
+          quiet_start_hour?: number
+          quiet_end_hour?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      verified_phones: {
+        Row: {
+          user_id: string
+          e164: string
+          code_sha256: string | null
+          code_expires_at: string | null
+          code_attempts: number
+          verified_at: string | null
+          created_at: string
+        }
+        Insert: {
+          user_id: string
+          e164: string
+          code_sha256?: string | null
+          code_expires_at?: string | null
+          code_attempts?: number
+          verified_at?: string | null
+          created_at?: string
+        }
+        Update: {
+          verified_at?: string | null
+        }
+        Relationships: []
+      }
       profile_claims: {
         Row: {
           contact: string
@@ -1654,6 +1780,22 @@ export type Database = {
       }
       acknowledge_premise: {
         Args: { p_decision_id: string; p_observation: string }
+        Returns: undefined
+      }
+      start_phone_verification: {
+        Args: { p_e164: string; p_code_sha256: string; p_ttl_minutes?: number }
+        Returns: undefined
+      }
+      confirm_phone_verification: {
+        Args: { p_code_sha256: string }
+        Returns: boolean
+      }
+      remove_phone: {
+        Args: Record<string, never>
+        Returns: undefined
+      }
+      queue_verification_sms: {
+        Args: { p_body: string }
         Returns: undefined
       }
     }

@@ -525,6 +525,8 @@ export interface OpenMention {
 
 export interface AccountBillingRecord {
   userId: string;
+  /** Abonnemangsnivån. Styr vilka aviseringskanaler som är öppna. */
+  planId: "start" | "standard" | "business" | "enterprise";
   startedAt: string;
   dueAt: string | null;
   paidAt: string | null;
@@ -853,4 +855,45 @@ export interface DocumentSignature {
   statementText: string;
   contentSha256: string;
   signedAt: string;
+}
+
+/* --- Aviseringar ----------------------------------------------------------- */
+
+/**
+ * Användarens val. Speglar notification_prefs; typerna för nivå och
+ * kanal bor i src/lib/notifications/events.ts, som äger reglerna.
+ */
+export interface NotificationPrefsRecord {
+  level: "alla" | "atgard" | "tidskritiska";
+  emailEnabled: boolean;
+  smsEnabled: boolean;
+  quietStartHour: number;
+  quietEndHour: number;
+}
+
+export type NotificationPrefsInput = NotificationPrefsRecord;
+
+/**
+ * Numret, som gränssnittet får se det.
+ *
+ * `masked` och aldrig hela numret: en skärmdump av inställningarna ska
+ * inte lämna ut mobilnumret. Den som vill se det får skriva in det igen.
+ */
+export interface VerifiedPhoneRecord {
+  masked: string;
+  verified: boolean;
+  /** Sant medan en kod är utskickad och ännu giltig. */
+  awaitingCode: boolean;
+}
+
+/** Ett kvitto: vad som gick ut, på vilken kanal, och skälet när det inte gjorde det. */
+export interface NotificationDeliveryRecord {
+  id: string;
+  channel: "inapp" | "email" | "sms" | "push";
+  status: "pending" | "sent" | "failed" | "suppressed";
+  title: string;
+  createdAt: string;
+  sentAt: string | null;
+  /** Läsbart skäl. Null när den gick fram. */
+  reason: string | null;
 }

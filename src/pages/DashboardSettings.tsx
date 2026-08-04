@@ -18,6 +18,7 @@ import {
   NotificationSection,
   PresentationSection,
 } from "@/components/settings/PreferenceSections";
+import { AlertChannelSection, AlertHistorySection } from "@/components/settings/AlertChannels";
 import type { CustomerInvoiceRecord } from "@/data/types";
 import { LockedFeature, useEntitlements } from "@/components/billing/LockedFeature";
 import { Link } from "react-router-dom";
@@ -256,6 +257,10 @@ const DashboardSettings = () => {
         <PresentationSection />
         <ActiveCaseSection />
         <NotificationSection />
+
+        <AlertChannelSection />
+
+        <AlertHistorySection />
         <ApiKeysSection />
 
         <WizardCard>

@@ -61,6 +61,10 @@ check("statuskort: misslyckade utskick", /Misslyckade utskick/i.test(admin));
 check("statuskort: stängda konton", /Stängda konton/i.test(admin));
 check("API-nyckelsektionen finns", /API-nycklar/i.test(admin));
 check("Creditsafe listas", /Creditsafe/i.test(admin));
+// SMS-nyckeln har ett format som inte går att gissa. Står det inte i
+// panelen sparar driften fel sträng och kön dör tyst.
+check("SMS-utskick listas", /SMS-utskick/i.test(admin));
+check("SMS-nyckelns format står utskrivet", /användarnamn:lösenord/i.test(admin));
 
 // 4. Spara en nyckel → maskeras, kan tas bort
 await page.fill('input[aria-label="API-nyckel för Creditsafe"]', "demo-nyckel-ABCD1234");
