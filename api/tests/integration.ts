@@ -312,6 +312,79 @@ if (apiKey) {
   );
 }
 
+/* --- 5c. Översiktens data ------------------------------------------------- */
+//
+// Milstolpen: allt startsidan behöver ska gå att hämta ur EGET API. Varje
+// resurs prövas två gånger - att den egna kretsen ser sitt, och att en
+// utomstående ser TOMT och inte ett fel. Tystnaden är samma överallt.
+
+await withAnon(async (tx) => {
+  await tx.query(
+    `insert into public.case_tasks (case_id, label, source) values ($1, 'Betala skatten', 'recommendation')
+     on conflict do nothing`,
+    [CASE_A],
+  );
+  await tx.query(
+    `insert into public.payments (case_id, user_id, label, amount, category, status, due_date)
+     values ($1, $2, 'Moms', 165000, 'tax', 'pending', now() + interval '8 days')`,
+    [CASE_A, AGNES],
+  );
+  await tx.query(
+    `insert into public.kbr_assessments
+       (case_id, user_id, share_capital, total_assets, total_liabilities, status)
+     values ($1, $2, 100000, 950000, 3200000, 'critical')`,
+    [CASE_A, AGNES],
+  );
+  await tx.query(
+    `insert into public.case_documents (case_id, user_id, kind, file_name, file_size, mime_type, storage_path, source)
+     values ($1, $2, 'other', 'kontoutdrag.csv', 2048, 'text/csv', $3, 'manual')`,
+    [CASE_A, AGNES, `${CASE_A}/kontoutdrag.csv`],
+  );
+});
+
+const uppgifter = await call("GET", `/v1/cases/${CASE_A}/tasks`, { token: agnesToken });
+check("uppgifterna hämtas", uppgifter.status === 200 && (uppgifter.body.tasks as Json[]).length >= 1, uppgifter.body);
+check(
+  "uppgiften bär kontraktets fältnamn",
+  (uppgifter.body.tasks as Json[])[0]?.label === "Betala skatten" &&
+    "doneAt" in ((uppgifter.body.tasks as Json[])[0] ?? {}),
+  (uppgifter.body.tasks as Json[])[0],
+);
+check(
+  "en utomstående ser inga uppgifter",
+  ((await call("GET", `/v1/cases/${CASE_A}/tasks`, { token: bertilToken })).body.tasks as Json[]).length === 0,
+);
+
+const betalningar = await call("GET", `/v1/cases/${CASE_A}/payments`, { token: agnesToken });
+check("betalningarna hämtas", betalningar.status === 200 && (betalningar.body.payments as Json[]).length >= 1, betalningar.body);
+check("beloppet är ett tal, inte en sträng", typeof (betalningar.body.payments as Json[])[0]?.amount === "number");
+check(
+  "en utomstående ser inga betalningar",
+  ((await call("GET", `/v1/cases/${CASE_A}/payments`, { token: bertilToken })).body.payments as Json[]).length === 0,
+);
+
+const handlingar = await call("GET", `/v1/cases/${CASE_A}/documents`, { token: agnesToken });
+check("dokumenten hämtas", handlingar.status === 200 && (handlingar.body.documents as Json[]).length >= 1, handlingar.body);
+// storage_path är nyckeln till hinken. Den får aldrig ut till klienten:
+// vägen till innehållet går genom en signerad URL efter behörighetsprövning.
+check(
+  "dokumentets lagringssökväg läcker inte ut",
+  !JSON.stringify(handlingar.body).includes("storage") && !JSON.stringify(handlingar.body).includes(CASE_A + "/"),
+  handlingar.body,
+);
+check(
+  "en utomstående ser inga dokument",
+  ((await call("GET", `/v1/cases/${CASE_A}/documents`, { token: bertilToken })).body.documents as Json[]).length === 0,
+);
+
+const kbr = await call("GET", `/v1/cases/${CASE_A}/kbr`, { token: agnesToken });
+check("kontrollbalansbedömningen hämtas", kbr.status === 200 && kbr.body.status === "critical", kbr.body);
+const kbrUtan = await call("GET", `/v1/cases/${CASE_B}/kbr`, { token: bertilToken });
+check("ingen bedömning ger null, inte 404", kbrUtan.status === 200 && kbrUtan.body === null, kbrUtan.body);
+
+const meddelanden = await call("GET", `/v1/cases/${CASE_A}/messages`, { token: agnesToken });
+check("meddelandena hämtas", meddelanden.status === 200 && Array.isArray(meddelanden.body.messages), meddelanden.body);
+
 /* --- 6. Indata som inte duger --------------------------------------------- */
 
 const badUuid = await call("GET", "/v1/cases/inte-ett-id", { token: agnesToken });

@@ -604,6 +604,75 @@
         },
         "security": []
       }
+    },
+    "/cases/{caseId}/payments": {
+      "get": {
+        "operationId": "listPayments",
+        "summary": "Betalningarna i ärendet, med förfallodag",
+        "description": "Sorterade på förfallodag. Ett ärende utan åtkomst ger en TOM lista, inte ett fel - samma tystnad som resten av API:t, så svaret inte går att använda för att kartlägga vilka ärenden som finns.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/cases/{caseId}/messages": {
+      "get": {
+        "operationId": "listMessages",
+        "summary": "Grundtrådens meddelanden i ärendet",
+        "description": "Bara grundtråden (meddelanden utan tråd-id). Trådade meddelanden hämtas per tråd, och synligheten avgörs av radskyddet - inte av ett filter i API:t.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/cases/{caseId}/kbr": {
+      "get": {
+        "operationId": "getKbr",
+        "summary": "Senaste kontrollbalansbedömningen",
+        "description": "Svarar med null när ingen bedömning är gjord - det är ett giltigt svar om ärendet och inte ett fel, så 404 vore fel signal.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "webhooks": {

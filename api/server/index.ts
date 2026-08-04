@@ -132,6 +132,53 @@ const toEvent = (row: Record<string, unknown>) => ({
   occurredAt: iso(row.occurred_at),
 });
 
+const toTask = (row: Record<string, unknown>) => ({
+  id: row.id,
+  caseId: row.case_id,
+  label: row.label,
+  dueDate: iso(row.due_date),
+  doneAt: iso(row.done_at),
+  doneBy: row.done_by,
+  source: row.source,
+  createdAt: iso(row.created_at),
+  assignedTo: row.assigned_to,
+});
+
+const toDocument = (row: Record<string, unknown>) => ({
+  id: row.id,
+  caseId: row.case_id,
+  kind: row.kind,
+  fileName: row.file_name,
+  fileSize: Number(row.file_size),
+  mimeType: row.mime_type,
+  source: row.source,
+  reviewStatus: row.review_status,
+  createdAt: iso(row.created_at),
+  // storage_path lämnas AVSIKTLIGT ute: den är nyckeln till hinken, och
+  // vägen till innehållet går genom en signerad URL efter
+  // app.may_read_document() - aldrig genom att klienten får sökvägen.
+});
+
+const toPayment = (row: Record<string, unknown>) => ({
+  id: row.id,
+  caseId: row.case_id,
+  label: row.label,
+  amount: Number(row.amount),
+  category: row.category,
+  status: row.status,
+  dueDate: iso(row.due_date),
+  recurring: row.recurring,
+});
+
+const toMessage = (row: Record<string, unknown>) => ({
+  id: row.id,
+  caseId: row.case_id,
+  conversationId: row.conversation_id,
+  body: row.body,
+  authorUserId: row.author_user_id,
+  createdAt: iso(row.created_at),
+});
+
 /* --- Läshjälp -------------------------------------------------------------- */
 
 const str = (body: unknown, field: string, opts: { max?: number; required?: boolean } = {}): string => {
@@ -409,6 +456,80 @@ router.post("/v1/decisions/:decisionId/acknowledge-premise", async (req) => {
     await tx.query("select public.acknowledge_premise($1, $2)", [decisionId, observation]);
   });
   return { status: 200, body: { acknowledged: true } };
+});
+
+/* --- Översiktens data ------------------------------------------------------
+ *
+ * Ingen av frågorna nedan filtrerar på användare. Radskyddet gör urvalet,
+ * och att lägga en where-sats här ovanpå hade dolt ett trasigt radskydd
+ * bakom applikationen - felet hade slutat synas utan att sluta finnas.
+ * Ett ärende man inte når ger därför en tom lista, inte ett fel: samma
+ * tystnad som resten av produkten.
+ */
+
+const caseScoped = (
+  path: string,
+  query: string,
+  map: (row: Record<string, unknown>) => unknown,
+  key: string,
+) =>
+  router.get(path, async (req) => {
+    const caller = await authenticate(req);
+    const caseId = uuidParam(req, "caseId");
+    const rows = await withUser(caller.userId, async (tx) => {
+      const { rows } = await tx.query(query, [caseId]);
+      return rows;
+    });
+    return { status: 200, body: { [key]: rows.map(map) } };
+  });
+
+caseScoped(
+  "/v1/cases/:caseId/tasks",
+  "select * from public.case_tasks where case_id = $1 order by created_at asc",
+  toTask,
+  "tasks",
+);
+caseScoped(
+  "/v1/cases/:caseId/documents",
+  `select id, case_id, kind, file_name, file_size, mime_type, source, review_status, created_at
+     from public.case_documents where case_id = $1 order by created_at desc`,
+  toDocument,
+  "documents",
+);
+caseScoped(
+  "/v1/cases/:caseId/payments",
+  "select * from public.payments where case_id = $1 order by due_date asc",
+  toPayment,
+  "payments",
+);
+caseScoped(
+  // Grundtråden: meddelanden utan tråd-id. Trådade hämtas per tråd, och
+  // synligheten avgörs av radskyddet - inte av filtret här.
+  "/v1/cases/:caseId/messages",
+  `select id, case_id, conversation_id, body, author_user_id, created_at
+     from public.case_messages where case_id = $1 and conversation_id is null
+    order by created_at asc`,
+  toMessage,
+  "messages",
+);
+
+router.get("/v1/cases/:caseId/kbr", async (req) => {
+  const caller = await authenticate(req);
+  const caseId = uuidParam(req, "caseId");
+  const row = await withUser(caller.userId, async (tx) => {
+    const { rows } = await tx.query(
+      `select status, created_at from public.kbr_assessments
+        where case_id = $1 order by created_at desc limit 1`,
+      [caseId],
+    );
+    return rows[0] ?? null;
+  });
+  // Null och inte 404: "ingen bedömning gjord" är ett giltigt svar om
+  // ärendet, inte ett fel. 404 hade blandat ihop de två.
+  return {
+    status: 200,
+    body: row ? { status: row.status, createdAt: iso(row.created_at) } : null,
+  };
 });
 
 /* --- Servern --------------------------------------------------------------- */

@@ -118,8 +118,8 @@ i resurser:
 | E-postarbetaren | **Byggd.** TypeScript, bundlas med `npm run build:worker` |
 | Webbappen | **Byggd.** Noll externa anrop, verifierat (`test:external`, 9/9 sidor) |
 | Terraform för nät, databas, lagring, CDN, e-post, hemligheter, larm | **Skrivet** i `infra/` — `terraform fmt` går igenom |
-| **API:et: identitet, sessioner, ärenden, journal, beslut** | **Byggt.** `api/server/`, node:http med **ett** beroende (`pg`). `npm run build:api` bygger, `npm run test:api` kör 55 kontroller mot riktig Postgres — inklusive att identiteten inte läcker mellan samtidiga requests, och att journalens nyckelväg svarar i kontraktets form |
-| **API:et: resten av `DataPort`** | **Saknas.** Dokument, uppgifter, meddelanden, fakturering. Samma mönster som skivan ovan — det som var osäkert är avklarat |
+| **API:et: identitet, sessioner och översiktens data** | **Byggt.** `api/server/`, node:http med **ett** beroende (`pg`). Ärenden, journal, beslut, uppgifter, betalningar, dokumentmetadata, meddelanden och KBR. `npm run test:api` kör 67 kontroller mot riktig Postgres — inklusive att identiteten inte läcker mellan samtidiga requests, att journalens nyckelväg svarar i kontraktets form, och att en utomstående får TOMT på varje resurs |
+| **API:et: resten av `DataPort`** | **Saknas.** Skrivvägarna (uppgifter, meddelanden, dokument), fakturering, deltagare, katalog. Läsvägarna för översikten är täckta; resten är samma mönster igen |
 | **`awsAdapter` i klienten** | **Saknas.** Klienten pratar fortfarande PostgREST via Supabase-klienten. En adapter mot `DataPort` plus en rad i `src/data/index.ts` |
 | **Egen autentisering** | **Byggt.** Inloggning, sessioner och utloggning i `api/server/auth.ts`. KDF är `scrypt` ur Node själv, inte Argon2id: en nativ modul hade gett API:t en byggkedja att sitta fast i, och hashformatet bär sina parametrar så ett byte blir ett nytt prefix, inte en migrering |
 | **S3-signering** | `app.may_read_document()` klar, signeringskoden saknas |
