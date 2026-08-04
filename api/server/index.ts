@@ -90,16 +90,52 @@ const iso = (value: unknown): string | null => {
   return String(value);
 };
 
+/**
+ * Ärendet, HELT.
+ *
+ * Den här funktionen returnerade tidigare nio fält av trettio. Adaptern
+ * castar svaret rakt till CaseRecord, så ett utelämnat fält blir inte ett
+ * saknat värde utan ett LÖFTE SOM INTE HÅLLS: resten av produkten läser
+ * recommendationReasons[0] och canPayTax som om de fanns. Översikten
+ * kraschade på första raden i systemanalysen.
+ *
+ * Regeln som följer: den som lägger till ett fält i CaseRecord måste
+ * lägga till det här. tests/apiSpec.ts jämför de två listorna och faller
+ * annars - ett kontrakt som bara hålls av vaksamhet hålls inte.
+ */
+const asStringArray = (value: unknown): string[] =>
+  Array.isArray(value) ? value.filter((v): v is string => typeof v === "string") : [];
+
 const toCase = (row: Record<string, unknown>) => ({
   id: row.id,
   orgNumber: row.org_number,
   companyName: row.company_name,
+  employees: row.employees ?? null,
+  canPaySalary: row.can_pay_salary ?? null,
+  salaryAmount: row.salary_amount ?? null,
+  salaryDay: row.salary_day ?? null,
+  canPayTax: row.can_pay_tax ?? null,
+  taxAmount: row.tax_amount ?? null,
+  taxDay: row.tax_day ?? null,
+  canPayRent: row.can_pay_rent ?? null,
+  rentAmount: row.rent_amount ?? null,
+  rentDay: row.rent_day ?? null,
+  canPaySuppliers: row.can_pay_suppliers ?? null,
+  totalDebt: row.total_debt ?? null,
+  quickLiquidationValue: row.quick_liquidation_value ?? null,
+  recommendationType: row.recommendation_type ?? null,
+  recommendationTitle: row.recommendation_title ?? null,
+  recommendationDescription: row.recommendation_description ?? null,
+  // Listorna får ALDRIG vara undefined: läsaren gör [0] på dem.
+  recommendationReasons: asStringArray(row.recommendation_reasons),
+  recommendationNextSteps: asStringArray(row.recommendation_next_steps),
   createdAt: iso(row.created_at),
   updatedAt: iso(row.updated_at),
   closedAt: iso(row.closed_at),
-  healthMode: row.health_mode,
-  recommendationType: row.recommendation_type,
-  recommendationTitle: row.recommendation_title,
+  exitReason: row.exit_reason ?? null,
+  healthMode: row.health_mode ?? false,
+  planApprovedAt: iso(row.plan_approved_at),
+  planApprovedBy: row.plan_approved_by ?? null,
 });
 
 const toDecision = (row: Record<string, unknown>) => ({
@@ -292,8 +328,15 @@ router.get("/v1/cases", async (req) => {
   // filtrera här också dolde vi ett trasigt radskydd bakom applikationen.
   const rows = await withUser(caller.userId, async (tx) => {
     const { rows } = await tx.query(
-      `select id, org_number, company_name, created_at, updated_at, closed_at,
-              health_mode, recommendation_type, recommendation_title
+      `select id, org_number, company_name, employees,
+              can_pay_salary, salary_amount, salary_day,
+              can_pay_tax, tax_amount, tax_day,
+              can_pay_rent, rent_amount, rent_day,
+              can_pay_suppliers, total_debt, quick_liquidation_value,
+              recommendation_type, recommendation_title, recommendation_description,
+              recommendation_reasons, recommendation_next_steps,
+              created_at, updated_at, closed_at, exit_reason,
+              health_mode, plan_approved_at, plan_approved_by
          from public.cases order by created_at desc limit 100`,
     );
     return rows;
@@ -306,8 +349,15 @@ router.get("/v1/cases/:caseId", async (req) => {
   const caseId = uuidParam(req, "caseId");
   const row = await withUser(caller.userId, async (tx) => {
     const { rows } = await tx.query(
-      `select id, org_number, company_name, created_at, updated_at, closed_at,
-              health_mode, recommendation_type, recommendation_title
+      `select id, org_number, company_name, employees,
+              can_pay_salary, salary_amount, salary_day,
+              can_pay_tax, tax_amount, tax_day,
+              can_pay_rent, rent_amount, rent_day,
+              can_pay_suppliers, total_debt, quick_liquidation_value,
+              recommendation_type, recommendation_title, recommendation_description,
+              recommendation_reasons, recommendation_next_steps,
+              created_at, updated_at, closed_at, exit_reason,
+              health_mode, plan_approved_at, plan_approved_by
          from public.cases where id = $1`,
       [caseId],
     );

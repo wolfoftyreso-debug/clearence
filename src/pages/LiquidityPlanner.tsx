@@ -17,6 +17,7 @@ import { useScrollToTopOnChange } from "@/hooks/useScrollToTop";
 import { useAutosavedState } from "@/hooks/useAutosavedState";
 import { ResumeNotice } from "@/components/wizard/ResumeNotice";
 import { data } from "@/data";
+import { GuidedArrival } from "@/components/GuidedArrival";
 import {
   employerContribution,
   projectLiquidity,
@@ -495,6 +496,10 @@ const LiquidityPlanner = () => {
           </div>
         </div>
       </header>
+
+      <div className="container px-4 pt-4">
+        <GuidedArrival />
+      </div>
 
       {/* Progress */}
       <div className="bg-card border-b border-border">

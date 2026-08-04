@@ -64,6 +64,16 @@ export interface NextStep {
 }
 
 export interface CrisisAnalysis {
+  /**
+   * Hur mycket underlag bedömningen vilar på.
+   *
+   * "none" betyder att INGEN av betalningsfrågorna är besvarad. Då finns
+   * ingen bedömning att göra, och produkten säger det i stället för att
+   * gissa. Tidigare svarade den "din situation är pressad men inte akut,
+   * med rätt åtgärder finns goda chanser" på noll svar - ett påstående
+   * utan grund, motiverat med orden "utifrån dina svar".
+   */
+  basis: "complete" | "partial" | "none";
   type: RecommendationType;
   title: string;
   description: string;
@@ -124,8 +134,11 @@ export const analyseCrisis = (input: AnalysisInput): CrisisAnalysis => {
     totalDebt, quickLiquidationValue, employees,
   } = input;
 
-  const cannotPayCount = [canPaySalary, canPayTax, canPayRent, canPaySuppliers]
-    .filter((v) => v === false).length;
+  const answers = [canPaySalary, canPayTax, canPayRent, canPaySuppliers];
+  const cannotPayCount = answers.filter((v) => v === false).length;
+  const answeredCount = answers.filter((v) => v !== null).length;
+  const basis: CrisisAnalysis["basis"] =
+    answeredCount === 0 ? "none" : answeredCount === answers.length ? "complete" : "partial";
 
   const ratio = totalDebt > 0 ? quickLiquidationValue / totalDebt : null;
   const hasEmployees = employees !== "" && employees !== "0";
@@ -318,6 +331,35 @@ export const analyseCrisis = (input: AnalysisInput): CrisisAnalysis => {
     });
   }
 
+  /**
+   * KAPITALBRIST UTAN BETALNINGSPROBLEM.
+   *
+   * Skyldigheten att upprätta kontrollbalansräkning hänger på det egna
+   * kapitalet, inte på likviditeten. Ett bolag som betalar allt i tid men
+   * vars tillgångar täcker en bråkdel av skulderna är precis det fall där
+   * styrelsens personliga ansvar löper tyst - och tidigare sa systemet
+   * ingenting alls om det, eftersom flaggan nedan krävde att någon
+   * betalning FALLERAT.
+   *
+   * Täckningsgraden är en INDIKATION, inte en beräkning av eget kapital:
+   * den jämför snabbavyttringsvärde med total skuld, och tröskeln är satt
+   * lågt (under halva skulden) för att bara fånga de tydliga fallen.
+   * Flaggan säger därför "kan behöva prövas" och pekar på modulen som
+   * gör den riktiga bedömningen - den påstår inte att kapitalbrist
+   * föreligger.
+   */
+  const thinCoverage = ratio !== null && ratio < 0.5;
+  if (thinCoverage && type !== "bankruptcy" && solvency.indication !== "likely_insolvent") {
+    riskFlags.push({
+      id: "kbr-tackning",
+      severity: "warning",
+      title: "Kontrollbalansräkningen kan behöva prövas",
+      body:
+        "Tillgångarna täcker mindre än hälften av skulderna. Det säger inget säkert om det egna kapitalet, men skyldigheten att upprätta kontrollbalansräkning inträder redan vid skäl att ANTA att kapitalet understiger halva aktiekapitalet - alltså innan det syns i betalningarna. Gör bedömningen och datera den; ett daterat beslut är det som skyddar styrelsen.",
+      legalRef: LEGAL_REFS.controlBalanceSheet,
+    });
+  }
+
   if (type === "bankruptcy" || solvency.indication === "likely_insolvent") {
     riskFlags.push({
       id: "atervinning",
@@ -383,10 +425,55 @@ export const analyseCrisis = (input: AnalysisInput): CrisisAnalysis => {
       });
     }
     nextSteps.push({ text: "Se över fakturabelåning eller checkkredit för att jämna ut kassaflödet." });
+    if (thinCoverage) {
+      nextSteps.push({
+        text: "Gör kontrollbalansbedömningen - skyldigheten hänger på kapitalet, inte på likviditeten.",
+        urgent: true,
+      });
+    }
     nextSteps.push({ text: "Överväg att avyttra tillgångar som inte är kritiska för driften." });
   }
 
+  /**
+   * UTAN SVAR FINNS INGEN BEDÖMNING.
+   *
+   * Allt ovanför räknar på null som om det vore "ja" - och landar därför
+   * i "stabilisering" med orden "din situation är pressad men inte akut".
+   * Det är produktens grundregel bruten: ett beslutsunderlag som hittar
+   * på är sämre än inget. Här skrivs den slutsatsen över med sanningen.
+   *
+   * Fristerna och datumen behålls: de kommer ur betalningsdagarna och är
+   * sanna oavsett om frågorna besvarats. Det är BEDÖMNINGEN som saknar
+   * grund, inte kalendern.
+   */
+  if (basis === "none") {
+    return {
+      basis,
+      type,
+      title: "Underlaget räcker inte för en bedömning",
+      description:
+        "Ingen av frågorna om betalningsförmågan är besvarad, och utan dem går det inte att säga något om läget. Fyll i utvärderingen så räknas bedömningen fram ur dina svar - och går att följa steg för steg.",
+      urgency: "months",
+      solvency: {
+        indication: "no_indication",
+        explanation:
+          "Ingen bedömning av betalningsförmågan är gjord. Det betyder inte att läget är gott - det betyder att systemet inte vet.",
+      },
+      coverage,
+      reasons: [
+        "Frågorna om löner, skatt, hyra och leverantörer är obesvarade.",
+        "Utan dem saknas grunden både för obeståndsindikationen och för valet av väg.",
+      ],
+      riskFlags,
+      timeline,
+      nextSteps: [
+        { text: "Gör utvärderingen så att bedömningen vilar på dina siffror.", urgent: true },
+      ],
+    };
+  }
+
   return {
+    basis,
     type, title, description, urgency,
     solvency, coverage, reasons, riskFlags, timeline, nextSteps,
   };

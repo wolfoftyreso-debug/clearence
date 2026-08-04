@@ -18,6 +18,7 @@ import type {
 } from "@/data/types";
 import { Loader2, LockOpen, Mail, Phone, Globe, Check, X } from "lucide-react";
 import { format } from "date-fns";
+import { InvoiceSpecification } from "@/components/billing/InvoiceSpecification";
 import { sv } from "date-fns/locale";
 
 /**
@@ -198,13 +199,19 @@ const InvoiceRow = ({ invoice, charges }: { invoice: CustomerInvoiceRecord; char
       </button>
       {open && (
         <div className="border-t border-border p-3">
-          {spec.length === 0 ? (
-            <p className="text-xs text-muted-foreground">
-              Specifikationen för den här fakturan ligger utanför
-              användningsavgifterna (t.ex. plattformsavgiften).
+          {/* Fakturan i sin helhet: parter, moms, villkor och konto - och
+              de tre saker man faktiskt vill göra med den. Tidigare stod
+              här bara att specifikationen "låg utanför" när fakturan
+              saknade användningsavgifter, vilket är att svara på en fråga
+              med att säga att frågan inte hör hit. */}
+          <InvoiceSpecification invoice={invoice} />
+
+          {spec.length > 0 && (
+            <>
+            <p className="mt-4 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+              Underlaget rad för rad
             </p>
-          ) : (
-            <ul className="space-y-1">
+            <ul className="mt-1 space-y-1">
               {spec.map((charge) => (
                 <li key={charge.id} className="flex flex-wrap justify-between gap-2 text-xs">
                   <span className="text-muted-foreground">
@@ -217,6 +224,7 @@ const InvoiceRow = ({ invoice, charges }: { invoice: CustomerInvoiceRecord; char
                 </li>
               ))}
             </ul>
+            </>
           )}
         </div>
       )}

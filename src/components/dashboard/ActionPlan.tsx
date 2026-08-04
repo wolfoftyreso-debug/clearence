@@ -8,7 +8,31 @@ import type { CaseRecord } from "@/data/types";
 import type { TimelineEvent } from "@/lib/crisisAnalysis";
 import { matchProfessionals, playbookForTask, type TaskContext } from "@/lib/taskIntelligence";
 import { Link } from "react-router-dom";
-import { ArrowRight, CalendarClock, CheckCircle2, ChevronDown, ListTodo, Loader2, Plus, ListChecks } from "lucide-react";
+import { ArrowRight, CalendarClock, Check, CheckCircle2, ChevronDown, ListTodo, Loader2, Plus, ListChecks } from "lucide-react";
+import { destinationFor } from "@/lib/guidedArrival";
+
+/**
+ * Vad knappen heter.
+ *
+ * "Öppna" säger inget om vad som väntar. Verbet ska vara samma som i
+ * uppgiften, så att den som klickar vet att hen hamnar rätt - och den
+ * som inte vill göra saken nu slipper klicka för att ta reda på det.
+ */
+const CTA_LABEL: Record<string, string> = {
+  likviditet: "Gör prognosen",
+  kontrollbalans: "Gör bedömningen",
+  "kontakta-radgivare": "Hitta rådgivare",
+  underlag: "Ladda upp underlagen",
+  "verksam-atgard": "Läs vad som gäller",
+  anstand: "Läs om anståndet",
+  betalningsplan: "Se betalningarna",
+  finansiering: "Gör prognosen först",
+  personalen: "Läs om lönegarantin",
+  "selektiva-betalningar": "Läs vad som gäller",
+  avyttring: "Läs om ordningen",
+};
+
+const ctaLabel = (playbookId: string): string => CTA_LABEL[playbookId] ?? "Öppna";
 
 /**
  * Handlingsplanen: ärendets klockor och dess checklista, överst på
@@ -85,9 +109,9 @@ export const ActionPlan = ({ caseRecord, timeline }: ActionPlanProps) => {
     }
   }, [seeded, isLoading, tasks, caseRecord, queryClient]);
 
-  // Optimistiskt: rutan bockas i samma ögonblick som klicket, inte när
-  // omfrågningen hunnit runt. En kryssruta som inte reagerar på klicket
-  // läses som trasig, och nästa klick blir en dubbelväxling.
+  // Optimistiskt: knappen svarar i samma ögonblick som klicket, inte när
+  // omfrågningen hunnit runt. En knapp som inte reagerar läses som
+  // trasig, och nästa klick blir en dubbelkörning.
   const [pendingDone, setPendingDone] = useState<string | null>(null);
   const toggle = useMutation({
     mutationFn: ({ id, done }: { id: string; done: boolean }) => data.tasks.setDone(id, done),
@@ -295,40 +319,59 @@ export const ActionPlan = ({ caseRecord, timeline }: ActionPlanProps) => {
               <ul className="mt-2 space-y-1.5">
                 {open.map((task) => {
                   const playbook = playbookForTask(task.label, taskCtx);
+                  // Dörren in i verktyget. Samma källa som systemanalysens
+                  // rader, så att de aldrig pekar åt olika håll.
+                  const door = destinationFor(task.label, taskCtx, task.id);
                   const expanded = expandedTask === task.id;
                   const matches = playbook.offersMatching
                     ? matchProfessionals(caseRecord, professionals ?? [])
                     : [];
                   return (
                     <li key={task.id} className="rounded-md border border-border p-3">
-                      {/* Rubriken får hela radbredden; expandern och
-                          delegeringen bor i samma kolumn som etiketten -
-                          indraget kommer ur kompositionen, inte ur en
-                          marginal som härmar checkboxens geometri. En knapp
-                          som trängs bredvid en tvåradig rubrik var det
-                          rörigaste på hela mobilvyn - lugn slår densitet. */}
+                      {/* RADEN LEDER TILL HANDLING, inte till ett påstående.
+                          Tidigare var kryssrutan radens första element och
+                          därmed dess huvudsakliga erbjudande: den bad
+                          användaren INTYGA att något var gjort, innan hen
+                          fått hjälp att göra det. En kryssruta är rätt när
+                          uppgiften är trivial och fel när den är hela skälet
+                          att produkten finns.
+
+                          Nu är knappen som öppnar verktyget det primära, och
+                          "Markera som klar" ligger sekundärt bredvid - kvar,
+                          för allt går inte att göra här inne, men inte längre
+                          det första ögat möter. */}
                       <div className="flex items-start gap-3">
-                        <input
-                          id={`task-${task.id}`}
-                          type="checkbox"
-                          checked={pendingDone === task.id}
-                          disabled={toggle.isPending}
-                          onChange={() => toggle.mutate({ id: task.id, done: true })}
-                          className="mt-0.5 h-4 w-4 flex-shrink-0 rounded border-border accent-accent"
-                        />
                         <div className="min-w-0 flex-1">
-                        <label
-                          htmlFor={`task-${task.id}`}
-                          className="block cursor-pointer text-sm leading-relaxed text-foreground"
-                        >
+                        <p className="block text-sm font-medium leading-relaxed text-foreground">
                           {task.label}
-                        </label>
+                        </p>
+
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                          {door ? (
+                            <Button asChild variant="accent" size="sm">
+                              <Link to={door.href}>
+                                {ctaLabel(playbook.id)}
+                                <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                              </Link>
+                            </Button>
+                          ) : null}
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={toggle.isPending || pendingDone === task.id}
+                            onClick={() => toggle.mutate({ id: task.id, done: true })}
+                          >
+                            <Check className="h-4 w-4" aria-hidden="true" />
+                            {pendingDone === task.id ? "Klar" : "Markera som klar"}
+                          </Button>
+                        </div>
+
                       <button
                         type="button"
                         onClick={() => setExpandedTask(expanded ? null : task.id)}
                         aria-expanded={expanded}
                         aria-label={expanded ? "Stäng processen" : "Öppna processen"}
-                        className="mt-1.5 flex items-center gap-1 text-xs font-medium text-accent transition-colors hover:text-foreground"
+                        className="mt-2 flex items-center gap-1 text-xs font-medium text-accent transition-colors hover:text-foreground"
                       >
                         <ListChecks className="h-3.5 w-3.5" aria-hidden="true" />
                         Så gör du

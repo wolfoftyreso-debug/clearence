@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Search, Filter, Users, Briefcase, Scale, Calculator, CreditCard } from "lucide-react";
 import { WAITS, waitText } from "@/lib/advisor/prepare";
+import { GuidedArrival } from "@/components/GuidedArrival";
 
 type CategoryFilter = 'all' | 'konkursforvaltare' | 'rekonstruktor' | 'revisor' | 'affarsjurist' | 'kreditbolag';
 
@@ -120,6 +121,9 @@ const Marketplace = () => {
       <Header />
       
       <main className="pt-24 pb-16">
+        <div className="container px-4">
+          <GuidedArrival />
+        </div>
         <section className="container px-4 mb-12">
           <div className="max-w-2xl">
             <h1 className="font-display text-3xl text-foreground sm:text-4xl">

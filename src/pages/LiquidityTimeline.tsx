@@ -1,5 +1,8 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
+import { buildKeyFigures, figureById, type FigureId } from "@/lib/liquidityKeyFigures";
+import { KeyFigureDetail } from "@/components/liquidity/KeyFigureDetail";
+import { GuidedArrival } from "@/components/GuidedArrival";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -27,6 +30,7 @@ import {
   Plus,
   Loader2,
   ArrowRight,
+  Info,
 } from "lucide-react";
 import { ChartSlot } from "@/components/liquidity/ChartSlot";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -336,11 +340,34 @@ const LiquidityTimeline = () => {
     );
   };
 
+  const [openFigure, setOpenFigure] = useState<FigureId | null>(null);
+
   const isDataLoading = paymentsLoading || invoicesLoading;
+
+  /**
+   * Underlaget bakom nyckeltalen. Byggs ur SAMMA värden som rutorna
+   * visar - en förklaring som räknar om på egen hand kan säga något
+   * annat än talet den förklarar, och då är den värre än ingen.
+   */
+  const keyFigures = useMemo(
+    () =>
+      buildKeyFigures({
+        startingBalance,
+        payments,
+        horizonDays: HORIZON_DAYS,
+        finalBalance: stats.finalBalance,
+        daysToNegative: stats.daysToNegative,
+        scenarioLabel: scenarioConfig[activeScenario].label,
+        incomingUnpaidTotal: invoiceStats.incomingTotal,
+        incomingUnpaidCount: invoiceStats.incomingCount,
+      }),
+    [startingBalance, payments, stats, activeScenario, invoiceStats],
+  );
 
   return (
     <DashboardShell title="Likviditet">
       <div className="mx-auto max-w-5xl space-y-6">
+          <GuidedArrival />
           {!latestCase ? (
             <div className="text-center py-16 px-4 rounded-md bg-card border border-border shadow-soft">
               <h2 className="text-xl font-display font-semibold text-foreground mb-2">Ingen plan ännu</h2>
@@ -429,7 +456,12 @@ const LiquidityTimeline = () => {
             </CardContent>
           </Card>
 
-          {/* Stats row */}
+          {/* Nyckeltalen. Varje tal går att öppna: ett tal utan underlag är
+              ett påstående, och "Runway 8 dagar" är ett av de mest
+              ingripande påståenden produkten gör. Se
+              src/lib/liquidityKeyFigures.ts. Kassan är inmatad och
+              förblir ett fält - man ska kunna rätta den utan omvägar -
+              men får en egen knapp för underlaget. */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <Card className="border-border">
               <CardContent className="p-4">
@@ -446,37 +478,67 @@ const LiquidityTimeline = () => {
                   />
                   <span className="text-sm text-muted-foreground">kr</span>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => setOpenFigure(openFigure === "kassa" ? null : "kassa")}
+                  aria-expanded={openFigure === "kassa"}
+                  className="mt-1 text-xs font-medium text-accent underline-offset-4 hover:underline"
+                >
+                  Så räknas den
+                </button>
               </CardContent>
             </Card>
-            <Card className="border-border">
-              <CardContent className="p-4">
-                <p className="text-xs text-muted-foreground mb-1">Väntande betalningar</p>
-                <p className="text-2xl font-display font-semibold text-foreground">
-                  {stats.totalPending.toLocaleString('sv-SE')} kr
-                </p>
-              </CardContent>
-            </Card>
-            <Card className={`border-border ${stats.finalBalance < 0 ? 'bg-destructive/5' : ''}`}>
-              <CardContent className="p-4">
-                <p className="text-xs text-muted-foreground mb-1">Prognos {HORIZON_DAYS} dagar</p>
-                <p className={`text-2xl font-display font-semibold ${
-                  stats.finalBalance < 0 ? 'text-destructive' : 'text-foreground'
-                }`}>
-                  {stats.finalBalance.toLocaleString('sv-SE')} kr
-                </p>
-              </CardContent>
-            </Card>
-            <Card className={`border-border ${stats.daysToNegative !== null ? 'bg-warning/5' : 'bg-emerald-500/5'}`}>
-              <CardContent className="p-4">
-                <p className="text-xs text-muted-foreground mb-1">Runway</p>
-                <p className={`text-2xl font-display font-semibold ${
-                  stats.daysToNegative !== null ? 'text-warning' : 'text-emerald-600'
-                }`}>
-                  {stats.runway}
-                </p>
-              </CardContent>
-            </Card>
+
+            {(["vantande", "prognos", "runway"] as FigureId[]).map((id) => {
+              const figure = figureById(keyFigures, id);
+              if (!figure) return null;
+              const negative =
+                (id === "prognos" && stats.finalBalance < 0) ||
+                (id === "runway" && stats.daysToNegative !== null);
+              const tone =
+                id === "prognos" && stats.finalBalance < 0
+                  ? "text-destructive"
+                  : id === "runway"
+                    ? stats.daysToNegative !== null
+                      ? "text-warning"
+                      : "text-emerald-600"
+                    : "text-foreground";
+              const background =
+                id === "prognos" && stats.finalBalance < 0
+                  ? "bg-destructive/5"
+                  : id === "runway"
+                    ? stats.daysToNegative !== null
+                      ? "bg-warning/5"
+                      : "bg-emerald-500/5"
+                    : "";
+              return (
+                <Card key={id} className={`border-border ${background}`}>
+                  <button
+                    type="button"
+                    onClick={() => setOpenFigure(openFigure === id ? null : id)}
+                    aria-expanded={openFigure === id}
+                    className="w-full rounded-md p-4 text-left transition-colors hover:bg-secondary/40"
+                  >
+                    <p className="mb-1 flex items-center gap-1 text-xs text-muted-foreground">
+                      {figure.label}
+                      <Info className="h-3 w-3 flex-shrink-0" aria-hidden="true" />
+                    </p>
+                    <p className={`text-2xl font-display font-semibold ${tone}`}>{figure.value}</p>
+                    <p className="mt-0.5 text-[11px] text-muted-foreground">
+                      {negative ? "Se vad talet bygger på" : "Så räknas den"}
+                    </p>
+                  </button>
+                </Card>
+              );
+            })}
           </div>
+
+          {openFigure && figureById(keyFigures, openFigure) && (
+            <KeyFigureDetail
+              figure={figureById(keyFigures, openFigure)!}
+              onClose={() => setOpenFigure(null)}
+            />
+          )}
 
           {/* Chart */}
           <Card className="border-border">

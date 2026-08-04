@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { GuidedArrival } from "@/components/GuidedArrival";
 import { DashboardShell } from "@/components/dashboard/DashboardShell";
 import { CaseDocuments } from "@/components/documents/CaseDocuments";
 import { TaxAccountImport } from "@/components/documents/TaxAccountImport";
@@ -51,6 +52,7 @@ const DashboardDocuments = () => {
 
   return (
     <DashboardShell title="Dokument">
+      <GuidedArrival />
       {isLoading ? (
         <div className="flex justify-center py-16">
           <Loader2 className="h-6 w-6 animate-spin text-accent" aria-hidden="true" />

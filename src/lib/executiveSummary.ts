@@ -76,6 +76,20 @@ const sek = (value: number): string =>
 const HORIZON_ORDER: ActionHorizon[] = ["omedelbart", "idag", "denna vecka", "kan vänta"];
 
 export const buildExecutiveSummary = (input: SummaryInput): ExecutiveSummary => {
+  /**
+   * Utan svar finns ingen bedömning att sammanfatta.
+   *
+   * Rapporten räknade tidigare på obesvarade frågor som om de vore ja,
+   * och skrev "läget är hanterbart" om ett ärende där ingenting var
+   * ifyllt. Samma fel som i analysen, ett lager upp - och det syntes
+   * först när båda kördes i samma genomgång.
+   */
+  const answered = [
+    input.caseRecord.canPaySalary,
+    input.caseRecord.canPayTax,
+    input.caseRecord.canPayRent,
+    input.caseRecord.canPaySuppliers,
+  ].filter((v) => v !== null).length;
   const { caseRecord: c, timeline, tasks, members, kbr, documentCount, now } = input;
 
   const name = c.companyName ?? c.orgNumber;
@@ -112,7 +126,9 @@ export const buildExecutiveSummary = (input: SummaryInput): ExecutiveSummary => 
     critical: "Kritiskt läge",
   }[severity];
 
-  const headline = {
+  const headline = answered === 0
+    ? `Det finns ingen bedömning av ${name} än - frågorna om betalningarna är obesvarade.`
+    : {
     stable: `Läget för ${name} är hanterbart, och de närmaste stegen handlar om att behålla kontrollen.`,
     elevated: `${name} har ansträngd likviditet. Läget är hanterbart, men några beslut bör inte skjutas upp.`,
     serious: `Situationen för ${name} är allvarlig. Med rätt ordning på besluten finns handlingsutrymme kvar.`,
@@ -123,7 +139,13 @@ export const buildExecutiveSummary = (input: SummaryInput): ExecutiveSummary => 
   const situation: string[] = [];
   {
     const parts: string[] = [];
-    if (cannotPay === 0) {
+    if (answered === 0) {
+      // Noll svar är inte samma sak som noll problem. Att skriva det förra
+      // som om det vore det senare är att uppfinna ett lugn.
+      parts.push(
+        "Ingen av frågorna om betalningsförmågan är besvarad. Det som står nedan bygger därför bara på datumen, inte på någon bedömning av läget.",
+      );
+    } else if (cannotPay === 0) {
       parts.push(
         `Enligt de uppgifter som är registrerade kan bolaget i nuläget hantera sina löpande betalningar.`,
       );
@@ -148,7 +170,7 @@ export const buildExecutiveSummary = (input: SummaryInput): ExecutiveSummary => 
     situation.push(parts.join(" "));
     if (c.recommendationTitle) {
       situation.push(
-        `Utvärderingens samlade bedömning: ${c.recommendationTitle.toLowerCase().replace(/\.$/, "")}. ${c.recommendationReasons[0] ?? ""}`.trim(),
+        `Utvärderingens samlade bedömning: ${c.recommendationTitle.toLowerCase().replace(/\.$/, "")}. ${c.recommendationReasons?.[0] ?? ""}`.trim(),
       );
     }
   }

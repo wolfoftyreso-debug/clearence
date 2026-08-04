@@ -161,6 +161,117 @@ export const playbookForTask = (label: string, ctx: TaskContext): TaskPlaybook =
     };
   }
 
+  if (/gör utvärderingen|fyll i utvärderingen/i.test(label)) {
+    return {
+      id: "utvardering",
+      why: "Bedömningen räknas fram ur svaren om löner, skatt, hyra och leverantörer. Utan dem finns ingen bedömning - bara en tom mall.",
+      basis: basisFor(ctx),
+      consequence:
+        "Ett ärende utan underlag ser ut som ett lugnt ärende. Det är den farligaste sortens tystnad i den här produkten.",
+      steps: [{ label: "Svara på frågorna om betalningarna", href: "/wizard", done: false }],
+      complete: false,
+      offersMatching: false,
+    };
+  }
+
+  if (/kontrollbalansbedömning|kontrollbalansräkning/i.test(label)) {
+    const done = ctx.kbr !== null;
+    return {
+      id: "kontrollbalans",
+      why: "Skyldigheten att upprätta kontrollbalansräkning hänger på det egna kapitalet, inte på likviditeten - den kan alltså ha inträtt medan bolaget fortfarande betalar allt i tid.",
+      basis: basisFor(ctx),
+      consequence:
+        "Görs ingen bedömning kan styrelseledamöterna bli personligt ansvariga för skulder som uppkommer därefter. Ett daterat beslut är det som bryter den kedjan.",
+      steps: [{ label: "Gör kontrollbalansbedömningen", href: "/kbr", done }],
+      complete: done,
+      offersMatching: false,
+    };
+  }
+
+  if (/förhandla betalningsplaner|kontakta nyckelleverantör/i.test(label)) {
+    // "Klart" är inte att ha ringt - det är att den nya överenskommelsen
+    // står i ärendet. En uppskjuten betalning är den enda spår systemet
+    // kan se, och därför det enda som får räknas.
+    const postponed = ctx.payments.some((p) => p.status === "postponed");
+    return {
+      id: "betalningsplan",
+      why: "Förhandlingsläget är bäst medan betalningarna fortfarande sköts. Den som hör av sig först får villkor; den som hör av sig efter en utebliven betalning får krav.",
+      basis: basisFor(ctx),
+      consequence:
+        "Uteblivna betalningar utan förvarning gör motparten till borgenär i stället för till samarbetspartner - och en borgenär som känner sig förbigången driver in hårdare.",
+      steps: [
+        { label: "Läs vad som gäller de första veckorna", href: "/kunskap/likviditetskris-forsta-steg", done: false },
+        { label: "Se vilka betalningar som ligger närmast", href: "/dashboard#frister", done: false },
+        { label: "Registrera den nya planen: markera betalningen som uppskjuten", href: "/dashboard#frister", done: postponed },
+      ],
+      complete: postponed,
+      offersMatching: false,
+    };
+  }
+
+  if (/fakturabelåning|checkkredit/i.test(label)) {
+    return {
+      id: "finansiering",
+      why: "Fakturabelåning och checkkredit ändrar inte hur mycket bolaget tjänar - de flyttar pengarna dit där de behövs i tiden. Det är rätt verktyg mot en tillfällig svacka och fel verktyg mot en varaktig förlust.",
+      basis: basisFor(ctx),
+      consequence:
+        "Extern finansiering som tas UTAN en prognos löser en månad och fördjupar nästa. Ordningen spelar roll: prognosen först, samtalet med banken sedan.",
+      steps: [
+        { label: "Gör prognosen först - den visar hur stort behovet är", href: "/likviditetsplan", done: ctx.payments.length > 0 },
+        { label: "Ta upp finansieringen med någon som kan siffrorna", href: "/marketplace", done: false },
+      ],
+      complete: false,
+      offersMatching: true,
+    };
+  }
+
+  if (/informera personalen/i.test(label)) {
+    return {
+      id: "personalen",
+      why: "De anställda omfattas av den statliga lönegarantin, men skyddet gäller först när konkursen är beslutad. Det är den skillnaden som avgör vad man ärligt kan lova på ett möte.",
+      basis: basisFor(ctx),
+      consequence:
+        "Personal som får veta av någon annan slutar lyssna på ledningen - och i en avveckling är det ledningens ord som håller ihop de sista veckorna.",
+      steps: [
+        { label: "Läs vad lönegarantin täcker, och när", href: "/kunskap/lonegaranti", done: false },
+      ],
+      complete: false,
+      offersMatching: false,
+    };
+  }
+
+  if (/selektiva betalningar/i.test(label)) {
+    return {
+      id: "selektiva-betalningar",
+      why: "Betalningar till enskilda borgenärer nära en konkurs kan komma att gås igenom i efterhand. Det gäller även betalningar som kändes självklara när de gjordes.",
+      basis: basisFor(ctx),
+      consequence:
+        "En betalning som görs nu kan behöva förklaras senare - av dig, i efterhand, utan möjlighet att göra om den.",
+      steps: [
+        { label: "Läs vad som gäller kring betalningar före en konkurs", href: "/kunskap/konkurs", done: false },
+        { label: "Stäm av med en jurist innan nästa betalning", href: "/marketplace", done: advisorInCase(ctx) },
+      ],
+      complete: false,
+      offersMatching: true,
+    };
+  }
+
+  if (/avyttra tillgångar/i.test(label)) {
+    return {
+      id: "avyttring",
+      why: "Tillgångar som inte behövs för driften binder pengar som behövs för den. Vad som är kritiskt avgörs av verksamheten, inte av bokfört värde.",
+      basis: basisFor(ctx),
+      consequence:
+        "En försäljning nära en konkurs kan komma att prövas i efterhand, särskilt till närstående eller till underpris. Dokumentera hur priset sattes.",
+      steps: [
+        { label: "Läs om ordningen de första veckorna", href: "/kunskap/likviditetskris-forsta-steg", done: false },
+        { label: "Lägg in effekten i likviditetsplanen", href: "/likviditetsplan", done: ctx.payments.length > 0 },
+      ],
+      complete: false,
+      offersMatching: false,
+    };
+  }
+
   // Okänd uppgift: ärlig grundvy, inga påhittade steg.
   return {
     id: "generisk",

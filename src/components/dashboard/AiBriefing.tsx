@@ -3,6 +3,8 @@ import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { data } from "@/data";
 import { buildExecutiveSummary, type ActionHorizon } from "@/lib/executiveSummary";
+import { destinationFor } from "@/lib/guidedArrival";
+import type { TaskContext } from "@/lib/taskIntelligence";
 import { GlossaryText, SimplerLanguageSuggestion, useLanguageLevel } from "@/components/language/GlossaryText";
 import { LANGUAGE_LEVELS, setLanguageLevel } from "@/lib/language";
 import {
@@ -117,6 +119,26 @@ export const AiBriefing = ({ caseRecord, timeline }: AiBriefingProps) => {
 
   const horizons: ActionHorizon[] = ["omedelbart", "idag", "denna vecka", "kan vänta"];
 
+  /**
+   * Rekommendationen är en dörr.
+   *
+   * Destinationen kommer ur spelboken, inte ur en egen tabell: annars kan
+   * systemanalysen och handlingsplanen peka åt olika håll för samma
+   * mening. Saknar spelboken steg finns ingen dörr, och raden förblir
+   * text - ett klick som landar fel är värre än ingen länk alls.
+   */
+  const taskCtx: TaskContext = {
+    caseRecord,
+    members: members ?? [],
+    documents: documents ?? [],
+    payments: payments ?? [],
+    kbr: kbr ?? null,
+  };
+  const doorFor = (label: string) => {
+    const task = (tasks ?? []).find((t) => !t.doneAt && t.label === label);
+    return destinationFor(label, taskCtx, task?.id);
+  };
+
   return (
     <section id="systemanalys" className="mb-6 scroll-mt-20 rounded-md border border-border bg-card p-5 shadow-soft">
       <div className="flex flex-wrap items-center gap-2">
@@ -207,14 +229,41 @@ export const AiBriefing = ({ caseRecord, timeline }: AiBriefingProps) => {
       {compact && (
         <>
           <ul className="mt-4 space-y-1.5">
-            {toCompact(summary).topActions.map((action) => (
-              <li key={`kort-${action.label}`} className="flex items-start gap-3 rounded-md border border-border p-2.5">
-                <span className="mt-0.5 w-16 flex-shrink-0 break-words text-[11px] font-bold uppercase leading-tight tracking-wide text-muted-foreground sm:w-24">
-                  {action.horizon}
-                </span>
-                <GlossaryText as="span" text={action.label} className="min-w-0 flex-1 text-sm font-medium text-foreground" />
-              </li>
-            ))}
+            {toCompact(summary).topActions.map((action) => {
+              const door = doorFor(action.label);
+              const row = (
+                <>
+                  <span className="mt-0.5 w-16 flex-shrink-0 break-words text-[11px] font-bold uppercase leading-tight tracking-wide text-muted-foreground sm:w-24">
+                    {action.horizon}
+                  </span>
+                  <GlossaryText
+                    as="span"
+                    text={action.label}
+                    className="min-w-0 flex-1 text-sm font-medium text-foreground"
+                  />
+                  {door && (
+                    <ArrowRight
+                      className="mt-0.5 h-4 w-4 flex-shrink-0 text-accent"
+                      aria-hidden="true"
+                    />
+                  )}
+                </>
+              );
+              return (
+                <li key={`kort-${action.label}`}>
+                  {door ? (
+                    <Link
+                      to={door.href}
+                      className="flex items-start gap-3 rounded-md border border-border p-2.5 transition-colors hover:border-accent hover:bg-secondary/40"
+                    >
+                      {row}
+                    </Link>
+                  ) : (
+                    <div className="flex items-start gap-3 rounded-md border border-border p-2.5">{row}</div>
+                  )}
+                </li>
+              );
+            })}
           </ul>
           <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1">
             <button

@@ -104,5 +104,42 @@ const decision = spec.components.schemas.Decision as { properties: { premise: { 
 check("beslutets premiss är dokumenterad", decision.properties.premise.description.includes("Omprövningsvillkoret"));
 check("ordet AI förekommer inte", !/\bAI\b/i.test(raw));
 
+/* --- Ärendet som API:et lämnar ifrån sig måste vara HELT ----------------- */
+
+/*
+ * Adaptern castar API-svaret rakt till CaseRecord. Ett fält som saknas i
+ * serialiseraren blir därför inte ett tomt värde utan ett löfte som inte
+ * hålls - och läsaren som gör recommendationReasons[0] kraschar. Det tog
+ * ner hela översikten en gång; kontrollen finns för att det inte ska
+ * kunna hända igen.
+ */
+const apiSource = readFileSync(join(process.cwd(), "api/server/index.ts"), "utf8");
+const toCaseBlock = apiSource.slice(
+  apiSource.indexOf("const toCase = (row"),
+  apiSource.indexOf("const toDecision = (row"),
+);
+const typesSource = readFileSync(join(process.cwd(), "src/data/types.ts"), "utf8");
+const caseBlock = typesSource.slice(
+  typesSource.indexOf("export interface CaseRecord {"),
+  typesSource.indexOf("export type NewCase"),
+);
+const contractFields = [...caseBlock.matchAll(/^\s{2}(\w+)\??:/gm)].map((m) => m[1]);
+check("CaseRecord-fälten hittades", contractFields.length > 20, contractFields.length);
+
+const missing = contractFields.filter((f) => !new RegExp(`\\b${f}:`).test(toCaseBlock));
+check(
+  "API:ets toCase bär hela CaseRecord",
+  missing.length === 0,
+  `saknas: ${missing.join(", ")}`,
+);
+
+// Listorna får aldrig vara undefined - läsaren indexerar dem.
+for (const listField of ["recommendationReasons", "recommendationNextSteps"]) {
+  check(
+    `${listField} normaliseras till en array`,
+    new RegExp(`${listField}:\\s*asStringArray`).test(toCaseBlock),
+  );
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);

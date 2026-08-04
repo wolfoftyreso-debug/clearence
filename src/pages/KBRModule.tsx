@@ -34,6 +34,7 @@ import { useAutosavedState } from "@/hooks/useAutosavedState";
 import { ResumeNotice } from "@/components/wizard/ResumeNotice";
 import { SaveWithAccountPrompt } from "@/components/SaveWithAccountPrompt";
 import { WAITS, waitText } from "@/lib/advisor/prepare";
+import { GuidedArrival } from "@/components/GuidedArrival";
 
 // KBR Status types
 type KBRStatus = 'not_required' | 'warning' | 'required' | 'critical';
@@ -920,6 +921,10 @@ const KBRModule = () => {
           </div>
         </div>
       </header>
+
+      <div className="container px-4 pt-4">
+        <GuidedArrival />
+      </div>
 
       {/* Progress */}
       <div className="bg-card border-b border-border">
