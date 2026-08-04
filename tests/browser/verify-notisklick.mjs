@@ -1,4 +1,15 @@
-/** Notisklick ska alltid göra något synligt: navigera och rulla till målet. */
+/**
+ * Notisklockan.
+ *
+ * Två löften prövas här, och båda gick förlorade i den första versionen:
+ *
+ *  1. Ett klick ska göra något SYNLIGT - navigera och rulla till målet.
+ *  2. Siffran ska gå att BETA AV. Klockan räknade tidigare samma tal i
+ *     evighet, och en räknare som aldrig går ner är en dekoration.
+ *
+ * Plus etiketten: den sa "väntar på ditt svar" om rader som själva skrev
+ * att inget krävde åtgärd i dag.
+ */
 import pw from "/opt/node22/lib/node_modules/playwright/index.js";
 const { chromium } = pw;
 const BASE = "http://127.0.0.1:4310";
@@ -46,6 +57,66 @@ await page.waitForTimeout(1300);
 const backOnDashboard = page.url().includes("/dashboard") && !page.url().includes("dokument");
 const analysTop2 = await page.evaluate(() => document.getElementById("systemanalys")?.getBoundingClientRect().top ?? 9999);
 check("från annan sida: navigerar och rullar", backOnDashboard && analysTop2 < 250, `${page.url()} top=${Math.round(analysTop2)}`);
+
+/* --- Siffran: ärlig, och möjlig att beta av ------------------------------- */
+
+// Ny flik utan minne: allt är oläst igen.
+const fresh = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+fresh.setDefaultTimeout(30000);
+await fresh.goto(`${BASE}/login`, { waitUntil: "domcontentloaded" });
+await fresh.waitForTimeout(800);
+await fresh.click('button:has-text("Demo – Företag")');
+await fresh.waitForTimeout(2000);
+await fresh.goto(`${BASE}/dashboard`, { waitUntil: "domcontentloaded" });
+await fresh.waitForTimeout(1800);
+
+const bell = fresh.locator("button[aria-label^='Notiser']");
+const label = () => bell.getAttribute("aria-label");
+
+const before = await label();
+check("etiketten talar om KRAV, inte om meddelanden", /kräver dig/.test(before ?? ""), before ?? "");
+check("etiketten säger inte 'väntar på ditt svar'", !/väntar på ditt svar/.test(before ?? ""), before ?? "");
+
+await bell.click();
+await fresh.waitForTimeout(500);
+const rows = await fresh.locator("ul li button").count();
+const badge = Number((before ?? "").match(/(\d+)/)?.[1] ?? "1");
+// Raden om NÄSTA frist säger själv att inget krävs i dag. Den ska visas
+// men inte räknas - listan är alltså längre än siffran.
+check("listan är längre än siffran", rows > badge, `rader=${rows} siffra=${badge}`);
+check(
+  "raden som inte räknas visas ändå",
+  /inget kräver åtgärd i dag/i.test(await fresh.innerText("body")),
+);
+
+// Kvittera en rad: siffran ska gå ner.
+await fresh.locator("ul li button").filter({ hasText: "Läget kräver" }).first().click();
+await fresh.waitForTimeout(1200);
+const after = await label();
+const badgeAfter = Number((after ?? "").match(/(\d+)/)?.[1] ?? "0");
+check("ett klick betar av raden", badgeAfter < badge || /inget kräver dig/.test(after ?? ""), `${before} -> ${after}`);
+
+// Raden ligger kvar - klockan får inte bli en plats där en frist går att
+// gömma genom att klicka bort den.
+await bell.click();
+await fresh.waitForTimeout(500);
+check(
+  "den kvitterade raden ligger kvar i listan",
+  (await fresh.locator("ul li button").count()) === rows,
+);
+
+// Markera alla: siffran ska bli noll.
+const markAll = fresh.locator("button:has-text('Markera alla som lästa')");
+if ((await markAll.count()) > 0) {
+  await markAll.first().click();
+  await fresh.waitForTimeout(700);
+}
+check("markera alla nollar siffran", /inget kräver dig just nu/.test((await label()) ?? ""), (await label()) ?? "");
+
+// Minnet överlever en omladdning - annars är det inget minne.
+await fresh.reload({ waitUntil: "domcontentloaded" });
+await fresh.waitForTimeout(1800);
+check("minnet överlever en omladdning", /inget kräver dig just nu/.test((await label()) ?? ""), (await label()) ?? "");
 
 await browser.close();
 console.log(`\n${passed} passed, ${failed} failed`);

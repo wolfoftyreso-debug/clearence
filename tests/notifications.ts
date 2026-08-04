@@ -7,7 +7,23 @@
  * lika effektivt som en som tiger om frister.
  */
 
-import { buildNotifications, categoryOf, filterNotifications, type NotificationInput } from "../src/lib/notifications";
+import {
+  buildNotifications,
+  categoryOf,
+  filterNotifications,
+  signatureOf,
+  type NotificationInput,
+  type NotificationItem,
+} from "../src/lib/notifications";
+import {
+  badgeCount,
+  bellLabel,
+  forgetRead,
+  isRead,
+  markAllRead,
+  markRead,
+  readSignatures,
+} from "../src/lib/notificationsRead";
 import type { TimelineEvent } from "../src/lib/crisisAnalysis";
 
 let passed = 0;
@@ -191,6 +207,108 @@ check("flera tilldelade: antalet i rubriken",
   assignedMany[0].href === "/dashboard#frister");
 check("tilldelningsnotisen hör till samarbetet",
   categoryOf(assignedMany[0].id) === "samarbete");
+
+/* --- siffran räknar bara det som KRÄVER något ----------------------------- */
+
+// Klockan sa tidigare "3 meddelanden väntar på ditt svar" om en lista
+// där en av raderna själv skrev "inget kräver åtgärd i dag". En siffra
+// som räknar sådant lär användaren att siffran inte betyder något.
+const withUpcoming = buildNotifications({
+  ...base(),
+  crisis: { urgency: "immediate", title: "Konkurs bör övervägas" },
+  timeline: [event("2026-08-20", "Skatt/moms")],
+});
+check("lägesnotisen och nästa frist visas båda", withUpcoming.length === 2, String(withUpcoming.length));
+check(
+  "nästa frist RÄKNAS inte - den säger själv att inget krävs",
+  withUpcoming.filter((n) => n.demandsAction).length === 1,
+  JSON.stringify(withUpcoming.map((n) => [n.id, n.demandsAction])),
+);
+check(
+  "raden som inte räknas är just den om nästa frist",
+  withUpcoming.find((n) => !n.demandsAction)?.id.startsWith("frist-nasta") === true,
+);
+
+const acceptedInvite = buildNotifications({
+  ...base(),
+  invitations: [
+    {
+      id: "i1",
+      caseId: "c1",
+      email: "revisor@byra.se",
+      role: "advisor",
+      createdAt: "2026-08-01T09:00:00Z",
+      expiresAt: "2026-09-01T09:00:00Z",
+      acceptedAt: "2026-08-01T10:00:00Z",
+      revokedAt: null,
+    } as NotificationInput["invitations"][number],
+  ],
+});
+check("ett deltagarsvar visas", acceptedInvite.length === 1);
+check("ett deltagarsvar kräver ingenting", acceptedInvite[0].demandsAction === false);
+
+const passedNow = buildNotifications({ ...base(), timeline: [event("2026-07-28", "Skatteinbetalning")] });
+check("en passerad frist kräver något", passedNow[0].demandsAction === true);
+
+/* --- minnet: siffran ska gå att beta av ----------------------------------- */
+
+// Testet kör i node utan webbläsare. En minimal lagring räcker: modulen
+// ska klara både att den finns och att den inte gör det.
+const store: Record<string, string> = {};
+(globalThis as unknown as { localStorage: Storage }).localStorage = {
+  getItem: (k: string) => store[k] ?? null,
+  setItem: (k: string, v: string) => { store[k] = String(v); },
+  removeItem: (k: string) => { delete store[k]; },
+  clear: () => { for (const k of Object.keys(store)) delete store[k]; },
+  key: () => null,
+  length: 0,
+} as Storage;
+(globalThis as unknown as { window: { dispatchEvent: () => boolean } }).window = {
+  dispatchEvent: () => true,
+};
+
+forgetRead();
+check("utan minne är allt oläst", badgeCount(withUpcoming) === 1, String(badgeCount(withUpcoming)));
+
+const demanding = withUpcoming.find((n) => n.demandsAction) as NotificationItem;
+markRead(demanding);
+check("en kvitterad rad räknas inte längre", badgeCount(withUpcoming) === 0);
+check("men den ligger kvar i listan", withUpcoming.length === 2);
+check("och den är märkt som läst", isRead(demanding));
+
+// Upptrappningen: samma id, ny allvarsgrad = ny information.
+const escalated: NotificationItem = { ...demanding, tone: "critical", title: "Läget har förvärrats" };
+check("samma id men ny text ger nytt fingeravtryck", signatureOf(escalated) !== signatureOf(demanding));
+check("upptrappningen är oläst igen", !isRead(escalated));
+check("och räknas igen", badgeCount([escalated]) === 1);
+
+// Markera alla: även det som inte räknas, annars ser listan oavklarad ut.
+forgetRead();
+markAllRead(withUpcoming);
+check("markera alla kvitterar hela listan", withUpcoming.every((n) => isRead(n)));
+check("markera alla nollar siffran", badgeCount(withUpcoming) === 0);
+
+forgetRead();
+check("glöm minnet visar allt igen", readSignatures().size === 0 && badgeCount(withUpcoming) === 1);
+
+// Gallringen: minnet får inte växa utan gräns och slå ut sig självt.
+const many: NotificationItem[] = Array.from({ length: 250 }, (_, i) => ({
+  id: `x-${i}`, tone: "info" as const, title: `T${i}`, body: "b", href: "/", demandsAction: true,
+}));
+markAllRead(many);
+check("minnet gallras vid taket", readSignatures().size <= 200, String(readSignatures().size));
+check("det senaste är kvar", isRead(many[249]));
+check("det äldsta är bortgallrat", !isRead(many[0]));
+
+/* --- etiketten stämmer med siffran ---------------------------------------- */
+
+check("noll: etiketten lovar inget", bellLabel(0) === "Notiser: inget kräver dig just nu");
+check("en: singular", bellLabel(1) === "Notiser: en sak kräver dig");
+check("flera: plural med tal", bellLabel(4) === "Notiser: 4 saker kräver dig");
+check(
+  "etiketten säger aldrig 'väntar på ditt svar' om något som inte gör det",
+  ![0, 1, 5].some((n) => /väntar på ditt svar/.test(bellLabel(n))),
+);
 
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

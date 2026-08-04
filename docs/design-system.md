@@ -114,6 +114,41 @@ syfte som inte bara upprepar nästa steg, att varje övergång faktiskt är
 inkopplad någonstans, och att inget naket väntebesked skrivs utanför
 `prepare.ts`.
 
+## Notisklockan
+
+Siffran på klockan räknar **olästa saker som kräver något av användaren**.
+Två villkor, och båda behövs:
+
+* **Kräver något.** Klockan sa tidigare *"3 meddelanden väntar på ditt
+  svar"* om en lista där en av raderna själv skrev *"inget kräver åtgärd i
+  dag"*. En siffra som räknar sådant lär användaren att siffran inte
+  betyder något - och då är den värdelös just den dag den betyder allt.
+  Varje notis bär därför `demandsAction`. Raderna som inte räknas **visas
+  fortfarande**; att veta att nästa frist ligger om åtta dagar är
+  värdefullt, det är bara inte ett krav.
+* **Oläst.** Ett klick kvitterar raden. Utan det stod siffran kvar i
+  evighet, och en räknare som inte går att beta av är en dekoration.
+
+Tre regler som håller kvitteringen ärlig:
+
+1. **Kvitteringen hänger på radens fingeravtryck, inte på dess id.** En
+   frist som går från *"om tre dagar"* till *"förfaller idag"* har samma
+   id men är ny information, och blir oläst igen. Att kvittera en notis
+   en gång ska inte tysta hela dess upptrappning.
+2. **Ingenting döljs.** En läst rad ligger kvar i listan, nedtonad.
+   Klockan får aldrig bli en plats där en frist går att gömma genom att
+   klicka bort den.
+3. **Ingen tyst avhuggning.** Listan visade tidigare åtta rader medan
+   siffran räknade alla - den som hade tolv fick aldrig veta att fyra
+   fanns. Listan rullar i stället.
+
+Minnet är per enhet, som resten av notisvalen, och går att släppa under
+Inställningar. Ett val som inte går att ta tillbaka är en fälla, särskilt
+när det man kvitterade bort kan vara en frist.
+
+Reglerna: `src/lib/notificationsRead.ts`. Vakterna: `tests/notifications.ts`
+och `tests/browser/verify-notisklick.mjs`.
+
 ## Regeln bakom reglerna
 
 Skalan finns för att en sida ska kännas komponerad, inte staplad.

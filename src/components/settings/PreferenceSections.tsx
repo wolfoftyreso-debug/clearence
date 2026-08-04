@@ -19,6 +19,7 @@ import {
   OPTIONAL_CATEGORIES,
   setNotificationPref,
 } from "@/lib/notifications";
+import { forgetRead } from "@/lib/notificationsRead";
 import { CheckCircle2, Download, Loader2, LogOut } from "lucide-react";
 
 /**
@@ -145,6 +146,7 @@ export const ActiveCaseSection = () => {
 
 export const NotificationSection = () => {
   const [prefs, setPrefs] = useState(getNotificationPrefs);
+  const [forgotten, setForgotten] = useState(false);
 
   return (
     <WizardCard>
@@ -175,6 +177,32 @@ export const NotificationSection = () => {
             </span>
           </label>
         ))}
+      </div>
+
+      {/* Minnet går att släppa. En kvittering är ett val, och ett val som
+          inte går att ta tillbaka är en fälla - särskilt i en produkt där
+          det man kvitterade bort kan vara en frist. */}
+      <div className="mt-4 border-t border-border pt-3">
+        <p className="text-xs leading-relaxed text-muted-foreground">
+          Klockan minns vad du kvitterat, på den här enheten. Trappas något upp - en frist
+          som går från "om tre dagar" till "förfaller idag" - räknas det som nytt och dyker
+          upp igen.
+        </p>
+        <button
+          type="button"
+          onClick={() => {
+            forgetRead();
+            setForgotten(true);
+          }}
+          className="mt-2 text-sm font-medium text-accent underline-offset-4 hover:underline"
+        >
+          Visa alla notiser igen
+        </button>
+        {forgotten && (
+          <span className="ml-2 text-xs text-muted-foreground" role="status">
+            Minnet är rensat.
+          </span>
+        )}
       </div>
     </WizardCard>
   );

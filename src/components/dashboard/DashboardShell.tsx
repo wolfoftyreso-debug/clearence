@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -7,6 +7,15 @@ import { data } from "@/data";
 import { billingMessage, billingState } from "@/lib/billing";
 import { paymentAccounts } from "@/lib/company";
 import { buildNotifications, filterNotifications } from "@/lib/notifications";
+import {
+  READ_EVENT,
+  badgeCount,
+  bellLabel,
+  isRead,
+  markAllRead,
+  markRead,
+  readSignatures,
+} from "@/lib/notificationsRead";
 import { analysisInputFromCase } from "@/lib/caseAnalysis";
 import { analyseCrisis } from "@/lib/crisisAnalysis";
 import type { UserRole } from "@/data/types";
@@ -275,16 +284,25 @@ const NotificationBell = () => {
     pendingProfileClaims: (profileClaims ?? []).filter((c) => c.status === "pending").length,
     now: new Date(),
   }));
-  const count = notifications.length;
+  // Siffran är OLÄST och KRÄVER något - se src/lib/notificationsRead.ts.
+  // Läsmängden ligger i tillstånd så att en kvittering syns direkt;
+  // händelsen fångar kvitteringar gjorda i en annan flik.
+  const [read, setRead] = useState(readSignatures);
+  useEffect(() => {
+    const refresh = () => setRead(readSignatures());
+    window.addEventListener(READ_EVENT, refresh);
+    return () => window.removeEventListener(READ_EVENT, refresh);
+  }, []);
+
+  const count = badgeCount(notifications, read);
+  const unreadItems = notifications.filter((n) => !isRead(n, read));
 
   return (
     <div className="relative">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        aria-label={
-          count > 0 ? `Notiser: ${count} meddelanden väntar på ditt svar` : "Notiser"
-        }
+        aria-label={bellLabel(count)}
         aria-expanded={open}
         className="relative rounded-md p-2 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
       >
@@ -298,21 +316,47 @@ const NotificationBell = () => {
 
       {open && (
         <div className="panel-reveal absolute right-0 top-full z-50 mt-1 w-80 max-w-[calc(100vw-2rem)] rounded-md border border-border bg-card p-2 shadow-medium">
-          <p className="px-2 py-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Notiser
-          </p>
-          {count === 0 ? (
+          <div className="flex items-baseline justify-between gap-2 px-2 py-1">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Notiser
+            </p>
+            {unreadItems.length > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  // Kvitterar ALLT som visas, inte bara det som räknas:
+                  // annars ligger de olästa informationsraderna kvar och
+                  // ser oavklarade ut fast siffran är noll.
+                  markAllRead(notifications);
+                  setRead(readSignatures());
+                }}
+                className="text-xs font-medium text-accent underline-offset-4 hover:underline"
+              >
+                Markera alla som lästa
+              </button>
+            )}
+          </div>
+          {notifications.length === 0 ? (
             <p className="px-2 py-3 text-sm text-muted-foreground">
               Inget kräver dig just nu. Frister, taggade meddelanden,
               deltagarsvar och driftlarm dyker upp här.
             </p>
           ) : (
+            /* Ingen avhuggning. Listan visade tidigare åtta rader medan
+               siffran räknade alla - och den som hade tolv fick aldrig
+               veta att fyra fanns. En lista som rullar är ärligare än en
+               som tystnar. */
             <ul className="max-h-96 overflow-y-auto">
-              {notifications.slice(0, 8).map((n) => (
+              {notifications.map((n) => (
                 <li key={n.id}>
                   <button
                     type="button"
                     onClick={() => {
+                      // Klicket ÄR kvitteringen: den som gått dit har
+                      // sett saken. Trappas läget upp senare får raden
+                      // ett nytt fingeravtryck och blir oläst igen.
+                      markRead(n);
+                      setRead(readSignatures());
                       setOpen(false);
                       // En notis vars mål är sidan man redan står på måste
                       // ändå göra något synligt: ankaret rullar till rätt
@@ -334,7 +378,9 @@ const NotificationBell = () => {
                         );
                       }
                     }}
-                    className="w-full rounded-md px-2 py-2 text-left transition-colors hover:bg-secondary"
+                    className={`w-full rounded-md px-2 py-2 text-left transition-colors hover:bg-secondary ${
+                      isRead(n, read) ? "opacity-55" : ""
+                    }`}
                   >
                     <span
                       className={`block text-sm font-medium ${

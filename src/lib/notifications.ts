@@ -21,7 +21,31 @@ export interface NotificationItem {
   title: string;
   body: string;
   href: string;
+  /**
+   * Räknas raden i klockans siffra?
+   *
+   * Bara det som faktiskt KRÄVER något av användaren. Klockan sa tidigare
+   * "3 meddelanden väntar på ditt svar" om en lista där en av raderna
+   * själv skrev "inget kräver åtgärd i dag" - och en siffra som räknar
+   * sådant lär användaren att siffran inte betyder något. Då är den
+   * värdelös just den dag den betyder allt.
+   *
+   * Raderna som inte räknas visas fortfarande. Att veta att nästa frist
+   * ligger om åtta dagar är värdefullt; det är bara inte ett krav.
+   */
+  demandsAction: boolean;
 }
+
+/**
+ * Radens fingeravtryck: identitet PLUS det som gör den angelägen.
+ *
+ * Läst-status hänger på den här, inte bara på id:t. En frist som går
+ * från "om tre dagar" till "förfaller idag" har samma id men är ny
+ * information - och ska därför bli oläst igen. Att kvittera en notis
+ * en gång ska inte tysta hela dess upptrappning.
+ */
+export const signatureOf = (item: NotificationItem): string =>
+  `${item.id}|${item.tone}|${item.title}`;
 
 export interface NotificationInput {
   caseRecord: CaseRecord | null;
@@ -57,6 +81,7 @@ export const buildNotifications = (input: NotificationInput): NotificationItem[]
     items.push({
       id: "laget-akut",
       tone: "critical",
+      demandsAction: true,
       title: "Läget kräver omedelbara åtgärder",
       body: `Systemanalysen bedömer: ${input.crisis.title}.`,
       href: "/dashboard#systemanalys",
@@ -64,6 +89,7 @@ export const buildNotifications = (input: NotificationInput): NotificationItem[]
   } else if (input.crisis?.urgency === "weeks") {
     items.push({
       id: "laget-veckor",
+      demandsAction: true,
       tone: "warning",
       title: "Läget kräver åtgärder inom veckor",
       body: `Systemanalysen bedömer: ${input.crisis.title}.`,
@@ -79,6 +105,7 @@ export const buildNotifications = (input: NotificationInput): NotificationItem[]
       nearFrist = true;
       items.push({
         id: `frist-passerad-${event.iso}-${event.label}`,
+        demandsAction: true,
         tone: "critical",
         title: `Passerad frist: ${event.label.toLowerCase()}`,
         body: `Datumet passerade ${countdown.label} utan registrerad åtgärd.`,
@@ -88,6 +115,7 @@ export const buildNotifications = (input: NotificationInput): NotificationItem[]
       nearFrist = true;
       items.push({
         id: `frist-idag-${event.iso}-${event.label}`,
+        demandsAction: true,
         tone: "critical",
         title: `Förfaller idag: ${event.label.toLowerCase()}`,
         body: "Sista dagen att agera eller dokumentera beslutet.",
@@ -97,6 +125,7 @@ export const buildNotifications = (input: NotificationInput): NotificationItem[]
       nearFrist = true;
       items.push({
         id: `frist-snart-${event.iso}-${event.label}`,
+        demandsAction: true,
         tone: "warning",
         title: `${event.label} ${countdown.label}`,
         body: "Planera åtgärden nu - handlingsutrymmet krymper med datumet.",
@@ -115,6 +144,9 @@ export const buildNotifications = (input: NotificationInput): NotificationItem[]
     if (upcoming) {
       items.push({
         id: `frist-nasta-${upcoming.event.iso}-${upcoming.event.label}`,
+        // Raden säger själv "inget kräver åtgärd i dag". Då får den
+        // inte räknas som ett krav.
+        demandsAction: false,
         tone: "info",
         title: `Nästa frist: ${upcoming.event.label.toLowerCase()} ${upcoming.countdown.label}`,
         body: "Bevakas i tidslinjen - inget kräver åtgärd i dag.",
@@ -127,6 +159,7 @@ export const buildNotifications = (input: NotificationInput): NotificationItem[]
   if (input.kbr && (input.kbr.status === "required" || input.kbr.status === "critical")) {
     items.push({
       id: "kbr-laget",
+      demandsAction: true,
       tone: "critical",
       title: input.kbr.status === "critical" ? "Kontrollbalans: kritisk" : "Kontrollbalansräkning krävs",
       body: "Bedömningen visar kapitalbrist. Protokollför styrelsens beslut och följ stämmospåret.",
@@ -140,6 +173,7 @@ export const buildNotifications = (input: NotificationInput): NotificationItem[]
     const n = input.assignedOpenTasks!;
     items.push({
       id: "mention-uppgifter-tilldelade",
+      demandsAction: true,
       tone: "warning",
       title: n === 1 ? "En uppgift är tilldelad dig" : `${n} uppgifter är tilldelade dig`,
       body: "Öppna handlingsplanen och bocka av när de är gjorda.",
@@ -151,6 +185,7 @@ export const buildNotifications = (input: NotificationInput): NotificationItem[]
   for (const mention of input.mentions) {
     items.push({
       id: `mention-${mention.messageId}`,
+      demandsAction: true,
       tone: "warning",
       title: `${mention.authorName ?? "Någon"} väntar på ditt svar`,
       body: mention.conversationTitle ? `I ${mention.conversationTitle}: ${mention.body}` : mention.body,
@@ -165,6 +200,8 @@ export const buildNotifications = (input: NotificationInput): NotificationItem[]
     if (days <= 7) {
       items.push({
         id: `invit-accept-${invitation.id}`,
+        // Ett svar som redan kommit kräver ingenting av mottagaren.
+        demandsAction: false,
         tone: "info",
         title: `${invitation.email} tackade ja`,
         body: "Deltagaren är nu inne i ärendet och ser samma underlag som du.",
@@ -177,6 +214,7 @@ export const buildNotifications = (input: NotificationInput): NotificationItem[]
   if (input.failedEmails.length > 0) {
     items.push({
       id: "drift-utskick",
+      demandsAction: true,
       tone: "critical",
       title: `${input.failedEmails.length} utskick har misslyckats`,
       body: "Mejl som inte gått fram väntar på omskick i driftvyn.",
@@ -186,6 +224,7 @@ export const buildNotifications = (input: NotificationInput): NotificationItem[]
   if (input.newContactMessages > 0) {
     items.push({
       id: "drift-inkorg",
+      demandsAction: true,
       tone: "warning",
       title: `${input.newContactMessages} nya meddelanden i inkorgen`,
       body: "Någon har hört av sig via kontaktformuläret.",
@@ -195,6 +234,7 @@ export const buildNotifications = (input: NotificationInput): NotificationItem[]
   if (input.pendingApplications > 0) {
     items.push({
       id: "drift-ansokningar",
+      demandsAction: true,
       tone: "info",
       title: `${input.pendingApplications} rådgivare väntar på besked`,
       body: "Ansökningar att granska i driftvyn.",
@@ -204,6 +244,7 @@ export const buildNotifications = (input: NotificationInput): NotificationItem[]
   if (input.pendingProfileClaims > 0) {
     items.push({
       id: "drift-anspråk",
+      demandsAction: true,
       tone: "info",
       title: `${input.pendingProfileClaims} profilanspråk att granska`,
       body: "Någon säger sig företräda en förifylld katalogprofil.",
