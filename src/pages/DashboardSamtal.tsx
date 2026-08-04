@@ -48,7 +48,7 @@ import { countdownTo } from "@/lib/actionPlan";
 import type { AdvisorSessionRecord } from "@/data/types";
 import { useInlineReport } from "@/components/reports/useInlineReport";
 import { buildInvoiceDocument, invoiceFromCustomerRecord } from "@/lib/reports/invoiceDocuments";
-import { ArrowRight, Compass, FileCheck2, FileText, Gavel, RotateCcw, Send } from "lucide-react";
+import { ArrowRight, ChevronDown, Compass, FileCheck2, FileText, Gavel, RotateCcw, Send } from "lucide-react";
 
 /* --- Conversation UI-blocken: rätt medium för budskapet -------------------- */
 
@@ -58,22 +58,37 @@ const SNAPSHOT_DOT: Record<SnapshotRow["tone"], string> = {
   success: "bg-success",
 };
 
-/** Lägesbilden: områden med ton och not - prioritering man ser, inte läser.
-    Medvetet PLATTA rader (inga kortramar): det här är nuläge att läsa, inte
-    knappar att klicka. Handlingarna bor under "Det viktigaste nu" och ser
-    ut som länkar - blanda aldrig ihop de två uttrycken. */
+/**
+ * Lägesbilden: områden med ton och not.
+ *
+ * Det här är NULÄGE ATT LÄSA. Handlingarna bor under "Det viktigaste nu"
+ * och ser klickbara ut - de två uttrycken får aldrig likna varandra.
+ *
+ * Tre saker fick tidigare raderna att se klickbara ut, och alla tre är
+ * borta nu:
+ *
+ *  1. Noten var `text-muted-foreground`, som i den här paletten är
+ *     blågrå (hue 220) - alltså nästan accentens kulör. Blå text läser
+ *     som länk. Nu neutral mörk.
+ *  2. `divide-y` gav raderna formen av en lista man tappar i. Borta.
+ *  3. Blocket saknade egen yta och svävade i samma vita fält som de
+ *     klickbara raderna direkt under. Nu en egen, ramlös läsyta.
+ *
+ * `<dl>` och inte `<ul>`: det ÄR uppgift och värde, och en definitions-
+ * lista säger det både för skärmläsaren och för den som läser koden.
+ */
 const SnapshotList = ({ rows }: { rows: SnapshotRow[] }) => (
-  <ul className="divide-y divide-border/60">
+  <dl className="cursor-default space-y-2 rounded-md bg-secondary/50 p-3.5">
     {rows.map((row) => (
-      <li key={row.label} className="flex items-start gap-2.5 py-2">
+      <div key={row.label} className="flex items-start gap-2.5">
         <span className={`mt-1.5 h-2 w-2 flex-shrink-0 rounded-full ${SNAPSHOT_DOT[row.tone]}`} aria-hidden="true" />
-        <span className="min-w-0 flex-1">
-          <span className="text-sm font-medium text-foreground">{row.label}</span>
-          <span className="text-sm text-muted-foreground"> – {row.note}</span>
-        </span>
-      </li>
+        <div className="min-w-0 flex-1 text-sm leading-relaxed">
+          <dt className="inline font-semibold text-foreground">{row.label}</dt>
+          <dd className="inline text-foreground/75"> – {row.note}</dd>
+        </div>
+      </div>
     ))}
-  </ul>
+  </dl>
 );
 
 /** Mätaren: stapel + tal, för det som mäts. */
@@ -560,6 +575,11 @@ const DashboardSamtal = () => {
     () => (caseSnapshot ? premiseFlags(decisions ?? [], caseSnapshot.facts) : []),
     [decisions, caseSnapshot],
   );
+  /** Besluten som redan har en egen fråga längst upp i vyn. */
+  const flaggedDecisionIds = useMemo(
+    () => new Set(flags.map((f) => f.decisionId)),
+    [flags],
+  );
   const acknowledge = useMutation({
     mutationFn: ({ id, observation }: { id: string; observation: string }) =>
       data.dialogue.acknowledgePremise(id, observation),
@@ -693,6 +713,10 @@ const DashboardSamtal = () => {
                   {caseSnapshot && (
                     <div className="mt-5 space-y-5">
                       <div>
+                        {/* Rubrikerna bär skillnaden i FÄRG, inte bara i ord:
+                            nuläget är dämpat (något att läsa), handlingarna
+                            är i accent (något att göra). Två sektioner som
+                            ser likadana ut läses som samma sorts sak. */}
                         <div className="flex items-baseline justify-between gap-3">
                           <h3 className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
                             Läget just nu
@@ -711,9 +735,12 @@ const DashboardSamtal = () => {
                           ut - accentram, accentsiffra och alltid synlig pil.
                           Nuläget ovanför är medvetet platt; håll kontrasten. */}
                       <div>
-                        <h3 className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
-                          Det viktigaste nu
-                        </h3>
+                        <div className="flex items-baseline justify-between gap-3">
+                          <h3 className="text-[11px] font-bold uppercase tracking-wide text-accent">
+                            Det viktigaste nu
+                          </h3>
+                          <span className="text-xs text-muted-foreground">att göra härnäst</span>
+                        </div>
                         <ol className="mt-2 space-y-1.5">
                           {caseSnapshot.priorities.map((item, i) => (
                             <li key={item.label}>
@@ -735,7 +762,7 @@ const DashboardSamtal = () => {
                       </div>
 
                       {caseSnapshot.coverageRatio !== null && (
-                        <details className="rounded-md border border-border">
+                        <details className="group rounded-md border border-border">
                           <summary className="flex cursor-pointer items-center justify-between gap-3 p-3 [&::-webkit-details-marker]:hidden">
                             <span className="min-w-0">
                               <span className="block text-sm font-medium text-foreground">Visa analys</span>
@@ -743,7 +770,13 @@ const DashboardSamtal = () => {
                                 Skuldtäckningen som stapel, direkt här i samtalet
                               </span>
                             </span>
-                            <span className="text-sm font-medium text-accent" aria-hidden="true">Öppna</span>
+                            {/* Chevron, inte ordet "Öppna": panelen fälls ut
+                                HÄR i samtalet, och "Öppna" i accentfärg läser
+                                som en länk till en annan sida. */}
+                            <ChevronDown
+                              className="h-4 w-4 flex-shrink-0 text-accent transition-transform group-open:rotate-180"
+                              aria-hidden="true"
+                            />
                           </summary>
                           <div className="px-3 pb-3">
                             <MeterBar
@@ -763,7 +796,7 @@ const DashboardSamtal = () => {
                           Transparens är skillnaden mellan en arbetsmodell
                           och en övervakningsakt. */}
                       {workingModel && (
-                        <details className="rounded-md border border-border">
+                        <details className="group rounded-md border border-border">
                           <summary className="flex cursor-pointer items-center justify-between gap-3 p-3 [&::-webkit-details-marker]:hidden">
                             <span className="min-w-0">
                               <span className="block text-sm font-medium text-foreground">
@@ -773,7 +806,13 @@ const DashboardSamtal = () => {
                                 Arbetsmodellen jag utgår ifrån – med källa för varje uppgift
                               </span>
                             </span>
-                            <span className="text-sm font-medium text-accent" aria-hidden="true">Öppna</span>
+                            {/* Chevron, inte ordet "Öppna": panelen fälls ut
+                                HÄR i samtalet, och "Öppna" i accentfärg läser
+                                som en länk till en annan sida. */}
+                            <ChevronDown
+                              className="h-4 w-4 flex-shrink-0 text-accent transition-transform group-open:rotate-180"
+                              aria-hidden="true"
+                            />
                           </summary>
                           <div className="space-y-3 px-3 pb-3">
                             {workingModel.map((section) => (
@@ -807,8 +846,12 @@ const DashboardSamtal = () => {
               )}
 
               {/* Minnet: det senaste aktiva beslutet följs upp mot sin
-                  premiss. En rådgivare som följer bolaget - ingen chatbot. */}
-              {entries.length === 0 && !checkInDone && activeDecision && (
+                  premiss. En rådgivare som följer bolaget - ingen chatbot.
+                  MEN: har omprövningsbevakningen redan flaggat just det
+                  beslutet ställs frågan där, ovanför samtalet, med det
+                  konkreta skälet. Två rutor som frågar om samma beslut i
+                  samma vy gör båda otydliga - den specifika vinner. */}
+              {entries.length === 0 && !checkInDone && activeDecision && !flaggedDecisionIds.has(activeDecision.id) && (
                 <div className="mt-4 rounded-md border border-accent/30 bg-accent/5 p-4">
                   <p className="text-sm leading-relaxed text-foreground">
                     {decisionCheckIn(activeDecision)}

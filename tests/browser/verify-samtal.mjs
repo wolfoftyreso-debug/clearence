@@ -91,6 +91,57 @@ check("avslutet lovar kontinuitet", /börjar vi där vi slutade/i.test(body));
 // 4b. Minnet: CLEARANCE följer upp beslutet mot premissen vid nästa besök.
 await page.goto(`${BASE}/dashboard/samtal`, { waitUntil: "domcontentloaded" });
 await page.waitForTimeout(1500);
+// 4c. CTA kontra NULÄGE, mätt på den FÄRSKA vyn.
+//
+// Lägesbilden och handlingarna visas bara när samtalet är tomt, så
+// kontrollen måste ligga här och inte mitt i en pågående dialog - första
+// versionen av den här mätningen hittade fel <dl> och blev grön av fel
+// skäl. Selektorerna utgår därför från rubrikerna, inte från "första
+// elementet av sorten".
+const distinction = await page.evaluate(() => {
+  const headings = [...document.querySelectorAll("h3")];
+  const lage = headings.find((h) => /läget just nu/i.test(h.textContent ?? ""));
+  const viktigast = headings.find((h) => /det viktigaste nu/i.test(h.textContent ?? ""));
+  // Lägesblocket är sektionen som rubriken "Läget just nu" sitter i.
+  const lageBlock = lage?.closest("div")?.parentElement ?? null;
+  const dl = lageBlock?.querySelector("dl") ?? null;
+  const dd = dl?.querySelector("dd") ?? null;
+  const handlingsBlock = viktigast?.closest("div")?.parentElement ?? null;
+  const handling = handlingsBlock?.querySelector("ol a") ?? null;
+  return {
+    hittadeBlocken: !!dl && !!handling,
+    nulageHarInteraktivForalder: !!dl?.closest("a, button"),
+    nulageHarInteraktivtBarn: !!dl?.querySelector("a, button"),
+    nulageCursor: dl ? getComputedStyle(dl).cursor : null,
+    nulageHarEgenYta: dl ? getComputedStyle(dl).backgroundColor !== "rgba(0, 0, 0, 0)" : false,
+    nulageHarAvdelare: !!dl && dl.className.includes("divide-y"),
+    notFarg: dd ? getComputedStyle(dd).color : null,
+    handlingsrubrikFarg: viktigast ? getComputedStyle(viktigast).color : null,
+    lagesrubrikFarg: lage ? getComputedStyle(lage).color : null,
+    handlingArLank: handling?.tagName === "A" && !!handling.getAttribute("href"),
+    handlingCursor: handling ? getComputedStyle(handling).cursor : null,
+  };
+});
+check("både lägesbilden och handlingarna finns i vyn", distinction.hittadeBlocken, distinction);
+check("lägesbilden ligger inte i något klickbart", !distinction.nulageHarInteraktivForalder);
+check("lägesbilden innehåller inget klickbart", !distinction.nulageHarInteraktivtBarn);
+check("lägesbilden har läsmarkör, inte handpekare", distinction.nulageCursor === "default", distinction.nulageCursor);
+check("lägesbilden har en egen läsyta", distinction.nulageHarEgenYta);
+check("lägesbilden ser inte ut som en tappbar lista", !distinction.nulageHarAvdelare);
+// Kärnan i klagomålet: nulägestexten fick inte ha länkarnas kulör.
+check(
+  "nulägestexten har inte accentens färg",
+  !!distinction.notFarg && distinction.notFarg !== distinction.handlingsrubrikFarg,
+  [distinction.notFarg, distinction.handlingsrubrikFarg],
+);
+check(
+  "rubrikerna skiljer läsa från göra",
+  !!distinction.lagesrubrikFarg && distinction.lagesrubrikFarg !== distinction.handlingsrubrikFarg,
+  [distinction.lagesrubrikFarg, distinction.handlingsrubrikFarg],
+);
+check("handlingarna är riktiga länkar", distinction.handlingArLank);
+check("handlingarna har handpekare", distinction.handlingCursor === "pointer", distinction.handlingCursor);
+
 body = await page.innerText("body");
 check("CLEARANCE följer upp beslutet", /Är det fortfarande planen\?/.test(body) && /150 000 kr/.test(body));
 await page.click('button:has-text("Ja, planen står fast")');
@@ -172,15 +223,30 @@ check("analysempanelen finns i samtalet", /Visa analys/.test(body));
 check("CLEARANCE har namn i rubriken", /CLEARANCE – din krisrådgivare/i.test(body));
 check("lägesbilden har rubrik och källa", /Läget just nu/i.test(body) && /ur ärendets registrerade uppgifter/i.test(body));
 check("Det viktigaste nu är numrerat", /Det viktigaste nu/i.test(body) && (await page.locator('ol a:has-text("kontrollbalansbedömningen"), ol a:has-text("handlingsplanen"), ol a:has-text("pengarna räcker")').count()) > 0);
-// CTA mot nuläge: lägesraderna är platta (inte klickbara kort), medan
-// prioriteterna bär accentram och pil - det ska SYNAS vad som är handling.
-const snapshotBordered = await page.evaluate(() => {
+// CTA mot nuläge: lägesraderna bär inga kortsignaler (ram, skugga),
+// medan prioriteterna har accentram och pil - det ska SYNAS vad som är
+// handling.
+//
+// Regeln är skärpt sedan förra ronden: RAM och SKUGGA är det som säger
+// "kort att klicka på", och de är fortfarande förbjudna här. En dämpad
+// BAKGRUND är däremot tillåten och är just det som skiljer läsytan från
+// den vita ytan där handlingarna bor - utan den svävade lägesbilden i
+// samma fält som knappraderna, vilket var hela klagomålet.
+const snapshotChrome = await page.evaluate(() => {
   const heading = [...document.querySelectorAll("h3")].find((h) => /Läget just nu/i.test(h.textContent ?? ""));
-  const list = heading?.closest("div")?.parentElement?.querySelector("ul");
-  if (!list) return null;
-  return [...list.querySelectorAll("li")].some((li) => getComputedStyle(li).borderTopWidth !== "0px" && getComputedStyle(li).borderLeftWidth !== "0px");
+  const block = heading?.closest("div")?.parentElement?.querySelector("dl");
+  if (!block) return null;
+  const nodes = [block, ...block.querySelectorAll(":scope > div")];
+  const harRam = nodes.some((n) => {
+    const st = getComputedStyle(n);
+    return st.borderTopWidth !== "0px" || st.borderLeftWidth !== "0px";
+  });
+  const harSkugga = nodes.some((n) => getComputedStyle(n).boxShadow !== "none");
+  return { harRam, harSkugga };
 });
-check("nuläget är platt - inga kortramar att vilja klicka på", snapshotBordered === false, String(snapshotBordered));
+check("lägesbilden hittades för ram-kontrollen", snapshotChrome !== null, String(snapshotChrome));
+check("nuläget har ingen kortram att vilja klicka på", snapshotChrome?.harRam === false, JSON.stringify(snapshotChrome));
+check("nuläget har ingen kortskugga", snapshotChrome?.harSkugga === false, JSON.stringify(snapshotChrome));
 const ctaAccent = await page.locator('ol a[class*="border-accent"]').count();
 check("prioriteterna ser klickbara ut (accentram)", ctaAccent > 0, String(ctaAccent));
 check("chipsen har ledtext", /Eller välj det som stämmer bäst/i.test(body));
