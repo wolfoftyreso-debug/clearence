@@ -21,7 +21,7 @@
  */
 
 import { handle } from "../server/index";
-import { closePool, withAnon } from "../server/db";
+import { closePool, withAnon, withUser } from "../server/db";
 import { hashPassword, verifyPassword } from "../server/auth";
 
 let passed = 0;
@@ -49,7 +49,8 @@ const call = (
 ): Promise<Res> => {
   const headers: Record<string, string> = {};
   if (opts.token) headers.authorization = `Bearer ${opts.token}`;
-  if (opts.apiKey) headers["x-api-key"] = opts.apiKey;
+  // Kontraktet deklarerar EN mekanism: Authorization: Bearer.
+  if (opts.apiKey) headers.authorization = `Bearer ${opts.apiKey}`;
   return handle(method, path, headers, opts.body, new URLSearchParams()) as Promise<Res>;
 };
 
@@ -268,6 +269,48 @@ const ackAfter = await call("POST", `/v1/decisions/${decisionId}/acknowledge-pre
   body: { observation: "Något annat" },
 });
 check("ett omprövat beslut kan inte kvitteras", ackAfter.status === 409, ackAfter);
+
+/* --- 5b. Journalen med API-nyckel: vägen som aldrig var testad ------------ */
+//
+// Den här vägen låg i koden från början men ingen kontroll gick genom
+// den, och den var fel: `select * from api_journal(...)` behandlade en
+// JSONB-retur som en radmängd, så svaret hade formen
+// [{ api_journal: {...} }]. En integration byggd på kontraktet hade
+// aldrig kunnat läsa det.
+
+// Nyckeln ägs av den som skapar den: create_api_key läser auth.uid(),
+// så den måste köras som Agnes och inte anonymt.
+const apiKey = await withUser(AGNES, async (tx) => {
+  const { rows } = await tx.query<{ secret: string }>(
+    "select secret from public.create_api_key($1)",
+    ["Revisionens nyckel"],
+  );
+  return rows[0]?.secret ?? null;
+});
+check("en API-nyckel går att skapa", typeof apiKey === "string" && apiKey.startsWith("clr_"), apiKey);
+
+if (apiKey) {
+  const byKey = await call("GET", `/v1/cases/${CASE_A}/journal`, { apiKey });
+  check("journalen svarar på nyckeln i Authorization-huvudet", byKey.status === 200, byKey.body);
+  check("svaret har kontraktets form", Array.isArray(byKey.body.events), byKey.body);
+  check("svaret säger vilket ärende det gäller", byKey.body.case_id === CASE_A, byKey.body);
+  check(
+    "händelserna bär sina fält",
+    (byKey.body.events as Json[]).every((e) => typeof e.action === "string" && typeof e.occurred_at === "string"),
+    (byKey.body.events as Json[])[0],
+  );
+
+  // Samma tystnad för okänd nyckel som för ärende utan åtkomst.
+  const okand = await call("GET", `/v1/cases/${CASE_A}/journal`, { apiKey: "clr_" + "0".repeat(48) });
+  const utanAtkomst = await call("GET", `/v1/cases/${CASE_B}/journal`, { apiKey });
+  check("okänd nyckel nekas", okand.status === 404, okand.body);
+  check("nyckel utan åtkomst till ärendet nekas", utanAtkomst.status === 404, utanAtkomst.body);
+  check(
+    "okänd nyckel och saknad åtkomst ger SAMMA svar",
+    JSON.stringify(okand.body) === JSON.stringify(utanAtkomst.body),
+    [okand.body, utanAtkomst.body],
+  );
+}
 
 /* --- 6. Indata som inte duger --------------------------------------------- */
 

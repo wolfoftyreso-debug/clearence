@@ -52,16 +52,16 @@ texter samtidigt.
 |---|---|---|---|
 | 1 | **Ärendehantering** | Embryo, bärande delar klara | `cases`, `case_members` (9 roller, borgenärer isolerade), dokument, meddelanden, append-only revisionslogg — allt RLS-testat i två miljöer. Saknas: uppgifter med ansvarig och deadline, beslutslogg, tidslinjevy (nästa bygge). |
 | 2 | **Juridisk motor** | Delvis | Krisanalysen täcker obestånd (KonkL 1:2), KBR-plikt (ABL 25 kap.), företrädaransvar (SFL 59 kap.), lönegaranti, rekonstruktionens tidsfönster. Saknas: likvidation, företagsinteckningar, säkerheter, borgensåtaganden. **Ingen juridisk granskning är gjord — krav före skarp drift.** |
-| 3 | **Kommunikationscentral** | Grunden klar | Ärendemeddelanden med oföränderlighetstrigger. Saknas: inbjudningsflödet (databasmodellen finns, gränssnittet inte). Realism: Skatteverket och Kronofogden kommer inte logga in — deras roll är att korrespondensen *med* dem arkiveras i ärendet, inte att de arbetar i det. |
+| 3 | **Kommunikationscentral** | Grunden klar | Ärendemeddelanden med oföränderlighetstrigger. Inbjudningsflödet är byggt, gränssnittet med (Deltagare: öppna inbjudningar, återkallning). Realism: Skatteverket och Kronofogden kommer inte logga in — deras roll är att korrespondensen *med* dem arkiveras i ärendet, inte att de arbetar i det. |
 | 4 | **Dokumentmotor** | Motor klar, mallar få | `ReportModel` renderar redan sex dokumenttyper (analys, KBR, likviditetsplan, rapport, faktura, kvitto). Styrelseprotokoll, borgenärsbrev, fullmakter och ansökningar är *mallar på samma motor* — billiga att lägga till. Saknas: versionskedjor. |
 | 5 | **Beslutsstöd** | Klar i sin kärna | Deterministisk insiktsmotor (median/MAD, koncentration, betalningsprioritering), likviditetsprognos med dag-kassan-tar-slut, KBR-utlösare. Medveten princip: **ingen LLM i beslutsvägen** — varje slutsats ska gå att räkna efter för hand. "Leverantörer som riskerar säga upp avtal" kräver avtalsdata vi inte har. |
 | 6 | **Integrationsplattform** | Kontrakt klara, noll live | `FinancialPort` + `PROVIDER_REGISTRY` är byggda som kontrakt; kontoutdrags-CSV fungerar. Bolagsverket har API. Bankdata via PSD2 kräver AISP-tillstånd eller licensierad aggregator — **går emot principen om inga yttre beroenden och måste beslutas som undantag**. Skatteverket/KFM saknar öppna ärende-API:er: realistisk nivå är filimport av skattekontoutdrag. Teams/Slack: lågt värde mot samma princip. |
 | 7 | **Kreditmarknad** | Inte påbörjad — se risknot | Kreditunderlaget är en naturlig produkt av data vi redan har plus rapportmotorn. Utskicket till flera finansiärer passar den beslutade modellen (förmedling faktureras mottagaren). **Risknot nedan måste avgöras först.** |
-| 8 | **Kunskapsmotor** | Inte påbörjad — se risknot | Situationsmedvetna svar går att bygga deterministiskt: kurerad frågemängd där varje svar är en funktion av ärendets fakta + lagrum, samma mönster som insiktsmotorn. **Gränsen mot juridisk rådgivning måste avgöras först.** |
-| 9 | **Compliance** | I stort klar | Append-only-revisionslogg via trigger (överlever t.o.m. raderat ärende), RLS 240/240 i två miljöer, oföränderliga meddelanden, obruten fakturaserie. Saknas: läsbar loggvy, beslutade gallringsregler (öppen juridisk fråga, noterad på `audit_events`). |
-| 10 | **Svarta lådan** | Fundamentet finns | Är i praktiken: revisionslogg + dokument + meddelanden + **dataexport**. Exporten saknas och är det som gör lådan trovärdig — en svart låda ägaren inte kan öppna är ett löfte, inte en funktion. |
+| 8 | **Kunskapsmotor** | Byggd | Byggd som kurerade, källhänvisade artiklar (/kunskap) med rådgivningsgränsen i varje svar - samma mönster som insiktsmotorn, deterministiskt. Gränsen mot juridisk rådgivning står i texten, inte i en policy vid sidan om. |
+| 9 | **Compliance** | I stort klar | Append-only-revisionslogg via trigger (överlever t.o.m. raderat ärende), RLS 253/253 i två miljöer, oföränderliga meddelanden, obruten fakturaserie. Loggvyn är byggd (/dashboard/handelser, med detaljrader). Saknas: beslutade gallringsregler (öppen juridisk fråga, noterad på `audit_events`). |
+| 10 | **Svarta lådan** | Fundamentet finns | Är i praktiken: revisionslogg + dokument + meddelanden + **dataexport**. Exporten är byggd (CSV och JSON ur händelseloggen) - det var den som gjorde lådan trovärdig, för en svart låda ägaren inte kan öppna är ett löfte och inte en funktion. |
 
-## Tre saker som INTE får byggas innan de avgjorts
+## Tre saker som inte fick byggas innan de avgjorts
 
 1. **Kreditförmedlingen (7).** Att skicka kreditunderlag för ett bolag nära
    obestånd till finansiärer rör sig i terräng där både tillståndsfrågor
@@ -71,12 +71,15 @@ texter samtidigt.
    idag att ett tillskott "skjuter upp problemet snarare än löser det" när
    det är sant. Den ärligheten är ett varumärke; kreditmodulen får inte
    undergräva den.
-2. **Kunskapsmotorn (8).** Ett situationsmedvetet svar på "hur påverkas
-   mitt personliga ansvar?" är juridisk rådgivning i allt utom namnet.
-   Antingen hålls svaren på lagrumsnivå med ärendets fakta insatta (och
-   granskas juridiskt som mallarna), eller så byggs den inte. En LLM som
-   improviserar juridik åt ett bolag i kris är den enskilt farligaste
-   funktionen som går att lägga till i den här produkten.
+2. **Kunskapsmotorn (8). AVGJORD OCH BYGGD.** Ett situationsmedvetet svar
+   på "hur påverkas mitt personliga ansvar?" är juridisk rådgivning i allt
+   utom namnet. Villkoret var att svaren hålls på lagrumsnivå med ärendets
+   fakta insatta, eller inte byggs alls. Så blev det: `/kunskap` är
+   kurerade, källhänvisade artiklar med rådgivningsgränsen i varje svar,
+   och ingen språkmodell någonstans i vägen. En LLM som improviserar
+   juridik åt ett bolag i kris är fortfarande den enskilt farligaste
+   funktionen som går att lägga till i den här produkten - villkoret
+   gäller alltså vidare för allt som byggs ovanpå.
 3. **Namnet.** Se ovan.
 
 ## Byggordning (bekräftar den redan påbörjade)

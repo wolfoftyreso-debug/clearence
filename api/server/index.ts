@@ -282,14 +282,32 @@ router.get("/v1/cases/:caseId", async (req) => {
  */
 router.get("/v1/cases/:caseId/journal", async (req) => {
   const caseId = uuidParam(req, "caseId");
-  const apiKey = req.headers["x-api-key"];
 
-  if (typeof apiKey === "string" && apiKey.length > 0) {
-    const events = await withAnon(async (tx) => {
-      const { rows } = await tx.query("select * from public.api_journal($1, $2)", [apiKey, caseId]);
-      return rows;
+  // Kontraktet deklarerar EN säkerhetsmekanism: Authorization: Bearer.
+  // Servern läste tidigare nyckeln ur x-api-key, alltså ett huvud som
+  // inte stod någonstans i det publicerade kontraktet - en integration
+  // byggd på dokumentationen hade fått 401 utan att förstå varför.
+  // Nyckeln känns igen på sitt prefix (clr_, satt av create_api_key);
+  // allt annat är en sessionstoken.
+  const credential = bearer(req);
+  if (credential?.startsWith("clr_")) {
+    // api_journal returnerar JSONB, inte en radmängd. Den här raden löd
+    // tidigare `select * from ...` och gav klienten ett svar i formen
+    // [{ api_journal: {...} }] - alltså fel form på hela nyckelvägen.
+    // Ingen märkte det, eftersom ingen kontroll gick den vägen. Nu gör
+    // två av dem det.
+    const payload = await withAnon(async (tx) => {
+      const { rows } = await tx.query<{ journal: unknown }>(
+        "select public.api_journal($1, $2) as journal",
+        [credential, caseId],
+      );
+      return rows[0]?.journal ?? null;
     });
-    return { status: 200, body: { events } };
+    // Funktionen svarar med null både för okänd nyckel och för ärende
+    // utan åtkomst - samma tystnad, med flit: skillnaden hjälper bara
+    // den som gissar. HTTP-lagret får inte återinföra skillnaden.
+    if (payload === null) throw notFound("Ärendet finns inte, eller så ger nyckeln ingen åtkomst.");
+    return { status: 200, body: payload };
   }
 
   const caller = await authenticate(req);

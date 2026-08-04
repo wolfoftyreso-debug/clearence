@@ -3,7 +3,7 @@
   "info": {
     "title": "CLEARANCE Öppna API",
     "version": "1.0.0-beta",
-    "description": "API-first: allt som går att göra i gränssnittet ska gå att göra via API. Kontraktet bygger på de fyra objekten (samtal, beslut, dokument, uppgifter) plus ärendet. Statusmärkning per operation: `live` är körbar idag, `beta` är kontrakt-först. API:t levererar strukturerad, spårbar ärendedata - aldrig automatiska bedömningar: mottagarens system drar sina egna slutsatser. Bakåtkompatibilitet inom v1: fält läggs till, aldrig bort.",
+    "description": "API-first: allt som går att göra i gränssnittet ska gå att göra via API. Kontraktet bygger på de fyra objekten (samtal, beslut, dokument, uppgifter) plus ärendet. INGEN MILJÖ ÄR DRIFTSATT ÄNNU: serveradresserna nedan svarar inte, och kontraktet är att läsa som en beställning. Statusmärkning per operation: `live` är implementerad och verifierad mot databasen, `beta` är kontrakt-först. API:t levererar strukturerad, spårbar ärendedata - aldrig automatiska bedömningar: mottagarens system drar sina egna slutsatser. Bakåtkompatibilitet inom v1: fält läggs till, aldrig bort.",
     "contact": {
       "name": "Landvex AB",
       "url": "https://clearance.se/kontakt"
@@ -12,16 +12,19 @@
   "servers": [
     {
       "url": "https://api.clearance.se/v1",
-      "description": "Produktion"
+      "description": "Produktion (ej driftsatt)"
     },
     {
       "url": "https://sandbox.api.clearance.se/v1",
-      "description": "Sandbox - demoadapterns datamodell"
+      "description": "Sandbox - demoadapterns datamodell (ej driftsatt)"
     }
   ],
   "security": [
     {
       "apiKey": []
+    },
+    {
+      "session": []
     }
   ],
   "paths": {
@@ -507,6 +510,100 @@
           }
         }
       }
+    },
+    "/auth/login": {
+      "post": {
+        "operationId": "login",
+        "summary": "Logga in och få en sessionstoken",
+        "description": "Sessionstoken i utbyte mot e-post och lösenord. Token visas EN gång och lagras aldrig i klartext - databasen har bara SHA-256 av den. Fel lösenord och okänd adress ger samma svar och kostar samma tid; skillnaden vore en kontolista. Kräver ingen autentisering.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
+    "/auth/logout": {
+      "post": {
+        "operationId": "logout",
+        "summary": "Återkalla den egna sessionen",
+        "description": "Återkallar sessionen bakom den token som skickas med. Återkallningen är slutgiltig - en token som en gång är död blir aldrig levande igen.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/me": {
+      "get": {
+        "operationId": "me",
+        "summary": "Vem den aktuella sessionen tillhör",
+        "description": "Kontot bakom token, med namn och roll ur profilen. Läses genom radskyddet som allt annat.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "operationId": "health",
+        "summary": "Tjänstens status",
+        "description": "Svarar utan att röra databasen. Finns för lastbalanserarens hälsokontroll, inte för integrationer. Kräver ingen autentisering.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
     }
   },
   "webhooks": {
@@ -670,7 +767,12 @@
       "apiKey": {
         "type": "http",
         "scheme": "bearer",
-        "description": "API-nyckel per organisation, hanterad i driftens valv. Samma radskydd som appen: API:t ser det kontots roller ser."
+        "description": "API-nyckel per organisation (Authorization: Bearer clr_...), hanterad i driftens valv. Nyckeln känns igen på prefixet clr_. Samma radskydd som appen: API:t ser det kontots roller ser."
+      },
+      "session": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Sessionstoken från POST /auth/login (Authorization: Bearer ...). Används av appen; en integration använder API-nyckel."
       }
     },
     "schemas": {

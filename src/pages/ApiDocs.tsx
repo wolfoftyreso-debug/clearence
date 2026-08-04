@@ -9,7 +9,8 @@ import spec from "../../api/openapi.json";
  * Den publika utvecklarsidan: renderar det riktiga kontraktet
  * (api/openapi.json) - specen ÄR sidan. Ingen handskriven lista som
  * kan driva isär från kontraktet, och samma ärliga statusmärkning:
- * live är körbart idag, beta är kontrakt-först.
+ * live är implementerat och verifierat, beta är kontrakt-först.
+ * Ingetdera är driftsatt - det står överst på sidan, inte i en fotnot.
  */
 
 type Operation = {
@@ -63,6 +64,16 @@ const ApiDocs = () => {
               strukturerad, spårbar ärendedata - aldrig automatiska
               bedömningar. Slutsatser dras av mottagarens system.
             </p>
+            {/* Sagt först, inte i en fotnot: ingen miljö är driftsatt, och
+                bas-URL:en nedan svarar inte ännu. Att låta en utvecklare
+                upptäcka det själv efter en halvtimmes felsökning vore
+                precis den sortens tystnad produkten säger sig undvika. */}
+            <p className="mt-4 max-w-2xl rounded-md border border-warning/50 bg-warning/5 p-3 text-sm leading-relaxed text-foreground">
+              <span className="font-semibold">Ingen miljö är driftsatt ännu.</span>{" "}
+              Bas-URL:erna nedan svarar inte, och kontraktet är därför att läsa
+              som en beställning - inte som något att integrera mot i dag. Vi
+              säger till här när det ändras.
+            </p>
             <div className="mt-6 flex flex-wrap items-center gap-3">
               <Button
                 variant="accent"
@@ -89,9 +100,11 @@ const ApiDocs = () => {
           <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
             Byggda på de fyra objekten - samtal, beslut, dokument, uppgifter -
             plus ärendet, rapporterna och delningslänkarna.{" "}
-            <span className="font-medium text-foreground">Live</span> är körbart
-            idag; <span className="font-medium text-foreground">Beta</span> är
-            kontrakt-först och implementeras bakom samma kontrakt.
+            <span className="font-medium text-foreground">Live</span> är
+            implementerat och verifierat mot databasen;{" "}
+            <span className="font-medium text-foreground">Beta</span> är
+            kontrakt-först och implementeras bakom samma kontrakt. Ingetdera
+            går att anropa förrän API:t är driftsatt.
           </p>
           <ul className="mt-6 space-y-2">
             {Object.entries(paths).flatMap(([path, methods]) =>

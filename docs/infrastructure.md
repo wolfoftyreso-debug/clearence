@@ -118,13 +118,13 @@ i resurser:
 | E-postarbetaren | **Byggd.** TypeScript, bundlas med `npm run build:worker` |
 | Webbappen | **Byggd.** Noll externa anrop, verifierat (`test:external`, 9/9 sidor) |
 | Terraform för nät, databas, lagring, CDN, e-post, hemligheter, larm | **Skrivet** i `infra/` — `terraform fmt` går igenom |
-| **API:et: identitet, sessioner, ärenden, journal, beslut** | **Byggt.** `api/server/`, node:http med **ett** beroende (`pg`). `npm run build:api` bygger, `npm run test:api` kör 47 kontroller mot riktig Postgres — inklusive att identiteten inte läcker mellan samtidiga requests |
+| **API:et: identitet, sessioner, ärenden, journal, beslut** | **Byggt.** `api/server/`, node:http med **ett** beroende (`pg`). `npm run build:api` bygger, `npm run test:api` kör 55 kontroller mot riktig Postgres — inklusive att identiteten inte läcker mellan samtidiga requests, och att journalens nyckelväg svarar i kontraktets form |
 | **API:et: resten av `DataPort`** | **Saknas.** Dokument, uppgifter, meddelanden, fakturering. Samma mönster som skivan ovan — det som var osäkert är avklarat |
 | **`awsAdapter` i klienten** | **Saknas.** Klienten pratar fortfarande PostgREST via Supabase-klienten. En adapter mot `DataPort` plus en rad i `src/data/index.ts` |
 | **Egen autentisering** | **Byggt.** Inloggning, sessioner och utloggning i `api/server/auth.ts`. KDF är `scrypt` ur Node själv, inte Argon2id: en nativ modul hade gett API:t en byggkedja att sitta fast i, och hashformatet bär sina parametrar så ett byte blir ett nytt prefix, inte en migrering |
 | **S3-signering** | `app.may_read_document()` klar, signeringskoden saknas |
 | **`lookup-company`** | Finns som Supabase edge function, ska bli endpoint i eget API |
-| **Applicerad infrastruktur** | **Nej.** Inget AWS-konto är kopplat. `infra/` är kartan och beställningen, inte ett kvitto |
+| **Applicerad infrastruktur** | **Nej.** Inget AWS-konto är kopplat. `infra/` är kartan och beställningen, inte ett kvitto. Följdriktigt svarar ingen av adresserna i API-kontraktet — det står numera överst på `/api`, inte i en fotnot |
 | **`terraform validate`** | **Inte kört.** Utvecklingsmiljön når inte `registry.terraform.io`; kör det i en miljö med nätåtkomst innan första `apply` |
 
 ## Öppna beslut
