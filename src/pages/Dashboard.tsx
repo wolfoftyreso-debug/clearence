@@ -18,6 +18,7 @@ import { data } from "@/data";
 import { useAuth } from "@/hooks/useAuth";
 import type { CaseRecord } from "@/data/types";
 import { DashboardShell } from "@/components/dashboard/DashboardShell";
+import { SectionLink } from "@/components/landing/HowItWorksLink";
 import { LockedFeature, useEntitlements } from "@/components/billing/LockedFeature";
 import { ActionPlan } from "@/components/dashboard/ActionPlan";
 import { ControlStatus } from "@/components/dashboard/ControlStatus";
@@ -128,11 +129,11 @@ const Dashboard = () => {
       return {
         label: upcoming.label,
         countdown: countdownTo(upcoming.iso, now).label,
-        href: "#frister",
+        target: "frister",
       };
     }
     const topOpen = (topTasks ?? []).find((t) => !t.doneAt);
-    return topOpen ? { label: topOpen.label, countdown: null, href: "#nasta-steg" } : null;
+    return topOpen ? { label: topOpen.label, countdown: null, target: "nasta-steg" } : null;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeCase, latestCase, topTasks]);
 
@@ -203,8 +204,15 @@ const Dashboard = () => {
               {/* Det ENDA viktigaste först: en rad, inte ett kort till.
                   Sidans allra första blick ska svara på "vad gör jag nu?". */}
               {nextStep && (
-                <a
-                  href={nextStep.href}
+                /* SectionLink och inte ett rått fragmentankare: i demon
+                   kör appen HashRouter, och då ÄR hashen rutten -
+                   webbläsaren läste ankaret som sidan "/frister", så
+                   raden ledde till 404 i stället för att rulla ned till
+                   fristerna. Exakt samma fel som en gång träffade "Så
+                   fungerar tjänsten", vilket är varför komponenten
+                   finns. tests/spacing.ts stoppar numera nästa. */
+                <SectionLink
+                  target={nextStep.target}
                   className="mb-6 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border border-l-4 border-accent/40 border-l-accent bg-accent/5 p-3.5 transition-colors hover:bg-accent/10"
                 >
                   <span className="rounded-sm bg-accent px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-accent-foreground">
@@ -221,7 +229,7 @@ const Dashboard = () => {
                   <span className="text-xs font-medium text-accent underline underline-offset-4">
                     Visa i planen
                   </span>
-                </a>
+                </SectionLink>
               )}
 
               {/* Statusbannern är död (Excellence rond 3): den sa samma sak

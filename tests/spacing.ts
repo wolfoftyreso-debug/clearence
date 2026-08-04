@@ -90,5 +90,36 @@ check("hörnradien är rounded-md utanför ui-biblioteket", offenders.radius.len
 check("uppercase följer etikett- eller chipreceptet", offenders.uppercase.length === 0, offenders.uppercase);
 check("shellen äger h1 - sidorna använder h2", offenders.doubleH1.length === 0, offenders.doubleH1);
 
+
+/* --- 6. Inga råa fragmentankare -------------------------------------------
+ *
+ * `href="#nasta-steg"` ser oskyldigt ut och fungerar i utvecklingsläget.
+ * I demon kör appen HashRouter, och då ÄR hashen rutten: webbläsaren
+ * byter adress till "#nasta-steg", routern läser det som sidan
+ * "/nasta-steg" och visar 404 i stället för att rulla.
+ *
+ * Felet har inträffat två gånger - först på "Så fungerar tjänsten",
+ * sedan på NÄRMAST-raden på översikten. Första gången löstes det med en
+ * komponent (SectionLink), men ingenting hindrade nästa råa ankare från
+ * att skrivas. Nu gör den här kontrollen det.
+ */
+const fragmentAnchors: string[] = [];
+for (const file of files) {
+  // Komponenten som ÄR lösningen får innehålla mönstret - det är där
+  // ankaret hör hemma, med preventDefault och rullning i kod.
+  if (file.endsWith("HowItWorksLink.tsx")) continue;
+  const text = readFileSync(file, "utf8");
+  for (const line of text.split("\n")) {
+    if (/href=(?:"#|\{`#|\{"#)/.test(line)) {
+      fragmentAnchors.push(`${file.split("/src/")[1]}: ${line.trim().slice(0, 80)}`);
+    }
+  }
+}
+check(
+  "inga råa fragmentankare - de blir 404 i hash-läget, använd SectionLink",
+  fragmentAnchors.length === 0,
+  fragmentAnchors,
+);
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);
