@@ -156,6 +156,16 @@ export const WAITS = {
     source: null,
     duration: "Det tar några sekunder för en större fil.",
   },
+  /**
+   * Bakgrundsanalysen under introduktionssamtalet. Väntetiden är den
+   * längsta i produkten, och den enda där användaren har något annat
+   * att göra under tiden - desto viktigare att det står vad som pågår.
+   */
+  backgroundAnalysis: {
+    doing: "Sätter ihop en första bild av företaget.",
+    source: "företagsregistret och dina svar",
+    duration: "Det tar några sekunder, och du kan svara på frågorna under tiden.",
+  },
 } as const satisfies Record<string, WaitNotice>;
 
 /* --- Kontroller som testerna använder -------------------------------------- */

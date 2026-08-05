@@ -335,12 +335,19 @@ check("tomt läge pekar på CLEARANCE", /Prata med CLEARANCE/i.test(body));
 await page.click('button:has-text("Prata med CLEARANCE")');
 await page.waitForTimeout(1200);
 body = await page.innerText("body");
+check("välkomsten säger hur lång tid det tar", /3–5 minuter/.test(body), body.slice(0, 200));
+await page.click('button:has-text("Kom igång")');
+await page.waitForTimeout(600);
+body = await page.innerText("body");
 check("CLEARANCE presenterar sig", /Jag heter CLEARANCE/i.test(body));
-// Grunduppgifterna tas i ETT svep: tre fält, en knapp. Att stycka dem i
-// tre turer var friktion utan förståelse.
+// Grunduppgifterna tas i ETT svep. Den som redan är inloggad har ett
+// konto: e-post och lösenord hoppas över, tre fält återstår.
 check("de tre fälten visas samtidigt", (await page.locator("#onboarding-name").count()) === 1
   && (await page.locator("#onboarding-company").count()) === 1
   && (await page.locator("#onboarding-org").count()) === 1);
+check("den inloggade ombeds inte skapa ett konto till",
+  (await page.locator("#onboarding-email").count()) === 0
+  && (await page.locator("#onboarding-password").count()) === 0);
 check("gamla en-fråga-i-taget-rutan är borta", (await page.locator("#onboarding-input").count()) === 0);
 check("empatin är nedtonad", !/Du är inte ensam/i.test(body) && !/överväldigande/i.test(body));
 check("situationen normaliseras sakligt", /Många företag hamnar någon gång/.test(body));
@@ -351,10 +358,24 @@ await page.waitForTimeout(600);
 body = await page.innerText("body");
 check("namnet används sparsamt (förnamn, en gång)", /Tack Erik\./.test(body) && !/Erik Erik/.test(body));
 check("bekräftelsen nämner bolaget", /Jag ser att vi nu arbetar med Eriks Bygg AB/.test(body));
-check("processen visas i fast ordning", /Kontaktperson/.test(body) && /Dokumentinsamling/.test(body));
-check("situationsvalen visas", /Steg 3 av 6/.test(body) && /orolig för ekonomin/i.test(body));
+check("processen visas i fast ordning", /Konto och företagsuppgifter/.test(body) && /Dokumentinsamling/.test(body));
+check("situationsvalen visas", /Steg 2 av 6/.test(body) && /orolig för ekonomin/i.test(body));
 await page.click('button:has-text("Jag kan inte betala vissa fakturor")');
 await page.waitForTimeout(800);
+
+// Intervjun: svara på allt genom att välja första alternativet.
+for (let i = 0; i < 20; i++) {
+  const chips = page.locator('section[aria-label="Samtal med CLEARANCE"] .flex.flex-wrap.gap-2 > button');
+  if ((await chips.count()) === 0) break;
+  await chips.first().click();
+  await page.waitForTimeout(220);
+}
+await page.waitForTimeout(600);
+body = await page.innerText("body");
+check("första analysen presenteras", (await page.locator('section[aria-label="Första analysen"]').count()) === 1);
+check("premiumerbjudandet kommer efter analysen", /SMS-aviseringar/.test(body));
+await page.click('button:has-text("Gå vidare till nulägesanalysen")');
+await page.waitForTimeout(700);
 body = await page.innerText("body");
 check("CLEARANCE navigerar själv", /Jag öppnar nu nulägesanalysen/i.test(body));
 // Förberedelsen står framme innan vyn byts, och pausen räcker för att

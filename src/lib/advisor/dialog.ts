@@ -577,18 +577,69 @@ export const CLARA = {
  * ifyllning, situationen är samtal.
  */
 export const ONBOARDING = {
+  /**
+   * VÄLKOMSTEN, före allt annat.
+   *
+   * Två meningar och en tidsangivelse. Den som landar här vet inte om
+   * det här kostar en kvart eller en eftermiddag, och den osäkerheten är
+   * i sig ett skäl att stänga fliken. "Cirka 3-5 minuter" är ett löfte -
+   * och därför är introduktionen byggd så att det håller.
+   */
+  welcome: {
+    title: "Välkommen",
+    body: [
+      "Välkommen! Jag hjälper dig att analysera företagets situation och identifiera åtgärder som kan förbättra resultatet.",
+      "Det tar cirka 3–5 minuter att komma igång.",
+    ],
+    cta: "Kom igång",
+  },
   intro: [
     "Hej! Jag heter CLEARANCE och guidar dig genom processen. För att komma igång behöver jag bara några grunduppgifter.",
     "Många företag hamnar någon gång i en situation där ekonomin behöver analyseras och struktureras. Min uppgift är att hjälpa dig samla rätt information, skapa en tydlig överblick och dokumentera processen på ett sätt som sparar tid och minskar risken för misstag.",
   ],
   /**
-   * De tre fälten, som data: gränssnittet renderar dem, testet räknar
-   * dem, och ingen kan lägga till ett fjärde utan att någon märker det.
+   * Fälten, som data: gränssnittet renderar dem, testet räknar dem, och
+   * ingen kan lägga till ett femte utan att någon märker det.
+   *
+   * E-posten kom till när kontot flyttade in i samtalet. Lösenordet står
+   * INTE här: det har ett eget fält med maskerade tecken och ska aldrig
+   * kunna hamna i en chattbubbla som alla i rummet kan läsa.
    */
   fields: [
     { id: "name", label: "Ditt namn", placeholder: "Förnamn Efternamn", autoComplete: "name" },
     { id: "company", label: "Företagsnamn", placeholder: "Bolagets namn", autoComplete: "organization" },
     { id: "orgNumber", label: "Organisationsnummer", placeholder: "XXXXXX-XXXX", autoComplete: "off" },
+    { id: "email", label: "E-postadress", placeholder: "namn@bolaget.se", autoComplete: "email" },
+  ],
+  /**
+   * Lösenordssteget, separat från de fyra.
+   *
+   * Skilt av två skäl: uppgifterna ovan går att fylla i från minnet,
+   * lösenordet kräver ett beslut - och det ska visas maskerat, inte
+   * ekas tillbaka som ett chattmeddelande.
+   */
+  password: {
+    lead: "Välj ett lösenord.",
+    label: "Lösenord",
+    placeholder: "Minst 8 tecken",
+    hint: "Minst 8 tecken. Du använder det för att logga in igen.",
+    submitLabel: "Skapa konto",
+    created: "Konto skapat.",
+  },
+  /**
+   * Direkt efter kontot: arbetet börjar innan användaren hunnit undra om
+   * något händer. Det är skillnaden mellan att vänta och att vara igång.
+   */
+  afterAccount: [
+    // Specifikationen inledde med ett berömmande ord. Det ströks av en
+    // regel som redan fanns i produkten: tomt beröm är förbjudet i hela
+    // src-trädet, och tests/tone.ts vaktar det. Ordet berömde ingenting -
+    // användaren hade valt ett lösenord - och en produkt som hyllar en
+    // trivialitet blir mindre trovärdig när den senare säger något som
+    // faktiskt betyder något. Meningens funktion, att arbetet börjar nu,
+    // är oförändrad.
+    "Tack. Jag börjar nu skapa en bild av företaget.",
+    "Under tiden vill jag lära känna verksamheten lite bättre.",
   ],
   submitLabel: "Fortsätt",
   /**
@@ -609,10 +660,10 @@ export const ONBOARDING = {
    * hela vägen vet att det tar slut, och vet var hen är just nu.
    */
   steps: [
-    { n: 1, label: "Kontaktperson", purpose: "Vem vi skriver till och i vems namn handlingarna upprättas" },
-    { n: 2, label: "Företagsuppgifter", purpose: "Bolaget, formen och de registrerade uppgifterna" },
-    { n: 3, label: "Kort nuläge", purpose: "Vad som gör att du är här" },
-    { n: 4, label: "Prioriterade problem", purpose: "Vad som måste lösas först" },
+    { n: 1, label: "Konto och företagsuppgifter", purpose: "Vem du är, vilket bolag det gäller och var du loggar in" },
+    { n: 2, label: "Nuläget i korthet", purpose: "Vad som gör att du är här" },
+    { n: 3, label: "Om verksamheten", purpose: "Frågorna som gör analysen till din och inte en generisk" },
+    { n: 4, label: "Första analysen", purpose: "Lägesbilden, byggd på det du berättat och det som gick att hämta" },
     { n: 5, label: "Tidskritiska händelser", purpose: "Frister och datum som styr handlingsutrymmet" },
     { n: 6, label: "Dokumentinsamling", purpose: "Underlaget som bedömningarna ska vila på" },
   ],
@@ -621,7 +672,7 @@ export const ONBOARDING = {
     "Tack. Jag har identifierat företaget och fyllt i grunduppgifterna. Vi kan nu fokusera på själva situationen.",
   lookupMiss:
     "Jag hittar inte bolaget i registret just nu. Det stoppar ingenting – vi använder namnet du angav och kompletterar uppgifterna senare.",
-  askSituation: "Steg 3 av 6: kort nuläge. Vilket beskriver läget bäst just nu?",
+  askSituation: "Steg 2 av 6: nuläget i korthet. Vilket beskriver läget bäst just nu?",
   situations: [
     { id: "oro", label: "Jag är orolig för ekonomin" },
     { id: "fakturor", label: "Jag kan inte betala vissa fakturor" },
@@ -636,8 +687,47 @@ export const ONBOARDING = {
    */
   closing: [
     "Tack. Med kontaktperson, bolag och en första lägesbeskrivning har vi ett underlag att arbeta vidare från.",
-    "Jag öppnar nu nulägesanalysen, som täcker steg 3–6. Den tar 5–10 minuter och ger oss en gemensam bild av läget – siffrorna, fristerna och alternativen. Du kan när som helst pausa eller gå tillbaka.",
+    "Jag öppnar nu nulägesanalysen, som täcker steg 5–6. Den tar 5–10 minuter och ger oss en gemensam bild av läget – siffrorna, fristerna och alternativen. Du kan när som helst pausa eller gå tillbaka.",
   ],
+  /**
+   * Övergången in i intervjun. Övergångsprincipen, tillämpad: vad som är
+   * klart, vad som händer nu, varför vi frågar, hur lång tid det tar.
+   */
+  interviewLead: {
+    heading: "Om verksamheten",
+    body: "Nu ställer jag några frågor om vad ni gör. De tar ungefär två minuter och gör att analysen handlar om ert bolag i stället för om bolag i allmänhet. Du kan hoppa över en fråga du inte vill svara på.",
+    skipLabel: "Hoppa över frågan",
+  },
+  /**
+   * När intervjun är klar. Ingen tom beröm - en kvittering på vad som
+   * faktiskt finns, och vad det räcker till.
+   */
+  interviewDone: (answered: number, fields: number): string =>
+    `Tack. ${answered} svar om verksamheten, och ${fields} av 9 fält i företagsprofilen vilar nu på något du sagt i stället för på ett antagande.`,
+  /**
+   * PREMIUM SIST, inte först.
+   *
+   * Telefonnumret frågas medvetet inte i introduktionen. Ett nummer som
+   * begärs innan tjänsten gjort något läses som insamling; samma fråga
+   * efter den första analysen läses som en uppgradering. Skillnaden är
+   * inte formuleringen utan ordningen - och därför vaktar testet att
+   * ordet "telefon" inte förekommer före det här steget.
+   */
+  premium: {
+    heading: "SMS-aviseringar",
+    lead: "Många företag uppskattar att få viktiga händelser direkt via SMS.",
+    examples: [
+      "Nya risker",
+      "Viktiga påminnelser",
+      "Daglig VD-sammanfattning",
+      "Kritiska avvikelser",
+    ],
+    tiers: "Det ingår i Professional och Enterprise.",
+    question: "Vill du aktivera SMS-aviseringar?",
+    yes: "Ja, visa hur",
+    no: "Inte nu",
+    declined: "Ingen fara. Du hittar det under Inställningar när du vill.",
+  },
 } as const;
 
 /**

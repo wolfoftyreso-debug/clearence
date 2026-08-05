@@ -19,6 +19,18 @@ export interface OnboardingHandoff {
   orgNumber: string;
   situation: string;
   savedAt: string;
+  /**
+   * Intervjusvaren och företagsprofilen, så att nulägesanalysen kan
+   * bygga vidare i stället för att fråga om samma sak igen. Frivilliga:
+   * en överlämning som sparats före intervjun saknar dem, och den ska
+   * fortfarande gå att läsa.
+   *
+   * Lösenordet finns INTE här och ska aldrig hamna här. Det går till
+   * inloggningen och ingen annanstans - localStorage är läsbart för allt
+   * som kör i fliken.
+   */
+  answers?: Record<string, string>;
+  profile?: Record<string, string | null>;
 }
 
 export const saveOnboarding = (
@@ -47,6 +59,8 @@ export const readOnboarding = (): OnboardingHandoff | null => {
       orgNumber: typeof parsed.orgNumber === "string" ? parsed.orgNumber : "",
       situation: typeof parsed.situation === "string" ? parsed.situation : "",
       savedAt: typeof parsed.savedAt === "string" ? parsed.savedAt : "",
+      answers: parsed.answers && typeof parsed.answers === "object" ? parsed.answers : undefined,
+      profile: parsed.profile && typeof parsed.profile === "object" ? parsed.profile : undefined,
     };
   } catch {
     return null;

@@ -137,7 +137,7 @@ check("onboardingen har fem situationsval", ONBOARDING.situations.length === 5);
 // Grunduppgifterna frågas i ETT svep - en fråga i taget börjar gälla när
 // frågorna kräver eftertanke, inte när de kräver ifyllning. Formen vaktas
 // i sin helhet av tests/tone.ts.
-check("onboardingen tar grunduppgifterna i ett svep", ONBOARDING.fields.length === 3);
+check("onboardingen tar grunduppgifterna i ett svep", ONBOARDING.fields.length === 4);
 check("CLEARANCE navigerar själv till nulägesanalysen", ONBOARDING.closing.join(" ").includes("Jag öppnar nu nulägesanalysen"));
 
 const checkIn = decisionCheckIn({

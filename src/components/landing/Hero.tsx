@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { ClaraIntro } from "@/components/advisor/ClaraIntro";
@@ -35,6 +36,16 @@ const facts = [
 const Hero = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
+  /**
+   * Ett konto skapas numera MITT I samtalet. I samma ögonblick blir
+   * `user` sann - och utan den här spärren hade vyn bytts ut under
+   * fötterna på användaren, med allt hen just berättat borta.
+   *
+   * Spärren sätts när samtalet startar och släpps aldrig under
+   * besöket. Den som kommer tillbaka senare får återvändarrutan som
+   * förut, eftersom sidan då laddats om.
+   */
+  const [conversationStarted, setConversationStarted] = useState(false);
 
   return (
     <section className="border-b border-border bg-secondary/30">
@@ -55,7 +66,7 @@ const Hero = () => {
             där de slutade i stället för att presenteras igen. */}
         <h1 className="sr-only">CLEARANCE – vägledning vid företagskris</h1>
         <div className="mx-auto mt-12 max-w-2xl">
-          {user ? (
+          {user && !conversationStarted ? (
             <div className="rounded-md border border-border bg-card p-5 text-center shadow-soft">
               <p className="text-base leading-relaxed text-foreground">
                 Välkommen tillbaka. CLEARANCE har läget klart – fortsätt samtalet
@@ -69,7 +80,11 @@ const Hero = () => {
               </Link>
             </div>
           ) : (
-            <ClaraIntro onDone={() => navigate("/wizard")} />
+            <ClaraIntro
+              hasAccount={!!user}
+              onStart={() => setConversationStarted(true)}
+              onDone={() => navigate("/wizard")}
+            />
           )}
         </div>
 

@@ -101,11 +101,14 @@ check(
 
 /* --- 5. Onboardingens form ----------------------------------------------- */
 
-check("onboardingen visar tre fält", ONBOARDING.fields.length === 3, ONBOARDING.fields.map((f) => f.label));
+// Fyra sedan kontot flyttade in i samtalet. E-posten kom till då;
+// lösenordet har ett eget steg och ett maskerat fält, och räknas därför
+// inte hit.
+check("onboardingen visar fyra fält", ONBOARDING.fields.length === 4, ONBOARDING.fields.map((f) => f.label));
 check(
-  "fälten är namn, företag och organisationsnummer",
+  "fälten är namn, företag, organisationsnummer och e-post",
   ONBOARDING.fields.map((f) => f.label).join("|") ===
-    "Ditt namn|Företagsnamn|Organisationsnummer",
+    "Ditt namn|Företagsnamn|Organisationsnummer|E-postadress",
 );
 check("knappen heter Fortsätt", ONBOARDING.submitLabel === "Fortsätt");
 check("introduktionen presenterar CLEARANCE", ONBOARDING.intro[0].includes("Jag heter CLEARANCE"));
@@ -140,7 +143,7 @@ check("processen har sex steg", ONBOARDING.steps.length === 6);
 check(
   "stegen står i den bestämda ordningen",
   ONBOARDING.steps.map((s) => s.label).join("|") ===
-    "Kontaktperson|Företagsuppgifter|Kort nuläge|Prioriterade problem|Tidskritiska händelser|Dokumentinsamling",
+    "Konto och företagsuppgifter|Nuläget i korthet|Om verksamheten|Första analysen|Tidskritiska händelser|Dokumentinsamling",
   ONBOARDING.steps.map((s) => s.label),
 );
 check("stegen är numrerade 1-6", ONBOARDING.steps.every((s, i) => s.n === i + 1));
@@ -154,7 +157,7 @@ check(
   "ett misslyckat uppslag stoppar ingenting",
   /stoppar ingenting|kompletterar/.test(ONBOARDING.lookupMiss),
 );
-check("nulägesfrågan är märkt med sitt steg", ONBOARDING.askSituation.includes("Steg 3 av 6"));
+check("nulägesfrågan är märkt med sitt steg", ONBOARDING.askSituation.includes("Steg 2 av 6"));
 check("det finns fem lägesval", ONBOARDING.situations.length === 5);
 check(
   "avslutet är förankrat i det användaren lämnade",

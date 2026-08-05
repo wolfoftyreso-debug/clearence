@@ -601,6 +601,9 @@ const DashboardSamtal = () => {
           /* Första upplevelsen är ett samtal, inte ett dashboard: CLEARANCE
              frågar en sak i taget och öppnar sedan nulägesanalysen själv. */
           <ClaraIntro
+            // Den som redan är inloggad har ett konto: kontostegen hoppas
+            // över, resten av introduktionen är densamma.
+            hasAccount
             onDone={(name) => {
               if (name) void data.profile.update({ displayName: name, phone: profile?.phone ?? null });
               navigate("/wizard");
