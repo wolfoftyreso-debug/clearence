@@ -212,6 +212,31 @@ Mål pekas ut med `data-guide="namn"`, aldrig med en CSS-klass eller en
 position. En klass byter namn vid nästa designrond utan att någon märker
 att guiden slutat peka; ett ankare som försvinner fäller testet.
 
+### Rutan får aldrig täcka det den pekar på
+
+Den gjorde det, och det var förvirrande på det värsta sättet: rutan sa
+"klicka på det markerade" samtidigt som den låg ovanpå markeringen.
+Positionen räknas nu så att rutan hamnar utanför ringen – under, över
+eller bredvid – och **ringen kapas så att det finns plats**. Ringen är en
+markering och får krympa; rutan är instruktionen och får inte skymma.
+
+Tre saker till som tydligheten hänger på:
+
+- **Namnge saken.** "Klicka på *Kontrolläge*", inte "klicka på det
+  markerade". Den som inte hittar markeringen har annars ingen andra
+  ledtråd.
+- **Räkna klicken, inte momenten.** "Steg 3 av 12" i en rundtur med fyra
+  stopp är en felaktig uppgift om hur lång tid det tar, och den som tror
+  sig ha nio steg kvar hoppar av.
+- **Säg vad som pågår.** Rutan bär genomgångens namn överst. Den som inte
+  vet varför skärmen plötsligt uppför sig annorlunda hinner bli irriterad
+  innan hen läst resten.
+
+När guiden **väntar på ett klick** dimmas resten av skärmen. Det är ett
+avsteg från att sammanhanget alltid ska synas, och det är avsiktligt: ska
+användaren hitta EN sak är kontrast det tydligaste som finns. När guiden
+bara visar var något ligger dimmas ingenting – då är sammanhanget svaret.
+
 ### Fyra saker guiden aldrig får göra
 
 1. **Låsa skärmen.** Overlayen har `pointer-events: none` och Esc

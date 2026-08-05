@@ -47,7 +47,17 @@ interface GuideState {
   text: string | null;
   /** Sant när guiden väntar på att användaren själv klickar. */
   awaitingClick: boolean;
-  /** Var i sekvensen vi är, för "steg 2 av 5". */
+  /** Vad saken HETER på skärmen, när guiden väntar på ett klick. */
+  targetLabel: string | null;
+  /** Vilken genomgång som pågår, så att användaren vet vad hen är mitt i. */
+  flowLabel: string | null;
+  /**
+   * Var i sekvensen vi är.
+   *
+   * I ett guidat flöde räknas KLICKEN, inte guidens interna moment: den
+   * som ser "steg 3 av 12" i en rundtur med fyra stopp har fått en
+   * felaktig uppgift om hur lång tid det tar.
+   */
   progress: { current: number; total: number } | null;
   /** Sant för kvitteringar - de ritas som ett kvitto, inte som en lektion. */
   receipt: boolean;
@@ -85,6 +95,8 @@ const idle: GuideState = {
   heading: null,
   text: null,
   awaitingClick: false,
+  targetLabel: null,
+  flowLabel: null,
   progress: null,
   receipt: false,
 };
@@ -122,6 +134,7 @@ export const GuideProvider = ({ children }: { children: ReactNode }) => {
     queue.current = [];
     running.current = false;
     ownRoute.current = null;
+    flowRef.current = null;
     setState(idle);
   }, []);
 
@@ -140,7 +153,10 @@ export const GuideProvider = ({ children }: { children: ReactNode }) => {
     }
     const done = total - queue.current.length;
     const step = (next: () => void, ms = STEP_MS) => {
-      setState((s) => ({ ...s, progress: { current: done, total } }));
+      // I ett guidat flöde ägs räknaren av vanta-pa-klick, som räknar
+      // klick. Att skriva över den här med "moment 5 av 12" mellan två
+      // stopp hade gjort siffran obegriplig.
+      setState((s) => ({ ...s, progress: flowRef.current ? s.progress : { current: done, total } }));
       next();
       clearTimer();
       timer.current = window.setTimeout(() => advance.current(), ms);
@@ -223,8 +239,9 @@ export const GuideProvider = ({ children }: { children: ReactNode }) => {
           heading: null,
           text: action.text,
           awaitingClick: true,
+          targetLabel: action.label,
           receipt: false,
-          progress: { current: done, total },
+          progress: { current: action.step, total: action.of },
         }));
         const el = findAnchor(action.anchor);
         if (!el) {
@@ -247,9 +264,11 @@ export const GuideProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const totalRef = useRef(0);
+  /** Namnet på det guidade flöde som körs, om något. */
+  const flowRef = useRef<string | null>(null);
 
   const run = useCallback(
-    (actions: GuideAction[]) => {
+    (actions: GuideAction[], flowLabel: string | null = null) => {
       clearTimer();
       clickCleanup.current?.();
       clickCleanup.current = null;
@@ -257,7 +276,8 @@ export const GuideProvider = ({ children }: { children: ReactNode }) => {
       totalRef.current = actions.length;
       running.current = true;
       ownRoute.current = pathname;
-      setState({ ...idle });
+      flowRef.current = flowLabel;
+      setState({ ...idle, flowLabel });
       advance.current();
     },
     [pathname],
@@ -301,7 +321,7 @@ export const GuideProvider = ({ children }: { children: ReactNode }) => {
       runFlow: (flowId) => {
         const flow = guidedFlow(flowId);
         if (!flow) return;
-        run(flowSteps(flow));
+        run(flowSteps(flow), flow.label);
       },
       teach: (anchor, text, heading) => {
         run([
@@ -328,9 +348,20 @@ export const GuideProvider = ({ children }: { children: ReactNode }) => {
         heading={state.heading}
         text={state.text}
         awaitingClick={state.awaitingClick}
+        targetLabel={state.targetLabel}
+        flowLabel={state.flowLabel}
         receipt={state.receipt}
         progress={state.progress}
         onClose={stop}
+        onSkip={() => {
+          // Fastnar användaren på ett steg ska hen kunna gå vidare i
+          // stället för att avbryta hela genomgången. En guide utan väg
+          // förbi ett steg är en återvändsgränd med extra artighet.
+          clickCleanup.current?.();
+          clickCleanup.current = null;
+          clearTimer();
+          advance.current();
+        }}
       />
     </GuideContext.Provider>
   );

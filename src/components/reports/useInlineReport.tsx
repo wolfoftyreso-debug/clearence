@@ -4,7 +4,7 @@ import { downloadReport, reportFileName } from "@/lib/reports/deliver";
 import { renderReport } from "@/lib/reports/render";
 import { renderReportPdf } from "@/lib/reports/pdf";
 import type { ReportModel } from "@/lib/reports/types";
-import { Download, Printer, X } from "lucide-react";
+import { Download, FileText, Printer, X } from "lucide-react";
 
 /**
  * Rapportvisaren: ett helskärmslager INUTI appen, aldrig en ny flik.
@@ -178,10 +178,15 @@ export const useInlineReport = (): {
         </div>
 
         {pdf !== null && (
+          /* Texten säger vad som ÄR sant: filen är skapad, och knappen
+             levererar den. Den lovar INTE en förhandsvisning - den
+             lovade det förut, och när webbläsaren blockerade den stod
+             produkten och påstod något användaren kunde se var fel.
+             Det är värre än att inte visa något alls. */
           <p className="border-b border-border bg-secondary/40 px-4 py-2 text-xs leading-relaxed text-muted-foreground">
-            PDF:en är skapad och visas nedan. Tryck på{" "}
-            <span className="font-medium text-foreground">Spara filen</span> så
-            öppnas delningsmenyn - välj t.ex. "Spara i Filer" på mobilen.
+            PDF:en är skapad. Tryck på{" "}
+            <span className="font-medium text-foreground">Spara filen</span> så laddas den ner –
+            eller öppnas i delningsmenyn, där du kan välja t.ex. "Spara i Filer".
           </p>
         )}
 
@@ -195,7 +200,30 @@ export const useInlineReport = (): {
             className="w-full flex-1 border-0 bg-white"
           />
         ) : pdf !== null ? (
-          <iframe src={pdf.url} title={pdf.title} className="w-full flex-1 border-0 bg-white" />
+          /*
+           * <object> och inte <iframe>: en <object> som inte kan visa sin
+           * typ renderar sina BARN i stället. Det är webbens egen
+           * inbyggda reservväg, och den behövs här - inbäddat i en
+           * sandlåda (den publicerade demon, en app-webbvy) blockerar
+           * Chrome PDF-visaren och en iframe blir en grå ruta med
+           * "Den här sidan har blockerats". En produkt som visar en
+           * blockerad sida ser trasig ut även när filen är helt färdig.
+           */
+          <object data={pdf.url} type="application/pdf" className="w-full flex-1 bg-white">
+            <div className="flex h-full flex-col items-center justify-center gap-3 p-8 text-center">
+              <FileText className="h-8 w-8 text-muted-foreground" aria-hidden="true" />
+              <p className="text-base font-semibold text-foreground">Filen är klar</p>
+              <p className="max-w-md text-sm leading-relaxed text-muted-foreground">
+                Webbläsaren visar inte inbäddade PDF:er här, så förhandsvisningen uteblir.
+                Det påverkar inte filen – den är färdig och innehåller allt.
+              </p>
+              <Button type="button" variant="accent" onClick={() => void savePdf(pdf)}>
+                <Download className="h-4 w-4" aria-hidden="true" />
+                Spara filen
+              </Button>
+              <p className="text-xs text-muted-foreground">{pdf.fileName}</p>
+            </div>
+          </object>
         ) : null}
       </div>
     );

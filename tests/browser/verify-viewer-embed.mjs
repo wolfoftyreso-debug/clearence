@@ -55,9 +55,25 @@ await page.waitForTimeout(1800);
 await inner.locator('button:has-text("Ladda ner PDF")').first().click();
 await page.waitForTimeout(1200);
 const dialogText = await inner.locator('[role="dialog"]').innerText().catch(() => "");
-check("inbäddat: PDF-läget öppnas med förklaring", /PDF:en är skapad och visas nedan/i.test(dialogText), dialogText.slice(0, 150));
-const pdfFrame = await inner.locator('[role="dialog"] iframe').getAttribute("src").catch(() => null);
-check("inbäddat: visaren pekar på PDF-blobben", (pdfFrame ?? "").startsWith("blob:"), String(pdfFrame));
+// Texten lovar att filen är SKAPAD - inte att den visas. Den lovade
+// visningen förut, och där webbläsaren blockerar inbäddade PDF:er stod
+// produkten och påstod något användaren kunde se var fel.
+check("inbäddat: PDF-läget öppnas med förklaring", /PDF:en är skapad/i.test(dialogText), dialogText.slice(0, 150));
+check(
+  "inbäddat: den lovar inte en förhandsvisning som kan blockeras",
+  !/visas nedan/i.test(dialogText),
+  dialogText.slice(0, 150),
+);
+// <object> och inte <iframe>: en object som inte kan visa sin typ
+// renderar sina barn, alltså vår egen reservruta - i stället för
+// webbläsarens "Den här sidan har blockerats".
+const pdfObject = await inner.locator('[role="dialog"] object').getAttribute("data").catch(() => null);
+check("inbäddat: visaren pekar på PDF-blobben", (pdfObject ?? "").startsWith("blob:"), String(pdfObject));
+check(
+  "inbäddat: reservrutan finns om visningen blockeras",
+  /Filen är klar/.test(dialogText) || (pdfObject ?? "").startsWith("blob:"),
+  dialogText.slice(0, 200),
+);
 // iOS-fallet: PDF-lagret utan spara-väg är en död knapp. "Spara filen"
 // öppnar delningsmenyn (Web Share med fil) eller faller till nedladdning.
 check("inbäddat: Spara filen-knappen finns i PDF-läget",

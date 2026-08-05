@@ -136,6 +136,35 @@ check(
   (await page.locator('[data-guide-ring="kontrollomrade"]').count()) === 1,
 );
 
+// TYDLIGHETEN, punkt för punkt. Den första versionen lade rutan ovanpå
+// markeringen och sa "klicka på det markerade" - alltså en instruktion
+// som dolde sitt eget föremål.
+check("genomgången presenterar sig", /Genomgång: Så hittar du tillbaka/i.test(flowBox), flowBox.slice(0, 120));
+check("saken namnges, inte bara 'det markerade'", /Kontrolläge/.test(flowBox), flowBox.slice(0, 200));
+check("det går att hoppa över steget", /Hoppa över steget/.test(flowBox));
+check("och att avsluta genomgången", /Avsluta genomgången/.test(flowBox));
+// Räknaren ska räkna KLICK, inte guidens interna moment: fyra stopp är
+// fyra, inte tolv.
+check("räknaren räknar klicken", /\b1\/4\b/.test(flowBox), (flowBox.match(/\d+\/\d+/) ?? [""])[0]);
+
+// Rutan får ALDRIG överlappa ringen.
+const overlap = await page.evaluate(() => {
+  const ring = document.querySelector("[data-guide-ring]")?.getBoundingClientRect();
+  const box = document.querySelector("[data-guide-callout]")?.getBoundingClientRect();
+  if (!ring || !box) return "saknas";
+  const hit =
+    box.left < ring.right && box.right > ring.left && box.top < ring.bottom && box.bottom > ring.top;
+  return hit ? `ring ${JSON.stringify(ring)} ruta ${JSON.stringify(box)}` : null;
+});
+check("rutan täcker inte det den pekar på", overlap === null, String(overlap));
+
+// Och skärmen dimmas så att det inringade sticker ut - men klicket går
+// fortfarande igenom.
+const dimmed = await page.evaluate(() =>
+  [...document.querySelectorAll("div")].some((d) => d.className.includes("bg-foreground/45")),
+);
+check("resten av skärmen dimmas när ett klick väntas", dimmed);
+
 // Användaren klickar själv - då, och först då, går flödet vidare.
 await page.click('[data-guide="kontrollomrade"]');
 await page.waitForTimeout(3500);

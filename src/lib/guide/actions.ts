@@ -39,8 +39,17 @@ export type GuideAction =
    * Guidat arbetsläge: guiden stannar och väntar på att användaren
    * klickar själv. Det är skillnaden mellan en demonstration och en
    * instruktör - handen är användarens.
+   *
+   * `label` är vad saken HETER på skärmen. Utan det stod det bara
+   * "klicka på det markerade", och den som inte hittade markeringen fick
+   * ingen andra ledtråd. Nu står namnet i klartext.
+   *
+   * `step` och `of` räknar de klick användaren faktiskt ska göra - inte
+   * guidens interna moment. "Steg 3 av 12" i en rundtur med fyra stopp
+   * är en felaktig uppgift om hur lång tid det tar, och den som tror sig
+   * ha nio steg kvar hoppar av.
    */
-  | { kind: "vanta-pa-klick"; anchor: string; text: string }
+  | { kind: "vanta-pa-klick"; anchor: string; text: string; label: string; step: number; of: number }
   /** En kort paus, så att ögat hinner följa med. */
   | { kind: "andas"; ms: number };
 
@@ -121,6 +130,8 @@ export const savedSteps = (entry: GuideEntry, what: string): GuideAction[] => [
 export interface FlowStep {
   /** Elementet användaren ska klicka på. */
   anchor: string;
+  /** Vad saken HETER på skärmen, ord för ord. */
+  label: string;
   /** Vad hen ska göra, och varför just nu. */
   text: string;
   /** Vyn steget utförs i, om det skiljer sig från föregående. */
@@ -154,16 +165,19 @@ export const GUIDED_FLOWS: GuidedFlow[] = [
       {
         route: "/wizard",
         anchor: "wizard-start",
+        label: "Nulägesanalysen",
         text: "Här lämnar du siffrorna – löner, skatt, hyra och skulder. Det är de fyra som avgör vilka alternativ som finns kvar.",
       },
       {
         route: "/dashboard",
         anchor: "kontrollomrade",
+        label: "Kontrolläge",
         text: "När analysen är klar hamnar bevakningen här. Datumen räknas ner även när du inte är inloggad.",
       },
       {
         route: "/dashboard",
         anchor: "handlingsplan",
+        label: "Nästa steg",
         text: "Och det som ska göras hamnar här, i den ordning fristerna kräver. Varje rad leder in i verktyget som löser den.",
       },
     ],
@@ -174,10 +188,10 @@ export const GUIDED_FLOWS: GuidedFlow[] = [
     outcome: "En rundtur på under en minut genom de fyra ytor du kommer att använda mest.",
     roles: ["company", "advisor"],
     steps: [
-      { route: "/dashboard", anchor: "kontrollomrade", text: "Kontrolläget: svaret på om systemet håller uppsikt åt dig." },
-      { route: "/dashboard/liquidity", anchor: "likviditetsvyn", text: "Likviditeten: dagen kassan tar slut, och vad som ligger bakom siffran." },
-      { route: "/dashboard/dokument", anchor: "dokumentvyn", text: "Dokumenten: allt som produceras i ärendet hamnar här av sig självt." },
-      { route: "/dashboard/handelser", anchor: "handelseloggen", text: "Händelseloggen: spåret som visar när ni insåg och när ni agerade." },
+      { route: "/dashboard", anchor: "kontrollomrade", label: "Kontrolläge", text: "Kontrolläget: svaret på om systemet håller uppsikt åt dig." },
+      { route: "/dashboard/liquidity", anchor: "likviditetsvyn", label: "Likviditet", text: "Likviditeten: dagen kassan tar slut, och vad som ligger bakom siffran." },
+      { route: "/dashboard/dokument", anchor: "dokumentvyn", label: "Dokument", text: "Dokumenten: allt som produceras i ärendet hamnar här av sig självt." },
+      { route: "/dashboard/handelser", anchor: "handelseloggen", label: "Händelselogg", text: "Händelseloggen: spåret som visar när ni insåg och när ni agerade." },
     ],
   },
   {
@@ -189,16 +203,19 @@ export const GUIDED_FLOWS: GuidedFlow[] = [
       {
         route: "/arenden",
         anchor: "klientlistan",
+        label: "Klienter",
         text: "Uppdragen sorteras efter vad som brådskar, inte efter när de kom in. Välj ett ärende – hela inloggade läget följer med dit.",
       },
       {
         route: "/dashboard",
         anchor: "systemanalysen",
+        label: "Systemanalysen",
         text: "Systemanalysen är din genväg in i ärendet: läget, riskerna och den rekommenderade vägen, med motivering.",
       },
       {
         route: "/dashboard/handelser",
         anchor: "handelseloggen",
+        label: "Händelselogg",
         text: "Och här ser du vad klienten faktiskt gjort och när. Loggen skrivs av databasen och går inte att ändra i efterhand.",
       },
     ],
@@ -212,13 +229,22 @@ export const guidedFlow = (id: string): GuidedFlow | null =>
 export const flowSteps = (flow: GuidedFlow): GuideAction[] => {
   const steps: GuideAction[] = [];
   let route: string | null = null;
-  for (const step of flow.steps) {
+  flow.steps.forEach((step, i) => {
     if (step.route && step.route !== route) {
       steps.push({ kind: "oppna-vy", route: step.route });
       route = step.route;
     }
     steps.push({ kind: "rulla-till", anchor: step.anchor });
-    steps.push({ kind: "vanta-pa-klick", anchor: step.anchor, text: step.text });
-  }
+    steps.push({
+      kind: "vanta-pa-klick",
+      anchor: step.anchor,
+      text: step.text,
+      label: step.label,
+      // Räknat i KLICK, inte i guidens moment. Se kommentaren vid
+      // åtgärdstypen ovan.
+      step: i + 1,
+      of: flow.steps.length,
+    });
+  });
   return steps;
 };
