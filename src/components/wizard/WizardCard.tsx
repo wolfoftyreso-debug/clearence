@@ -4,14 +4,24 @@ import { cn } from "@/lib/utils";
 interface WizardCardProps {
   children: ReactNode;
   className?: string;
+  /**
+   * Guidens ankarnamn. Kortet är den yta CLEARANCE pekar på när den
+   * visar var något ligger, och attributet måste därför nå ända ut till
+   * DOM:en - en komponent som sväljer det gör ankaret osynligt för
+   * guiden utan att något klagar.
+   */
+  "data-guide"?: string;
 }
 
-export const WizardCard = ({ children, className }: WizardCardProps) => {
+export const WizardCard = ({ children, className, "data-guide": guide }: WizardCardProps) => {
   return (
-    <div className={cn(
-      "bg-card rounded-md border border-border p-5 md:p-6 shadow-soft",
-      className
-    )}>
+    <div
+      data-guide={guide}
+      className={cn(
+        "bg-card rounded-md border border-border p-5 md:p-6 shadow-soft",
+        className
+      )}
+    >
       {children}
     </div>
   );

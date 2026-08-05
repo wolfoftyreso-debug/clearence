@@ -149,6 +149,65 @@ när det man kvitterade bort kan vara en frist.
 Reglerna: `src/lib/notificationsRead.ts`. Vakterna: `tests/notifications.ts`
 och `tests/browser/verify-notisklick.mjs`.
 
+## Visa, berätta inte
+
+**Användaren ska aldrig behöva leta efter en funktion som CLEARANCE
+känner till.** Nämner CLEARANCE en funktion ska den samtidigt kunna visa
+exakt var den finns, förklara varför den används, visa vad som sparats
+där, och hur användaren själv administrerar den sedan.
+
+Motsatsen – "du hittar rapporterna under Rapporter" – lägger arbetet på
+användaren och lär inte ut någonting. Guiden öppnar i stället menyn,
+ringar in valet, byter vy, rullar fram, markerar målet och förklarar.
+Man lär sig av att se något hända.
+
+### Kontraktet
+
+Varje funktion CLEARANCE får nämna står i `src/lib/guide/catalogue.ts`
+med fyra svar och en adress:
+
+| Fält | Svarar på |
+| --- | --- |
+| `route` + `anchor` | Var det finns |
+| `why` | Varför funktionen används |
+| `saves` | Vad som sparas där |
+| `manage` | Hur användaren ändrar det sedan |
+
+`tests/guide.ts` fäller om adressen inte finns i `App.tsx`, om ankaret
+inte finns som `data-guide` i källträdet, eller om något av svaren
+saknas. Konsekvensen är avsiktlig och obekväm: den som lägger till en vy
+och vill att CLEARANCE ska kunna prata om den måste kunna svara på
+varför den finns och hur användaren sköter den. Kan man inte det är
+funktionen inte färdig.
+
+### Ankare, inte selektorer
+
+Mål pekas ut med `data-guide="namn"`, aldrig med en CSS-klass eller en
+position. En klass byter namn vid nästa designrond utan att någon märker
+att guiden slutat peka; ett ankare som försvinner fäller testet.
+
+### Fyra saker guiden aldrig får göra
+
+1. **Låsa skärmen.** Overlayen har `pointer-events: none` och Esc
+   avbryter. En rundtur man inte kan gå ifrån är en dialogruta med extra
+   steg, och målgruppen har bråttom.
+2. **Klicka åt användaren.** I guidat arbetsläge markerar guiden nästa
+   knapp och VÄNTAR. Den som utför momentet själv minns det.
+3. **Gissa.** Träffar "visa mig" inget entydigt säger guiden det och
+   erbjuder alternativ. En guide som ibland pekar fel lär ut fel väg med
+   auktoritet.
+4. **Undervisa när det brinner.** Mikrolektionerna är avstängda när
+   analysen säger `immediate`. Den som inte kan betala lönerna på fredag
+   ska inte få veta vad ett kontrollområde heter.
+
+### Mikroutbildning
+
+Små återkommande förklaringar slår en genomgång vid första inloggningen,
+som hamnar precis när användaren har minst nytta av den. En lektion visas
+en gång, och en påminnelse kommer långt senare och knyter an till något
+nytt: "Kommer du ihåg kontrolläget? Det är också där framtida varningar
+dyker upp." Se `src/lib/guide/microLessons.ts`.
+
 ## Regeln bakom reglerna
 
 Skalan finns för att en sida ska kännas komponerad, inte staplad.

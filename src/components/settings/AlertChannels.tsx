@@ -80,7 +80,7 @@ export const AlertChannelSection = () => {
   };
 
   return (
-    <WizardCard>
+    <WizardCard data-guide="aviseringskanaler">
       <WizardCardHeader
         title="Aviseringar"
         description="Klockan i appen visar alltid allt. Här väljer du vad som dessutom ska nå dig när du inte är inloggad."

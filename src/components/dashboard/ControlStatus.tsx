@@ -103,7 +103,7 @@ export const ControlStatus = ({ caseRecord }: ControlStatusProps) => {
   }
 
   return (
-    <section className="mb-6 rounded-md border border-border bg-card p-5 shadow-soft">
+    <section data-guide="kontrollomrade" className="mb-6 rounded-md border border-border bg-card p-5 shadow-soft">
       <h2 className="flex items-center gap-2 font-semibold text-foreground">
         <ShieldCheck className="h-5 w-5 text-accent" aria-hidden="true" />
         Kontrolläge

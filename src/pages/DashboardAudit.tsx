@@ -83,6 +83,7 @@ const DashboardAudit = () => {
 
   return (
     <DashboardShell title="Händelselogg">
+      <div data-guide="handelseloggen">
       {loadingCase ? (
         <div className="flex justify-center py-16">
           <Loader2 className="h-6 w-6 animate-spin text-accent" aria-hidden="true" />
@@ -184,6 +185,7 @@ const DashboardAudit = () => {
           )}
         </div>
       )}
+      </div>
     </DashboardShell>
   );
 };

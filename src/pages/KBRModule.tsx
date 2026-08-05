@@ -959,7 +959,7 @@ const KBRModule = () => {
       </div>
 
       {/* Content */}
-      <main className="container px-4 py-6 pb-32">
+      <main data-guide="kbr-modulen" className="container px-4 py-6 pb-32">
         {draft.restored && !resumeDismissed && !saved && (
           <ResumeNotice onReset={resetDraft} />
         )}

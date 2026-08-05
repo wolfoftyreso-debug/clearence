@@ -1,7 +1,8 @@
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { useGuide } from "@/components/guide/GuideProvider";
 import type { FirstAnalysis } from "@/lib/advisor/firstAnalysis";
-import { AlertTriangle, ArrowRight, Lightbulb } from "lucide-react";
+import { AlertTriangle, ArrowRight, Lightbulb, MapPin } from "lucide-react";
 
 /**
  * Den första analysen, presenterad.
@@ -14,7 +15,9 @@ import { AlertTriangle, ArrowRight, Lightbulb } from "lucide-react";
  * Varje observation bär sitt underlag. "Du svarade X" under varje punkt
  * är det som skiljer en analys från en spådom.
  */
-export const FirstAnalysisCard = ({ analysis }: { analysis: FirstAnalysis }) => (
+export const FirstAnalysisCard = ({ analysis }: { analysis: FirstAnalysis }) => {
+  const guide = useGuide();
+  return (
   <section aria-label="Första analysen" className="rounded-md border border-border bg-card p-4">
     <h3 className="text-base font-semibold text-foreground">{analysis.headline}</h3>
     <p className="mt-1.5 text-sm leading-relaxed text-foreground">{analysis.understanding}</p>
@@ -64,6 +67,28 @@ export const FirstAnalysisCard = ({ analysis }: { analysis: FirstAnalysis }) => 
       </ul>
     </div>
 
+    {/* "Jag sparade precis det där under X" - och så VISAR den var.
+        Att bara säga det lämnar användaren med en plats hen ska minnas;
+        att visa det gör att hen hittar dit själv nästa gång. */}
+    <div className="mt-4 rounded-md bg-secondary/50 p-3">
+      <p className="text-xs leading-relaxed text-foreground">
+        Analysen och allt du berättat sparas i ärendet. Du behöver aldrig leta efter den.
+      </p>
+      <button
+        type="button"
+        onClick={() =>
+          guide.savedTo(
+            "dokument",
+            "Analysen och underlaget från introduktionen ligger i ärendets handlingar.",
+          )
+        }
+        className="mt-1.5 flex items-center gap-1.5 text-xs font-medium text-accent underline underline-offset-2"
+      >
+        <MapPin className="h-3.5 w-3.5" aria-hidden="true" />
+        Visa var det sparades
+      </button>
+    </div>
+
     <div className="mt-4">
       <p className="text-sm leading-relaxed text-muted-foreground">{analysis.nextStep.why}</p>
       <Button asChild variant="accent" className="mt-2.5">
@@ -74,4 +99,5 @@ export const FirstAnalysisCard = ({ analysis }: { analysis: FirstAnalysis }) => 
       </Button>
     </div>
   </section>
-);
+  );
+};

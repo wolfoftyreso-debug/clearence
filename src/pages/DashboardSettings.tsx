@@ -245,7 +245,7 @@ const DashboardSettings = () => {
 
   return (
     <DashboardShell title="Inställningar">
-      <div className="max-w-3xl space-y-6">
+      <div data-guide="installningsvyn" className="max-w-3xl space-y-6">
         <WizardCard>
           <WizardCardHeader
             title="Språkprofil"

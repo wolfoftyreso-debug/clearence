@@ -366,7 +366,7 @@ const LiquidityTimeline = () => {
 
   return (
     <DashboardShell title="Likviditet">
-      <div className="mx-auto max-w-5xl space-y-6">
+      <div data-guide="likviditetsvyn" className="mx-auto max-w-5xl space-y-6">
           <GuidedArrival />
           {!latestCase ? (
             <div className="text-center py-16 px-4 rounded-md bg-card border border-border shadow-soft">

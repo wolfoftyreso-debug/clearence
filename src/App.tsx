@@ -10,6 +10,7 @@ import { DemoBanner } from "@/components/DemoBanner";
 import { AuthProvider } from "@/hooks/useAuth";
 import { ScrollToTop } from "@/hooks/useScrollToTop";
 import { Loader2 } from "lucide-react";
+import { GuideProvider } from "@/components/guide/GuideProvider";
 
 // Route-level code splitting keeps the initial bundle small — the landing
 // page shouldn't have to download the recharts-heavy liquidity timeline.
@@ -70,6 +71,10 @@ const App = () => (
                 utanför Suspense: den ska köra även när nästa sida
                 fortfarande laddar sin kodbit. */}
             <ScrollToTop />
+            {/* Guiden ligger innanför routern - den byter vy - men
+                utanför Suspense, så att en pågående rundtur överlever
+                att nästa sida laddar sin kodbit. */}
+            <GuideProvider>
             <Suspense fallback={<RouteFallback />}>
               <Routes>
                 <Route path="/" element={<Index />} />
@@ -259,6 +264,7 @@ const App = () => (
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </Suspense>
+            </GuideProvider>
             {/* Inside AuthProvider: the banner links to the demo sign-in only
                 while signed out, so it needs the auth context. */}
             <DemoBanner />

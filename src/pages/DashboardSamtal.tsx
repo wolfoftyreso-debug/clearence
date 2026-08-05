@@ -38,6 +38,7 @@ import {
 } from "@/lib/advisor/premiseWatch";
 import { buildWorkingModel, sinceLastVisit } from "@/lib/advisor/memory";
 import { ClaraIntro } from "@/components/advisor/ClaraIntro";
+import { ShowMeBar } from "@/components/guide/ShowMeBar";
 import { useEntitlements } from "@/components/billing/LockedFeature";
 import { lockMessage } from "@/lib/pricing";
 import { caseInvitationEmail } from "@/lib/email/messages";
@@ -611,6 +612,13 @@ const DashboardSamtal = () => {
           />
         ) : (
           <>
+            {/* "Visa mig": användaren ska aldrig behöva leta efter en
+                funktion CLEARANCE känner till. Ligger i samtalet, för
+                det är där man frågar. */}
+            <div className="mb-4">
+              <ShowMeBar />
+            </div>
+
             {/* Omprövningen ligger FÖRE samtalet, inte i en lista längre
                 ned: ett beslut som vilar på en premiss som inte längre
                 gäller är det viktigaste CLEARANCE vet om ärendet just nu.

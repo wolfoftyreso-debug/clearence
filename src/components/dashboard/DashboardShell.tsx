@@ -19,6 +19,9 @@ import {
 import { analysisInputFromCase } from "@/lib/caseAnalysis";
 import { analyseCrisis } from "@/lib/crisisAnalysis";
 import type { UserRole } from "@/data/types";
+import { useGuide } from "@/components/guide/GuideProvider";
+import { MicroLessons } from "@/components/guide/MicroLessons";
+import { analysisInputFromCase as guideAnalysisInput } from "@/lib/caseAnalysis";
 import {
   BarChart3,
   Bell,
@@ -60,28 +63,35 @@ interface NavItem {
   icon: LucideIcon;
   label: string;
   href: string;
+  /**
+   * Guidens ankarnamn. Måste stämma med navAnchor i
+   * lib/guide/catalogue.ts - det är hit den pulserande ringen pekar när
+   * CLEARANCE visar var något ligger, och tests/guide.ts fäller om
+   * katalogen pekar på ett ankare som inte finns.
+   */
+  guide: string;
 }
 
 const COMPANY_NAV: NavItem[] = [
-  { icon: LayoutDashboard, label: "Översikt", href: "/dashboard" },
-  { icon: TrendingDown, label: "Likviditet", href: "/dashboard/liquidity" },
-  { icon: FileText, label: "Dokument", href: "/dashboard/dokument" },
-  { icon: MessageSquare, label: "Meddelanden", href: "/dashboard/meddelanden" },
-  { icon: UserPlus, label: "Deltagare", href: "/dashboard/deltagare" },
+  { icon: LayoutDashboard, label: "Översikt", href: "/dashboard", guide: "nav-oversikt" },
+  { icon: TrendingDown, label: "Likviditet", href: "/dashboard/liquidity", guide: "nav-likviditet" },
+  { icon: FileText, label: "Dokument", href: "/dashboard/dokument", guide: "nav-dokument" },
+  { icon: MessageSquare, label: "Meddelanden", href: "/dashboard/meddelanden", guide: "nav-meddelanden" },
+  { icon: UserPlus, label: "Deltagare", href: "/dashboard/deltagare", guide: "nav-deltagare" },
   /* Max 7 menyval (Excellence rond 2). Kreditunderlag nås från Dokument,
      rådgivarkatalogen från Deltagare - handlingar och bemanning är delar av
      ärendet, inte egna arbetsytor. Lägg inte tillbaka dem här. */
-  { icon: History, label: "Händelselogg", href: "/dashboard/handelser" },
-  { icon: Settings, label: "Inställningar", href: "/dashboard/installningar" },
+  { icon: History, label: "Händelselogg", href: "/dashboard/handelser", guide: "nav-handelselogg" },
+  { icon: Settings, label: "Inställningar", href: "/dashboard/installningar", guide: "nav-installningar" },
 ];
 
 const ADVISOR_NAV: NavItem[] = [
-  { icon: Briefcase, label: "Klienter", href: "/arenden" },
-  { icon: LayoutDashboard, label: "Aktivt ärende", href: "/dashboard" },
-  { icon: MessageSquare, label: "Meddelanden", href: "/dashboard/meddelanden" },
-  { icon: Briefcase, label: "Mina förfrågningar", href: "/mina-forfragningar" },
-  { icon: FileText, label: "Byråprofil och team", href: "/byraprofil" },
-  { icon: Settings, label: "Inställningar", href: "/dashboard/installningar" },
+  { icon: Briefcase, label: "Klienter", href: "/arenden", guide: "nav-klienter" },
+  { icon: LayoutDashboard, label: "Aktivt ärende", href: "/dashboard", guide: "nav-oversikt" },
+  { icon: MessageSquare, label: "Meddelanden", href: "/dashboard/meddelanden", guide: "nav-meddelanden" },
+  { icon: Briefcase, label: "Mina förfrågningar", href: "/mina-forfragningar", guide: "nav-forfragningar" },
+  { icon: FileText, label: "Byråprofil och team", href: "/byraprofil", guide: "nav-byraprofil" },
+  { icon: Settings, label: "Inställningar", href: "/dashboard/installningar", guide: "nav-installningar" },
 ];
 
 export const navForRole = (role: UserRole): NavItem[] =>
@@ -413,6 +423,15 @@ interface DashboardShellProps {
 
 export const DashboardShell = ({ children, title, actions }: DashboardShellProps) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  /**
+   * Guiden får öppna menyn. Den behöver det för att kunna VISA vägen på
+   * en liten skärm: att ringa in ett menyval bakom en stängd meny är
+   * att peka på ingenting.
+   */
+  const { registerMenu } = useGuide();
+  useEffect(() => {
+    registerMenu(setSidebarOpen);
+  }, [registerMenu]);
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
   const { pathname } = useLocation();
@@ -434,6 +453,19 @@ export const DashboardShell = ({ children, title, actions }: DashboardShellProps
     queryFn: () => data.billing.getMine(),
     retry: false,
   });
+
+  /**
+   * Ärendet, bara för att kunna hålla mikroutbildningen tyst när det
+   * brinner. Den som just fått veta att lönerna inte kan betalas ska
+   * inte få en lektion i vad ett kontrollområde heter.
+   */
+  const { data: shellCase } = useQuery({
+    queryKey: ["latest-case"],
+    queryFn: () => data.cases.getLatest(),
+    retry: false,
+  });
+  const acute =
+    !!shellCase && analyseCrisis(guideAnalysisInput(shellCase)).urgency === "immediate";
 
   // Låst konto: innehållet byts mot stängningsvyn. Två undantag:
   //  - Inställningar, där fakturan man ska betala ligger. Att låsa inne den
@@ -497,6 +529,7 @@ export const DashboardShell = ({ children, title, actions }: DashboardShellProps
                 <Link
                   key={item.href}
                   to={item.href}
+                  data-guide={item.guide}
                   onClick={() => setSidebarOpen(false)}
                   aria-current={active ? "page" : undefined}
                   className={`flex w-full items-center gap-3 rounded-md px-4 py-3 text-sm font-medium transition-colors ${
@@ -649,6 +682,9 @@ export const DashboardShell = ({ children, title, actions }: DashboardShellProps
         ) : (
           <main className="p-4 lg:p-8">{children}</main>
         )}
+        {/* Mikroutbildningen: små förklaringar som kommer när ytan är
+            framme, en i taget, och aldrig när läget är akut. */}
+        <MicroLessons acute={acute} />
       </div>
     </div>
   );

@@ -52,6 +52,7 @@ const DashboardDocuments = () => {
 
   return (
     <DashboardShell title="Dokument">
+      <div data-guide="dokumentvyn">
       <GuidedArrival />
       {isLoading ? (
         <div className="flex justify-center py-16">
@@ -120,6 +121,7 @@ const DashboardDocuments = () => {
           <IntegrationStatus />
         </div>
       )}
+      </div>
     </DashboardShell>
   );
 };

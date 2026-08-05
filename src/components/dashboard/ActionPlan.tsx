@@ -203,7 +203,7 @@ export const ActionPlan = ({ caseRecord, timeline }: ActionPlanProps) => {
   const done = (tasks ?? []).filter((t) => t.doneAt);
 
   return (
-    <section id="nasta-steg" className="scroll-mt-20 rounded-md border border-border bg-card p-5 shadow-soft">
+    <section id="nasta-steg" data-guide="handlingsplan" className="scroll-mt-20 rounded-md border border-border bg-card p-5 shadow-soft">
       <h2 className="flex flex-wrap items-center gap-2 font-semibold text-foreground">
         <ListTodo className="h-5 w-5 text-accent" aria-hidden="true" />
         Nästa steg

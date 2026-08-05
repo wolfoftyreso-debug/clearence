@@ -290,7 +290,7 @@ const DashboardParticipants = () => {
 
   return (
     <DashboardShell title="Deltagare">
-      <div className="mx-auto max-w-3xl space-y-8">
+      <div data-guide="deltagarvyn" className="mx-auto max-w-3xl space-y-8">
         <header>
           <h2 className="text-2xl font-semibold text-foreground">Deltagare</h2>
           <p className="mt-1 text-sm text-muted-foreground">

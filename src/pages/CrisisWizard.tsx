@@ -1082,7 +1082,7 @@ const CrisisWizard = () => {
         </div>
 
         {/* Step Content */}
-        <div className="mb-6">
+        <div data-guide="wizard-start" className="mb-6">
           {currentStep === 0 && renderStep1()}
           {currentStep === 1 && renderStep2()}
           {currentStep === 2 && renderStep3()}
