@@ -329,7 +329,16 @@ const LiquidityPlanner = () => {
 
   const current = steps[step];
   const isResult = current.key === "result";
-  const canGoNext = step === 0 ? openingBalance.trim().length > 0 : true;
+  /**
+   * Vad som saknas för att gå vidare - i klartext, ur samma källa som
+   * låser knappen. En grå "Nästa" utan förklaring är en tyst
+   * återvändsgränd; se nulägesanalysen och kontrollbalansen.
+   */
+  const blockingReason: string | null =
+    step === 0 && openingBalance.trim().length === 0
+      ? "Fyll i saldot på företagskontot för att gå vidare. Ungefärligt går bra – planen räknas om när du ändrar."
+      : null;
+  const canGoNext = blockingReason === null;
 
   const renderStepBody = () => {
     switch (current.key) {
@@ -632,7 +641,13 @@ const LiquidityPlanner = () => {
           className="fixed left-0 right-0 bg-card border-t border-border p-4"
           style={{ bottom: "var(--app-bottom-inset, 0px)" }}
         >
-          <div className="container max-w-2xl mx-auto flex gap-3">
+          <div className="container max-w-2xl mx-auto">
+            {blockingReason !== null && (
+              <p className="mb-3 rounded-md bg-secondary/60 px-3.5 py-2.5 text-sm leading-relaxed text-foreground">
+                {blockingReason}
+              </p>
+            )}
+            <div className="flex gap-3">
             {step > 0 && (
               <Button variant="outline" size="lg" onClick={() => setStep((s) => s - 1)} className="flex-1">
                 <ArrowLeft className="w-5 h-5" />
@@ -649,6 +664,7 @@ const LiquidityPlanner = () => {
               {step === 0 ? "Nästa" : "Nästa"}
               <ArrowRight className="w-5 h-5" />
             </Button>
+            </div>
           </div>
         </div>
       )}

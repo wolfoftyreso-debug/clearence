@@ -229,19 +229,44 @@ const CrisisWizard = () => {
     formData.orgNumber.replace(/\D/g, "").length === 10 &&
     !validateOrgNumber(formData.orgNumber);
 
-  const canProceed = (): boolean => {
+  const canProceed = (): boolean => blockingReason() === null;
+
+  /**
+   * VAD SOM SAKNAS FÖR ATT GÅ VIDARE - i klartext.
+   *
+   * En grå "Nästa" som inte förklarar sig är den tystaste
+   * återvändsgränden som finns: användaren ser en knapp som inte gör
+   * något och vet inte varför. Att låta hen gissa vilket av sidans fält
+   * som fattas är att lägga över arbetet på den som redan har fullt upp.
+   *
+   * Skälet står därför alltid intill knappen, och det är SAMMA källa som
+   * låser den - de kan inte glida isär.
+   */
+  const blockingReason = (): string | null => {
     switch (currentStep) {
       case 0:
-        return validateOrgNumber(formData.orgNumber);
-      case 1:
-        return formData.canPaySalary !== null && 
-               formData.canPayTax !== null && 
-               formData.canPayRent !== null &&
-               formData.canPaySuppliers !== null;
+        if (formData.orgNumber.replace(/\D/g, "").length === 0) {
+          return "Fyll i organisationsnumret för att gå vidare.";
+        }
+        return validateOrgNumber(formData.orgNumber)
+          ? null
+          : "Organisationsnumret är inte komplett – tio siffror, och kontrollsiffran ska stämma.";
+      case 1: {
+        const missing = [
+          formData.canPaySalary === null ? "lönerna" : null,
+          formData.canPayTax === null ? "skatten" : null,
+          formData.canPayRent === null ? "hyran" : null,
+          formData.canPaySuppliers === null ? "leverantörerna" : null,
+        ].filter(Boolean) as string[];
+        if (missing.length === 0) return null;
+        return `Svara på frågan om ${missing.join(", ").replace(/, ([^,]*)$/, " och $1")} för att gå vidare.`;
+      }
       case 2:
-        return formData.totalDebt.length > 0;
+        return formData.totalDebt.length > 0
+          ? null
+          : "Ange de totala skulderna för att gå vidare. Vet du inte exakt räcker en uppskattning.";
       default:
-        return true;
+        return null;
     }
   };
 
@@ -1100,6 +1125,12 @@ const CrisisWizard = () => {
         )}
 
         {/* Navigation */}
+        {currentStep < 3 && blockingReason() !== null && (
+          /* Se blockingReason(): knappen och skälet har samma källa. */
+          <p className="mb-3 rounded-md bg-secondary/60 px-3.5 py-2.5 text-sm leading-relaxed text-foreground">
+            {blockingReason()}
+          </p>
+        )}
         {currentStep < 3 && (
           <div className="flex gap-3 sticky bottom-4">
             {currentStep > 0 && (

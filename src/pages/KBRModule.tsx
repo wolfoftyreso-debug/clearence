@@ -296,18 +296,38 @@ const KBRModule = () => {
     }
   };
 
-  const canProceed = (): boolean => {
+  const canProceed = (): boolean => blockingReason() === null;
+
+  /**
+   * VAD SOM SAKNAS FÖR ATT GÅ VIDARE - i klartext.
+   *
+   * Samma regel som i nulägesanalysen: en grå "Nästa" utan förklaring är
+   * en tyst återvändsgränd. Skälet kommer ur samma funktion som låser
+   * knappen, så de kan aldrig säga olika saker.
+   */
+  const blockingReason = (): string | null => {
     switch (currentStep) {
       case 0:
-        return formData.ambitionLevel !== null;
+        return formData.ambitionLevel !== null
+          ? null
+          : "Välj hur långt du vill gå för att gå vidare. Du kan ändra dig senare.";
       case 1:
-        return formData.orgNumber.replace(/\D/g, '').length === 10;
-      case 2:
-        return !!formData.shareCapital && !!formData.totalAssets && !!formData.totalLiabilities;
+        return formData.orgNumber.replace(/\D/g, '').length === 10
+          ? null
+          : "Fyll i organisationsnumret – tio siffror – för att gå vidare.";
+      case 2: {
+        const missing = [
+          !formData.shareCapital ? "aktiekapitalet" : null,
+          !formData.totalAssets ? "tillgångarna" : null,
+          !formData.totalLiabilities ? "skulderna" : null,
+        ].filter(Boolean) as string[];
+        if (missing.length === 0) return null;
+        return `Ange ${missing.join(", ").replace(/, ([^,]*)$/, " och $1")} för att gå vidare. Uppskattningar går bra – de går att rätta.`;
+      }
       case 3:
-        return true;
+        return null;
       default:
-        return false;
+        return "Det här steget går inte att lämna än.";
     }
   };
 
@@ -972,7 +992,14 @@ const KBRModule = () => {
           className="fixed left-0 right-0 bg-card border-t border-border p-4"
           style={{ bottom: "var(--app-bottom-inset, 0px)" }}
         >
-          <div className="container flex gap-3">
+          <div className="container">
+            {blockingReason() !== null && (
+              /* Se blockingReason(): knappen och skälet har samma källa. */
+              <p className="mb-3 rounded-md bg-secondary/60 px-3.5 py-2.5 text-sm leading-relaxed text-foreground">
+                {blockingReason()}
+              </p>
+            )}
+            <div className="flex gap-3">
             {currentStep > 0 && (
               <Button variant="outline" size="lg" onClick={prevStep} className="flex-1">
                 <ArrowLeft className="w-5 h-5" />
@@ -989,6 +1016,7 @@ const KBRModule = () => {
               Nästa
               <ArrowRight className="w-5 h-5" />
             </Button>
+            </div>
           </div>
         </div>
       )}

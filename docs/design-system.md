@@ -259,6 +259,31 @@ en gång, och en påminnelse kommer långt senare och knyter an till något
 nytt: "Kommer du ihåg kontrolläget? Det är också där framtida varningar
 dyker upp." Se `src/lib/guide/microLessons.ts`.
 
+## Inga återvändsgränder
+
+**Ingen skärm får sakna en väg vidare.** Antingen händer något när man
+trycker, eller så står det på skärmen vad man ska göra i stället – och då
+som något klickbart, inte som en tröstande mening.
+
+Två sorters återvändsgränd har funnits i produkten, och båda var osynliga
+för trettiotre gröna testsviter:
+
+- **Den döda knappen.** "Hoppa över frågan" lagrade tomt svar, och motorn
+  läste tomt som obesvarat: samma fråga kom tillbaka i evighet. *Svarad*
+  är inte samma sak som *svarad med något* – frågan om något är besvarat
+  ska pröva om nyckeln finns, aldrig om värdet är sant.
+- **Den tysta låsningen.** En grå "Nästa" som inte förklarar sig är den
+  tystaste återvändsgränden som finns: användaren ser en knapp som inte
+  gör något och vet inte varför. Alla tre guiderna har därför en
+  `blockingReason()` som både låser knappen och skriver skälet intill den
+  – samma källa, så de kan aldrig säga olika saker.
+
+`tests/browser/verify-atervandsgrander.mjs` går bara de olyckliga
+vägarna: hoppar över varje fråga, varje guidesteg, går tillbaka ur varje
+guide, besöker varje vy utan ärende och skriver obegripligheter i
+samtalet. Alla övriga sviter tar den lyckliga vägen – det var därför
+felet kunde ligga kvar.
+
 ## Regeln bakom reglerna
 
 Skalan finns för att en sida ska kännas komponerad, inte staplad.
