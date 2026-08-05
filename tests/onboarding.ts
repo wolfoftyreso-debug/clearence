@@ -36,6 +36,7 @@ import {
   interviewProgress,
   INTERVIEW,
   isAcute,
+  isAnswered,
   nextQuestion,
 } from "../src/lib/advisor/interview";
 import { buildFirstAnalysis } from "../src/lib/advisor/firstAnalysis";
@@ -226,6 +227,50 @@ check(
   nextQuestion(calm, "oro", midway)?.id,
 );
 check("intervjun tar slut", nextQuestion(calm, "oro", Object.fromEntries(INTERVIEW.map((q) => [q.id, "x"]))) === null);
+
+// ATT HOPPA ÖVER ÄR ETT SVAR - svaret "det vill jag inte säga".
+//
+// Överhoppade frågor lagras som tom sträng, och tom sträng är falsk.
+// Motorn läste därför överhoppat som obesvarat och ställde samma fråga
+// igen, i evighet: knappen gjorde ingenting och användaren satt fast på
+// fråga sex. Det var en riktig återvändsgränd i produkten.
+{
+  check("nyckeln finns = ställning tagen", isAnswered({ anstallda: "" }, "anstallda"));
+  check("saknad nyckel = obesvarad", !isAnswered({}, "anstallda"));
+
+  const skipped = { anstallda: "" };
+  check(
+    "en överhoppad fråga kommer inte tillbaka",
+    nextQuestion(emptyProfile(), "oro", skipped)?.id !== "anstallda",
+    nextQuestion(emptyProfile(), "oro", skipped)?.id,
+  );
+  check(
+    "utan att intervjun stannar",
+    nextQuestion(emptyProfile(), "oro", skipped) !== null,
+  );
+  check(
+    "och räknaren går framåt",
+    interviewProgress(emptyProfile(), "oro", skipped).current === 2,
+    interviewProgress(emptyProfile(), "oro", skipped),
+  );
+
+  // Hela intervjun överhoppad ska ta slut, inte snurra.
+  let prof = emptyProfile();
+  const allSkipped: Record<string, string> = {};
+  let rounds = 0;
+  for (; rounds < 30; rounds += 1) {
+    const q = nextQuestion(prof, "loner", allSkipped);
+    if (!q) break;
+    allSkipped[q.id] = "";
+    prof = applyAnswer(prof, {});
+  }
+  check("en intervju där allt hoppas över tar slut", rounds < 30, rounds);
+  check(
+    "och den slutar efter rimligt många frågor",
+    rounds >= 10 && rounds <= 15,
+    rounds,
+  );
+}
 const p = interviewProgress(calm, "oro", midway);
 check("förloppet räknar rätt", p.current === 3 && p.total === 15, p);
 

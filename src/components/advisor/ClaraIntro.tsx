@@ -290,7 +290,10 @@ export const ClaraIntro = ({
   useEffect(() => {
     if (stage !== "intervju" || question !== null) return;
     const filled = profileFilled(profile);
-    say(ONBOARDING.interviewDone(Object.keys(answers).length, filled));
+    // Överhoppade frågor räknas inte som svar. "Tolv svar" när fyra av
+    // dem var överhoppningar är en överdrift om hur mycket vi vet.
+    const given = Object.values(answers).filter((v) => v !== "").length;
+    say(ONBOARDING.interviewDone(given, filled));
     setStage("analys");
     saveOnboarding({
       name: name.trim(),

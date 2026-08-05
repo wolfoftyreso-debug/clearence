@@ -257,6 +257,22 @@ export const INTERVIEW: InterviewQuestion[] = [
 ];
 
 /**
+ * SVARAD är inte samma sak som SVARAD MED NÅGOT.
+ *
+ * Att hoppa över en fråga ÄR ett svar - svaret "det vill jag inte säga".
+ * Överhoppade frågor lagras som tom sträng, och en tom sträng är falsk.
+ * Motorn läste därför `!answers[id]` som "obesvarad" och ställde samma
+ * fråga igen, i evighet: knappen "Hoppa över frågan" gjorde ingenting
+ * alls och användaren satt fast.
+ *
+ * Frågan om något är besvarat ska därför ALLTID gå genom den här
+ * funktionen, aldrig genom sanningsvärdet hos svaret. Nyckeln finns =
+ * användaren har tagit ställning.
+ */
+export const isAnswered = (answers: Record<string, string>, id: string): boolean =>
+  Object.prototype.hasOwnProperty.call(answers, id);
+
+/**
  * Läget är akut när introduktionen sa det, eller när användaren själv
  * pekat ut likviditeten som den största utmaningen.
  */
@@ -275,8 +291,8 @@ export const applicableQuestions = (
   return INTERVIEW.filter((q) => {
     // En fråga som redan är besvarad står kvar i listan - annars skulle
     // "fråga 4 av 12" räkna ner medan man svarar, vilket är obegripligt.
-    if (acute && q.skipWhenAcute && !answers[q.id]) return false;
-    if (q.askWhen && !q.askWhen(profile) && !answers[q.id]) return false;
+    if (acute && q.skipWhenAcute && !isAnswered(answers, q.id)) return false;
+    if (q.askWhen && !q.askWhen(profile) && !isAnswered(answers, q.id)) return false;
     return true;
   });
 };
@@ -287,7 +303,7 @@ export const nextQuestion = (
   situationId: string | null,
   answers: Record<string, string>,
 ): InterviewQuestion | null =>
-  applicableQuestions(profile, situationId, answers).find((q) => !answers[q.id]) ?? null;
+  applicableQuestions(profile, situationId, answers).find((q) => !isAnswered(answers, q.id)) ?? null;
 
 /** Var i intervjun användaren är: "Fråga 4 av 12". */
 export const interviewProgress = (
@@ -296,6 +312,6 @@ export const interviewProgress = (
   answers: Record<string, string>,
 ): { current: number; total: number } => {
   const applicable = applicableQuestions(profile, situationId, answers);
-  const answeredCount = applicable.filter((q) => answers[q.id]).length;
+  const answeredCount = applicable.filter((q) => isAnswered(answers, q.id)).length;
   return { current: Math.min(answeredCount + 1, applicable.length), total: applicable.length };
 };

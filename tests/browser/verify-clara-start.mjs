@@ -143,10 +143,37 @@ check("första frågan är antalet personer", /Hur många personer arbetar i fö
 check("frågan säger varför den ställs", /Antalet styr vad som händer/.test(body));
 check("det går att hoppa över en fråga", /Hoppa över frågan/.test(body));
 
-await page.click('button:has-text("6–20 personer")');
+// ATT HOPPA ÖVER MÅSTE FAKTISKT GÅ VIDARE.
+//
+// Knappen lagrade tomt svar, och motorn läste tomt som obesvarat: samma
+// fråga kom tillbaka i evighet och användaren satt fast. En återvändsgränd
+// mitt i introduktionen, alltså precis det produkten inte får ha.
+const questionNow = async () => {
+  const t = await page.locator('section[aria-label="Samtal med CLEARANCE"]').innerText();
+  return (t.match(/fråga \d+ av \d+/i) ?? [""])[0];
+};
+{
+  const before = await questionNow();
+  await page.click('button:has-text("Hoppa över frågan")');
+  await page.waitForTimeout(500);
+  const after = await questionNow();
+  check("att hoppa över en fråga går vidare", before !== after, `${before} -> ${after}`);
+  // Och den överhoppade frågan får inte dyka upp igen längre fram.
+  await page.click('button:has-text("Hoppa över frågan")');
+  await page.waitForTimeout(500);
+  const third = await questionNow();
+  check("två hopp i rad går också vidare", after !== third, `${after} -> ${third}`);
+  check(
+    "den första frågan kommer inte tillbaka",
+    !/Hur många personer arbetar/.test(await page.innerText("body")),
+  );
+}
+
+// Två frågor är överhoppade; nu står vi på den tredje.
+await page.click('button:has-text("Varor")');
 await page.waitForTimeout(400);
 body = await page.innerText("body");
-check("nästa fråga kommer", /Vilken bransch ligger närmast\?/.test(body));
+check("nästa fråga kommer", /fråga 4 av/i.test(body), (body.match(/fråga \d+ av \d+/i) ?? [""])[0]);
 check("profilen går att öppna", /Det här har jag förstått hittills/.test(body));
 await page.click('button:has-text("Det här har jag förstått hittills")');
 await page.waitForTimeout(300);
