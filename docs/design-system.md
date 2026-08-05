@@ -284,6 +284,42 @@ guide, besöker varje vy utan ärende och skriver obegripligheter i
 samtalet. Alla övriga sviter tar den lyckliga vägen – det var därför
 felet kunde ligga kvar.
 
+## Arbete får aldrig försvinna
+
+**Allt en användare lämnar ifrån sig överlever att fliken dör.** Målgruppen
+sitter i en telefon, mitt i sitt livs mest stressade vecka. En skärmlåsning,
+ett appbyte eller en webbläsare som återvinner fliken får inte kosta dem en
+enda inmatning.
+
+Tre krav, och de hänger ihop:
+
+1. **Spara.** Guiderna gör det med `useAutosavedState`, introduktions­samtalet
+   med `onboardingResume`. Guiderna använder debounce eftersom de har textfält
+   som ändras vid varje tangenttryck; samtalet sparar direkt, eftersom det
+   bara ändras när användaren klickar och 400 ms hade varit ett fönster där
+   ett svar gick förlorat.
+2. **Säg det.** Att arbetet finns kvar räcker inte – användaren ska se *att*
+   det gör det, *var* det ligger och *hur mycket* som finns kvar, plus en väg
+   att börja om. En återupptagning man inte kan tacka nej till är en låsning.
+   Siffran ska tåla att kontrolleras: överhoppade frågor räknas inte som svar.
+3. **Städa vid utloggning.** Ett halvfärdigt samtal innehåller ett personnamn,
+   ett organisationsnummer och svar om ett bolags ekonomi. `localTraces` skiljer
+   på **arbete** (städas) och **läsinställningar** (står kvar) – språknivå och
+   presentationsläge säger något om hur en människa vill läsa, inte något om
+   ett bolag. Listan är handskriven med flit: att städa allt som börjar med
+   `clearance-` hade tagit demoläget med sig.
+
+**Ett löfte om sparat arbete måste vara sant.** Startsidan mötte återvändare
+med "fortsätt samtalet där ni slutade" medan intervjusvaren aldrig sparats.
+Ett brutet löfte är värre än inget löfte: det lär användaren att ingenting som
+sägs i samtalet får konsekvenser. Rutan visas därför bara när det faktiskt
+finns ett läge att fortsätta i.
+
+`tests/browser/verify-avbrott.mjs` gör bara en sak: den avbryter. Övriga
+sviter kör varje flöde i ett svep, och det var därför ingen av dem märkte att
+produktens ytterdörr – det längsta sammanhängande arbetet i hela tjänsten –
+saknade autospar.
+
 ## Regeln bakom reglerna
 
 Skalan finns för att en sida ska kännas komponerad, inte staplad.

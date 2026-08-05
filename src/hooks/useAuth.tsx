@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { data } from "@/data";
+import { clearWorkTraces } from "@/lib/localTraces";
 import type { AuthUser } from "@/data/types";
 
 interface AuthContextValue {
@@ -35,6 +36,25 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return unsubscribe;
   }, []);
 
+  /**
+   * Utloggningen städar det som ligger kvar i webbläsaren.
+   *
+   * Här och inte i adaptrarna: alla tre backends ska bete sig likadant,
+   * och en ny adapter ska inte kunna glömma bort städningen. Ordningen
+   * är avsiktlig - först loggas användaren ut (sessionstoken behövs för
+   * det), sedan städas spåren.
+   *
+   * Vad som städas och vad som står kvar avgörs i localTraces: arbete
+   * och uppgifter om bolaget går, läsinställningar stannar.
+   */
+  const signOut = async () => {
+    try {
+      await data.auth.signOut();
+    } finally {
+      clearWorkTraces();
+    }
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -42,7 +62,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         loading,
         signUp: data.auth.signUp,
         signIn: data.auth.signIn,
-        signOut: data.auth.signOut,
+        signOut,
       }}
     >
       {children}

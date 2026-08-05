@@ -5,6 +5,13 @@ import { Input } from "@/components/ui/input";
 import { data } from "@/data";
 import { ONBOARDING } from "@/lib/advisor/dialog";
 import { saveOnboarding } from "@/lib/advisor/onboardingHandoff";
+import {
+  clearResume,
+  readResume,
+  resumeAnswerCount,
+  saveResume,
+  type ResumableStage,
+} from "@/lib/advisor/onboardingResume";
 import { formatOrgNumber, lookupCompany, validateOrgNumber } from "@/lib/orgNumber";
 import { WAITS, waitText } from "@/lib/advisor/prepare";
 import { TransitionNotice } from "@/components/advisor/TransitionNotice";
@@ -52,6 +59,10 @@ import { Check, ChevronDown } from "lucide-react";
  * Komponenten bor här för att den används på två ställen: startsidan
  * (före inloggning) och samtalsvyn för en inloggad användare utan
  * ärende. Den som redan har konto får inte kontostegen - `hasAccount`.
+ *
+ * Samtalet ÖVERLEVER en siduppdatering från och med kontosteget - se
+ * onboardingResume. Femton frågor i en telefon är för mycket arbete för
+ * att en skärmlåsning ska få kasta bort det.
  */
 
 interface ChatEntry {
@@ -105,11 +116,14 @@ export const ClaraIntro = ({
   /** Den som redan är inloggad ska inte skapa ett konto till. */
   hasAccount?: boolean;
 }) => {
-  const [entries, setEntries] = useState<ChatEntry[]>([]);
-  const [stage, setStage] = useState<Stage>("valkommen");
-  const [name, setName] = useState("");
-  const [company, setCompany] = useState("");
-  const [orgNumber, setOrgNumber] = useState("");
+  // Läses EN gång, vid mount. Finns ingen post är allt som förut.
+  const [resumed] = useState(() => readResume());
+
+  const [entries, setEntries] = useState<ChatEntry[]>(() => resumed?.entries ?? []);
+  const [stage, setStage] = useState<Stage>(() => resumed?.stage ?? "valkommen");
+  const [name, setName] = useState(() => resumed?.name ?? "");
+  const [company, setCompany] = useState(() => resumed?.company ?? "");
+  const [orgNumber, setOrgNumber] = useState(() => resumed?.orgNumber ?? "");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [accountError, setAccountError] = useState<string | null>(null);
@@ -117,13 +131,15 @@ export const ClaraIntro = ({
   const [lookupStatus, setLookupStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [companyInfo, setCompanyInfo] = useState<CompanyInfo | null>(null);
 
-  const [situationId, setSituationId] = useState<string | null>(null);
-  const [answers, setAnswers] = useState<Record<string, string>>({});
-  const [profile, setProfile] = useState<CompanyProfile>(emptyProfile);
+  const [situationId, setSituationId] = useState<string | null>(() => resumed?.situationId ?? null);
+  const [answers, setAnswers] = useState<Record<string, string>>(() => resumed?.answers ?? {});
+  const [profile, setProfile] = useState<CompanyProfile>(() => resumed?.profile ?? emptyProfile());
   const [signals, setSignals] = useState<{
     concentration: "låg" | "medel" | "hög" | null;
     trend: "upp" | "stabil" | "ner" | "kraftigt ner" | null;
-  }>({ concentration: null, trend: null });
+  }>(() => resumed?.signals ?? { concentration: null, trend: null });
+  /** Notisen om att samtalet återupptogs. Går att stänga - den har gjort sitt. */
+  const [resumeNoticeOpen, setResumeNoticeOpen] = useState(resumed !== null);
   const [profileOpen, setProfileOpen] = useState(false);
   const [smsChoice, setSmsChoice] = useState<"none" | "yes" | "no">("none");
 
@@ -146,6 +162,42 @@ export const ClaraIntro = ({
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ block: "nearest" });
   }, [entries.length]);
+
+  /**
+   * Ett återupptaget samtal är ett pågående samtal. Utan det här hade
+   * startsidan bytt ut vyn under fötterna på användaren i samma ögonblick
+   * som inloggningen laddats klart - allt hen just sett, borta igen.
+   */
+  useEffect(() => {
+    if (resumed) onStart?.();
+    // Körs en gång, vid mount, och bara om det fanns något att återuppta.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /**
+   * Samtalet skrivs ned efter varje ändring, från kontosteget och framåt.
+   *
+   * Inget debounce: till skillnad från guidernas textfält ändras det här
+   * tillståndet bara när användaren klickar, alltså några gånger per
+   * minut. Att vänta 400 ms hade bara skapat ett fönster där ett svar
+   * gick förlorat.
+   */
+  useEffect(() => {
+    const resumable: Stage[] = ["situation", "intervju", "analys"];
+    if (!resumable.includes(stage)) return;
+    saveResume({
+      stage: stage as ResumableStage,
+      entries,
+      name,
+      company,
+      orgNumber,
+      situationId,
+      answers,
+      profile,
+      signals,
+      savedAt: new Date().toISOString(),
+    });
+  }, [stage, entries, name, company, orgNumber, situationId, answers, profile, signals]);
 
   // Uppslaget mot företagsregistret. Effekten beror ENBART på numret;
   // allt annat den behöver ligger i refs eller i uppdateringsfunktioner.
@@ -352,6 +404,10 @@ export const ClaraIntro = ({
   /* --- steg 5: vidare ------------------------------------------------------- */
   const finish = () => {
     say(...ONBOARDING.closing);
+    // Samtalet är överlämnat till nulägesanalysen. Nästa besök ska börja
+    // rent i stället för att erbjuda en återupptagning av något som är
+    // klart - det hade varit ett erbjudande som pekar bakåt.
+    clearResume();
     setStage("done");
     handoffTimer.current = window.setTimeout(() => onDone(name.trim() || null), 5200);
   };
@@ -360,7 +416,31 @@ export const ClaraIntro = ({
   const goNow = () => {
     if (handoffTimer.current !== null) window.clearTimeout(handoffTimer.current);
     handoffTimer.current = null;
+    clearResume();
     onDone(name.trim() || null);
+  };
+
+  /**
+   * Börja om.
+   *
+   * Den som återupptas ska kunna säga nej. Utan den här knappen vore
+   * återupptagningen en låsning: ett gammalt halvfärdigt samtal som inte
+   * går att komma ur annat än genom att svara sig igenom det.
+   *
+   * Namnet, bolaget och organisationsnumret står kvar. De är uppgifter om
+   * kontot, inte svar i intervjun, och de går att ändra i formuläret som
+   * välkomsten leder till. Att tvinga fram dem en gång till hade varit
+   * friktion utan syfte.
+   */
+  const startOver = () => {
+    clearResume();
+    setEntries([]);
+    setStage("valkommen");
+    setSituationId(null);
+    setAnswers({});
+    setProfile(emptyProfile());
+    setSignals({ concentration: null, trend: null });
+    setResumeNoticeOpen(false);
   };
 
   const currentStep =
@@ -387,6 +467,37 @@ export const ClaraIntro = ({
         </div>
       ) : (
         <>
+          {resumed && resumeNoticeOpen && (
+            /* Samma besked som guiderna ger efter en siduppdatering, av
+               samma skäl: den som kommer tillbaka ska se ATT arbetet finns
+               kvar och HUR MYCKET, inte behöva gissa av samtalet ovanför.
+               Överhoppade frågor räknas inte - siffran ska tåla att
+               kontrolleras mot analysen. */
+            <div className="mb-4 rounded-md border border-border bg-secondary/60 p-3.5">
+              <p className="text-sm leading-relaxed text-foreground">
+                Vi har sparat samtalet, lokalt i din webbläsare.{" "}
+                {resumeAnswerCount(resumed) > 0
+                  ? `Dina ${resumeAnswerCount(resumed)} svar finns kvar och du fortsätter där du var.`
+                  : "Du fortsätter där du var."}
+              </p>
+              <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
+                <button
+                  type="button"
+                  onClick={() => setResumeNoticeOpen(false)}
+                  className="text-sm font-medium text-accent underline underline-offset-2"
+                >
+                  Fortsätt
+                </button>
+                <button
+                  type="button"
+                  onClick={startOver}
+                  className="text-sm text-muted-foreground underline underline-offset-2 hover:text-foreground"
+                >
+                  Börja om från början
+                </button>
+              </div>
+            </div>
+          )}
           <ol className="space-y-3" aria-live="polite">
             {entries.map((entry, i) => (
               <li key={i} className={entry.who === "user" ? "flex justify-end" : "flex items-start gap-2"}>

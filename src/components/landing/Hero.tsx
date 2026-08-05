@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { ClaraIntro } from "@/components/advisor/ClaraIntro";
+import { hasResume } from "@/lib/advisor/onboardingResume";
 import { Clock, FileText, UserCheck } from "lucide-react";
 
 /**
@@ -47,6 +48,20 @@ const Hero = () => {
    */
   const [conversationStarted, setConversationStarted] = useState(false);
 
+  /**
+   * Ett avbrutet introduktionssamtal ska ÅTERUPPTAS, inte ersättas.
+   *
+   * Rutan nedanför lovar att fortsätta "där ni slutade". Innan det här
+   * var det ett löfte sidan inte kunde hålla: den som laddade om mitt i
+   * intervjun fick rutan, klickade, och landade i samtalsvyn utan ett
+   * spår av frågorna hen just svarat på. Ett brutet löfte lär användaren
+   * att ingenting som sägs i samtalet får konsekvenser.
+   *
+   * Läses en gång, vid mount: posten raderas när samtalet lämnas över,
+   * och vyn ska inte byta skepnad mitt under användarens fingrar.
+   */
+  const [resumable] = useState(() => hasResume());
+
   return (
     <section className="border-b border-border bg-secondary/30">
       <div className="container px-4 pb-12 pt-8 md:pb-20 md:pt-12">
@@ -66,7 +81,7 @@ const Hero = () => {
             där de slutade i stället för att presenteras igen. */}
         <h1 className="sr-only">CLEARANCE – vägledning vid företagskris</h1>
         <div className="mx-auto mt-12 max-w-2xl">
-          {user && !conversationStarted ? (
+          {user && !conversationStarted && !resumable ? (
             <div className="rounded-md border border-border bg-card p-5 text-center shadow-soft">
               <p className="text-base leading-relaxed text-foreground">
                 Välkommen tillbaka. CLEARANCE har läget klart – fortsätt samtalet
