@@ -26,7 +26,7 @@ const Disclaimer = () => (
 );
 
 const KnowledgeIndex = () => (
-  <main className="mx-auto w-full max-w-3xl flex-1 px-4 pb-12 pt-24">
+  <main data-guide="kunskapsbanken" className="mx-auto w-full max-w-3xl flex-1 px-4 pb-12 pt-24">
     <h1 className="font-display text-3xl text-foreground">Kunskap</h1>
     <p className="mt-2 leading-relaxed text-muted-foreground">
       Företagskrisens regler, förklarade med källhänvisningar. Vad lagen

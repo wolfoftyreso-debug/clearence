@@ -79,7 +79,7 @@ const ApiKeysSection = () => {
   }
 
   return (
-    <WizardCard>
+    <WizardCard data-guide="api-nycklar">
       <WizardCardHeader
         title="API-nycklar"
         description="För att koppla egna system till det öppna API:t. Nyckeln visas en enda gång när den skapas – därefter kan den aldrig läsas igen, bara bytas ut."
@@ -383,7 +383,7 @@ const DashboardSettings = () => {
           )}
         </WizardCard>
 
-        <WizardCard>
+        <WizardCard data-guide="fakturor">
           <WizardCardHeader
             title="Fakturor och kvitton"
             description="Ligger kvar här. Du behöver aldrig leta i mejlen."

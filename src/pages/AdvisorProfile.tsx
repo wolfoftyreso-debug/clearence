@@ -449,7 +449,7 @@ const AdvisorProfile = () => {
   return (
     <div className="min-h-screen bg-background">
       <Header />
-      <main className="container mx-auto max-w-3xl px-4 pb-16 pt-24">
+      <main data-guide="byraprofilen" className="container mx-auto max-w-3xl px-4 pb-16 pt-24">
         <h1 className="mb-1 font-display text-3xl text-foreground">Byråprofil</h1>
         <p className="mb-6 text-muted-foreground">
           Din profil i rådgivarkatalogen – det företag i kris ser när de väljer

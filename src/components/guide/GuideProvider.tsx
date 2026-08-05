@@ -18,6 +18,7 @@ import {
   type GuideAction,
 } from "@/lib/guide/actions";
 import { guideEntry } from "@/lib/guide/catalogue";
+import type { UserRole } from "@/data/types";
 import { Spotlight } from "@/components/guide/Spotlight";
 
 /**
@@ -54,8 +55,13 @@ interface GuideState {
 }
 
 interface GuideApi {
-  /** Led användaren till en funktion i katalogen. */
-  showMe: (entryId: string) => void;
+  /**
+   * Led användaren till en funktion i katalogen.
+   *
+   * Rollen behövs för menysteget: menyerna skiljer sig åt, och ett
+   * menyval som ringas in för någon som inte har det pekar på ingenting.
+   */
+  showMe: (entryId: string, role?: UserRole) => void;
   /** Kvittera var något sparades. */
   savedTo: (entryId: string, what: string) => void;
   /** Kör ett guidat arbetsflöde. */
@@ -283,10 +289,10 @@ export const GuideProvider = ({ children }: { children: ReactNode }) => {
 
   const api = useMemo<GuideApi>(
     () => ({
-      showMe: (entryId) => {
+      showMe: (entryId, role) => {
         const entry = guideEntry(entryId);
         if (!entry) return;
-        run(showMeSteps(entry, { alreadyThere: entry.route === pathname }));
+        run(showMeSteps(entry, { alreadyThere: entry.route === pathname, role }));
       },
       savedTo: (entryId, what) => {
         const entry = guideEntry(entryId);

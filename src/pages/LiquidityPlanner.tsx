@@ -503,7 +503,7 @@ const LiquidityPlanner = () => {
 
       {/* Progress */}
       <div className="bg-card border-b border-border">
-        <div className="container px-4 py-4 max-w-2xl mx-auto">
+        <div data-guide="likviditetsplaneraren" className="container px-4 py-4 max-w-2xl mx-auto">
           <div className="flex items-center justify-between mb-3">
             <h1 className="font-display text-lg font-semibold text-foreground">Likviditetsplanering</h1>
             <span className="text-sm text-muted-foreground">

@@ -84,7 +84,7 @@ export const DocumentTemplates = ({ caseRecord }: DocumentTemplatesProps) => {
   const template = TEMPLATES.find((t) => t.id === selectedId) ?? null;
 
   return (
-    <section aria-labelledby="templates-heading" className="rounded-md border border-border bg-card p-5">
+    <section aria-labelledby="templates-heading" data-guide="dokumentmallar" className="rounded-md border border-border bg-card p-5">
       <h2
         id="templates-heading"
         className="flex items-center gap-2 text-lg font-semibold text-foreground"

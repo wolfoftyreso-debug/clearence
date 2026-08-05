@@ -691,7 +691,7 @@ const DashboardSamtal = () => {
             {/* Samtalet */}
             {/* Samtalet fyller ytan: minsta höjd nära hela fönstret och
                 inmatningen längst ned - en arbetsyta, inte en widget. */}
-            <section aria-label="Samtal med rådgivaren" className="flex min-h-[calc(100vh-14rem)] flex-col rounded-md border border-border bg-card p-5 shadow-soft">
+            <section aria-label="Samtal med rådgivaren" data-guide="samtalet" className="flex min-h-[calc(100vh-14rem)] flex-col rounded-md border border-border bg-card p-5 shadow-soft">
               {entries.length === 0 && (
                 <div>
                   {/* Aldrig "hur kan jag hjälpa dig idag?" - läget först.

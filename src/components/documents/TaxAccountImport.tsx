@@ -86,7 +86,7 @@ export const TaxAccountImport = ({ onImport, onFileRead }: TaxAccountImportProps
   };
 
   return (
-    <section className="rounded-md border border-border bg-card p-5">
+    <section data-guide="skattekontoutdrag" className="rounded-md border border-border bg-card p-5">
       <div className="flex items-start gap-3">
         <Landmark className="mt-0.5 h-5 w-5 flex-shrink-0 text-accent" aria-hidden="true" />
         <div className="min-w-0 flex-1">

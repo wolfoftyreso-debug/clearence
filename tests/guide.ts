@@ -82,12 +82,32 @@ for (const file of files) {
 }
 check("gränssnittet har utpekade ankare", anchorsInUi.size >= 12, [...anchorsInUi].sort());
 
+/**
+ * Menyvalen per roll.
+ *
+ * Rollerna ser olika menyer, och ett menyval som bara finns för den ena
+ * får inte ringas in för den andra. Listorna läses ur skalet, så att de
+ * inte kan glida isär från det som faktiskt renderas.
+ */
+const shellSource = readFileSync(
+  join(process.cwd(), "src/components/dashboard/DashboardShell.tsx"),
+  "utf8",
+);
+const navAnchorsIn = (constName: string): Set<string> => {
+  const block = shellSource.split(`const ${constName}: NavItem[] = [`)[1]?.split("];")[0] ?? "";
+  return new Set([...block.matchAll(/guide:\s*"([a-zA-Z0-9-]+)"/g)].map((m) => m[1]));
+};
+const companyNavAnchors = navAnchorsIn("COMPANY_NAV");
+const advisorNavAnchors = navAnchorsIn("ADVISOR_NAV");
+check("företagsmenyn hittades", companyNavAnchors.size >= 6, [...companyNavAnchors]);
+check("juristmenyn hittades", advisorNavAnchors.size >= 5, [...advisorNavAnchors]);
+
 const appSource = readFileSync(join(process.cwd(), "src/App.tsx"), "utf8");
 const ROUTES = [...appSource.matchAll(/path="([^"]+)"/g)].map((m) => m[1]);
 
 /* --- 1. Principen, punkt för punkt ---------------------------------------- */
 
-check("katalogen är inte tom", GUIDE_CATALOGUE.length >= 10, GUIDE_CATALOGUE.length);
+check("katalogen täcker produktens ytor", GUIDE_CATALOGUE.length >= 25, GUIDE_CATALOGUE.length);
 check(
   "inga dubbletter bland id:n",
   new Set(GUIDE_CATALOGUE.map((e) => e.id)).size === GUIDE_CATALOGUE.length,
@@ -97,11 +117,18 @@ for (const entry of GUIDE_CATALOGUE) {
   // VAR: adressen ska finnas, och ankaret ska gå att peka på.
   check(`${entry.id}: adressen finns i appen`, ROUTES.includes(entry.route), entry.route);
   check(`${entry.id}: ankaret finns i gränssnittet`, anchorsInUi.has(entry.anchor), entry.anchor);
-  if (entry.navAnchor) {
+  for (const [role, anchor] of Object.entries(entry.navAnchor)) {
     check(
-      `${entry.id}: menyankaret finns i gränssnittet`,
-      anchorsInUi.has(entry.navAnchor),
-      entry.navAnchor,
+      `${entry.id}: menyankaret ${anchor} finns i gränssnittet`,
+      anchorsInUi.has(anchor),
+      anchor,
+    );
+    // Rollen måste vara en av postens egna: ett menyval för en roll som
+    // inte ens har funktionen är en rad som aldrig kan bli sann.
+    check(
+      `${entry.id}: menyvalet hör till en roll posten gäller för`,
+      entry.roles.includes(role as (typeof entry.roles)[number]),
+      `${role} finns inte i ${JSON.stringify(entry.roles)}`,
     );
   }
   // VARFÖR, VAD SOM SPARAS, HUR MAN ÄNDRAR: alla tre skrivna, ingen tom.
@@ -109,6 +136,24 @@ for (const entry of GUIDE_CATALOGUE) {
   check(`${entry.id}: säger vad som sparas där`, entry.saves.length > 20, entry.saves);
   check(`${entry.id}: säger hur användaren ändrar det`, entry.manage.length > 20, entry.manage);
   check(`${entry.id}: går att hitta med ord`, entry.synonyms.length >= 3, entry.synonyms);
+  // En post utan roller går inte att nå för någon. En post med en roll
+  // som inte finns är ett stavfel som annars märks först i drift.
+  check(`${entry.id}: har minst en roll`, entry.roles.length >= 1, entry.roles);
+  check(
+    `${entry.id}: rollerna är riktiga roller`,
+    entry.roles.every((r) => r === "company" || r === "advisor"),
+    entry.roles,
+  );
+  // Menyankaret måste finnas i den meny rollen faktiskt ser. Ett
+  // företagsmenyval inringat för en jurist pekar på ingenting.
+  for (const [role, anchor] of Object.entries(entry.navAnchor)) {
+    const menu = role === "advisor" ? advisorNavAnchors : companyNavAnchors;
+    check(
+      `${entry.id}: menyankaret finns i ${role}-menyn`,
+      menu.has(anchor),
+      `${anchor} saknas i ${role}-menyn`,
+    );
+  }
   // Fyra svar i briefingen, i principens ordning.
   const briefing = entryBriefing(entry);
   check(`${entry.id}: briefingen har fyra delar`, briefing.length === 4, briefing.length);
@@ -191,10 +236,34 @@ const kinds = (actions: GuideAction[]): string[] => actions.map((a) => a.kind);
 {
   // En funktion utan eget menyval ska inte få ett menyval inringat.
   const kbr = guideEntry("kontrollbalans")!;
-  check("kontrollbalansräkningen har inget menyval", kbr.navAnchor === null);
+  check("kontrollbalansräkningen har inget menyval", Object.keys(kbr.navAnchor).length === 0);
   const steps = showMeSteps(kbr);
   check("då ringas inget menyval in", !kinds(steps).includes("oppna-meny"), kinds(steps));
   check("men vyn öppnas ändå", kinds(steps).includes("oppna-vy"));
+}
+
+{
+  // Samma funktion, två roller, olika vägar dit. Företagaren har ett
+  // menyval för handlingarna; juristen når dem genom det aktiva ärendet
+  // och ska därför inte få ett menyval inringat som inte finns hos hen.
+  const entry = guideEntry("dokument")!;
+  check("företagaren har ett menyval till handlingarna", !!entry.navAnchor.company);
+  check("juristen har inget", entry.navAnchor.advisor === undefined);
+  check(
+    "företagaren får menyvägen visad",
+    kinds(showMeSteps(entry, { role: "company" })).includes("oppna-meny"),
+  );
+  check(
+    "juristen leds rakt till vyn utan ett menyval som inte finns",
+    !kinds(showMeSteps(entry, { role: "advisor" })).includes("oppna-meny"),
+    kinds(showMeSteps(entry, { role: "advisor" })),
+  );
+  check(
+    "men juristen kommer ändå fram",
+    showMeSteps(entry, { role: "advisor" }).some(
+      (s) => s.kind === "oppna-vy" && s.route === entry.route,
+    ),
+  );
 }
 
 /* --- 3. Kvitteringen: var det sparades ------------------------------------- */
@@ -215,6 +284,7 @@ const kinds = (actions: GuideAction[]): string[] => actions.map((a) => a.kind);
 check("det finns guidade flöden", GUIDED_FLOWS.length >= 2);
 for (const flow of GUIDED_FLOWS) {
   check(`${flow.id}: säger vad det leder till`, flow.outcome.length > 40, flow.outcome);
+  check(`${flow.id}: har minst en roll`, flow.roles.length >= 1, flow.roles);
   check(`${flow.id}: har minst tre steg`, flow.steps.length >= 3, flow.steps.length);
   for (const step of flow.steps) {
     check(`${flow.id}: ankaret ${step.anchor} finns`, anchorsInUi.has(step.anchor), step.anchor);
@@ -254,6 +324,18 @@ const shows: [string, string][] = [
   ["stäng av sms", "aviseringar"],
   ["vad kan jag göra", "alternativ"],
   ["hitta hjälp", "radgivare"],
+  ["prata med clearance", "samtalet"],
+  ["gör om utvärderingen", "nulagesanalys"],
+  ["lägesrapport", "systemanalysen"],
+  ["planera kassan", "likviditetsplan"],
+  ["underlag till banken", "kreditunderlag"],
+  ["styrelseprotokoll", "dokumentmallar"],
+  ["skatteverket", "skattekonto"],
+  ["dela länk", "arendelank"],
+  ["stänga ärendet", "avsluta-arendet"],
+  ["mina kvitton", "fakturor"],
+  ["koppla eget system", "api-nycklar"],
+  ["vad säger lagen", "kunskap"],
 ];
 for (const [query, expected] of shows) {
   const result = resolveShowMe(query);
@@ -261,6 +343,37 @@ for (const [query, expected] of shows) {
     `"${query}" leder till ${expected}`,
     result.entry?.id === expected,
     result.entry?.id ?? "ingen träff",
+  );
+}
+
+// Rollen filtrerar. En företagare som frågar efter juristens ärendelista
+// ska INTE ledas dit och landa på en tom sida - att peka någon mot en yta
+// hen inte har är precis det principen finns för att förhindra.
+{
+  check(
+    "juristen hittar sin klientlista",
+    resolveShowMe("mina klienter", "advisor").entry?.id === "klienter",
+    resolveShowMe("mina klienter", "advisor").entry?.id,
+  );
+  check(
+    "företagaren leds inte till juristens klientlista",
+    resolveShowMe("mina klienter", "company").entry?.id !== "klienter",
+    resolveShowMe("mina klienter", "company").entry?.id ?? "ingen träff",
+  );
+  check(
+    "företagaren hittar sin likviditetsplanerare",
+    resolveShowMe("lägga in betalningar", "company").entry?.id === "likviditetsplan",
+    resolveShowMe("lägga in betalningar", "company").entry?.id,
+  );
+  check(
+    "juristen erbjuds aldrig en företagsyta som alternativ",
+    resolveShowMe("wxyz", "advisor").alternatives.every((e) => e.roles.includes("advisor")),
+    resolveShowMe("wxyz", "advisor").alternatives.map((e) => e.id),
+  );
+  check(
+    "och företagaren aldrig en juristyta",
+    resolveShowMe("wxyz", "company").alternatives.every((e) => e.roles.includes("company")),
+    resolveShowMe("wxyz", "company").alternatives.map((e) => e.id),
   );
 }
 

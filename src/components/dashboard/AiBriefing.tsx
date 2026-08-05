@@ -140,7 +140,7 @@ export const AiBriefing = ({ caseRecord, timeline }: AiBriefingProps) => {
   };
 
   return (
-    <section id="systemanalys" className="mb-6 scroll-mt-20 rounded-md border border-border bg-card p-5 shadow-soft">
+    <section id="systemanalys" data-guide="systemanalysen" className="mb-6 scroll-mt-20 rounded-md border border-border bg-card p-5 shadow-soft">
       <div className="flex flex-wrap items-center gap-2">
         <h2 className="flex items-center gap-2 text-lg font-semibold text-foreground">
           <Activity className="h-5 w-5 text-accent" aria-hidden="true" />

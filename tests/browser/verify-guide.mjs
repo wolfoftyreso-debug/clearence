@@ -199,6 +199,63 @@ check(
   repeatText.slice(0, 160),
 );
 
+/* --- 7. Katalogen växte: en av de nya posterna, hela vägen ---------------- */
+
+await page.goto(`${BASE}/dashboard/samtal`, { waitUntil: "domcontentloaded" });
+await page.waitForTimeout(2500);
+await page.fill('[data-guide="visa-mig-falt"]', "underlag till banken");
+await page.click('button:has-text("Visa mig")');
+await page.locator('[data-guide-callout="kreditunderlagsvyn"]:has-text("Vad som sparas här")').waitFor({ timeout: 20000 });
+check("guiden hittar kreditunderlaget", page.url().includes("/dashboard/kreditunderlag"), page.url());
+const credit = await page.locator('[data-guide-callout="kreditunderlagsvyn"]').innerText();
+check("och förklarar varför det finns", /bank eller finansiär|siffror, säkerheter/.test(credit), credit.slice(0, 200));
+await page.keyboard.press("Escape");
+
+/* --- 8. ROLLEN STYR VAD GUIDEN KAN VISA ---------------------------------- */
+
+// Företagaren ska INTE ledas till juristens ärendelista. Att peka någon
+// mot en yta hen inte har är precis det principen finns för att
+// förhindra - guiden ska ta bort letandet, inte flytta det.
+await page.goto(`${BASE}/dashboard/samtal`, { waitUntil: "domcontentloaded" });
+await page.waitForTimeout(2500);
+await page.fill('[data-guide="visa-mig-falt"]', "mina klienter");
+await page.click('button:has-text("Visa mig")');
+await page.waitForTimeout(2500);
+check(
+  "företagaren leds inte till juristens klientlista",
+  !page.url().includes("/arenden"),
+  page.url(),
+);
+await page.keyboard.press("Escape");
+
+// Juristen ska hitta den. Samma fråga, annan roll, annat svar.
+await page.goto(`${BASE}/login`, { waitUntil: "domcontentloaded" });
+await page.waitForTimeout(900);
+await page.click('button:has-text("Demo – Jurist")');
+await page.waitForTimeout(2500);
+await page.goto(`${BASE}/dashboard/samtal`, { waitUntil: "domcontentloaded" });
+await page.waitForTimeout(2500);
+if ((await page.locator('[data-guide="visa-mig-falt"]').count()) === 0) {
+  check("juristen har Visa mig i samtalet", false, "rutan saknas");
+} else {
+  const advisorBar = await page.locator('section[aria-label="Visa mig"]').innerText();
+  check(
+    "juristen erbjuds sitt eget guidade flöde",
+    /klientärende/i.test(advisorBar),
+    advisorBar.slice(-300),
+  );
+  check(
+    "och inte företagarens",
+    !/Gör din första analys/.test(advisorBar),
+    advisorBar.slice(-300),
+  );
+  await page.fill('[data-guide="visa-mig-falt"]', "mina klienter");
+  await page.click('button:has-text("Visa mig")');
+  await page.locator('[data-guide-callout="klientlistan"]').waitFor({ timeout: 20000 });
+  check("juristen leds till klientlistan", page.url().includes("/arenden"), page.url());
+  await page.keyboard.press("Escape");
+}
+
 await browser.close();
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);

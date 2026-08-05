@@ -311,7 +311,7 @@ const AdvisorReferrals = () => {
   return (
     <div className="min-h-screen bg-background">
       <Header />
-      <main className="pt-24 pb-16 container px-4 max-w-3xl mx-auto space-y-5">
+      <main data-guide="forfragningarna" className="pt-24 pb-16 container px-4 max-w-3xl mx-auto space-y-5">
         <div>
           <h1 className="font-display text-3xl text-foreground mb-1">Dina förfrågningar</h1>
           <p className="text-muted-foreground">

@@ -72,7 +72,7 @@ const ShareLinksSection = ({ caseId }: { caseId: string }) => {
   };
 
   return (
-    <section aria-labelledby="share-links-heading" className="rounded-md border border-border bg-card p-5">
+    <section aria-labelledby="share-links-heading" data-guide="arendelank" className="rounded-md border border-border bg-card p-5">
       <h2 id="share-links-heading" className="flex items-center gap-2 text-lg font-semibold text-foreground">
         <ArrowRight className="h-5 w-5 text-accent" aria-hidden="true" />
         Live ärendelänk

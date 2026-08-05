@@ -1,6 +1,8 @@
 import { useState, type FormEvent } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { data } from "@/data";
 import { useGuide } from "@/components/guide/GuideProvider";
 import { GUIDED_FLOWS } from "@/lib/guide/actions";
 import { noMatchMessage, resolveShowMe, type ShowMeResult } from "@/lib/guide/showMe";
@@ -22,15 +24,23 @@ export const ShowMeBar = () => {
   const guide = useGuide();
   const [query, setQuery] = useState("");
   const [miss, setMiss] = useState<ShowMeResult | null>(null);
+  // Rollen styr vad guiden kan visa. En företagare ska aldrig ledas till
+  // juristens ärendelista, och tvärtom.
+  const { data: profile } = useQuery({
+    queryKey: ["my-profile"],
+    queryFn: () => data.profile.getMine(),
+    retry: false,
+  });
+  const role = profile?.role ?? "company";
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
     if (!query.trim()) return;
-    const result = resolveShowMe(query);
+    const result = resolveShowMe(query, role);
     if (result.entry) {
       setMiss(null);
       setQuery("");
-      guide.showMe(result.entry.id);
+      guide.showMe(result.entry.id, role);
       return;
     }
     setMiss(result);
@@ -75,7 +85,7 @@ export const ShowMeBar = () => {
                 onClick={() => {
                   setMiss(null);
                   setQuery("");
-                  guide.showMe(entry.id);
+                  guide.showMe(entry.id, role);
                 }}
                 className="rounded-full border border-border bg-card px-3 py-1 text-xs font-medium text-foreground transition-colors hover:border-accent"
               >
@@ -87,13 +97,13 @@ export const ShowMeBar = () => {
       )}
 
       {/* Guidat arbetsläge: hela flödet, steg för steg, med handen kvar
-          hos användaren. */}
+          hos användaren. Bara flöden som gäller den här rollen. */}
       <div className="mt-3 border-t border-border pt-3">
         <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
           Eller låt mig gå igenom det med dig
         </p>
         <div className="mt-1.5 space-y-1.5">
-          {GUIDED_FLOWS.map((flow) => (
+          {GUIDED_FLOWS.filter((f) => f.roles.includes(role)).map((flow) => (
             <div key={flow.id} className="flex flex-wrap items-baseline justify-between gap-2">
               <div className="min-w-0">
                 <p className="text-sm font-medium text-foreground">{flow.label}</p>

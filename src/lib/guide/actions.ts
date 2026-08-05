@@ -16,6 +16,7 @@
  */
 
 import { entryBriefing, type GuideEntry } from "./catalogue";
+import type { UserRole } from "@/data/types";
 
 export type GuideAction =
   /** Öppna sidomenyn (bara på små skärmar - på stora står den redan öppen). */
@@ -55,14 +56,20 @@ export const STEP_MS = 1400;
  * funktioner utan eget menyval - att ringa in ett menyval som inte leder
  * dit vore att lära ut fel väg.
  */
-export const showMeSteps = (entry: GuideEntry, opts?: { alreadyThere?: boolean }): GuideAction[] => {
+export const showMeSteps = (
+  entry: GuideEntry,
+  opts?: { alreadyThere?: boolean; role?: UserRole },
+): GuideAction[] => {
   const steps: GuideAction[] = [];
-  if (!opts?.alreadyThere && entry.navAnchor) {
+  // Menyvalet gäller den här rollen eller ingen. Saknas det går guiden
+  // rakt till vyn i stället för att ringa in något som inte finns.
+  const navAnchor = entry.navAnchor[opts?.role ?? "company"] ?? null;
+  if (!opts?.alreadyThere && navAnchor) {
     steps.push({ kind: "oppna-meny" });
-    steps.push({ kind: "markera", anchor: entry.navAnchor });
+    steps.push({ kind: "markera", anchor: navAnchor });
     steps.push({
       kind: "forklara",
-      anchor: entry.navAnchor,
+      anchor: navAnchor,
       heading: "Här ligger det",
       text: `${entry.label} nås härifrån. Nästa gång hittar du hit själv.`,
     });
@@ -120,6 +127,8 @@ export interface GuidedFlow {
   /** Vad flödet leder till. Sägs innan det börjar - ingen ska gissa. */
   outcome: string;
   steps: FlowStep[];
+  /** Rollerna flödet gäller för. Samma skäl som i katalogen. */
+  roles: UserRole[];
 }
 
 /**
@@ -134,6 +143,7 @@ export const GUIDED_FLOWS: GuidedFlow[] = [
     id: "forsta-analysen",
     label: "Gör din första analys",
     outcome: "En bedömning av läget som vilar på dina siffror, och en handlingsplan som följer av den.",
+    roles: ["company"],
     steps: [
       {
         route: "/wizard",
@@ -156,11 +166,35 @@ export const GUIDED_FLOWS: GuidedFlow[] = [
     id: "sa-hittar-du-tillbaka",
     label: "Så hittar du tillbaka till allt",
     outcome: "En rundtur på under en minut genom de fyra ytor du kommer att använda mest.",
+    roles: ["company", "advisor"],
     steps: [
       { route: "/dashboard", anchor: "kontrollomrade", text: "Kontrolläget: svaret på om systemet håller uppsikt åt dig." },
       { route: "/dashboard/liquidity", anchor: "likviditetsvyn", text: "Likviditeten: dagen kassan tar slut, och vad som ligger bakom siffran." },
       { route: "/dashboard/dokument", anchor: "dokumentvyn", text: "Dokumenten: allt som produceras i ärendet hamnar här av sig självt." },
       { route: "/dashboard/handelser", anchor: "handelseloggen", text: "Händelseloggen: spåret som visar när ni insåg och när ni agerade." },
+    ],
+  },
+  {
+    id: "sa-arbetar-du-i-ett-klientarende",
+    label: "Så arbetar du i ett klientärende",
+    outcome: "Vägen från uppdragslistan till det aktiva ärendet, och var du ser vad klienten själv har gjort.",
+    roles: ["advisor"],
+    steps: [
+      {
+        route: "/arenden",
+        anchor: "klientlistan",
+        text: "Uppdragen sorteras efter vad som brådskar, inte efter när de kom in. Välj ett ärende – hela inloggade läget följer med dit.",
+      },
+      {
+        route: "/dashboard",
+        anchor: "systemanalysen",
+        text: "Systemanalysen är din genväg in i ärendet: läget, riskerna och den rekommenderade vägen, med motivering.",
+      },
+      {
+        route: "/dashboard/handelser",
+        anchor: "handelseloggen",
+        text: "Och här ser du vad klienten faktiskt gjort och när. Loggen skrivs av databasen och går inte att ändra i efterhand.",
+      },
     ],
   },
 ];

@@ -172,6 +172,7 @@ med fyra svar och en adress:
 | `why` | Varför funktionen används |
 | `saves` | Vad som sparas där |
 | `manage` | Hur användaren ändrar det sedan |
+| `roles` | Vilka roller funktionen finns för |
 
 `tests/guide.ts` fäller om adressen inte finns i `App.tsx`, om ankaret
 inte finns som `data-guide` i källträdet, eller om något av svaren
@@ -179,6 +180,19 @@ saknas. Konsekvensen är avsiktlig och obekväm: den som lägger till en vy
 och vill att CLEARANCE ska kunna prata om den måste kunna svara på
 varför den finns och hur användaren sköter den. Kan man inte det är
 funktionen inte färdig.
+
+### Rollen styr vad guiden får visa
+
+En företagare som frågar efter "mina klienter" ska inte ledas till
+juristens ärendelista och landa på en tom sida. Att peka någon mot en yta
+hen inte har är precis det principen finns för att förhindra – guiden ska
+ta bort letandet, inte flytta det.
+
+`navAnchor` är därför per roll, inte ett värde. Menyerna skiljer sig åt:
+en jurist når likviditeten och handlingarna genom det aktiva ärendet men
+har inga egna menyval för dem, och ett menyval som ringas in för någon
+som inte har det pekar på ingenting. Saknas rollen går guiden rakt till
+vyn i stället.
 
 ### Ankare, inte selektorer
 

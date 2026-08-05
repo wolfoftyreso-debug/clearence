@@ -91,6 +91,24 @@ export const MICRO_LESSONS: MicroLesson[] = [
     followUpAfterMinutes: 6,
     order: 5,
   },
+  {
+    id: "systemanalysen",
+    anchor: "systemanalysen",
+    text: "Rapporten räknas om varje gång underlaget ändras – den är aldrig äldre än ärendet.",
+    followUp:
+      "Systemanalysen motiverar alltid sin rekommendation. Håller du inte med om motiveringen är det den du ska ifrågasätta, inte slutsatsen.",
+    followUpAfterMinutes: 10,
+    order: 6,
+  },
+  {
+    id: "samtalet",
+    anchor: "samtalet",
+    text: "Samtalet journalförs i ärendet. En fråga du ställer idag går att hitta om ett halvår.",
+    followUp:
+      "En bedömning i samtalet kan protokollföras som beslut med en premiss – då säger CLEARANCE till om premissen ändras.",
+    followUpAfterMinutes: 15,
+    order: 7,
+  },
 ];
 
 const KEY = "clearance-mikrolektioner";

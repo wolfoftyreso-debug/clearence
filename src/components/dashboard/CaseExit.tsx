@@ -123,6 +123,7 @@ export const CaseExitSection = ({ caseRecord }: { caseRecord: CaseRecord }) => {
   return (
     <section
       aria-labelledby="case-exit-heading"
+      data-guide="avsluta-arendet"
       className="mt-6 rounded-md border border-border bg-card p-5 shadow-soft"
     >
       <h2 id="case-exit-heading" className="font-semibold text-foreground">

@@ -12,6 +12,7 @@
  */
 
 import { GUIDE_CATALOGUE, type GuideEntry } from "./catalogue";
+import type { UserRole } from "@/data/types";
 
 /**
  * Orden som bara inleder en fråga och inte pekar ut något.
@@ -83,17 +84,26 @@ const scoreFor = (entry: GuideEntry, query: string, words: string[]): number => 
   return score;
 };
 
-export const resolveShowMe = (query: string): ShowMeResult => {
+/**
+ * Sökningen sker bara bland det den här användaren kan använda.
+ *
+ * En företagare som frågar efter "mina klienter" ska inte ledas till
+ * juristens ärendelista och landa på en tom sida. Att peka någon mot en
+ * yta hen inte har är precis det principen finns för att förhindra:
+ * guiden ska ta bort letandet, inte flytta det.
+ */
+export const resolveShowMe = (query: string, role: UserRole = "company"): ShowMeResult => {
+  const available = GUIDE_CATALOGUE.filter((e) => e.roles.includes(role));
   const words = meaningfulWords(query);
   if (words.length === 0) {
-    return { entry: null, understood: [], alternatives: GUIDE_CATALOGUE.slice(0, 4) };
+    return { entry: null, understood: [], alternatives: available.slice(0, 4) };
   }
-  const ranked = GUIDE_CATALOGUE.map((entry) => ({ entry, score: scoreFor(entry, query, words) }))
+  const ranked = available.map((entry) => ({ entry, score: scoreFor(entry, query, words) }))
     .filter((r) => r.score > 0)
     .sort((a, b) => b.score - a.score);
 
   if (ranked.length === 0) {
-    return { entry: null, understood: words, alternatives: GUIDE_CATALOGUE.slice(0, 4) };
+    return { entry: null, understood: words, alternatives: available.slice(0, 4) };
   }
   // En tvetydig träff är ingen träff. Står två poster lika har frågan
   // inte pekat ut någon av dem, och då ska guiden fråga i stället för
