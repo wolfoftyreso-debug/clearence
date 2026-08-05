@@ -256,6 +256,64 @@ if ((await page.locator('[data-guide="visa-mig-falt"]').count()) === 0) {
   await page.keyboard.press("Escape");
 }
 
+/* --- 9. DRIFTVYERNA: bara för den som administrerar tjänsten ------------- */
+
+// Först det som INTE får hända. En kund som får se "Analysövervakning"
+// i en lista har fått veta att vi övervakar hens analys - att röja
+// tjänstens insida för en kund är värre än att inte kunna visa den.
+await page.goto(`${BASE}/login`, { waitUntil: "domcontentloaded" });
+await page.waitForTimeout(900);
+await page.click('button:has-text("Demo – Företag")');
+await page.waitForTimeout(2500);
+await page.goto(`${BASE}/dashboard/samtal`, { waitUntil: "domcontentloaded" });
+await page.waitForTimeout(2500);
+await page.fill('[data-guide="visa-mig-falt"]', "analysövervakning");
+await page.click('button:has-text("Visa mig")');
+await page.waitForTimeout(2500);
+check("företagaren leds inte in i driften", !page.url().includes("/admin"), page.url());
+const custMiss = await page.locator('section[aria-label="Visa mig"]').innerText();
+check(
+  "och driftvyerna erbjuds inte ens som alternativ",
+  !/Analysövervakning|Driftpanel|Loggar/.test(custMiss),
+  custMiss.slice(-260),
+);
+check("företagaren har ingen driftmeny", (await page.locator('[data-guide="nav-drift"]').count()) === 0);
+await page.keyboard.press("Escape");
+
+// Och så det som SKA hända: adminen hittar dem, och behåller sina egna
+// produktytor - driftbehörigheten ersätter inte rollen.
+await page.goto(`${BASE}/login`, { waitUntil: "domcontentloaded" });
+await page.waitForTimeout(900);
+await page.click('button:has-text("Demo – Systemadministratör")');
+await page.waitForTimeout(2500);
+await page.goto(`${BASE}/dashboard`, { waitUntil: "domcontentloaded" });
+await page.waitForTimeout(2500);
+check("adminen har en driftmeny med ankare", (await page.locator('[data-guide^="nav-"]').count()) >= 14);
+check("driftpanelens menyval bär ankare", (await page.locator('[data-guide="nav-drift"]').count()) === 1);
+
+await page.goto(`${BASE}/dashboard/samtal`, { waitUntil: "domcontentloaded" });
+await page.waitForTimeout(2500);
+await page.fill('[data-guide="visa-mig-falt"]', "tekniska fel");
+await page.click('button:has-text("Visa mig")');
+await page.locator('[data-guide-callout="loggvyn"]:has-text("Vad som sparas här")').waitFor({ timeout: 20000 });
+check("adminen leds till systemloggarna", page.url().includes("/admin/loggar"), page.url());
+const opsCallout = await page.locator('[data-guide-callout="loggvyn"]').innerText();
+check(
+  "och får veta varför de är skilda från ärendets logg",
+  /bolagets och inte vår|Systemets egna spår/.test(opsCallout),
+  opsCallout.slice(0, 240),
+);
+await page.keyboard.press("Escape");
+
+// Driftbehörigheten tar inte bort produktens ytor.
+await page.goto(`${BASE}/dashboard/samtal`, { waitUntil: "domcontentloaded" });
+await page.waitForTimeout(2500);
+await page.fill('[data-guide="visa-mig-falt"]', "var sparas rapporterna");
+await page.click('button:has-text("Visa mig")');
+await page.waitForTimeout(9000);
+check("adminen når fortfarande produktens ytor", page.url().includes("/dashboard/dokument"), page.url());
+await page.keyboard.press("Escape");
+
 await browser.close();
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);

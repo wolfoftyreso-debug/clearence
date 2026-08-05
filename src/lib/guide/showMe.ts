@@ -11,8 +11,7 @@
  * fråga än den som ställdes.
  */
 
-import { GUIDE_CATALOGUE, type GuideEntry } from "./catalogue";
-import type { UserRole } from "@/data/types";
+import { GUIDE_CATALOGUE, type GuideAudience, type GuideEntry } from "./catalogue";
 
 /**
  * Orden som bara inleder en fråga och inte pekar ut något.
@@ -91,9 +90,18 @@ const scoreFor = (entry: GuideEntry, query: string, words: string[]): number => 
  * juristens ärendelista och landa på en tom sida. Att peka någon mot en
  * yta hen inte har är precis det principen finns för att förhindra:
  * guiden ska ta bort letandet, inte flytta det.
+ *
+ * Publiken är en MÄNGD och inte ett värde, för att drift inte är en
+ * roll som utesluter de andra: den som administrerar tjänsten är också
+ * företagare eller rådgivare i sitt eget konto och ska hitta båda
+ * sorternas ytor. En admin får alltså sin roll PLUS "ops".
  */
-export const resolveShowMe = (query: string, role: UserRole = "company"): ShowMeResult => {
-  const available = GUIDE_CATALOGUE.filter((e) => e.roles.includes(role));
+export const resolveShowMe = (
+  query: string,
+  audience: GuideAudience | GuideAudience[] = "company",
+): ShowMeResult => {
+  const audiences = Array.isArray(audience) ? audience : [audience];
+  const available = GUIDE_CATALOGUE.filter((e) => e.roles.some((r) => audiences.includes(r)));
   const words = meaningfulWords(query);
   if (words.length === 0) {
     return { entry: null, understood: [], alternatives: available.slice(0, 4) };

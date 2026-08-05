@@ -333,6 +333,7 @@ const AdminCustomers = () => {
 
   return (
     <DashboardShell title="Kunder">
+      <div data-guide="kundvyn">
       {checking ? (
         <div className="flex justify-center py-16">
           <Loader2 className="h-6 w-6 animate-spin text-accent" aria-hidden="true" />
@@ -373,6 +374,7 @@ const AdminCustomers = () => {
           <OutboxPanel />
         </div>
       )}
+      </div>
     </DashboardShell>
   );
 };

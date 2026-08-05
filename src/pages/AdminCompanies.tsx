@@ -38,7 +38,7 @@ const AdminCompanies = () => {
 
   return (
     <DashboardShell title="Företag">
-      <div className="mx-auto max-w-3xl space-y-8">
+      <div data-guide="foretagsvyn" className="mx-auto max-w-3xl space-y-8">
         <header>
           <h2 className="flex items-center gap-2 text-2xl font-semibold text-foreground">
             <Building2 className="h-6 w-6 text-accent" aria-hidden="true" />

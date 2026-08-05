@@ -6,6 +6,7 @@ import { data } from "@/data";
 import { useGuide } from "@/components/guide/GuideProvider";
 import { GUIDED_FLOWS } from "@/lib/guide/actions";
 import { noMatchMessage, resolveShowMe, type ShowMeResult } from "@/lib/guide/showMe";
+import type { GuideAudience } from "@/lib/guide/catalogue";
 import { Compass, Play } from "lucide-react";
 
 /**
@@ -31,12 +32,21 @@ export const ShowMeBar = () => {
     queryFn: () => data.profile.getMine(),
     retry: false,
   });
+  // Drift är inte en roll som utesluter de andra: den som administrerar
+  // tjänsten är också företagare eller rådgivare i sitt eget konto, och
+  // ska hitta båda sorternas ytor.
+  const { data: isAdmin } = useQuery({
+    queryKey: ["am-i-admin"],
+    queryFn: () => data.contact.amIAdmin(),
+    retry: false,
+  });
   const role = profile?.role ?? "company";
+  const audience: GuideAudience[] = isAdmin ? [role, "ops"] : [role];
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
     if (!query.trim()) return;
-    const result = resolveShowMe(query, role);
+    const result = resolveShowMe(query, audience);
     if (result.entry) {
       setMiss(null);
       setQuery("");
@@ -103,7 +113,7 @@ export const ShowMeBar = () => {
           Eller låt mig gå igenom det med dig
         </p>
         <div className="mt-1.5 space-y-1.5">
-          {GUIDED_FLOWS.filter((f) => f.roles.includes(role)).map((flow) => (
+          {GUIDED_FLOWS.filter((f) => f.roles.some((r) => audience.includes(r))).map((flow) => (
             <div key={flow.id} className="flex flex-wrap items-baseline justify-between gap-2">
               <div className="min-w-0">
                 <p className="text-sm font-medium text-foreground">{flow.label}</p>

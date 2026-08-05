@@ -179,7 +179,7 @@ const AdminInbox = () => {
       <Header />
 
       <main className="pt-24 pb-16">
-        <section className="container px-4">
+        <section data-guide="inkorgen" className="container px-4">
           {checkingAdmin ? (
             <div className="flex justify-center py-16">
               <Loader2 className="h-6 w-6 animate-spin text-accent" aria-hidden="true" />

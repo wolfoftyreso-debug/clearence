@@ -28,6 +28,19 @@
 
 import type { UserRole } from "@/data/types";
 
+/**
+ * Vem en funktion finns för.
+ *
+ * "ops" är INTE en användarroll i datamodellen - behörigheten kommer ur
+ * `app.is_admin()`, inte ur profilen, och en driftanvändare är dessutom
+ * alltid också företagare eller rådgivare. Katalogen behöver ändå kunna
+ * skilja driftvyerna från produkten, och därför är publiken ett eget
+ * begrepp här i stället för en påhittad tredje UserRole. Att låtsas att
+ * det finns en admin-roll i datamodellen hade varit en lögn som förr
+ * eller senare hamnat i en behörighetskontroll.
+ */
+export type GuideAudience = UserRole | "ops";
+
 export interface GuideEntry {
   id: string;
   /** Vad funktionen heter i gränssnittet. Exakt samma ord som på skärmen. */
@@ -50,7 +63,7 @@ export interface GuideEntry {
    * tomma anvisning principen finns för att förhindra. Saknas rollen i
    * posten hoppar guiden över menysteget och går rakt till vyn.
    */
-  navAnchor: Partial<Record<UserRole, string>>;
+  navAnchor: Partial<Record<GuideAudience, string>>;
   /** Varför funktionen används. Ett skäl, inte en beskrivning. */
   why: string;
   /** Vad som sparas där. Det här är svaret på "vart tog mina uppgifter vägen?". */
@@ -71,10 +84,10 @@ export interface GuideEntry {
    * en yta hen inte kan använda är precis det principen finns för att
    * förhindra - guiden ska ta bort letandet, inte flytta det.
    */
-  roles: UserRole[];
+  roles: GuideAudience[];
 }
 
-const BOTH: UserRole[] = ["company", "advisor"];
+const BOTH: GuideAudience[] = ["company", "advisor"];
 
 export const GUIDE_CATALOGUE: GuideEntry[] = [
   {
@@ -404,6 +417,117 @@ export const GUIDE_CATALOGUE: GuideEntry[] = [
     manage: "Redigera profilen och bjud in kollegor härifrån; varje inbjudan kan återkallas.",
     synonyms: ["byråprofil", "min profil", "teamet", "kollegor", "vår presentation"],
     roles: ["advisor"],
+  },
+  {
+    id: "driftpanel",
+    label: "Driftpanel",
+    route: "/admin",
+    anchor: "driftpanelen",
+    navAnchor: { ops: "nav-drift" },
+    why: "Tjänstens eget nuläge på en yta: vad som körts, vad som fastnat och vad som väntar. Ett fel i en bakgrundskörning märks annars först när en kund hör av sig.",
+    saves: "Körningarnas status och de nycklar som integrationerna använder.",
+    manage: "Kör om en misslyckad körning eller byt ut en nyckel härifrån.",
+    synonyms: ["driftpanel", "drift", "systemstatus", "körningar"],
+    roles: ["ops"],
+  },
+  {
+    id: "inkorg",
+    label: "Inkorg",
+    route: "/admin/inkorg",
+    anchor: "inkorgen",
+    navAnchor: { ops: "nav-inkorg" },
+    why: "Kontaktförfrågningar som kommit in utan att gå via ett ärende. En obesvarad rad här är oftast någon som just nu letar efter hjälp någon annanstans.",
+    saves: "Meddelandet, avsändaren och när det togs om hand.",
+    manage: "Markera som hanterad eller svara direkt; åtgärden hamnar i loggen.",
+    synonyms: ["inkorg", "kontaktförfrågningar", "obesvarade meddelanden"],
+    roles: ["ops"],
+  },
+  {
+    id: "ansokningar",
+    label: "Ansökningar",
+    route: "/admin/ansokningar",
+    anchor: "ansokningarna",
+    navAnchor: { ops: "nav-ansokningar" },
+    why: "Rådgivare som vill in i katalogen granskas innan de syns för bolag. Det är den kontrollen som gör katalogen värd något.",
+    saves: "Ansökan, underlaget och beslutet med datum.",
+    manage: "Godkänn eller avslå; ett avslag kan motiveras och skickas till den sökande.",
+    synonyms: ["ansökningar", "granska rådgivare", "verifiering", "nya byråer"],
+    roles: ["ops"],
+  },
+  {
+    id: "driftkunder",
+    label: "Kunder",
+    route: "/admin/kunder",
+    anchor: "kundvyn",
+    navAnchor: { ops: "nav-kunder" },
+    why: "Abonnemangen och deras läge. En kund vars konto håller på att låsas ska upptäckas här, inte av kunden själv.",
+    saves: "Abonnemang, fakturor och betalningsstatus per kund.",
+    manage: "Justera abonnemang och registrera betalningar – ett låst konto låses upp härifrån.",
+    // "abonnemang" ägs av användarens EGNA inställningar. Driftvyn
+    // handlar om alla kunders abonnemang, och två poster som gör
+    // anspråk på samma ord kan inte skiljas åt vid en sökning.
+    synonyms: ["kundregister", "betalande kunder", "kundlista", "vem betalar"],
+    roles: ["ops"],
+  },
+  {
+    id: "driftforetag",
+    label: "Företag",
+    route: "/admin/foretag",
+    anchor: "foretagsvyn",
+    navAnchor: { ops: "nav-foretag" },
+    why: "Alla bolag i tjänsten med sitt läge. Ger svaret på hur många som faktiskt är i kris just nu, och hur det förändras.",
+    saves: "Bolagen, deras ärendestatus och när de senast var aktiva.",
+    manage: "Vyn är läsande. Ändringar görs i ärendet, inte här.",
+    synonyms: ["företag", "alla bolag", "bolagslista"],
+    roles: ["ops"],
+  },
+  {
+    id: "driftradgivare",
+    label: "Rådgivare",
+    route: "/admin/radgivare",
+    anchor: "radgivarvyn",
+    navAnchor: { ops: "nav-driftradgivare" },
+    why: "Katalogens innehåll och hur den används: vilka som är verifierade, vilka som får förfrågningar och vilka som inte svarar.",
+    saves: "Profilerna, verifieringsstatus och förmedlingshistoriken.",
+    manage: "Verifiera, pausa eller ta bort en profil ur katalogen.",
+    synonyms: ["rådgivarregister", "katalogen", "verifierade byråer"],
+    roles: ["ops"],
+  },
+  {
+    id: "statistik",
+    label: "Statistik",
+    route: "/admin/statistik",
+    anchor: "statistikvyn",
+    navAnchor: { ops: "nav-statistik" },
+    why: "Hur tjänsten faktiskt används, inte hur den var tänkt att användas. Skillnaden mellan de två är det mesta av produktarbetet.",
+    saves: "Ingenting nytt – vyn räknar på det som redan finns.",
+    manage: "Perioden går att ändra; siffrorna räknas om direkt.",
+    synonyms: ["statistik", "användning", "siffror om tjänsten", "nyckeltal drift"],
+    roles: ["ops"],
+  },
+  {
+    id: "analysovervakning",
+    label: "Analysövervakning",
+    route: "/admin/analys",
+    anchor: "analysovervakningen",
+    navAnchor: { ops: "nav-analys" },
+    why: "Analysmotorn är deterministisk, men underlaget är det inte. Här syns ärenden där bedömningen vilar på tunt eller motstridigt underlag – innan någon fattar beslut på den.",
+    saves: "Vilka ärenden som flaggats och varför.",
+    manage: "Vyn är läsande. Åtgärden är att komplettera underlaget i ärendet.",
+    synonyms: ["analysövervakning", "bevaka analyser", "tunt underlag"],
+    roles: ["ops"],
+  },
+  {
+    id: "loggar",
+    label: "Loggar",
+    route: "/admin/loggar",
+    anchor: "loggvyn",
+    navAnchor: { ops: "nav-loggar" },
+    why: "Systemets egna spår: utskick, integrationsanrop och fel. Skiljt från ärendets händelselogg, som är bolagets och inte vår.",
+    saves: "Tekniska händelser med tidsstämpel och resultat.",
+    manage: "Loggen är läsande och kan filtreras på typ och period.",
+    synonyms: ["systemloggar", "tekniska fel", "utskickslogg", "felsökning"],
+    roles: ["ops"],
   },
 ];
 

@@ -99,15 +99,19 @@ const navAnchorsIn = (constName: string): Set<string> => {
 };
 const companyNavAnchors = navAnchorsIn("COMPANY_NAV");
 const advisorNavAnchors = navAnchorsIn("ADVISOR_NAV");
+const opsNavAnchors = navAnchorsIn("OPS_NAV");
 check("företagsmenyn hittades", companyNavAnchors.size >= 6, [...companyNavAnchors]);
 check("juristmenyn hittades", advisorNavAnchors.size >= 5, [...advisorNavAnchors]);
+check("driftmenyn hittades", opsNavAnchors.size >= 9, [...opsNavAnchors]);
+const menuFor = (audience: string): Set<string> =>
+  audience === "advisor" ? advisorNavAnchors : audience === "ops" ? opsNavAnchors : companyNavAnchors;
 
 const appSource = readFileSync(join(process.cwd(), "src/App.tsx"), "utf8");
 const ROUTES = [...appSource.matchAll(/path="([^"]+)"/g)].map((m) => m[1]);
 
 /* --- 1. Principen, punkt för punkt ---------------------------------------- */
 
-check("katalogen täcker produktens ytor", GUIDE_CATALOGUE.length >= 25, GUIDE_CATALOGUE.length);
+check("katalogen täcker hela tjänsten", GUIDE_CATALOGUE.length >= 34, GUIDE_CATALOGUE.length);
 check(
   "inga dubbletter bland id:n",
   new Set(GUIDE_CATALOGUE.map((e) => e.id)).size === GUIDE_CATALOGUE.length,
@@ -140,17 +144,16 @@ for (const entry of GUIDE_CATALOGUE) {
   // som inte finns är ett stavfel som annars märks först i drift.
   check(`${entry.id}: har minst en roll`, entry.roles.length >= 1, entry.roles);
   check(
-    `${entry.id}: rollerna är riktiga roller`,
-    entry.roles.every((r) => r === "company" || r === "advisor"),
+    `${entry.id}: rollerna är riktiga`,
+    entry.roles.every((r) => r === "company" || r === "advisor" || r === "ops"),
     entry.roles,
   );
   // Menyankaret måste finnas i den meny rollen faktiskt ser. Ett
   // företagsmenyval inringat för en jurist pekar på ingenting.
   for (const [role, anchor] of Object.entries(entry.navAnchor)) {
-    const menu = role === "advisor" ? advisorNavAnchors : companyNavAnchors;
     check(
       `${entry.id}: menyankaret finns i ${role}-menyn`,
-      menu.has(anchor),
+      menuFor(role).has(anchor),
       `${anchor} saknas i ${role}-menyn`,
     );
   }
@@ -374,6 +377,74 @@ for (const [query, expected] of shows) {
     "och företagaren aldrig en juristyta",
     resolveShowMe("wxyz", "company").alternatives.every((e) => e.roles.includes("company")),
     resolveShowMe("wxyz", "company").alternatives.map((e) => e.id),
+  );
+}
+
+// DRIFTVYERNA: bara för den som administrerar tjänsten, och aldrig
+// synliga för en kund. En företagare som får se "Analysövervakning" i
+// en lista har fått veta att vi övervakar hens analys - och att röja
+// tjänstens insida för en kund är värre än att inte kunna visa den.
+{
+  const opsEntries = GUIDE_CATALOGUE.filter((e) => e.roles.includes("ops"));
+  check("driftvyerna finns i katalogen", opsEntries.length >= 9, opsEntries.length);
+  check(
+    "ingen driftvy är märkt som en kundyta",
+    opsEntries.every((e) => e.roles.length === 1),
+    opsEntries.filter((e) => e.roles.length > 1).map((e) => e.id),
+  );
+  check(
+    "alla driftvyer ligger under /admin",
+    opsEntries.every((e) => e.route.startsWith("/admin")),
+    opsEntries.map((e) => e.route),
+  );
+  // Och det omvända: inget under /admin får vara märkt som en kundyta.
+  check(
+    "ingen kundyta pekar in i driften",
+    GUIDE_CATALOGUE.filter((e) => e.route.startsWith("/admin")).every(
+      (e) => e.roles.length === 1 && e.roles[0] === "ops",
+    ),
+  );
+
+  check(
+    "driften hittar sin analysövervakning",
+    resolveShowMe("analysövervakning", ["company", "ops"]).entry?.id === "analysovervakning",
+    resolveShowMe("analysövervakning", ["company", "ops"]).entry?.id,
+  );
+  check(
+    "driften hittar systemloggarna",
+    resolveShowMe("tekniska fel", ["company", "ops"]).entry?.id === "loggar",
+    resolveShowMe("tekniska fel", ["company", "ops"]).entry?.id,
+  );
+  check(
+    "företagaren leds aldrig in i driften",
+    resolveShowMe("analysövervakning", "company").entry === null,
+    resolveShowMe("analysövervakning", "company").entry?.id,
+  );
+  check(
+    "och erbjuds den aldrig ens som alternativ",
+    resolveShowMe("wxyz", "company").alternatives.every((e) => !e.roles.includes("ops")),
+  );
+  check(
+    "juristen heller inte",
+    resolveShowMe("systemloggar", "advisor").entry === null,
+    resolveShowMe("systemloggar", "advisor").entry?.id,
+  );
+  // Adminen behåller sin egen roll: driftbehörigheten tar inte bort
+  // ytorna hen använder som företagare i sitt eget konto.
+  check(
+    "adminen når fortfarande produktens ytor",
+    resolveShowMe("var sparas rapporterna", ["company", "ops"]).entry?.id === "dokument",
+    resolveShowMe("var sparas rapporterna", ["company", "ops"]).entry?.id,
+  );
+  // Menyvalet: driftvyerna ska ringa in driftmenyn, även när anropet
+  // kommer med adminens produktroll.
+  const drift = guideEntry("loggar")!;
+  check(
+    "driftvyn ringar in driftmenyn även när rollen är company",
+    showMeSteps(drift, { role: "company" }).some(
+      (s) => s.kind === "markera" && s.anchor === "nav-loggar",
+    ),
+    kinds(showMeSteps(drift, { role: "company" })),
   );
 }
 

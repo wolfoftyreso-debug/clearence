@@ -777,7 +777,7 @@ const AdminOverview = () => {
 
   return (
     <DashboardShell title="Driftpanel">
-      <div className="mx-auto max-w-3xl space-y-8">
+      <div data-guide="driftpanelen" className="mx-auto max-w-3xl space-y-8">
         <header>
           <h2 className="text-2xl font-semibold text-foreground">Driftpanel</h2>
           <p className="mt-1 text-sm text-muted-foreground">

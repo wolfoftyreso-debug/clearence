@@ -15,8 +15,7 @@
  * förklaringen framme. Guiden lämnar aldrig någon mitt i en flytt.
  */
 
-import { entryBriefing, type GuideEntry } from "./catalogue";
-import type { UserRole } from "@/data/types";
+import { entryBriefing, type GuideAudience, type GuideEntry } from "./catalogue";
 
 export type GuideAction =
   /** Öppna sidomenyn (bara på små skärmar - på stora står den redan öppen). */
@@ -58,12 +57,19 @@ export const STEP_MS = 1400;
  */
 export const showMeSteps = (
   entry: GuideEntry,
-  opts?: { alreadyThere?: boolean; role?: UserRole },
+  opts?: { alreadyThere?: boolean; role?: GuideAudience },
 ): GuideAction[] => {
   const steps: GuideAction[] = [];
-  // Menyvalet gäller den här rollen eller ingen. Saknas det går guiden
+  // Menyvalet gäller den här publiken eller ingen. Saknas det går guiden
   // rakt till vyn i stället för att ringa in något som inte finns.
-  const navAnchor = entry.navAnchor[opts?.role ?? "company"] ?? null;
+  //
+  // Driftvyerna når bara den som ser driftmenyn, och den menyn hänger på
+  // att posten är märkt "ops" - därför läses menyvalet ur postens EGNA
+  // nycklar när den efterfrågade rollen saknas i den. En admin som
+  // frågar med sin företagsroll ska ändå få driftmenyn visad.
+  const navAnchor =
+    entry.navAnchor[opts?.role ?? "company"] ??
+    (entry.roles.length === 1 ? entry.navAnchor[entry.roles[0]] ?? null : null);
   if (!opts?.alreadyThere && navAnchor) {
     steps.push({ kind: "oppna-meny" });
     steps.push({ kind: "markera", anchor: navAnchor });
@@ -128,7 +134,7 @@ export interface GuidedFlow {
   outcome: string;
   steps: FlowStep[];
   /** Rollerna flödet gäller för. Samma skäl som i katalogen. */
-  roles: UserRole[];
+  roles: GuideAudience[];
 }
 
 /**

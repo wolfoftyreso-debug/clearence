@@ -172,7 +172,7 @@ med fyra svar och en adress:
 | `why` | Varför funktionen används |
 | `saves` | Vad som sparas där |
 | `manage` | Hur användaren ändrar det sedan |
-| `roles` | Vilka roller funktionen finns för |
+| `roles` | Vilken publik funktionen finns för |
 
 `tests/guide.ts` fäller om adressen inte finns i `App.tsx`, om ankaret
 inte finns som `data-guide` i källträdet, eller om något av svaren
@@ -188,11 +188,23 @@ juristens ärendelista och landa på en tom sida. Att peka någon mot en yta
 hen inte har är precis det principen finns för att förhindra – guiden ska
 ta bort letandet, inte flytta det.
 
-`navAnchor` är därför per roll, inte ett värde. Menyerna skiljer sig åt:
-en jurist når likviditeten och handlingarna genom det aktiva ärendet men
-har inga egna menyval för dem, och ett menyval som ringas in för någon
-som inte har det pekar på ingenting. Saknas rollen går guiden rakt till
-vyn i stället.
+`navAnchor` är därför per publik, inte ett värde. Menyerna skiljer sig
+åt: en jurist når likviditeten och handlingarna genom det aktiva ärendet
+men har inga egna menyval för dem, och ett menyval som ringas in för
+någon som inte har det pekar på ingenting. Saknas publiken går guiden
+rakt till vyn i stället.
+
+**Publiken är `company`, `advisor` eller `ops` – och en mängd, inte ett
+värde.** `ops` är inte en roll i datamodellen: driftbehörigheten kommer
+ur `app.is_admin()`, och den som administrerar tjänsten är dessutom
+alltid också företagare eller rådgivare i sitt eget konto. En admin får
+därför sin roll PLUS `ops`, och behåller alla produktytor.
+
+Driftvyerna är den enda delen av katalogen där en läcka gör skada åt
+andra hållet: en kund som ser "Analysövervakning" i en lista har fått
+veta att vi övervakar hens analys. Testet kräver därför att varje post
+under `/admin` har `ops` som ENDA publik, och att ingen kundyta pekar in
+i driften.
 
 ### Ankare, inte selektorer
 

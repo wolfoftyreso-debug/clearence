@@ -291,6 +291,7 @@ const AdminApplications = () => {
 
   return (
     <DashboardShell title="Ansökningar">
+      <div data-guide="ansokningarna">
       {checking ? (
         <div className="flex justify-center py-16">
           <Loader2 className="h-6 w-6 animate-spin text-accent" aria-hidden="true" />
@@ -339,6 +340,7 @@ const AdminApplications = () => {
           )}
         </div>
       )}
+      </div>
     </DashboardShell>
   );
 };

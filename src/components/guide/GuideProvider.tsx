@@ -17,8 +17,7 @@ import {
   STEP_MS,
   type GuideAction,
 } from "@/lib/guide/actions";
-import { guideEntry } from "@/lib/guide/catalogue";
-import type { UserRole } from "@/data/types";
+import { guideEntry, type GuideAudience } from "@/lib/guide/catalogue";
 import { Spotlight } from "@/components/guide/Spotlight";
 
 /**
@@ -61,7 +60,7 @@ interface GuideApi {
    * Rollen behövs för menysteget: menyerna skiljer sig åt, och ett
    * menyval som ringas in för någon som inte har det pekar på ingenting.
    */
-  showMe: (entryId: string, role?: UserRole) => void;
+  showMe: (entryId: string, role?: GuideAudience) => void;
   /** Kvittera var något sparades. */
   savedTo: (entryId: string, what: string) => void;
   /** Kör ett guidat arbetsflöde. */

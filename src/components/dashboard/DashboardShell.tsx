@@ -98,6 +98,28 @@ export const navForRole = (role: UserRole): NavItem[] =>
   role === "advisor" ? ADVISOR_NAV : COMPANY_NAV;
 
 /**
+ * Driftmenyn - bara för den som är admin.
+ *
+ * Låg tidigare som nio nästan identiska Link-block i JSX. Som data blir
+ * den dels kortare, dels möjlig att peka på: guidens ankare måste finnas
+ * i källan för att katalogen ska få nämna vyerna, och nio handskrivna
+ * kopior är nio ställen att glömma ett attribut på.
+ */
+const OPS_NAV: NavItem[] = [
+  { icon: Gauge, label: "Driftpanel", href: "/admin", guide: "nav-drift" },
+  { icon: Inbox, label: "Inkorg", href: "/admin/inkorg", guide: "nav-inkorg" },
+  { icon: Briefcase, label: "Ansökningar", href: "/admin/ansokningar", guide: "nav-ansokningar" },
+  { icon: Users, label: "Kunder", href: "/admin/kunder", guide: "nav-kunder" },
+  { icon: Building2, label: "Företag", href: "/admin/foretag", guide: "nav-foretag" },
+  { icon: Scale, label: "Rådgivare", href: "/admin/radgivare", guide: "nav-driftradgivare" },
+  { icon: BarChart3, label: "Statistik", href: "/admin/statistik", guide: "nav-statistik" },
+  { icon: Gauge, label: "Analysövervakning", href: "/admin/analys", guide: "nav-analys" },
+  { icon: History, label: "Loggar", href: "/admin/loggar", guide: "nav-loggar" },
+];
+
+export const opsNav = (): NavItem[] => OPS_NAV;
+
+/**
  * Kontovarningen.
  *
  * Sitter i skalet och inte på en enskild sida, så att den syns var användaren
@@ -549,88 +571,27 @@ export const DashboardShell = ({ children, title, actions }: DashboardShellProps
                 <p className="px-4 pb-1 pt-6 text-xs font-semibold uppercase tracking-wider text-sidebar-foreground/40">
                   Drift
                 </p>
-                <Link
-                  to="/admin"
-                  onClick={() => setSidebarOpen(false)}
-                  aria-current={pathname === "/admin" ? "page" : undefined}
-                  className={`flex w-full items-center gap-3 rounded-md px-4 py-3 text-sm font-medium transition-colors ${
-                    pathname === "/admin"
-                      ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                      : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
-                  }`}
-                >
-                  <Gauge className="h-5 w-5 flex-shrink-0" aria-hidden="true" />
-                  <span className="min-w-0 flex-1 text-left">Driftpanel</span>
-                </Link>
-                <Link
-                  to="/admin/inkorg"
-                  onClick={() => setSidebarOpen(false)}
-                  className="flex w-full items-center gap-3 rounded-md px-4 py-3 text-sm font-medium text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
-                >
-                  <Inbox className="h-5 w-5 flex-shrink-0" aria-hidden="true" />
-                  <span className="min-w-0 flex-1 text-left">Inkorg</span>
-                </Link>
-                <Link
-                  to="/admin/ansokningar"
-                  onClick={() => setSidebarOpen(false)}
-                  className="flex w-full items-center gap-3 rounded-md px-4 py-3 text-sm font-medium text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
-                >
-                  <Briefcase className="h-5 w-5 flex-shrink-0" aria-hidden="true" />
-                  <span className="min-w-0 flex-1 text-left">Ansökningar</span>
-                </Link>
-                <Link
-                  to="/admin/kunder"
-                  onClick={() => setSidebarOpen(false)}
-                  className="flex w-full items-center gap-3 rounded-md px-4 py-3 text-sm font-medium text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
-                >
-                  <Users className="h-5 w-5 flex-shrink-0" aria-hidden="true" />
-                  <span className="min-w-0 flex-1 text-left">Kunder</span>
-                </Link>
-                <Link
-                  to="/admin/foretag"
-                  onClick={() => setSidebarOpen(false)}
-                  aria-current={pathname === "/admin/foretag" ? "page" : undefined}
-                  className="flex w-full items-center gap-3 rounded-md px-4 py-3 text-sm font-medium text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
-                >
-                  <Building2 className="h-5 w-5 flex-shrink-0" aria-hidden="true" />
-                  <span className="min-w-0 flex-1 text-left">Företag</span>
-                </Link>
-                <Link
-                  to="/admin/radgivare"
-                  onClick={() => setSidebarOpen(false)}
-                  aria-current={pathname === "/admin/radgivare" ? "page" : undefined}
-                  className="flex w-full items-center gap-3 rounded-md px-4 py-3 text-sm font-medium text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
-                >
-                  <Scale className="h-5 w-5 flex-shrink-0" aria-hidden="true" />
-                  <span className="min-w-0 flex-1 text-left">Rådgivare</span>
-                </Link>
-                <Link
-                  to="/admin/statistik"
-                  onClick={() => setSidebarOpen(false)}
-                  aria-current={pathname === "/admin/statistik" ? "page" : undefined}
-                  className="flex w-full items-center gap-3 rounded-md px-4 py-3 text-sm font-medium text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
-                >
-                  <BarChart3 className="h-5 w-5 flex-shrink-0" aria-hidden="true" />
-                  <span className="min-w-0 flex-1 text-left">Statistik</span>
-                </Link>
-                <Link
-                  to="/admin/analys"
-                  onClick={() => setSidebarOpen(false)}
-                  aria-current={pathname === "/admin/analys" ? "page" : undefined}
-                  className="flex w-full items-center gap-3 rounded-md px-4 py-3 text-sm font-medium text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
-                >
-                  <Gauge className="h-5 w-5 flex-shrink-0" aria-hidden="true" />
-                  <span className="min-w-0 flex-1 text-left">Analysövervakning</span>
-                </Link>
-                <Link
-                  to="/admin/loggar"
-                  onClick={() => setSidebarOpen(false)}
-                  aria-current={pathname === "/admin/loggar" ? "page" : undefined}
-                  className="flex w-full items-center gap-3 rounded-md px-4 py-3 text-sm font-medium text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
-                >
-                  <History className="h-5 w-5 flex-shrink-0" aria-hidden="true" />
-                  <span className="min-w-0 flex-1 text-left">Loggar</span>
-                </Link>
+                {OPS_NAV.map((item) => {
+                  const Icon = item.icon;
+                  const active = pathname === item.href;
+                  return (
+                    <Link
+                      key={item.href}
+                      to={item.href}
+                      data-guide={item.guide}
+                      onClick={() => setSidebarOpen(false)}
+                      aria-current={active ? "page" : undefined}
+                      className={`flex w-full items-center gap-3 rounded-md px-4 py-3 text-sm font-medium transition-colors ${
+                        active
+                          ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                          : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                      }`}
+                    >
+                      <Icon className="h-5 w-5 flex-shrink-0" aria-hidden="true" />
+                      <span className="min-w-0 flex-1 text-left">{item.label}</span>
+                    </Link>
+                  );
+                })}
               </>
             )}
           </nav>
