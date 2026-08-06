@@ -147,7 +147,13 @@ const Hero = () => {
             <div
               className={
                 laast
-                  ? "fixed inset-0 z-[60] flex flex-col bg-secondary/40"
+                  ? /* OGENOMSKINLIG bakgrund. Den var bg-secondary/40, alltså nästan
+                     genomskinlig, och på en bred skärm lyste hela marknadssidan
+                     igenom bakom samtalet - rubriker, faktakort och tagline om
+                     vartannat. Det såg ut som en halvfärdig dialogruta i stället
+                     för ett övertagande. På telefon dolde innehållet det, vilket
+                     är varför det slank igenom första provet. */
+                    "fixed inset-0 z-[60] flex flex-col bg-secondary"
                   : "contents"
               }
             >
