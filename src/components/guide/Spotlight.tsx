@@ -1,29 +1,42 @@
-import { useEffect, useLayoutEffect, useState } from "react";
-import { Check, MousePointerClick, X } from "lucide-react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Check, CornerDownLeft, MousePointerClick, X } from "lucide-react";
 
 /**
- * RINGEN OCH FÖRKLARINGSRUTAN.
+ * RINGEN OCH SYSTEMPANELEN.
  *
- * Det synliga av guiden: en pulserande ring kring elementet och en ruta
- * intill som säger vad det är.
+ * Guiden består av två delar med skilda uppgifter: en ring ute i vyn som
+ * pekar, och en panel i kanten som förklarar. De byttes hit från en
+ * flytande ruta, och skälet är strukturellt snarare än estetiskt.
  *
- * TVÅ REGLER SOM ALLT ANNAT HÄR FÖLJER AV:
+ * VARFÖR EN DOCKAD PANEL OCH INTE EN RUTA SOM FÖLJER MED
  *
- *  1. RUTAN FÅR ALDRIG TÄCKA DET DEN PEKAR PÅ. Det gjorde den, och det
- *     var förvirrande på det värsta sättet: rutan sa "klicka på det
- *     markerade" samtidigt som den låg ovanpå markeringen. Positionen
- *     räknas nu så att rutan hamnar utanför ringen - under, över eller
- *     bredvid, i den ordningen - och ringen kapas så att det finns plats.
- *  2. INGEN MODAL. Overlayen har `pointer-events: none`; bara rutans
- *     egna knappar tar emot klick. Användaren kan klicka på det ringen
- *     pekar på - i guidat arbetsläge är det ju hela poängen - och kan
- *     lika gärna göra något helt annat.
+ *  1. RUTAN KUNDE TÄCKA DET DEN PEKADE PÅ. Det löstes en gång med
+ *     räkning - under, över, bredvid, och en ring som kapades för att ge
+ *     plats. Det fungerade, men det var en beräkning som måste stämma
+ *     varje gång. En panel som ligger i kanten kan inte hamna ovanpå
+ *     målet, och behöver därför ingen beräkning som kan gå fel.
+ *  2. RUTAN VISADE ETT STEG I TAGET. "3 av 4" tvingar användaren att
+ *     hålla resten i huvudet, och den som inte vet vad som återstår vet
+ *     inte om det är värt att stanna kvar. Panelen visar HELA
+ *     genomgången: avklarat, pågående och kvarvarande på en gång.
+ *  3. RUTAN HOPPADE. Varje nytt steg flyttade den, och blicken fick leta
+ *     upp den igen. Panelen står stilla; det enda som rör sig är
+ *     markeringen i listan och ringen ute i vyn.
  *
- * När guiden VÄNTAR PÅ ETT KLICK dimmas resten av skärmen. Det är ett
- * avsteg från principen att sammanhanget ska synas, och det är avsiktligt:
- * ska användaren hitta EN sak att klicka på är kontrast det tydligaste
- * som finns. När guiden bara visar var något ligger dimmas ingenting -
- * då är det just sammanhanget som är svaret.
+ * PANELEN ÄGER EN FIL. Den reserverar en remsa i kanten, och RINGEN kapas
+ * mot filens gräns i stället för tvärtom. Två tidigare försök letade i
+ * stället efter en ledig kant, och båda föll på samma sak: ett mål som
+ * spänner över halva vyn lämnar ingen kant ledig. En gräns kan inte
+ * misslyckas på det sättet - det finns ingen sökning som kan gå fel.
+ *
+ * INGEN MODAL. Overlayen har `pointer-events: none`; bara panelens egna
+ * knappar tar emot klick. Användaren kan klicka på det ringen pekar på -
+ * i guidat arbetsläge är det hela poängen - och kan lika gärna göra något
+ * helt annat.
+ *
+ * DIMNINGEN gäller bara när guiden väntar på ett klick. Ska användaren
+ * hitta EN sak är kontrast det tydligaste som finns. Visar guiden bara
+ * var något ligger dimmas ingenting - då är sammanhanget svaret.
  */
 
 interface Rect {
@@ -41,9 +54,21 @@ const rectOf = (anchor: string): Rect | null => {
   return { top: r.top, left: r.left, width: r.width, height: r.height };
 };
 
-const BOX_W = 360;
-const BOX_H = 210;
-const GAP = 14;
+/** Panelens bredd på skärmar där den står vid sidan. */
+const PANEL_W = 320;
+/** Under den här bredden dockas panelen längst ned i stället. */
+const SMAL_SKARM = 720;
+
+/*
+ * Marginalen upp från skärmens underkant för den nedåtdockade panelen.
+ *
+ * Längst ned bor annat som ligger fast: demobannern, och i en telefon
+ * webbläsarens eget fält. En panel som lägger sig i botten hamnade under
+ * dem - knappen "Hoppa över steget" syntes men gick inte att trycka på,
+ * vilket är en återvändsgränd av det värsta slaget: den ser ut att
+ * fungera.
+ */
+const NEDRE_SAKER = 76;
 
 export const Spotlight = ({
   anchor,
@@ -52,6 +77,7 @@ export const Spotlight = ({
   awaitingClick,
   targetLabel,
   flowLabel,
+  stops,
   receipt,
   progress,
   onClose,
@@ -63,12 +89,24 @@ export const Spotlight = ({
   awaitingClick: boolean;
   targetLabel: string | null;
   flowLabel: string | null;
+  stops: { step: number; label: string }[];
   receipt: boolean;
   progress: { current: number; total: number } | null;
   onClose: () => void;
   onSkip: () => void;
 }) => {
   const [rect, setRect] = useState<Rect | null>(null);
+  const [vw, setVw] = useState(() => (typeof window === "undefined" ? 1280 : window.innerWidth));
+  /*
+   * Panelens verkliga höjd, mätt efter rendering.
+   *
+   * Den gissades först till 340 px. Den är 430 med en stopplista, och
+   * skillnaden var precis vad som lät ringen krocka med panelen på en
+   * skärm där det såg ut att finnas plats. En layout som bygger på ett
+   * antagande om sin egen storlek har fel så fort innehållet växer.
+   */
+  const [panelHojd, setPanelHojd] = useState(360);
+  const panelRef = useRef<HTMLElement | null>(null);
 
   useLayoutEffect(() => {
     if (!anchor) {
@@ -82,7 +120,10 @@ export const Spotlight = ({
     if (!anchor) return;
     let frame = 0;
     const update = () => {
-      frame = window.requestAnimationFrame(() => setRect(rectOf(anchor)));
+      frame = window.requestAnimationFrame(() => {
+        setRect(rectOf(anchor));
+        setVw(window.innerWidth);
+      });
     };
     // Under rullningen mot målet flyttar sig elementet hela tiden. Ringen
     // följer med i stället för att hoppa på plats när allt stannat.
@@ -97,80 +138,105 @@ export const Spotlight = ({
     };
   }, [anchor]);
 
+  /*
+   * Tangentbordet. Esc avbryter redan i GuideProvider; S hoppar över ett
+   * steg man fastnat på.
+   *
+   * Genvägen gäller bara när guiden faktiskt väntar, och aldrig när
+   * användaren skriver: ett S som hoppar över ett steg mitt i ett
+   * fritextfält vore en fälla, inte en genväg.
+   */
+  useEffect(() => {
+    if (!awaitingClick) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "s" && e.key !== "S") return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      const el = document.activeElement as HTMLElement | null;
+      if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable)) return;
+      e.preventDefault();
+      onSkip();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [awaitingClick, onSkip]);
+
+  useLayoutEffect(() => {
+    const h = panelRef.current?.getBoundingClientRect().height;
+    if (h && Math.abs(h - panelHojd) > 4) setPanelHojd(h);
+  });
+
   if (!anchor || !rect) return null;
 
-  const vw = window.innerWidth;
   const vh = window.innerHeight;
   const pad = 8;
+  const smal = vw < SMAL_SKARM;
 
-  /**
-   * Ringen kapas så att RUTAN GARANTERAT FÅR PLATS UTANFÖR den.
+  /*
+   * PANELEN ÄGER EN FIL, OCH RINGEN HÅLLER SIG UR DEN.
    *
-   * Det räckte inte att bara kapa ringen till skärmen. En stor panel som
-   * börjar en bit ner lämnade varken plats under, över eller bredvid -
-   * och rutan hamnade ovanpå ringens kant ändå, alltså exakt det fel
-   * regeln finns för att förhindra. Ringen är en markering och får
-   * krympa; rutan är instruktionen och får inte skymma.
+   * Två försök före det här letade efter en ledig kant. Båda föll på
+   * samma sak: ett mål som spänner över halva vyn lämnar ingen kant
+   * ledig, och då hamnar panelen ovanpå det den pekar på ändå.
    *
-   * Bottenmarginalen tar höjd för det som ligger fast längst ned
-   * (demobannern, mobilens webbläsarfält).
+   * Modellen är därför den omvända, och den är ett operativsystems: en
+   * dockad panel reserverar sin remsa, och innehållet flödar bredvid.
+   * Ringen kapas mot filens kant. Det kan inte bli fel, för det finns
+   * ingen sökning som kan misslyckas - bara en gräns.
+   *
+   * FILEN LIGGER TILL HÖGER. Vänsterkanten är appens egen navigering, och
+   * en panel som lägger sig över menyn gör rundturen till en fälla:
+   * användaren ser vart hen ska men kommer inte åt att klicka dit.
+   * Tyngdpunktsregeln som stod här förut gjorde precis det.
+   *
+   * Undantaget är ett mål som SJÄLVT bor i högerfilen och inte i den
+   * vänstra. Då byter panelen sida - då är det målet som skulle skymmas,
+   * och menyn är åtminstone inte det som pekas ut.
    */
-  const BOTTOM_SAFE = 76;
-  const visibleTop = Math.max(12, rect.top);
-  const visibleBottom = Math.min(vh - 12, rect.top + rect.height);
-  const roomForRing = vh - visibleTop - (BOX_H + GAP + BOTTOM_SAFE) - pad * 2;
-  const ringHeight = Math.min(
-    Math.max(90, roomForRing),
-    Math.max(32, visibleBottom - visibleTop),
+  const panelH = Math.min(panelHojd, vh - 32);
+  const iHogerfil = rect.left + rect.width > vw - PANEL_W - 32;
+  const iVansterfil = rect.left < PANEL_W + 32;
+  const fil: "hoger" | "vanster" | "nere" = smal
+    ? "nere"
+    : iHogerfil && !iVansterfil
+      ? "vanster"
+      : "hoger";
+
+  // Innehållsytan: allt utom panelens fil.
+  const ytaVanster = fil === "vanster" ? PANEL_W + 32 : 4;
+  const ytaHoger = fil === "hoger" ? vw - PANEL_W - 32 : vw - 4;
+  const ytaNere = fil === "nere" ? vh - panelH - NEDRE_SAKER - 16 : vh - 12;
+
+  const ringLeft = Math.max(ytaVanster, rect.left - pad);
+  const ringWidth = Math.max(24, Math.min(ytaHoger - ringLeft, rect.width + pad * 2));
+  const ringTop = Math.max(12, rect.top) - pad;
+  const ringHeight = Math.max(
+    24,
+    Math.min(
+      Math.min(ytaNere, rect.top + rect.height) - Math.max(12, rect.top),
+      ytaNere - ringTop - pad * 2,
+    ),
   );
-  const ringTop = visibleTop - pad;
-  const ringLeft = Math.max(4, rect.left - pad);
-  const ringWidth = Math.min(vw - ringLeft - 4, rect.width + pad * 2);
   const ringBottom = ringTop + ringHeight + pad * 2;
 
-  /**
-   * Rutans plats: under ringen om det får plats, annars över, annars
-   * bredvid. Aldrig ovanpå.
-   */
-  const roomBelow = vh - ringBottom;
-  const roomAbove = ringTop;
-  const roomRight = vw - (ringLeft + ringWidth);
-  let boxTop: number;
-  let boxLeft: number;
-  if (roomBelow >= BOX_H + GAP) {
-    boxTop = ringBottom + GAP;
-    boxLeft = Math.min(Math.max(12, ringLeft), Math.max(12, vw - BOX_W - 12));
-  } else if (roomAbove >= BOX_H + GAP) {
-    boxTop = ringTop - BOX_H - GAP;
-    boxLeft = Math.min(Math.max(12, ringLeft), Math.max(12, vw - BOX_W - 12));
-  } else if (roomRight >= BOX_W + GAP) {
-    boxTop = Math.min(Math.max(12, ringTop), Math.max(12, vh - BOX_H - 12));
-    boxLeft = ringLeft + ringWidth + GAP;
-  } else {
-    // Sista utvägen: till vänster om ringen. Skulle inte heller det få
-    // plats står rutan nere i hörnet - fortfarande utanför ringen.
-    boxTop = Math.min(Math.max(12, ringTop), Math.max(12, vh - BOX_H - 12));
-    boxLeft = Math.max(12, ringLeft - BOX_W - GAP);
-  }
+  const panelPos: React.CSSProperties =
+    fil === "nere"
+      ? { left: 12, right: 12, bottom: NEDRE_SAKER }
+      : fil === "hoger"
+        ? { right: 16, top: 88, width: PANEL_W }
+        : { left: 16, top: 88, width: PANEL_W };
 
-  const ring: React.CSSProperties = {
-    top: ringTop,
-    left: ringLeft,
-    width: ringWidth,
-    height: ringHeight + pad * 2,
-  };
+  const nuvarande = progress?.current ?? null;
 
   return (
     <div className="pointer-events-none fixed inset-0 z-[90]" aria-live="polite">
-      {/* Dimningen: bara när användaren ska hitta EN sak att klicka på.
-          Fyra rutor runt hålet i stället för en mask - enklare, och
-          hålet blir exakt. */}
+      {/* Dimningen: fyra rutor runt hålet i stället för en mask - enklare,
+          och hålet blir exakt. */}
       {awaitingClick && (
         <div aria-hidden="true">
-          <div className="absolute bg-foreground/45 transition-all duration-300" style={{ top: 0, left: 0, right: 0, height: Math.max(0, ringTop) }} />
-          <div className="absolute bg-foreground/45 transition-all duration-300" style={{ top: ringBottom, left: 0, right: 0, bottom: 0 }} />
-          <div className="absolute bg-foreground/45 transition-all duration-300" style={{ top: ringTop, left: 0, width: Math.max(0, ringLeft), height: ringHeight + pad * 2 }} />
-          <div className="absolute bg-foreground/45 transition-all duration-300" style={{ top: ringTop, left: ringLeft + ringWidth, right: 0, height: ringHeight + pad * 2 }} />
+          <div className="absolute bg-foreground/50 transition-all duration-300" style={{ top: 0, left: 0, right: 0, height: Math.max(0, ringTop) }} />
+          <div className="absolute bg-foreground/50 transition-all duration-300" style={{ top: ringBottom, left: 0, right: 0, bottom: 0 }} />
+          <div className="absolute bg-foreground/50 transition-all duration-300" style={{ top: ringTop, left: 0, width: Math.max(0, ringLeft), height: ringHeight + pad * 2 }} />
+          <div className="absolute bg-foreground/50 transition-all duration-300" style={{ top: ringTop, left: ringLeft + ringWidth, right: 0, height: ringHeight + pad * 2 }} />
         </div>
       )}
 
@@ -182,10 +248,10 @@ export const Spotlight = ({
           receipt
             ? "border-2 border-success"
             : awaitingClick
-              ? "border-[3px] border-accent shadow-[0_0_0_4px_hsl(var(--accent)/0.25)]"
+              ? "border-[3px] border-accent shadow-[0_0_0_4px_hsl(var(--accent)/0.3)]"
               : "border-2 border-accent"
         }`}
-        style={ring}
+        style={{ top: ringTop, left: ringLeft, width: ringWidth, height: ringHeight + pad * 2 }}
       >
         <span
           className={`absolute -inset-1 animate-ping rounded-md border-2 ${
@@ -196,81 +262,131 @@ export const Spotlight = ({
       </div>
 
       {text && (
-        <div
+        <aside
+          ref={panelRef}
           data-guide-callout={anchor}
+          aria-label="Guiden"
           role="status"
-          className="pointer-events-auto absolute w-[360px] max-w-[calc(100vw-24px)] rounded-md border border-border bg-card p-4 shadow-lg"
-          style={{ top: boxTop, left: boxLeft }}
+          className="pointer-events-auto fixed overflow-hidden rounded-md border border-border bg-card shadow-lg"
+          style={panelPos}
         >
-          {/* Vad som pågår, överst. Den som inte vet varför skärmen
-              plötsligt uppför sig annorlunda hinner bli irriterad innan
-              hen hunnit läsa resten. */}
-          {flowLabel && (
-            <p className="mb-2 flex items-center justify-between gap-2 border-b border-border pb-2 text-[11px] font-bold uppercase tracking-wide text-accent">
-              <span className="truncate">Genomgång: {flowLabel}</span>
-              {progress && (
-                <span className="flex-shrink-0 tabular-nums text-muted-foreground">
-                  {progress.current}/{progress.total}
-                </span>
-              )}
-            </p>
+          {/* HUVUDET: vad som pågår och hur långt det gått. Mätaren är
+              inte dekoration - den är skillnaden mellan "det här tar
+              visst aldrig slut" och "två kvar". */}
+          <header className="border-b border-border bg-secondary/50 px-4 py-3">
+            <div className="flex items-start justify-between gap-2">
+              <p className="min-w-0 text-[11px] font-bold uppercase leading-snug tracking-wide text-accent">
+                {flowLabel ? `Genomgång: ${flowLabel}` : "Guiden"}
+              </p>
+              <button
+                type="button"
+                onClick={onClose}
+                aria-label="Avsluta guiden"
+                className="-mr-1 -mt-0.5 flex-shrink-0 rounded-sm p-1 text-muted-foreground transition-colors hover:text-foreground"
+              >
+                <X className="h-4 w-4" aria-hidden="true" />
+              </button>
+            </div>
+            {progress && (
+              <>
+                <p className="mt-1 text-[11px] font-medium tabular-nums text-muted-foreground">
+                  {/* Läsbart, inte nollutfyllt. "Steg 03 av 04" ser
+                      systematiskt ut men är svårare att ta in för den
+                      som läser stressat, och den här panelen finns för
+                      att vara tydlig. */}
+                  Steg {progress.current} av {progress.total}
+                </p>
+                <div
+                  className="mt-1.5 h-1 overflow-hidden rounded-full bg-border"
+                  role="progressbar"
+                  aria-valuenow={progress.current}
+                  aria-valuemin={0}
+                  aria-valuemax={progress.total}
+                >
+                  <div
+                    className="h-full rounded-full bg-accent transition-all duration-500"
+                    style={{ width: `${(progress.current / Math.max(1, progress.total)) * 100}%` }}
+                  />
+                </div>
+              </>
+            )}
+          </header>
+
+          {/* HÅLLPLATSERNA. Hela genomgången, alltid synlig. Avklarade får
+              en bock, den pågående en fylld punkt, kvarvarande sitt
+              nummer. Man ska kunna se på en halv sekund var man är. */}
+          {stops.length > 1 && (
+            <ol className="max-h-40 overflow-y-auto border-b border-border px-2 py-2">
+              {stops.map((stop) => {
+                const klar = nuvarande !== null && stop.step < nuvarande;
+                const aktiv = stop.step === nuvarande;
+                return (
+                  <li
+                    key={`${stop.step}-${stop.label}`}
+                    aria-current={aktiv ? "step" : undefined}
+                    className={`flex items-center gap-2.5 rounded-sm px-2 py-1.5 text-sm ${
+                      aktiv ? "bg-accent/10 font-semibold text-foreground" : "text-muted-foreground"
+                    }`}
+                  >
+                    <span
+                      aria-hidden="true"
+                      className={`flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full text-[10px] font-bold tabular-nums ${
+                        klar
+                          ? "bg-success/15 text-success"
+                          : aktiv
+                            ? "bg-accent text-accent-foreground"
+                            : "border border-border text-muted-foreground"
+                      }`}
+                    >
+                      {klar ? <Check className="h-2.5 w-2.5" aria-hidden="true" /> : stop.step}
+                    </span>
+                    <span className="truncate">{stop.label}</span>
+                  </li>
+                );
+              })}
+            </ol>
           )}
 
-          <div className="flex items-start justify-between gap-2">
-            <div className="min-w-0">
-              {receipt ? (
-                <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-success">
-                  <Check className="h-3.5 w-3.5" aria-hidden="true" />
-                  Sparat
+          {/* FÖRKLARINGEN för det som pågår just nu. */}
+          <div className="px-4 py-3">
+            {receipt ? (
+              <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-success">
+                <Check className="h-3.5 w-3.5" aria-hidden="true" />
+                Sparat
+              </p>
+            ) : (
+              heading && (
+                <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+                  {heading}
                 </p>
-              ) : (
-                heading && (
-                  <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
-                    {heading}
-                  </p>
-                )
-              )}
-              <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-foreground">{text}</p>
-            </div>
-            <button
-              type="button"
-              onClick={onClose}
-              aria-label="Stäng guiden"
-              className="-mr-1 -mt-1 flex-shrink-0 rounded-sm p-1 text-muted-foreground hover:text-foreground"
-            >
-              <X className="h-4 w-4" aria-hidden="true" />
-            </button>
+              )
+            )}
+            <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-foreground">{text}</p>
+
+            {awaitingClick && (
+              /* Guidat arbetsläge: handen är användarens. Saken NAMNGES -
+                 "klicka på det markerade" hjälper inte den som inte hittar
+                 markeringen, och då finns ingen andra ledtråd. */
+              <p className="mt-3 flex items-start gap-2 rounded-md bg-accent px-3 py-2 text-sm font-semibold text-accent-foreground">
+                <MousePointerClick className="mt-0.5 h-4 w-4 flex-shrink-0" aria-hidden="true" />
+                <span>
+                  Klicka på {targetLabel ? `”${targetLabel}”` : "det inringade"} ute i vyn. Jag
+                  väntar.
+                </span>
+              </p>
+            )}
           </div>
 
-          {awaitingClick && (
-            /* Guidat arbetsläge: handen är användarens. Saken NAMNGES -
-               "klicka på det markerade" hjälper inte den som inte hittar
-               markeringen, och då finns ingen andra ledtråd. */
-            <p className="mt-2.5 flex items-start gap-2 rounded-md bg-accent px-3 py-2 text-sm font-semibold text-accent-foreground">
-              <MousePointerClick className="mt-0.5 h-4 w-4 flex-shrink-0" aria-hidden="true" />
-              <span>
-                Klicka på {targetLabel ? `”${targetLabel}”` : "det inringade"} – det inringade på
-                skärmen. Jag väntar.
-              </span>
-            </p>
-          )}
-
-          <div className="mt-2.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
-            {progress && !flowLabel ? (
-              <span className="text-[11px] tabular-nums text-muted-foreground">
-                Steg {progress.current} av {progress.total}
-              </span>
-            ) : (
-              <span />
-            )}
-            <span className="flex items-center gap-3">
+          {/* FOTEN: vägarna ut, och tangenterna som gör samma sak. Att
+              visa genvägarna är halva OS-känslan - och den som en gång
+              sett dem slutar leta efter knappen. */}
+          <footer className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 border-t border-border bg-secondary/30 px-4 py-2.5">
+            <span className="flex items-center gap-3 whitespace-nowrap">
               {awaitingClick && (
-                /* Fastnar man ska man kunna gå vidare utan att avbryta
-                   hela genomgången. */
                 <button
                   type="button"
                   onClick={onSkip}
-                  className="text-xs font-medium text-muted-foreground underline underline-offset-2 hover:text-foreground"
+                  className="text-xs font-medium text-muted-foreground underline underline-offset-2 transition-colors hover:text-foreground"
                 >
                   Hoppa över steget
                 </button>
@@ -278,15 +394,25 @@ export const Spotlight = ({
               <button
                 type="button"
                 onClick={onClose}
-                className="text-xs font-medium text-muted-foreground underline underline-offset-2 hover:text-foreground"
+                className="text-xs font-medium text-muted-foreground underline underline-offset-2 transition-colors hover:text-foreground"
               >
                 {flowLabel ? "Avsluta genomgången" : "Jag hittar själv"}
               </button>
             </span>
-          </div>
-        </div>
+            <span className="hidden flex-shrink-0 items-center gap-1.5 whitespace-nowrap text-[10px] text-muted-foreground sm:flex">
+              {awaitingClick && (
+                <kbd className="rounded border border-border bg-card px-1.5 py-0.5 font-sans font-semibold">
+                  S
+                </kbd>
+              )}
+              <kbd className="flex items-center gap-1 rounded border border-border bg-card px-1.5 py-0.5 font-sans font-semibold">
+                <CornerDownLeft className="h-2.5 w-2.5" aria-hidden="true" />
+                Esc
+              </kbd>
+            </span>
+          </footer>
+        </aside>
       )}
-
     </div>
   );
 };

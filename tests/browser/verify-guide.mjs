@@ -145,7 +145,15 @@ check("det går att hoppa över steget", /Hoppa över steget/.test(flowBox));
 check("och att avsluta genomgången", /Avsluta genomgången/.test(flowBox));
 // Räknaren ska räkna KLICK, inte guidens interna moment: fyra stopp är
 // fyra, inte tolv.
-check("räknaren räknar klicken", /\b1\/4\b/.test(flowBox), (flowBox.match(/\d+\/\d+/) ?? [""])[0]);
+check(
+  "räknaren räknar klicken",
+  /Steg 1 av 4/i.test(flowBox),
+  (flowBox.match(/Steg \d+ av \d+/i) ?? [""])[0],
+);
+// Hela genomgången ska synas på en gång, inte ett steg i taget: den som
+// inte vet vad som återstår vet inte om det är värt att stanna kvar.
+check("alla hållplatser visas samtidigt", /Likviditet/.test(flowBox) && /Dokument/.test(flowBox) && /Händelselogg/.test(flowBox), flowBox.slice(0, 200));
+check("tangentbordsgenvägarna visas", /Esc/.test(flowBox), flowBox.slice(-120));
 
 // Rutan får ALDRIG överlappa ringen.
 const overlap = await page.evaluate(() => {
@@ -161,7 +169,7 @@ check("rutan täcker inte det den pekar på", overlap === null, String(overlap))
 // Och skärmen dimmas så att det inringade sticker ut - men klicket går
 // fortfarande igenom.
 const dimmed = await page.evaluate(() =>
-  [...document.querySelectorAll("div")].some((d) => d.className.includes("bg-foreground/45")),
+  [...document.querySelectorAll("div")].some((d) => /bg-foreground\/\d+/.test(d.className)),
 );
 check("resten av skärmen dimmas när ett klick väntas", dimmed);
 

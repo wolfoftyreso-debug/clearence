@@ -52,6 +52,16 @@ interface GuideState {
   /** Vilken genomgång som pågår, så att användaren vet vad hen är mitt i. */
   flowLabel: string | null;
   /**
+   * Genomgångens hållplatser, alla på en gång.
+   *
+   * Panelen visar hela listan i stället för ett steg i taget. Att bara se
+   * "3 av 4" tvingar användaren att hålla resten i huvudet - och den som
+   * inte vet vad som återstår vet heller inte om det är värt att stanna
+   * kvar. Listan kommer ur samma åtgärder som körs, så den kan inte
+   * beskriva en annan genomgång än den som faktiskt pågår.
+   */
+  stops: { step: number; label: string }[];
+  /**
    * Var i sekvensen vi är.
    *
    * I ett guidat flöde räknas KLICKEN, inte guidens interna moment: den
@@ -97,6 +107,7 @@ const idle: GuideState = {
   awaitingClick: false,
   targetLabel: null,
   flowLabel: null,
+  stops: [],
   progress: null,
   receipt: false,
 };
@@ -277,7 +288,14 @@ export const GuideProvider = ({ children }: { children: ReactNode }) => {
       running.current = true;
       ownRoute.current = pathname;
       flowRef.current = flowLabel;
-      setState({ ...idle, flowLabel });
+      // Bara de moment användaren faktiskt ska göra något vid blir
+      // hållplatser. Rullningar och pauser är hur guiden tar sig dit,
+      // inte stationer på vägen.
+      const stops = actions
+        .filter((a): a is Extract<GuideAction, { kind: "vanta-pa-klick" }> =>
+          a.kind === "vanta-pa-klick")
+        .map((a) => ({ step: a.step, label: a.label ?? "Nästa steg" }));
+      setState({ ...idle, flowLabel, stops });
       advance.current();
     },
     [pathname],
@@ -350,6 +368,7 @@ export const GuideProvider = ({ children }: { children: ReactNode }) => {
         awaitingClick={state.awaitingClick}
         targetLabel={state.targetLabel}
         flowLabel={state.flowLabel}
+        stops={state.stops}
         receipt={state.receipt}
         progress={state.progress}
         onClose={stop}
