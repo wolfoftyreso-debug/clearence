@@ -15,7 +15,7 @@ import {
 import type {
   FinancialSnapshot, OpenItem, Provenance, Voucher,
 } from "../src/lib/financial/model";
-import { PROVIDER_REGISTRY, manualDatasets } from "../src/lib/financial/ports";
+import { PROVIDER_REGISTRY, manualDatasets, providerLabel } from "../src/lib/financial/ports";
 
 const norm = (s: string) => s.replace(/[\u00a0\u202f]/g, " ");
 let pass = 0, fail = 0;
@@ -175,6 +175,19 @@ ok("every provider warns about skattekonto", PROVIDER_REGISTRY.every(p => !!p.no
 eq("manualDatasets flags the gap",
    manualDatasets(PROVIDER_REGISTRY.find(p => p.id === "bokio")!, ["openItems","counterparties","taxAccount"]),
    ["counterparties","taxAccount"]);
+
+/* --- Leverantörens namn som det visas ------------------------------------- */
+
+/*
+ * Översikten skrev "Från fortnox" - det råa id:t, gemener och allt, i
+ * meningen som pekar ut varifrån bolagets siffror kommer. providerLabel
+ * finns för att det aldrig ska hända igen: registrets label för kända
+ * leverantörer, en läsbar text för "generic" (SIE-filen är inget
+ * varumärke), och id:t bara som sista utväg för okända.
+ */
+eq("providerLabel slår upp varumärket", providerLabel("fortnox"), "Fortnox");
+eq("generic är importerat underlag, inte ett id", providerLabel("generic"), "importerat underlag");
+eq("okänt id faller tillbaka till sig självt", providerLabel("okand-leverantor"), "okand-leverantor");
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

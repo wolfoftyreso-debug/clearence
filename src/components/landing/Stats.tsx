@@ -9,7 +9,14 @@ const Stats = () => {
       <div className="container px-4">
         <div className="grid grid-cols-1 gap-8 md:grid-cols-12 md:items-center md:gap-12">
           <div className="md:col-span-5">
-            <p className="font-display text-5xl text-accent md:text-6xl">
+            {/*
+              Ljus accent, INTE text-accent. Ytan är alltid mörk
+              (surface-brand), och accentens ljusa läge mot den ger 4,9:1.
+              text-accent - mörkblå på marinblå - gav 1,4:1: startsidans
+              största siffra var den minst läsbara. Kontrast mäts inte av
+              designsviten, så felet syntes bara för ögon.
+            */}
+            <p className="font-display text-5xl text-[hsl(211_70%_62%)] md:text-6xl">
               {companies.toLocaleString("sv-SE")}
             </p>
             <p className="mt-2 text-base font-medium text-primary-foreground">

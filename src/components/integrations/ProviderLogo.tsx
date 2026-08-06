@@ -13,6 +13,8 @@
  * då själv, per leverantör, utan att någon anropsplats ändras.
  */
 
+import { SMS_SECRET_PROVIDER } from "@/lib/notifications/events";
+
 const BRAND: Record<string, { bg: string; fg: string; initials: string; name: string }> = {
   creditsafe: { bg: "#003d6e", fg: "#ffffff", initials: "Cs", name: "Creditsafe" },
   bolagsverket: { bg: "#1d5c33", fg: "#ffffff", initials: "Bv", name: "Bolagsverket" },
@@ -21,6 +23,19 @@ const BRAND: Record<string, { bg: string; fg: string; initials: string; name: st
   fortnox: { bg: "#00623a", fg: "#ffffff", initials: "F", name: "Fortnox" },
   visma: { bg: "#c8102e", fg: "#ffffff", initials: "V", name: "Visma" },
   ses: { bg: "#232f3e", fg: "#ff9900", initials: "@", name: "E-postutskick" },
+  /*
+   * SMS-leverantören saknades här, och driftpanelens rad visade då
+   * reservrutan - en tom grå kvadrat bredvid fem rader med märken. En
+   * tom ruta i en lista där alla andra har innehåll läses som "trasig",
+   * inte som "neutral".
+   *
+   * Nyckeln är KONSTANTEN, inte en strängliteral: leverantörsnamnet är
+   * inkapslat (tests/notificationService.ts vaktar det), så att ett byte
+   * av SMS-leverantör är en fil och inte en jakt genom kodbasen. Märket
+   * är därför också neutralt - "SMS" i vår egen mörka färg, inget
+   * varumärke - och överlever bytet.
+   */
+  [SMS_SECRET_PROVIDER]: { bg: "#1e2a3a", fg: "#ffffff", initials: "SMS", name: "SMS-utskick" },
 };
 
 /**

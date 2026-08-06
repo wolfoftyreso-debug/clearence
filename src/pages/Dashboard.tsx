@@ -11,6 +11,7 @@ import { buildCaseBundle, timelineToIcs } from "@/lib/integrations/caseBundle";
 import { downloadTextFile } from "@/lib/integrations/download";
 import { InsightList } from "@/components/financial/InsightList";
 import { analyseSnapshot } from "@/lib/financial/insights";
+import { providerLabel } from "@/lib/financial/ports";
 import { format } from "date-fns";
 import { sv } from "date-fns/locale";
 import { CalendarClock, FolderDown, Plus } from "lucide-react";
@@ -290,7 +291,7 @@ const Dashboard = () => {
                   <h2 className="font-semibold text-foreground">Vad siffrorna säger</h2>
                   {snapshot && (
                     <span className="text-xs text-muted-foreground">
-                      Från {snapshot.provider}, hämtat{" "}
+                      Från {providerLabel(snapshot.provider)}, hämtat{" "}
                       {format(new Date(snapshot.capturedAt), "d MMM HH:mm", { locale: sv })}
                     </span>
                   )}

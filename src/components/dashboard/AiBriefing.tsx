@@ -233,7 +233,12 @@ export const AiBriefing = ({ caseRecord, timeline }: AiBriefingProps) => {
               const door = doorFor(action.label);
               const row = (
                 <>
-                  <span className="mt-0.5 w-16 flex-shrink-0 break-words text-[11px] font-bold uppercase leading-tight tracking-wide text-muted-foreground sm:w-24">
+                  {/* w-24 och INGEN break-words: kolumnen var w-16 med break-words,
+                      och "OMEDELBART" bröts till "OMEDELBA / RT" på en telefon.
+                      Ett ord som bryts mitt i läses som ett stavfel. "DENNA
+                      VECKA" radbryts vid mellanslaget ändå - det är ordbrytet
+                      som ska bort, inte radbrytet. */}
+                  <span className="mt-0.5 w-24 flex-shrink-0 text-[11px] font-bold uppercase leading-tight tracking-wide text-muted-foreground">
                     {action.horizon}
                   </span>
                   <GlossaryText
@@ -321,7 +326,7 @@ export const AiBriefing = ({ caseRecord, timeline }: AiBriefingProps) => {
           {toTimelineRows(summary, timeline, new Date()).map((row, index) => (
             <li key={`${row.label}-${index}`} className="flex items-start gap-3 rounded-md border border-border p-2.5">
               <span
-                className={`mt-0.5 w-20 flex-shrink-0 break-words text-[11px] font-bold uppercase leading-tight tracking-wide sm:w-24 ${
+                className={`mt-0.5 w-24 flex-shrink-0 text-[11px] font-bold uppercase leading-tight tracking-wide ${
                   row.tone === "critical" ? "text-frist" : row.tone === "warning" ? "text-warning" : "text-muted-foreground"
                 }`}
               >
@@ -355,7 +360,8 @@ export const AiBriefing = ({ caseRecord, timeline }: AiBriefingProps) => {
                       to={action.href ?? "/dashboard"}
                       className={`group flex items-start gap-3 rounded-md border p-2.5 transition-colors hover:border-accent ${HORIZON_TONE[action.horizon]}`}
                     >
-                      <span className="mt-0.5 w-16 flex-shrink-0 break-words text-[11px] font-bold uppercase leading-tight tracking-wide sm:w-24">
+                      {/* Samma regel som kortversionens etikett: w-24, aldrig break-words. */}
+                      <span className="mt-0.5 w-24 flex-shrink-0 text-[11px] font-bold uppercase leading-tight tracking-wide">
                         {action.horizon}
                       </span>
                       <span className="min-w-0 flex-1">

@@ -219,6 +219,24 @@ export const PROVIDER_REGISTRY: ProviderDescriptor[] = [
   },
 ];
 
+/**
+ * Leverantörens namn som det VISAS, aldrig som det lagras.
+ *
+ * Översikten skrev "Från fortnox" - det råa id:t, med gemener, rakt in i
+ * en mening som pekar ut varifrån bolagets siffror kommer. Ett varumärke
+ * med fel skiftläge är en liten sak som gör en stor: raden finns för att
+ * skapa förtroende för källan, och ett systemnamn i loggformat gör
+ * motsatsen.
+ *
+ * "generic" står inte i registret med flit - det är SIE-filens och
+ * handinmatningens ursprung, inte en leverantör - och får därför en egen
+ * läsbar text i stället för att falla tillbaka till id:t.
+ */
+export const providerLabel = (id: string): string => {
+  if (id === "generic") return "importerat underlag";
+  return PROVIDER_REGISTRY.find((p) => p.id === id)?.label ?? id;
+};
+
 /** Datasets the user must supply by hand for a given provider. */
 export const manualDatasets = (
   descriptor: ProviderDescriptor,

@@ -121,5 +121,68 @@ check(
   fragmentAnchors,
 );
 
+/* --- 6. Pixelrevisionens vakter -------------------------------------------- */
+
+/*
+ * Tre fel som sviterna inte kunde se, hittade med ögon i skärmdumpar.
+ * Vakterna är textuella och trubbiga - men de fångar exakt den
+ * återkomst som annars sker när någon "städar" en klass eller lägger
+ * till en leverantör.
+ */
+
+// Startsidans största siffra var dess minst läsbara: text-accent
+// (mörkblå) på surface-brand (marinblå) gav kontrast 1,4:1. Stor text
+// kräver 3:1. Kontrast mäts inte av designsviten, så regeln står här.
+const rot = process.cwd();
+const statsKalla = readFileSync(join(rot, "src/components/landing/Stats.tsx"), "utf8");
+check(
+  "Stats: ingen text-accent på den mörka ytan (kontrast 1,4:1)",
+  // Klassanvändningen, inte prosan: kommentaren som förklarar regeln
+  // nämner klassen och får göra det.
+  !/className="[^"]*\btext-accent\b/.test(statsKalla),
+);
+
+// "Från fortnox": det råa leverantörs-id:t i användarens gränssnitt.
+const oversikt = readFileSync(join(rot, "src/pages/Dashboard.tsx"), "utf8");
+check(
+  "översikten visar leverantörens namn, aldrig snapshot.provider rått",
+  !/Från \{snapshot\.provider\}/.test(oversikt),
+);
+
+// Driftpanelens leverantörsrader: varje id i PROVIDERS ska ha ett märke i
+// ProviderLogo. Saknas det visas reservrutan - en tom grå kvadrat i en
+// lista där alla andra rader har innehåll, vilket läses som "trasig".
+const adminKalla = readFileSync(join(rot, "src/pages/AdminOverview.tsx"), "utf8");
+const logoKalla = readFileSync(join(rot, "src/components/integrations/ProviderLogo.tsx"), "utf8");
+const adminIdn = [...adminKalla.matchAll(/\{ id: "([a-z0-9]+)"/g)].map((m) => m[1]);
+// SMS-leverantören refereras via konstant - även här: literalen är
+// inkapslad, och vakten läser deklarationen i stället för att upprepa den.
+const eventsKalla = readFileSync(join(rot, "src/lib/notifications/events.ts"), "utf8");
+const smsId = /export const SMS_SECRET_PROVIDER = "([^"]+)"/.exec(eventsKalla)?.[1];
+if (/id: SMS_SECRET_PROVIDER/.test(adminKalla) && smsId) adminIdn.push(smsId);
+check("driftpanelens leverantörslista gick att läsa", adminIdn.length >= 6, adminIdn);
+for (const id of adminIdn) {
+  check(
+    `ProviderLogo har ett märke för ${id} - ingen tom ruta i driftpanelen`,
+    new RegExp(`^\\s*"?${id}"?:`, "m").test(logoKalla) ||
+      // Konstantnyckeln: [SMS_SECRET_PROVIDER] i stället för literalen.
+      (id === smsId && /\[SMS_SECRET_PROVIDER\]:/.test(logoKalla)),
+  );
+}
+
+// En uppercase-etikett i smal kolumn med break-words bryter ord mitt i:
+// "OMEDELBART" blev "OMEDELBA / RT" på en telefon och lästes som stavfel.
+// Radbryt vid mellanslag är rätt; ordbryt är aldrig det för etiketter.
+const ordbryt: string[] = [];
+for (const file of files) {
+  const text = readFileSync(file, "utf8");
+  for (const line of text.split("\n")) {
+    if (/className="[^"]*break-words[^"]*uppercase|className="[^"]*uppercase[^"]*break-words/.test(line)) {
+      ordbryt.push(`${file.split("/src/")[1]}: ${line.trim().slice(0, 80)}`);
+    }
+  }
+}
+check("inga uppercase-etiketter med break-words - ord bryts aldrig mitt i", ordbryt.length === 0, ordbryt);
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);
