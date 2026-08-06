@@ -29,9 +29,12 @@ export type AccountStatus =
   | "trial"
   /** Fakturan är skickad och förfallodagen har inte passerat. */
   | "invoiced"
-  /** Förfallodagen har passerat. Åtkomsten finns kvar, varningen visas. */
+  /**
+   * Förfallodagen har passerat men ingen har stängt kontot ännu.
+   * Innehållet är låst; stängningen är fortfarande en åtgärd som återstår.
+   */
   | "overdue"
-  /** Stängt. Inloggning fungerar, innehållet är låst. */
+  /** Stängt av jobbet eller för hand - `closedAt` är satt. */
   | "closed"
   /** Betalt och i drift. */
   | "active";
@@ -116,8 +119,24 @@ export const billingState = (billing: AccountBilling, now: Date): BillingState =
   const daysLeft = daysBetween(new Date(now), new Date(deadline));
 
   if (daysLeft < 0) {
+    /*
+     * Förfallen, men INTE stängd.
+     *
+     * Stängningen är en åtgärd någon vidtar - stängningsjobbet, eller drift
+     * för hand - och den syns som `closedAt`. Fram till dess är kontot
+     * förfallet, inte stängt.
+     *
+     * Skillnaden är inte akademisk. Vyn skrev tidigare "Kontot är stängt"
+     * i samma sekund som förfallodagen passerade, innan något faktiskt
+     * hänt: ett påstående om en åtgärd som ingen hade vidtagit. Den som
+     * betalade samma kväll fick veta att kontot var stängt när det inte
+     * var det.
+     *
+     * Låsningen ligger kvar oförändrad - det är beslutat att åtkomsten
+     * upphör vid förfallodagen. Det som ändras är vad användaren får läsa.
+     */
     return {
-      status: "closed",
+      status: "overdue",
       daysLeft,
       deadline: deadline.toISOString(),
       shouldWarn: true,
@@ -171,7 +190,7 @@ export const billingMessage = (
     case "overdue":
       return {
         title: "Fakturan är förfallen",
-        body: "Kontot stängs inom kort. Betala fakturan så öppnas det igen.",
+        body: "Åtkomsten är pausad tills betalningen registreras. Ditt material finns kvar – vi raderar ingenting.",
         tone: "critical",
       };
 

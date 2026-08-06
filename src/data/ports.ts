@@ -482,6 +482,18 @@ export interface BillingPort {
     vatOre: number;
     vatRate: number;
     dueAt: string;
+    /*
+     * Köparen, avbildad vid utställandet. Namn och adress är formkrav
+     * enligt 17 kap. 24 § 5 mervärdesskattelagen och prövas både här och
+     * i databasen - vyn för att kunna säga det i tid, databasen för att
+     * det ska vara sant.
+     */
+    customerName: string;
+    customerOrgNumber: string | null;
+    customerAddress: string;
+    /** Tillhandahållandeperioden, ISO-datum. Null = samma dag som fakturan. */
+    periodStart: string | null;
+    periodEnd: string | null;
     /**
      * Vart momsfakturan mejlas. Null = ingen adress känd; fakturan skapas
      * ändå och finns i kundens inloggning, och utkorgen visar att inget

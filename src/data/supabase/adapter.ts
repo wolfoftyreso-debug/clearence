@@ -11,7 +11,6 @@ import {
   normalisePhone,
   verificationSms,
 } from "@/lib/notifications/phone";
-import { nextInvoiceNumber } from "@/lib/invoice";
 import { invoiceEmail, receiptEmail } from "@/lib/email/messages";
 import { COMPANY } from "@/lib/company";
 import { deriveAuditDetail } from "@/lib/auditDetail";
@@ -173,12 +172,24 @@ const toCustomerInvoice = (row: {
   paid_at: string | null;
   payment_reference: string | null;
   receipt_number: string | null;
+  customer_name?: string | null;
+  customer_org_number?: string | null;
+  customer_address?: string | null;
+  period_start?: string | null;
+  period_end?: string | null;
 }): CustomerInvoiceRecord => ({
   id: row.id,
   userId: row.user_id,
   invoiceNumber: row.invoice_number,
   issuedAt: row.issued_at,
   dueAt: row.due_at,
+  // Null på rader som skapades innan formkravsfälten fanns. Fakturan
+  // visar då det den kan; nya rader kan inte sakna dem.
+  customerName: row.customer_name ?? null,
+  customerOrgNumber: row.customer_org_number ?? null,
+  customerAddress: row.customer_address ?? null,
+  periodStart: row.period_start ?? null,
+  periodEnd: row.period_end ?? null,
   // bigint kommer som sträng genom PostgREST. Number() här, en gång, i
   // stället för överallt i gränssnittet.
   netOre: Number(row.net_ore),
@@ -1291,29 +1302,31 @@ export const supabaseAdapter: DataPort = {
       );
     },
     async issueInvoice(input) {
-      const { data: existing, error: readError } = await supabase
-        .from("customer_invoices")
-        .select("invoice_number");
-      if (readError) throw readError;
-
-      const number = nextInvoiceNumber(
-        (existing ?? []).map((r) => r.invoice_number),
-        new Date(),
-      );
-
+      /*
+       * Numret sätts i databasen, inte här.
+       *
+       * Förut lästes alla befintliga nummer hit, max + 1 räknades fram i
+       * webbläsaren och skrevs in. Två samtidiga utställanden läste då
+       * samma max och båda försökte skriva samma nummer - unikhets-
+       * villkoret räddade datan men gav ett ogenomskinligt fel, och
+       * serien Skatteverket kräver ska vara obruten låg i händerna på en
+       * klient. app.issue_customer_invoice tar seriens lås, prövar
+       * formkraven och behörigheten, och returnerar den skapade raden.
+       */
       const { data, error } = await supabase
-        .from("customer_invoices")
-        .insert({
-          user_id: input.userId,
-          invoice_number: number,
-          due_at: input.dueAt,
-          net_ore: input.netOre,
-          vat_ore: input.vatOre,
-          gross_ore: input.netOre + input.vatOre,
-          vat_rate: input.vatRate,
-          description: input.description,
+        .rpc("issue_customer_invoice", {
+          p_user_id: input.userId,
+          p_description: input.description,
+          p_net_ore: input.netOre,
+          p_vat_ore: input.vatOre,
+          p_vat_rate: input.vatRate,
+          p_due_at: input.dueAt,
+          p_customer_name: input.customerName,
+          p_customer_org_number: input.customerOrgNumber,
+          p_customer_address: input.customerAddress,
+          p_period_start: input.periodStart,
+          p_period_end: input.periodEnd,
         })
-        .select()
         .single();
       if (error) throw error;
 

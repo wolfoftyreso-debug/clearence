@@ -79,9 +79,39 @@ check(
 check("sista dagen: noll kvar", billingState(account(), day("2026-08-08")).daysLeft, 0);
 check("sista dagen: inte låst", billingState(account(), day("2026-08-08")).isLocked, false);
 
-// Dagen efter är den första som låser.
-check("dagen efter: stängt", billingState(account(), day("2026-08-09")).status, "closed");
-check("dagen efter: låst", billingState(account(), day("2026-08-09")).isLocked, true);
+/*
+ * Dagen efter är den första som låser - men kontot är FÖRFALLET, inte
+ * stängt. Skillnaden är inte språklig: stängningen är en åtgärd som
+ * jobbet eller drift vidtar, och den syns som closedAt.
+ *
+ * Vyn skrev tidigare "Kontot är stängt" i samma sekund som förfallodagen
+ * passerade, innan något hänt. Det var ett påstående om en åtgärd ingen
+ * hade vidtagit - och den som betalade samma kväll fick veta att kontot
+ * var stängt när det inte var det.
+ */
+check("dagen efter: förfallet", billingState(account(), day("2026-08-09")).status, "overdue");
+check("dagen efter: låst ändå", billingState(account(), day("2026-08-09")).isLocked, true);
+check(
+  "förfallet är inte stängt förrän någon stängt",
+  billingState(account(), day("2026-08-09")).status === "closed",
+  false,
+);
+// Och när jobbet väl stängt är det stängt - då är påståendet sant.
+check(
+  "stängt när closedAt är satt",
+  billingState(account({ closedAt: "2026-08-10T03:00:00.000Z" }), day("2026-08-11")).status,
+  "closed",
+);
+// Texten ska tala om att materialet finns kvar. Att bli utestängd utan att
+// veta att arbetet är kvar är vad som får någon att ringa i stället för
+// att betala.
+check(
+  "det förfallna beskedet lovar att inget raderas",
+  /raderar ingenting/.test(
+    billingMessage(billingState(account(), day("2026-08-09")))?.body ?? "",
+  ),
+  true,
+);
 
 /* -------------------------------------------------------------------------- */
 /* Fakturerat                                                                 */

@@ -552,6 +552,24 @@ export interface CustomerInvoiceRecord {
   paidAt: string | null;
   paymentReference: string | null;
   receiptNumber: string | null;
+
+  /*
+   * Köparen och perioden, avbildade när fakturan ställdes ut.
+   *
+   * Avbildade, inte uppslagna: en faktura som skrivs ut om ett år ska visa
+   * vem som fakturerades då och vilken adress den gick till - inte var
+   * bolaget råkar sitta idag. Samma regel som beloppen redan följer.
+   *
+   * Null bara på rader som skapades innan fälten fanns. Nya fakturor kan
+   * inte ställas ut utan namn och adress; det prövas både i buildInvoice
+   * och i databasen.
+   */
+  customerName: string | null;
+  customerOrgNumber: string | null;
+  customerAddress: string | null;
+  /** Tillhandahållandeperioden, ISO-datum. Se InvoiceInput.period. */
+  periodStart: string | null;
+  periodEnd: string | null;
 }
 
 /** En kund som drift ser den: vem, vilket läge, vilka fakturor. */

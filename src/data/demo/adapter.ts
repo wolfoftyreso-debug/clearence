@@ -1342,6 +1342,11 @@ export const demoAdapter: DataPort = {
           grossOre: 123125,
           vatRate: 0.25,
           description: "Clearance Standard – månadsavgift",
+          customerName: "Demobolaget AB",
+          customerOrgNumber: "556012-3456",
+          customerAddress: "Verkstadsgatan 12, 118 20 Stockholm",
+          periodStart: issued.slice(0, 10),
+          periodEnd: new Date(Date.now() + 10 * 86400000).toISOString().slice(0, 10),
           status: "paid",
           paidAt: new Date(Date.now() - 12 * 86400000).toISOString(),
           paymentReference: "CL-2026-0141",
@@ -1393,6 +1398,11 @@ export const demoAdapter: DataPort = {
         paidAt: null,
         paymentReference: null,
         receiptNumber: null,
+        customerName: input.customerName,
+        customerOrgNumber: input.customerOrgNumber,
+        customerAddress: input.customerAddress,
+        periodStart: input.periodStart,
+        periodEnd: input.periodEnd,
       };
       state.customerInvoices.unshift(invoice);
       if (state.billing) state.billing.dueAt = input.dueAt;

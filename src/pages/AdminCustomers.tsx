@@ -7,7 +7,13 @@ import { Input } from "@/components/ui/input";
 import { data } from "@/data";
 import { billingState, TRIAL_DAYS } from "@/lib/billing";
 import { missingInvoiceFields } from "@/lib/company";
-import { formatOre, invoiceTotals, PAYMENT_TERMS_DAYS, VAT_RATE } from "@/lib/invoice";
+import {
+  formatOre,
+  invoiceTotals,
+  missingBuyerFields,
+  PAYMENT_TERMS_DAYS,
+  VAT_RATE,
+} from "@/lib/invoice";
 import type { CustomerOverview, OutboundEmailRecord } from "@/data/types";
 import { AlertTriangle, Loader2, Lock, Mail, ShieldOff } from "lucide-react";
 
@@ -51,8 +57,27 @@ const CustomerRow = ({ customer }: { customer: CustomerOverview }) => {
   const [amountKr, setAmountKr] = useState("");
   const [description, setDescription] = useState("");
   const [reference, setReference] = useState("");
+  /*
+   * Köparens adress.
+   *
+   * Plattformen frågar aldrig efter kundens faktureringsadress - varken
+   * onboardingen eller inställningarna samlar in den. Ändå är den ett
+   * formkrav: 17 kap. 24 § 5 mervärdesskattelagen kräver båda parternas
+   * namn OCH adress. Fram till att fältet finns i kundens egen profil
+   * skrivs den in här, av den som ställer ut fakturan.
+   */
+  const [buyerAddress, setBuyerAddress] = useState("");
+  const [buyerOrgNumber, setBuyerOrgNumber] = useState("");
 
-  const blockers = missingInvoiceFields();
+  const buyerName = customer.displayName?.trim() ?? "";
+  const sellerBlockers = missingInvoiceFields();
+  const buyerBlockers = missingBuyerFields({
+    name: buyerName,
+    orgNumber: buyerOrgNumber.trim() || null,
+    email: customer.email ?? "",
+    address: buyerAddress.trim() || null,
+  });
+  const blockers = [...sellerBlockers, ...buyerBlockers];
   const canInvoice = blockers.length === 0;
 
   const refresh = () => {
@@ -77,12 +102,21 @@ const CustomerRow = ({ customer }: { customer: CustomerOverview }) => {
         vatOre: totals.vatOre,
         vatRate: VAT_RATE,
         dueAt: new Date(Date.now() + PAYMENT_TERMS_DAYS * DAY_MS).toISOString(),
+        customerName: buyerName,
+        customerOrgNumber: buyerOrgNumber.trim() || null,
+        customerAddress: buyerAddress.trim(),
+        // Perioden lämnas öppen tills abonnemangsperioden finns i modellen.
+        // Hellre ingen uppgift än en påhittad: se InvoiceInput.period.
+        periodStart: null,
+        periodEnd: null,
         recipientEmail: customer.email,
       });
     },
     onSuccess: () => {
       setAmountKr("");
       setDescription("");
+      setBuyerAddress("");
+      setBuyerOrgNumber("");
       refresh();
     },
   });
@@ -162,12 +196,36 @@ const CustomerRow = ({ customer }: { customer: CustomerOverview }) => {
           <p className="flex gap-2 text-sm text-destructive">
             <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0" aria-hidden="true" />
             <span>
-              Kan inte fakturera än. Saknas: {blockers.join(", ")}. Fyll i det i{" "}
-              <code className="text-xs">src/lib/company.ts</code> först – en faktura utan de
-              uppgifterna går varken att bokföra eller betala.
+              Kan inte fakturera än. Saknas: {blockers.join(", ")}.{" "}
+              {sellerBlockers.length > 0 && (
+                <>
+                  Säljarens uppgifter fylls i{" "}
+                  <code className="text-xs">src/lib/company.ts</code>.{" "}
+                </>
+              )}
+              {buyerBlockers.length > 0 && <>Köparens uppgifter fylls i fälten nedan.{" "}</>}
+              En faktura utan dem går varken att bokföra eller betala.
             </span>
           </p>
         )}
+        {/* Köparens uppgifter FÖRST, och aldrig låsta av sin egen brist:
+            ett adressfält som är utgråat för att adressen saknas är en
+            återvändsgränd, inte en spärr. */}
+        <div className="flex flex-col gap-3 sm:flex-row">
+          <Input
+            value={buyerAddress}
+            onChange={(e) => setBuyerAddress(e.target.value)}
+            placeholder="Köparens adress (krav på fakturan)"
+            aria-label="Köparens adress"
+          />
+          <Input
+            value={buyerOrgNumber}
+            onChange={(e) => setBuyerOrgNumber(e.target.value)}
+            placeholder="Köparens org.nr (frivilligt)"
+            aria-label="Köparens organisationsnummer"
+            className="sm:w-60"
+          />
+        </div>
         <div className="flex flex-col gap-3 sm:flex-row">
           <Input
             value={description}

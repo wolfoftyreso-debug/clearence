@@ -12,6 +12,8 @@ import { renderReportPdf } from "../src/lib/reports/pdf";
 import { boardMinutesKbr, TEMPLATES, templateToPdf } from "../src/lib/documentTemplates";
 import { buildCrisisReport, buildKbrReport, buildLiquidityReport } from "../src/lib/reports/builders";
 import { buildInvoiceDocument, buildReceiptDocument } from "../src/lib/reports/invoiceDocuments";
+import { buildInvoice, missingBuyerFields } from "../src/lib/invoice";
+import { COMPANY } from "../src/lib/company";
 import { buildTimeBasisReport } from "../src/lib/reports/timeBasis";
 import { analyseCrisis } from "../src/lib/crisisAnalysis";
 import { projectLiquidity } from "../src/lib/liquidityPlan";
@@ -240,6 +242,99 @@ check("tidsunderlag: underlaget kallar sig inte faktura",
 check("tidsunderlag: post utan beskrivning får standardtext",
   tbText.includes("Arbete i ärendet"));
 validatePdf("tidsunderlag", renderReportPdf(timeBasis), ["Fakturaunderlag"]);
+
+/* -------------------------------------------------------------------------- */
+/* Fakturans formkrav                                                         */
+/* -------------------------------------------------------------------------- */
+
+/*
+ * 17 kap. 24 § mervärdesskattelagen (2023:200) räknar upp vad en faktura
+ * MÅSTE innehålla. Två av punkterna saknades helt: köparens adress
+ * (punkt 5, som gäller båda parterna) och datum då tillhandahållandet
+ * utförts när det skiljer sig från fakturadatumet (punkt 7).
+ *
+ * Blockeringen var dessutom ensidig - säljarens brister stoppade fakturan,
+ * köparens gjorde det inte.
+ */
+{
+  // Säljaruppgifterna kompletta: testet prövar KÖPARSIDAN. Landvex egna
+  // fält är avsiktligt tomma tills de bekräftats, se company.ts.
+  const komplettBolag = {
+    ...COMPANY,
+    email: "faktura@exempel.test",
+    bankgiro: "123-4567",
+    hasFSkatt: true,
+    vatRegistered: true,
+  };
+
+  const kund = {
+    name: "Demobolaget AB",
+    orgNumber: "556012-3456",
+    email: "ekonomi@demobolaget.se",
+    address: "Verkstadsgatan 12, 118 20 Stockholm",
+  };
+
+  check(
+    "köparens adress är ett formkrav",
+    missingBuyerFields({ ...kund, address: null }).includes("köparens adress"),
+  );
+  check(
+    "köparens namn är ett formkrav",
+    missingBuyerFields({ ...kund, name: "  " }).includes("köparens namn"),
+  );
+  check("en fullständig köpare blockerar inget", missingBuyerFields(kund).length === 0);
+
+  // Perioden: samma dag = leveransdatum, olika dagar = period.
+  const doc = buildInvoiceDocument({
+    invoiceNumber: "2026-0001",
+    issuedAt: "2026-08-01T09:00:00.000Z",
+    dueAt: "2026-08-11T09:00:00.000Z",
+    seller: komplettBolag,
+    customer: kund,
+    period: { start: "2026-07-01", end: "2026-07-31" },
+    lines: [{ description: "Clearance Standard", quantity: 1, unitPriceOre: 98500 }],
+    note: null,
+    totals: { netOre: 98500, vatOre: 24625, grossOre: 123125, vatRate: 0.25 },
+  });
+  const doctext = JSON.stringify(doc);
+  check("perioden står på fakturan", /Avser perioden/.test(doctext));
+  check("köparens adress står på fakturan", /Verkstadsgatan 12/.test(doctext));
+  check("köparens org.nr står på fakturan", /556012-3456/.test(doctext));
+
+  const engang = buildInvoiceDocument({
+    invoiceNumber: "2026-0002",
+    issuedAt: "2026-08-01T09:00:00.000Z",
+    dueAt: "2026-08-11T09:00:00.000Z",
+    seller: komplettBolag,
+    customer: kund,
+    period: { start: "2026-07-15", end: "2026-07-15" },
+    lines: [{ description: "Engångsavgift", quantity: 1, unitPriceOre: 50000 }],
+    note: null,
+    totals: { netOre: 50000, vatOre: 12500, grossOre: 62500, vatRate: 0.25 },
+  });
+  check(
+    "en dag blir leveransdatum, inte period",
+    /Leveransdatum/.test(JSON.stringify(engang)) &&
+      !/Avser perioden/.test(JSON.stringify(engang)),
+  );
+
+  // Och blockeringen: en faktura utan köparadress får inte byggas.
+  const utan = buildInvoice(
+    {
+      invoiceNumber: "2026-0003",
+      issuedAt: "2026-08-01T09:00:00.000Z",
+      customer: { ...kund, address: null },
+      lines: [{ description: "Avgift", quantity: 1, unitPriceOre: 1000 }],
+    },
+    komplettBolag,
+  );
+  check("faktura utan köparadress byggs inte", utan.ok === false);
+  check(
+    "och den säger vad som saknas",
+    utan.ok === false && utan.blockedBy.includes("köparens adress"),
+  );
+}
+
 
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

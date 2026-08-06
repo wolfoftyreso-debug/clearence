@@ -228,7 +228,12 @@ export type Database = {
       customer_invoices: {
         Row: {
           description: string
+          customer_address: string | null
+          customer_org_number: string | null
+          customer_name: string | null
           due_at: string
+          period_end: string | null
+          period_start: string | null
           gross_ore: number
           id: string
           invoice_number: string
@@ -1797,6 +1802,22 @@ export type Database = {
       queue_verification_sms: {
         Args: { p_body: string }
         Returns: undefined
+      }
+      issue_customer_invoice: {
+        Args: {
+          p_user_id: string
+          p_description: string
+          p_net_ore: number
+          p_vat_ore: number
+          p_vat_rate: number
+          p_due_at: string
+          p_customer_name: string
+          p_customer_org_number: string | null
+          p_customer_address: string
+          p_period_start: string | null
+          p_period_end: string | null
+        }
+        Returns: Database["public"]["Tables"]["customer_invoices"]["Row"]
       }
     }
     Enums: {

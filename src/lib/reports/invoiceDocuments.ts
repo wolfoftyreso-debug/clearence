@@ -31,7 +31,19 @@ export const invoiceFromCustomerRecord = (
   issuedAt: record.issuedAt,
   dueAt: record.dueAt,
   seller: COMPANY,
-  customer: { name: customer.name, orgNumber: null, email: customer.email, address: null },
+  // Namnet på fakturan är det som stod där när den ställdes ut. Den
+  // inloggades nuvarande namn används bara på rader som skapades innan
+  // avbildningen fanns - då är det den enda uppgift vi har.
+  customer: {
+    name: record.customerName ?? customer.name,
+    orgNumber: record.customerOrgNumber,
+    email: customer.email,
+    address: record.customerAddress,
+  },
+  period:
+    record.periodStart && record.periodEnd
+      ? { start: record.periodStart, end: record.periodEnd }
+      : null,
   lines: [
     {
       description: record.description,
@@ -82,9 +94,24 @@ const lineRows = (invoice: Invoice): TableRow[] =>
  * vad det kostar, när det ska betalas, vart. Betalningsuppgifterna står både
  * i huvudet och sist, eftersom den som betalar ofta bara tittar på slutet.
  */
+/**
+ * Raden som uppfyller 17 kap. 24 § 7: när tillhandahållandet skedde.
+ *
+ * Är start och slut samma dag är det en engångsleverans och rubriken ska
+ * säga leveransdatum. Skiljer de sig är det en period, och då är det
+ * perioden mottagaren behöver för att periodisera kostnaden rätt.
+ */
+const deliveryRow = (invoice: Invoice): { label: string; value: string } | null => {
+  if (!invoice.period) return null;
+  const { start, end } = invoice.period;
+  if (start === end) return { label: "Leveransdatum", value: swedishDate(start) };
+  return { label: "Avser perioden", value: `${swedishDate(start)} – ${swedishDate(end)}` };
+};
+
 export const buildInvoiceDocument = (invoice: Invoice): ReportModel => {
   const accounts = paymentAccounts(invoice.seller);
   const vatPercent = `${Math.round(invoice.totals.vatRate * 100)} %`;
+  const delivery = deliveryRow(invoice);
 
   return {
     meta: {
@@ -100,6 +127,7 @@ export const buildInvoiceDocument = (invoice: Invoice): ReportModel => {
         items: [
           { label: "Fakturanummer", value: invoice.invoiceNumber },
           { label: "Fakturadatum", value: swedishDate(invoice.issuedAt) },
+          ...(delivery ? [delivery] : []),
           {
             label: "Förfallodag",
             value: swedishDate(invoice.dueAt),

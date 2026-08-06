@@ -43,7 +43,19 @@ export interface InvoiceInput {
   invoiceNumber: string;
   /** ISO. Fakturadatum. */
   issuedAt: string;
-  /** Kunden. */
+  /**
+   * Kunden.
+   *
+   * Namn OCH adress är formkrav, inte trevligheter: 17 kap. 24 § 5
+   * mervärdesskattelagen (2023:200) kräver båda parternas namn och adress
+   * på en faktura. Fältet var frivilligt förut och fylldes aldrig i - en
+   * faktura som saknar köparens adress uppfyller inte formkraven, och
+   * mottagaren har rätt att skicka tillbaka den.
+   *
+   * Organisationsnumret är inte ett formkrav vid inhemsk försäljning, men
+   * mottagarens ekonomifunktion behöver det för att bokföra rätt, och det
+   * är alltid känt: bolaget uppgav det när ärendet skapades.
+   */
   customer: {
     name: string;
     orgNumber: string | null;
@@ -51,7 +63,19 @@ export interface InvoiceInput {
     address: string | null;
   };
   lines: InvoiceLine[];
-  /** Fritext under raderna, t.ex. vilken period avgiften avser. */
+  /**
+   * Perioden tjänsten avser, ISO-datum.
+   *
+   * 17 kap. 24 § 7 kräver datum då tillhandahållandet utförts eller
+   * slutförts när det skiljer sig från fakturadatumet. En månadsavgift
+   * gör alltid det. Är start och slut samma dag är det en
+   * engångsleverans och skrivs ut som leveransdatum.
+   *
+   * Null bara när tillhandahållandet sker samma dag som fakturan ställs
+   * ut - då är fakturadatumet självt uppgiften.
+   */
+  period?: { start: string; end: string } | null;
+  /** Fritext under raderna. */
   note?: string | null;
 }
 
@@ -109,18 +133,33 @@ export type InvoiceResult =
   | { ok: false; blockedBy: string[] };
 
 /**
+ * Vad som saknas på KÖPARSIDAN innan fakturan får ställas ut.
+ *
+ * Blockeringen var ensidig förut: säljarens brister stoppade fakturan,
+ * köparens gjorde det inte. Men en faktura utan mottagarens adress är
+ * lika ogiltig som en utan säljarens momsnummer - formkravet i 17 kap.
+ * 24 § 5 gäller båda parterna.
+ */
+export const missingBuyerFields = (customer: InvoiceInput["customer"]): string[] => {
+  const missing: string[] = [];
+  if (!customer.name.trim()) missing.push("köparens namn");
+  if (!customer.address?.trim()) missing.push("köparens adress");
+  return missing;
+};
+
+/**
  * Bygger en faktura, eller vägrar.
  *
  * Vägran är inte en artighet. En faktura som går ut utan
- * momsregistreringsnummer, utan bekräftad F-skatt eller med ett tomt
- * bankgiro är ett dokument mottagaren inte kan bokföra och inte kan betala.
- * Bättre att den aldrig skapas än att den skickas.
+ * momsregistreringsnummer, utan bekräftad F-skatt, med ett tomt bankgiro
+ * eller utan köparens adress är ett dokument mottagaren inte kan bokföra
+ * och inte kan betala. Bättre att den aldrig skapas än att den skickas.
  */
 export const buildInvoice = (
   input: InvoiceInput,
   seller: CompanyIdentity = COMPANY,
 ): InvoiceResult => {
-  const blockedBy = missingInvoiceFields(seller);
+  const blockedBy = [...missingInvoiceFields(seller), ...missingBuyerFields(input.customer)];
   if (input.lines.length === 0) blockedBy.push("minst en fakturarad");
   if (blockedBy.length > 0) return { ok: false, blockedBy };
 
