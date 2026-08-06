@@ -28,6 +28,7 @@ import {
   type ApiRequest,
 } from "./http";
 import { ALLMAN, klientNyckel, LOGIN, provaGrans, type Utfall } from "./rateLimit";
+import { googleConfigured, lookupCompany } from "./google";
 import { withAnon, withUser } from "./db";
 import { hashPassword, issueToken, sessionTtlHours, sha256, verifyPassword } from "./auth";
 
@@ -245,10 +246,40 @@ const uuidParam = (req: ApiRequest, name: string): string => {
 
 export const router = new Router();
 
+/*
+ * Hälsan säger också vilka YTTRE källor den här driften har.
+ *
+ * En källa som är ansluten i utvecklarens container och inte i
+ * produktion ger en analys som tyst blir tunnare - utan att någon sagt
+ * det. `sources` gör skillnaden avläsbar utifrån. Bara namn och ja/nej;
+ * aldrig en nyckel eller ens dess längd.
+ */
 router.get("/v1/health", async () => ({
   status: 200,
-  body: { status: "ok", version: "1.0" },
+  body: { status: "ok", version: "1.0", sources: { google: googleConfigured() } },
 }));
+
+/**
+ * Uppslag av bolaget hos Google.
+ *
+ * KRÄVER INLOGGNING, trots att uppgifterna är offentliga. Skälet är inte
+ * sekretess utan pengar: Places debiteras per anrop, och en öppen rutt är
+ * någon annans gratis Google-konto på vår faktura. Den allmänna
+ * hastighetsgränsen gäller dessutom före den här handlern.
+ *
+ * Svaret bär ALLTID ett status-fält som skiljer på "hittade inget",
+ * "källan är inte ansluten" och "det gick fel". Panelen visar olika saker
+ * för de tre, och att slå ihop dem till ett tomt resultat är precis den
+ * sortens tystnad produkten är byggd för att undvika.
+ */
+router.post("/v1/sources/google", async (req) => {
+  await authenticate(req);
+  const body = (req.body ?? {}) as { companyName?: unknown; ort?: unknown };
+  const companyName = typeof body.companyName === "string" ? body.companyName.trim() : "";
+  if (companyName.length === 0) throw badRequest("companyName krävs.");
+  const ort = typeof body.ort === "string" ? body.ort.trim() : undefined;
+  return { status: 200, body: await lookupCompany(companyName, ort) };
+});
 
 /**
  * Inloggning.

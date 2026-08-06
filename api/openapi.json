@@ -673,6 +673,218 @@
           }
         }
       }
+    },
+    "/sources/google": {
+      "post": {
+        "operationId": "lookupCompanyAtGoogle",
+        "summary": "Slår upp bolaget hos Google",
+        "description": "Hämtar webbadress, besöksadress, telefon, omdömen och verksamhetsstatus ur Google Places. Ger ALDRIG organisationsnummer, styrelse, F-skatt eller momsregistrering – Places känner till platser och verksamheter, inte juridiska personer. Kräver inloggning trots att uppgifterna är offentliga: Places debiteras per anrop, och en öppen rutt är någon annans trafik på vår faktura. Svarets status skiljer på traff, ingen-traff (bolaget kunde inte matchas entydigt), ingen-kalla (ingen nyckel i driften) och fel (Google svarade inte). De fyra får inte slås ihop – ett driftfel som ser ut som ingen-traff blir ett påstående om bolaget.",
+        "x-status": "beta",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "companyName"
+                ],
+                "properties": {
+                  "companyName": {
+                    "type": "string",
+                    "description": "Bolagets namn. Matchas exakt efter att bolagsformen skalats bort."
+                  },
+                  "ort": {
+                    "type": "string",
+                    "description": "Ort, när den är känd. Enda sättet att skilja två likadana namn åt."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Utfallet av uppslaget",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "required": [
+                        "status",
+                        "facts"
+                      ],
+                      "properties": {
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "traff"
+                          ]
+                        },
+                        "facts": {
+                          "$ref": "#/components/schemas/GoogleFacts"
+                        }
+                      }
+                    },
+                    {
+                      "type": "object",
+                      "required": [
+                        "status",
+                        "reason"
+                      ],
+                      "properties": {
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "ingen-traff",
+                            "ingen-kalla",
+                            "fel"
+                          ]
+                        },
+                        "reason": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tasks/{taskId}/done": {
+      "post": {
+        "operationId": "setTaskDone",
+        "summary": "Bockar av en uppgift, eller ångrar avbockningen",
+        "description": "Tidpunkten sätts av servern, aldrig av anroparen: en tidsstämpel som den som bockar av får välja är inte bevis på när något gjordes. Vem och när sätts tillsammans - ett halvt svar på vem gjorde vad när är inget svar.",
+        "x-status": "beta",
+        "parameters": [
+          {
+            "name": "taskId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "done"
+                ],
+                "properties": {
+                  "done": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Uppgiften efter ändringen",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Task"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tasks/{taskId}/assign": {
+      "post": {
+        "operationId": "assignTask",
+        "summary": "Tilldelar en uppgift, eller tar bort tilldelningen",
+        "description": "userId satt till null tar bort tilldelningen. Uppgiften måste tillhöra ett ärende anroparen har tillgång till; radskyddet avgör det, inte handlern.",
+        "x-status": "beta",
+        "parameters": [
+          {
+            "name": "taskId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "userId"
+                ],
+                "properties": {
+                  "userId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "nullable": true
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Uppgiften efter ändringen",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Task"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "webhooks": {
@@ -1200,6 +1412,76 @@
             ],
             "items": {
               "$ref": "#/components/schemas/Document"
+            }
+          }
+        }
+      },
+      "GoogleFacts": {
+        "type": "object",
+        "description": "Uppgifter ur Google Places. Recensenternas namn, bilder och länkar hämtas aldrig – vi läser omdömet om bolaget, inte om människan som skrev det. Innehållet får cachas i högst 30 dagar; placeId utan tidsgräns.",
+        "properties": {
+          "placeId": {
+            "type": "string",
+            "nullable": true
+          },
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "website": {
+            "type": "string",
+            "nullable": true,
+            "description": "Bolagets webbadress. Detta är uppgiften som gör att webbplatsläsaren kan köra utan att fråga användaren."
+          },
+          "phone": {
+            "type": "string",
+            "nullable": true
+          },
+          "address": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "oppet",
+              "tillfalligt-stangt",
+              "permanent-stangt",
+              "okant"
+            ],
+            "description": "Verksamhetsstatus hos Google. permanent-stangt på ett levande bolag är en uppgift som syns för alla som söker på bolaget och som kan behöva rättas."
+          },
+          "reviews": {
+            "type": "object",
+            "properties": {
+              "rating": {
+                "type": "number",
+                "nullable": true
+              },
+              "count": {
+                "type": "integer"
+              },
+              "excerpts": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "basis": {
+            "type": "array",
+            "description": "Grunden för varje fält, så att frågan var en uppgift kommer ifrån går att besvara.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "field": {
+                  "type": "string"
+                },
+                "source": {
+                  "type": "string"
+                }
+              }
             }
           }
         }

@@ -61,9 +61,15 @@ resource "aws_iam_role_policy" "execution_secrets" {
     Version = "2012-10-17"
     Statement = [
       {
-        Effect   = "Allow"
-        Action   = ["secretsmanager:GetSecretValue"]
-        Resource = [aws_secretsmanager_secret.database.arn]
+        Effect = "Allow"
+        Action = ["secretsmanager:GetSecretValue"]
+        # Integrationshemligheten står med bara när någon integration
+        # faktiskt läses ur den. En rättighet som ges "för säkerhets
+        # skull" är en rättighet ingen kommer ihåg att ta bort.
+        Resource = concat(
+          [aws_secretsmanager_secret.database.arn],
+          var.enable_google_source ? [aws_secretsmanager_secret.integrations.arn] : []
+        )
       },
       {
         Effect   = "Allow"
@@ -254,9 +260,24 @@ resource "aws_ecs_task_definition" "api" {
 
     # Lösenordet når containern som hemlighet, aldrig som miljövariabel i
     # en plan eller en avbild.
-    secrets = [
-      { name = "DATABASE_URL", valueFrom = "${aws_secretsmanager_secret.database.arn}:app_url::" },
-    ]
+    #
+    # Google-nyckeln är AVSTÄNGD SOM FÖRVAL, och det är inte försiktighet
+    # för sakens skull: ECS vägrar starta en uppgift vars hemlighet inte
+    # går att läsa. Vore raden alltid med skulle varje driftsättning utan
+    # en ifylld google_maps_api_key ge uppgifter som startar om i evighet
+    # - samma felklass som hälsokontrollen mot fel sökväg gav.
+    #
+    # Slås på med enable_google_source = true, EFTER att nyckeln lagts in
+    # i integrationshemligheten. Utan den svarar /v1/health med
+    # sources.google = false, och källan redovisas som ej ansluten i
+    # stället för att tyst ge tomma svar.
+    secrets = concat(
+      [{ name = "DATABASE_URL", valueFrom = "${aws_secretsmanager_secret.database.arn}:app_url::" }],
+      var.enable_google_source ? [{
+        name      = "GOOGLE_MAPS_API_KEY"
+        valueFrom = "${aws_secretsmanager_secret.integrations.arn}:google_maps_api_key::"
+      }] : []
+    )
 
     logConfiguration = {
       logDriver = "awslogs"

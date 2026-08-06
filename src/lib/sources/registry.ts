@@ -98,7 +98,12 @@ export const SOURCES: SourceSpec[] = [
       "Uppgifterna är offentliga, men de tillhandahålls genom avtalade " +
       "gränssnitt. Att i stället skrapa allabolag.se eller ratsit vore att " +
       "ta betalt av en återförsäljares arbete utan avtal - och deras villkor " +
-      "förbjuder det uttryckligen.",
+      "förbjuder det uttryckligen. " +
+      "GOOGLE LÖSER INTE DEN HÄR RADEN, och det är värt att skriva ut " +
+      "eftersom frågan kommer: Google Places känner till PLATSER och " +
+      "verksamheter, inte juridiska personer. Därifrån får vi adress, " +
+      "telefon och webbplats - aldrig organisationsnummer, styrelse, " +
+      "F-skatt eller momsregistrering. Det är Bolagsverket och Skatteverket.",
   },
   {
     id: "webb",
@@ -118,9 +123,15 @@ export const SOURCES: SourceSpec[] = [
     value:
       "Vad bolaget säger att det gör, kontaktvägar, och vilka sociala konton " +
       "det själv länkar till.",
+    /*
+     * "Webbadressen från dig" stod här förut. Den behöver inte längre
+     * komma från användaren: Google Places returnerar websiteUri, och det
+     * var precis den saknade biten. Kvar är hämtaren av själva sidan.
+     */
     needs:
-      "Webbadressen från dig, och slutpunkten i API:et som gör hämtningen. " +
-      "Tolkningen är byggd och prövad - det som saknas är själva hämtningen.",
+      "Slutpunkten i API:et som hämtar sidan. Webbadressen behöver du inte " +
+      "längre lämna själv - den kommer ur Google-uppslaget. Tolkningen är " +
+      "byggd och prövad; det som saknas är hämtningen av sidan.",
     basis:
       "Sidan är publicerad för att läsas, och kunden äger den. Vi läser " +
       "robots.txt först och respekterar den, anger vem vi är i user-agent, " +
@@ -144,16 +155,42 @@ export const SOURCES: SourceSpec[] = [
   {
     id: "recensioner",
     label: "Kundrecensioner",
-    acquisition: "agarmedgivande",
+    acquisition: "api-avtal",
+    /*
+     * KÖRNINGSBEROENDE, som företagsregistret. Hämtningen är byggd
+     * (api/server/google.ts) och tolkningen prövad (sources/google.ts).
+     * Om källan svarar avgörs vid körning av två saker: att driften har
+     * en Google-nyckel, och att bolaget går att matcha entydigt.
+     *
+     * Den andra är inte en teknikalitet. Google har inget
+     * organisationsnummer att matcha på, så två bolag med samma namn går
+     * inte att skilja åt - och då hämtar vi ingenting hellre än fel
+     * bolags omdömen.
+     */
     live: false,
-    value: "Omdömen och betyg, som signal om kundrelationerna håller.",
+    runtime: true,
+    value:
+      "Betyg, antal omdömen och verksamhetsstatus - om Google visar bolaget " +
+      "som öppet, tillfälligt stängt eller permanent stängt.",
+    /*
+     * SKRIVEN FÖR DEN SOM LÄSER PANELEN, inte för den som driftsätter.
+     * Texten här visas för en företagare mitt i en kris; ett variabelnamn
+     * ur en containerkonfiguration säger hen ingenting. Det tekniska
+     * (GOOGLE_MAPS_API_KEY, flaggan i Terraform) står i basis och i
+     * docs/driftsattning.md, där den som ska göra jobbet letar.
+     */
     needs:
-      "Google Business Profile API eller Trustpilot API. Båda kräver att " +
-      "bolaget ger oss åtkomst till sin egen profil.",
+      "Kopplingen mot Google är byggd men inte påslagen i den här driften. " +
+      "När den är det hämtas uppgifterna automatiskt – du behöver inte lämna " +
+      "något själv.",
     basis:
-      "Genomförbart just här: kunden ÄR den som äger profilen och kan ge " +
-      "medgivandet i ett steg. Att i stället skrapa sökresultat bryter mot " +
-      "Googles villkor och ger dessutom ett urval vi inte kan förklara.",
+      "Google Places API (nyckeln GOOGLE_MAPS_API_KEY, flaggan " +
+      "enable_google_source i infrastrukturen). Ett betalt, officiellt " +
+      "gränssnitt - inte skrapning. " +
+      "Villkoren tillåter cachning i högst 30 dagar och kräver att källan " +
+      "anges där uppgiften visas; båda reglerna står i sources/google.ts. " +
+      "Recensenternas namn och bilder hämtas aldrig - vi läser omdömet om " +
+      "bolaget, inte om människan som skrev det.",
   },
   {
     id: "nyheter",

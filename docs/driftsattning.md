@@ -212,6 +212,50 @@ visar det — den skiljer på *skickat* och *misslyckat fem gånger*.
 
 ---
 
+## 7b. Google som källa (valfritt)
+
+Ger tre saker analysen annars saknar: **bolagets webbadress** (som gör att
+webbplatsläsaren kan köra utan att fråga användaren), **omdömen och betyg**,
+och **verksamhetsstatus** — om Google visar bolaget som öppet, tillfälligt
+stängt eller permanent stängt.
+
+Det Google *inte* ger: organisationsnummer, styrelse, F-skatt eller
+momsregistrering. Places känner till platser och verksamheter, inte
+juridiska personer. Den raden i bakgrundspanelen kräver fortfarande
+Bolagsverket eller en kreditupplysare.
+
+**ORDNINGEN ÄR INTE VALFRI.** Slås flaggan på innan nyckeln finns kan ECS
+inte läsa hemligheten, och API-uppgifterna startar om i evighet — samma
+felklass som en hälsokontroll mot fel sökväg.
+
+1. **DU:** skapa ett Google Cloud-projekt, aktivera **Places API (New)**
+   och slå på fakturering. Places debiteras per anrop.
+2. **DU:** begränsa nyckeln till Places API. En obegränsad nyckel som
+   läcker är någon annans trafik på din faktura.
+3. **DU:** lägg in nyckeln i integrationshemligheten, under fältet
+   `google_maps_api_key`:
+
+   ```bash
+   aws secretsmanager put-secret-value \
+     --secret-id clearance-prod/integrations \
+     --secret-string '{"google_maps_api_key":"..."}'
+   ```
+
+4. Sätt `enable_google_source = true` i tfvars och kör `terraform apply`.
+5. Kontrollera: `curl https://api.<domän>/v1/health` ska svara
+   `"sources":{"google":true}`.
+
+Med flaggan av fungerar tjänsten precis som förut — källan redovisas som
+ej ansluten i bakgrundspanelen, och analysen blir tunnare. Det är ett
+giltigt läge, inte ett fel.
+
+**Om ett bolag inte matchar:** uppslaget kräver att exakt en verksamhet
+hos Google heter samma sak som bolaget. Två träffar med samma namn ger
+inget svar alls — Google har inget organisationsnummer att skilja dem åt
+med, och fel bolags omdömen i en analys är värre än inga omdömen.
+
+---
+
 ## 8. Automatiken
 
 När första driftsättningen gått igenom för hand tar `.github/workflows/`

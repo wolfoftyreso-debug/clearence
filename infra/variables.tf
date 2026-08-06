@@ -119,6 +119,24 @@ variable "enable_compute" {
   default     = false
 }
 
+variable "enable_google_source" {
+  description = <<-EOT
+    Kopplar in Google Places som källa (webbadress, omdömen, verksamhetsstatus).
+
+    STÅR PÅ false TILLS NYCKELN FINNS. Slås den på utan att
+    google_maps_api_key ligger i integrationshemligheten kan ECS inte läsa
+    hemligheten, och API-uppgifterna startar om i evighet.
+
+    Ordningen är alltså: lägg in nyckeln i hemligheten FÖRST, slå på
+    flaggan sedan. Se docs/driftsattning.md.
+
+    Med flaggan av svarar /v1/health med sources.google = false och källan
+    redovisas som ej ansluten - tjänsten fungerar, analysen blir tunnare.
+  EOT
+  type        = bool
+  default     = false
+}
+
 variable "api_image" {
   description = "Container för API:et, t.ex. <konto>.dkr.ecr.eu-north-1.amazonaws.com/clearance-api:sha."
   type        = string

@@ -141,5 +141,67 @@ for (const listField of ["recommendationReasons", "recommendationNextSteps"]) {
   );
 }
 
+/* --- Servern och kontraktet får inte glida isär ------------------------ */
+
+/*
+ * DEN HÄR KONTROLLEN SAKNADES, och den saknades på precis det sätt som
+ * gör en kontroll värdelös: sviten prövade att en LISTA av resurser fanns
+ * i kontraktet, inte att kontraktet täcker det servern faktiskt svarar
+ * på. En ny rutt kunde alltså läggas till utan att kontraktet nämnde den,
+ * och allt förblev grönt - vilket är exakt vad som hände när
+ * /v1/sources/google lades till.
+ *
+ * "API-first" betyder att kontraktet är sanningen. Då måste avvikelsen gå
+ * att se. Kontrollen läser rutterna som text ur servern; det är trubbigt,
+ * men det är den sortens trubbighet som håller när ingen tittar.
+ */
+const serverKod = readFileSync(join(process.cwd(), "api", "server", "index.ts"), "utf8");
+
+/** "/v1/cases/:caseId" -> "/cases/{caseId}", som kontraktet skriver det. */
+const somKontraktet = (rutt: string): string =>
+  rutt.replace(/^\/v1/, "").replace(/:([A-Za-z0-9_]+)/g, "{$1}");
+
+const rutter = [...new Set((serverKod.match(/"\/v1\/[^"]*"/g) ?? []).map((m) => m.slice(1, -1)))];
+
+check("rutterna gick att läsa ur servern", rutter.length > 10, rutter.length);
+
+for (const rutt of rutter) {
+  const i = somKontraktet(rutt);
+  check(`${rutt} är deklarerad i kontraktet`, Object.hasOwn(spec.paths, i), i);
+}
+
+/*
+ * Åt andra hållet är läget ett annat, och det ska inte påstås vara ett fel.
+ *
+ * Kontraktet beskriver HELA v1. Den egna servern är första lodräta skivan
+ * (api/server/index.ts): identiteten, ärendena, journalen och
+ * beslutsminnet. Resten serveras idag genom supabase-adaptern. Att kräva
+ * att servern täcker kontraktet vore alltså att kräva att migreringen är
+ * klar, vilket den inte är.
+ *
+ * Men gapet får inte växa i tysthet. Listan nedan är den skrivna
+ * sanningen om vad den egna servern ännu inte svarar på. Bygger någon en
+ * av dem faller kontrollen och listan ska kortas - och lägger någon till
+ * ett nytt hål faller den också. Det är skillnaden mellan en känd skuld
+ * och en glömd.
+ */
+const ANNU_INTE_I_EGNA_SERVERN = [
+  "/cases/{caseId}/close",
+  "/cases/{caseId}/report",
+  "/cases/{caseId}/share-links",
+  "/share-links/{linkId}",
+  "/shared/{token}",
+];
+
+const oimplementerade = Object.keys(spec.paths)
+  .filter((i) => !rutter.some((r) => somKontraktet(r) === i))
+  .sort();
+
+check(
+  "gapet mellan kontraktet och egna servern är exakt det kända",
+  JSON.stringify(oimplementerade) === JSON.stringify([...ANNU_INTE_I_EGNA_SERVERN].sort()),
+  { hittade: oimplementerade, forvantade: ANNU_INTE_I_EGNA_SERVERN },
+);
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);
