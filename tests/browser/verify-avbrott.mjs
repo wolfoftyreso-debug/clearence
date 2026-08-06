@@ -158,10 +158,27 @@ check("samtalet ligger i webbläsaren medan det pågår",
 // Läsinställningen ska däremot överleva: den säger något om hur en
 // människa vill läsa, inte något om ett bolag.
 await b.evaluate(() => localStorage.setItem("clearance-language-level", "enkel"));
-await b.click('button[aria-label="Toggle menu"]');
-await b.waitForTimeout(400);
-// Headern renderar utloggningen två gånger - en för desktop, en i
-// mobilmenyn. Bara den ena är synlig, och det är den vi vill klicka på.
+
+/*
+ * UTLOGGNINGEN GÖRS FRÅN INSTÄLLNINGARNA, inte från sidhuvudets meny.
+ *
+ * Menyn låg tidigare i vägen: samtalets helskärmsläge täcker sidhuvudet,
+ * och fyra försök att ta sig förbi överlägget - fälla ihop, rulla till
+ * toppen, klicka i DOM:en - gav alla samma resultat. Att fortsätta slåss
+ * med den ytan hade varit att låta testet handla om något annat än det
+ * det heter.
+ *
+ * Det här testet handlar om att UTLOGGNINGEN STÄDAR POSTEN. Inställningarna
+ * har en egen utloggningsknapp, på en sida utan överlägg, och den kör
+ * samma signOut. Påståendet blir därmed prövat på riktigt i stället för
+ * att vara rött av ett skäl som inte rör det.
+ */
+await b.goto(`${BASE}/dashboard/installningar`, { waitUntil: "domcontentloaded" });
+await b.waitForTimeout(1600);
+check(
+  "posten finns kvar när inställningarna öppnas",
+  await b.evaluate(() => localStorage.getItem("clearance-onboarding-pagaende") !== null),
+);
 await b.locator('button:visible:has-text("Logga ut")').first().click();
 await b.waitForTimeout(1800);
 check("utloggningen städar det avbrutna samtalet",
