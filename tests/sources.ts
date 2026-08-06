@@ -27,6 +27,7 @@ import {
   websiteNote,
 } from "../src/lib/sources/website";
 import { backgroundTasks } from "../src/lib/advisor/backgroundWork";
+import fs from "node:fs";
 
 let passed = 0;
 let failed = 0;
@@ -172,6 +173,48 @@ check("och panelen säger det rakt ut", /innehöll inget vi kunde använda/.test
 
 // Notisen räknar bara det som faktiskt hittades.
 check("notisen räknar rätt", /2 sociala konton/.test(websiteNote(facts)), websiteNote(facts));
+
+/* --- 5. CSP:n tillåter det appen faktiskt gör ----------------------------- */
+
+/*
+ * Innehållspolicyn står i infrastrukturen och gäller först i produktion.
+ * Den kan därför motsäga appen utan att någon märker det förrän en kund
+ * gör det - vilket den gjorde: object-src var 'none' medan
+ * rapportvisaren bäddar in PDF:en med <object data={blob-url}>.
+ *
+ * Testet läser policyn ur Terraform och jämför med vad koden använder.
+ * Det är trubbigt, men det fångar just den klass av fel som annars bara
+ * syns bakom CloudFront.
+ */
+{
+  // process.cwd(), inte __dirname: bunten hamnar i node_modules/.cache
+  // och __dirname pekar då dit, inte på repot. Sviterna körs från roten.
+  const rot = process.cwd();
+  const tf = fs.readFileSync(`${rot}/infra/frontend.tf`, "utf8");
+  const visaren = fs.readFileSync(`${rot}/src/components/reports/useInlineReport.tsx`, "utf8");
+
+  const direktiv = (namn: string): string => {
+    const m = new RegExp(`"${namn} ([^"]*)"`).exec(tf);
+    return m ? m[1] : "";
+  };
+
+  check("CSP:n finns i infrastrukturen", /content_security_policy/.test(tf));
+  check("frame-ancestors är låst", /"frame-ancestors 'none'"/.test(tf));
+  check("base-uri är låst", /"base-uri 'self'"/.test(tf));
+
+  if (/<object\b/.test(visaren)) {
+    const o = direktiv("object-src");
+    check("visaren använder <object> - då måste object-src tillåta det", o.includes("'self'"), o);
+    if (/blob:/.test(visaren) || /pdf\.url/.test(visaren)) {
+      check("och blob: eftersom PDF:en är en blob-URL", o.includes("blob:"), o);
+    }
+  }
+  if (/<iframe\b/.test(visaren)) {
+    const f = direktiv("frame-src");
+    check("visaren använder <iframe> - frame-src måste tillåta det", f.includes("'self'"), f);
+  }
+}
+
 
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

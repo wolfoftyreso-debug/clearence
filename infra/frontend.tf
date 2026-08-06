@@ -68,7 +68,13 @@ resource "aws_cloudfront_response_headers_policy" "security" {
         "font-src 'self'",
         "connect-src 'self'",
         "frame-src 'self' blob:",
-        "object-src 'none'",
+        # 'self' blob: - INTE 'none'. Rapportvisaren bäddar in PDF:en med
+        # <object data={blob-url}>, och med 'none' blockeras den av vår
+        # egen policy i produktion. Reservrutan hade då skyllt på
+        # webbläsaren ("visar inte inbäddade PDF:er här") när det i
+        # själva verket var vi som stoppade den - ett falskt besked om
+        # vår egen konfiguration.
+        "object-src 'self' blob:",
         "base-uri 'self'",
         "form-action 'self'",
         "frame-ancestors 'none'",
