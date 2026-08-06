@@ -16,6 +16,10 @@ const serviceLinks = [
   { to: "/marketplace", label: "Hitta rådgivare" },
   { to: "/kontakt", label: "Kontakta oss" },
   { to: "/login", label: "Logga in" },
+  // Informationsplikten i art. 13 GDPR förutsätter att policyn går att
+  // hitta utan att leta. Sidfoten är där svenska besökare letar först.
+  { to: "/integritetspolicy", label: "Integritetspolicy" },
+  { to: "/villkor", label: "Användarvillkor" },
 ];
 
 const providerLinks = [

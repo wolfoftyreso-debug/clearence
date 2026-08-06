@@ -1,0 +1,69 @@
+<!doctype html>
+<!--
+  Sidan som visas när nätet inte går fram.
+
+  Den lovar ingenting den inte kan hålla. Ärendet ligger i backend, så
+  utan uppkoppling finns det inget att visa - och att antyda att något
+  skulle vara "tillgängligt offline" vore att be någon fatta beslut på
+  siffror vi inte kan garantera.
+
+  Det den däremot gör är att säga att inget arbete har gått förlorat.
+  Guiderna och introduktionssamtalet sparar lokalt, och det är precis den
+  oron någon har när skärmen plötsligt blir tom mitt i en ifyllning.
+-->
+<html lang="sv">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Ingen uppkoppling – CLEARANCE</title>
+    <meta name="theme-color" content="#134376" />
+    <style>
+      :root { color-scheme: light dark; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 1.5rem;
+        background: #f4f6f9;
+        color: #16202b;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        line-height: 1.6;
+      }
+      .kort { max-width: 26rem; }
+      .marke {
+        width: 2.5rem; height: 2.5rem; border-radius: 0.45rem;
+        background: #134376; color: #fff;
+        display: flex; align-items: center; justify-content: center;
+        font-family: Georgia, "Times New Roman", serif; font-weight: 700; font-size: 1.35rem;
+      }
+      h1 { font-size: 1.15rem; margin: 1.25rem 0 0.5rem; }
+      p { margin: 0 0 0.75rem; font-size: 0.95rem; color: #4a5766; }
+      button {
+        margin-top: 0.75rem; padding: 0.7rem 1.4rem; border: 0; border-radius: 999px;
+        background: #134376; color: #fff; font-size: 0.95rem; font-weight: 600; cursor: pointer;
+      }
+      @media (prefers-color-scheme: dark) {
+        body { background: #10161d; color: #e8edf3; }
+        p { color: #9fb0c2; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="kort">
+      <div class="marke" aria-hidden="true">C</div>
+      <h1>Ingen uppkoppling</h1>
+      <p>
+        CLEARANCE når inte nätet just nu. Ärendet ligger hos oss och kan inte visas utan
+        uppkoppling – vi vill hellre visa ingenting än siffror vi inte vet är aktuella.
+      </p>
+      <p>
+        <strong>Inget du fyllt i har gått förlorat.</strong> Nulägesanalysen, kontrollbalansen,
+        likviditetsplanen och introduktionssamtalet sparas i din webbläsare och finns kvar när du
+        är uppkopplad igen.
+      </p>
+      <button type="button" onclick="location.reload()">Försök igen</button>
+    </div>
+  </body>
+</html>

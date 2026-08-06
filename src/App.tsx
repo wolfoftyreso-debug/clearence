@@ -16,6 +16,7 @@ import { GuideProvider } from "@/components/guide/GuideProvider";
 // page shouldn't have to download the recharts-heavy liquidity timeline.
 const Index = lazy(() => import("./pages/Index"));
 const About = lazy(() => import("./pages/About"));
+const LegalPage = lazy(() => import("./pages/LegalPage"));
 const Knowledge = lazy(() => import("./pages/Knowledge"));
 const ApiDocs = lazy(() => import("./pages/ApiDocs"));
 const Login = lazy(() => import("./pages/Login"));
@@ -79,6 +80,10 @@ const App = () => (
               <Routes>
                 <Route path="/" element={<Index />} />
                 <Route path="/om" element={<About />} />
+                {/* Två innehåll, samma sida: identisk form, och de ska
+                    inte kunna glida isär. */}
+                <Route path="/integritetspolicy" element={<LegalPage kind="integritet" />} />
+                <Route path="/villkor" element={<LegalPage kind="villkor" />} />
                 <Route path="/kunskap" element={<Knowledge />} />
                 <Route path="/api" element={<ApiDocs />} />
                 <Route path="/kunskap/:slug" element={<Knowledge />} />

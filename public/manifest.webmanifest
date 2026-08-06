@@ -1,0 +1,35 @@
+{
+  "name": "CLEARANCE – vägledning vid företagskris",
+  "short_name": "CLEARANCE",
+  "description": "Sambandscentralen vid företagskris. Strukturera läget, bevaka fristerna och samla kretsen i samma ärende.",
+  "lang": "sv-SE",
+  "dir": "ltr",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#ffffff",
+  "theme_color": "#134376",
+  "categories": ["business", "finance", "productivity"],
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    {
+      "name": "Nulägesanalysen",
+      "short_name": "Nuläget",
+      "description": "En bedömning av läget ur bolagets siffror.",
+      "url": "/wizard",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Kontrollbalansräkningen",
+      "short_name": "Kontrollbalans",
+      "description": "Pröva om kapitalbristen är ett faktum.",
+      "url": "/kbr",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}
