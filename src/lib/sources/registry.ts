@@ -1,0 +1,202 @@
+/**
+ * KÄLLREGISTRET: var uppgifterna om bolaget faktiskt kan komma ifrån.
+ *
+ * Bakgrundspanelen sa "ingen källa ansluten" på sex moment. Den var ärlig
+ * men tom, och frågan blev: kan vi skrapa det här?
+ *
+ * SVARET ÄR NEJ FÖR DE FLESTA AV DEM, och det är inte en teknisk
+ * begränsning utan ett medvetet val. Skillnaden mellan hämtningssätten är
+ * hela poängen med den här filen:
+ *
+ *  - "hamta"          Vi hämtar en sida som är publicerad för att läsas,
+ *                     och följer robots.txt. Bolagets egen webbplats är
+ *                     det tydliga fallet: användaren äger den.
+ *  - "rss"            Ett flöde som finns till för att prenumereras på.
+ *  - "api-avtal"      Officiellt gränssnitt som kräver avtal eller nyckel.
+ *                     Koden är meningslös innan avtalet finns.
+ *  - "agarmedgivande" API som kräver att bolaget själv ger oss åtkomst.
+ *                     Det är genomförbart just här - kunden ÄR ägaren.
+ *  - "harledd"        Ingen hämtning alls: räknas fram ur uppgifter vi
+ *                     redan har.
+ *  - "forbjuden"      Får inte hämtas. Motpartens villkor förbjuder det,
+ *                     och en produkt som bygger på att bryta mot dem tappar
+ *                     källan den dag någon märker det - mitt i ett ärende.
+ *
+ * VARFÖR INTE BARA SKRAPA ÄNDÅ
+ *
+ * Tre skäl, i den ordning de kostar:
+ *
+ *  1. Det slutar fungera. En skrapa mot en sajt som inte vill bli skrapad
+ *     är trasig efter nästa layoutändring eller blockering. Ett bolag i
+ *     rekonstruktion får då en analys som tyst blivit tunnare, utan att
+ *     någon sagt det.
+ *  2. Det är ett avtalsbrott. LinkedIn, Meta och Google förbjuder det i
+ *     sina villkor. Ett bolag som säljer krishantering till andra bolag
+ *     kan inte ha den risken i sin egen leveranskedja.
+ *  3. Det gör uppgifterna omöjliga att stå för. "Var kommer det här
+ *     ifrån?" måste gå att besvara för varje rad i en analys som används
+ *     som beslutsunderlag.
+ *
+ * Det som ÄR skrapbart - bolagets egen webbplats - hämtas därför ordentligt:
+ * robots.txt först, tydlig user-agent, en sida i taget, och ingenting
+ * påhittat när svaret uteblir.
+ */
+
+export type Acquisition =
+  | "hamta"
+  | "rss"
+  | "api-avtal"
+  | "agarmedgivande"
+  | "harledd"
+  | "forbjuden";
+
+export interface SourceSpec {
+  /** Samma id som BackgroundSource i advisor/backgroundWork. */
+  id: string;
+  label: string;
+  acquisition: Acquisition;
+  /** Sant när källan går att använda i den här versionen, utan nytt avtal. */
+  live: boolean;
+  /** Vad den ger analysen. Skrivet för en läsare, inte för en logg. */
+  value: string;
+  /** Vad som krävs för att den ska bli live. Tom sträng när den redan är det. */
+  needs: string;
+  /**
+   * Sant när källans tillgänglighet avgörs vid KÖRNING och inte av
+   * konfigurationen.
+   *
+   * Företagsregistret är det enda fallet: uppslaget går genom dataporten
+   * och kan svara eller inte svara för ett givet organisationsnummer.
+   * Panelen visar då utfallet - "hämtat ur företagsregistret" eller
+   * "gav inget svar på det här numret" - och det är riktigare än vad ett
+   * statiskt register kan säga.
+   *
+   * `live` beskriver för sådana källor PRODUKTIONSLÄGET: finns ett avtal
+   * som gör uppslaget meningsfullt utanför demoläget.
+   */
+  runtime?: boolean;
+  /**
+   * Den rättsliga eller praktiska grunden. Fylls i för ALLA källor, även
+   * de som är live: den som frågar var en uppgift kommer ifrån ska få
+   * svaret ur registret och inte ur någons minne.
+   */
+  basis: string;
+}
+
+export const SOURCES: SourceSpec[] = [
+  {
+    id: "foretagsregister",
+    label: "Offentlig företagsinformation",
+    acquisition: "api-avtal",
+    live: false,
+    runtime: true,
+    value: "Firma, säte, bolagsform, styrelse, F-skatt och momsregistrering.",
+    needs:
+      "Avtal med Bolagsverket för Näringslivsregistret, eller ett abonnemang " +
+      "hos en kreditupplysare (Creditsafe, Syna, Bisnode).",
+    basis:
+      "Uppgifterna är offentliga, men de tillhandahålls genom avtalade " +
+      "gränssnitt. Att i stället skrapa allabolag.se eller ratsit vore att " +
+      "ta betalt av en återförsäljares arbete utan avtal - och deras villkor " +
+      "förbjuder det uttryckligen.",
+  },
+  {
+    id: "webb",
+    label: "Bolagets webbplats",
+    acquisition: "hamta",
+    /*
+     * INTE LIVE ÄNNU, och skillnaden är viktig: tolken är skriven och
+     * prövad (sources/website.ts, tests/sources.ts), men ingen hämtare är
+     * kopplad. Att märka källan som ansluten för att koden finns vore att
+     * påstå att vi läst en sida vi aldrig hämtat - samma sorts osanning
+     * som resten av produkten är byggd för att undvika.
+     *
+     * Den här raden vänds till true samtidigt som API-slutpunkten kopplas
+     * in, inte före.
+     */
+    live: false,
+    value:
+      "Vad bolaget säger att det gör, kontaktvägar, och vilka sociala konton " +
+      "det själv länkar till.",
+    needs:
+      "Webbadressen från dig, och slutpunkten i API:et som gör hämtningen. " +
+      "Tolkningen är byggd och prövad - det som saknas är själva hämtningen.",
+    basis:
+      "Sidan är publicerad för att läsas, och kunden äger den. Vi läser " +
+      "robots.txt först och respekterar den, anger vem vi är i user-agent, " +
+      "och hämtar ett fåtal sidor - inte hela sajten.",
+  },
+  {
+    id: "sociala-medier",
+    label: "Sociala medier",
+    acquisition: "forbjuden",
+    live: false,
+    value: "Aktivitetsnivå och hur bolaget beskriver sig utåt.",
+    needs:
+      "Officiell API-åtkomst hos respektive plattform. LinkedIns och Metas " +
+      "villkor förbjuder automatiserad insamling utan den.",
+    basis:
+      "Får inte skrapas. Det vi däremot gör är att läsa vilka konton bolaget " +
+      "SJÄLVT länkar till från sin webbplats - den uppgiften kommer ur en " +
+      "sida vi har rätt att hämta, och säger vilka kanaler som finns utan " +
+      "att röra plattformarna.",
+  },
+  {
+    id: "recensioner",
+    label: "Kundrecensioner",
+    acquisition: "agarmedgivande",
+    live: false,
+    value: "Omdömen och betyg, som signal om kundrelationerna håller.",
+    needs:
+      "Google Business Profile API eller Trustpilot API. Båda kräver att " +
+      "bolaget ger oss åtkomst till sin egen profil.",
+    basis:
+      "Genomförbart just här: kunden ÄR den som äger profilen och kan ge " +
+      "medgivandet i ett steg. Att i stället skrapa sökresultat bryter mot " +
+      "Googles villkor och ger dessutom ett urval vi inte kan förklara.",
+  },
+  {
+    id: "nyheter",
+    label: "Nyhetsartiklar om bolaget",
+    acquisition: "rss",
+    live: false,
+    value: "Om något hänt utåt som ärendet behöver ta höjd för.",
+    needs:
+      "En namngiven nyhetskälla. RSS-flöden går att hämta utan avtal; " +
+      "svensk mediebevakning med djup (Retriever, Meltwater) kräver " +
+      "abonnemang.",
+    basis:
+      "Ett RSS-flöde publiceras för att prenumereras på - att hämta det är " +
+      "dess syfte. Fulltext bakom betalvägg är däremot upphovsrättsskyddad " +
+      "och får inte lagras; vi sparar rubrik, datum och länk.",
+  },
+  {
+    id: "branschdata",
+    label: "Konkurrenter och branschläge",
+    acquisition: "harledd",
+    live: false,
+    value: "Hur bolagets läge står sig mot branschen.",
+    needs:
+      "SNI-koden ur företagsregistret, plus SCB:s öppna statistik-API för " +
+      "branschtal. Faller alltså med företagsregistret.",
+    basis:
+      "Ingen hämtning om enskilda konkurrenter - den uppgiften finns inte " +
+      "att hämta lagligt och skulle bli en gissning. Det som går är " +
+      "branschens aggregerade tal, ur offentlig statistik.",
+  },
+];
+
+export const sourceById = (id: string): SourceSpec | undefined =>
+  SOURCES.find((s) => s.id === id);
+
+/** Källor som får användas i den här versionen. */
+export const liveSources = (): SourceSpec[] => SOURCES.filter((s) => s.live);
+
+/**
+ * Källor som ALDRIG får hämtas automatiskt, oavsett hur mycket någon vill.
+ *
+ * Egen funktion och inte bara ett fält, för att den ska gå att anropa från
+ * en kontroll: det är skillnad på "inte byggt än" och "får inte byggas".
+ */
+export const forbiddenSources = (): SourceSpec[] =>
+  SOURCES.filter((s) => s.acquisition === "forbjuden");

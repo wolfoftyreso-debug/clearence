@@ -32,6 +32,8 @@ export type BackgroundSource =
   | "nyheter"
   | "branschdata";
 
+import { liveSources, sourceById } from "@/lib/sources/registry";
+
 export type BackgroundState = "pagar" | "klar" | "ingen-kalla";
 
 export interface BackgroundTask {
@@ -53,19 +55,35 @@ export interface BackgroundTask {
 export const DISCLOSURE =
   "Jag samlar in relevant offentlig information om företaget och kombinerar den med det du berättar för att skapa en så träffsäker analys som möjligt.";
 
-/** Källor som faktiskt är anslutna i den här versionen. */
-const CONNECTED: BackgroundSource[] = ["foretagsregister", "intervjun", "analysmotorn"];
+/**
+ * Källor som faktiskt är anslutna i den här versionen.
+ *
+ * De tre första är interna: intervjun är användarens egna svar,
+ * analysmotorn räknar på dem, och företagsregistret läses genom
+ * dataporten. De YTTRE källorna kommer ur src/lib/sources/registry, så att
+ * panelen inte kan påstå att något är anslutet som registret säger kräver
+ * ett avtal - eller tvärtom.
+ */
+const CONNECTED: BackgroundSource[] = [
+  "foretagsregister",
+  "intervjun",
+  "analysmotorn",
+  ...(liveSources().map((s) => s.id) as BackgroundSource[]),
+];
 
-/** Vad som saknas för de källor som inte är anslutna. Skrivet för en läsare, inte för en logg. */
-const MISSING_NOTE: Record<BackgroundSource, string> = {
-  foretagsregister: "",
-  intervjun: "",
-  analysmotorn: "",
-  webb: "Kräver en koppling till bolagets webbplats. Ingen är ansluten ännu.",
-  "sociala-medier": "Kräver en koppling till sociala medier. Ingen är ansluten ännu.",
-  recensioner: "Kräver en koppling till en recensionstjänst. Ingen är ansluten ännu.",
-  nyheter: "Kräver en koppling till en nyhetskälla. Ingen är ansluten ännu.",
-  branschdata: "Kräver en koppling till branschstatistik. Ingen är ansluten ännu.",
+/**
+ * Vad som saknas för de källor som inte är anslutna.
+ *
+ * Texten kommer ur källregistret, som är den enda platsen där det står
+ * VARFÖR en källa inte är ansluten. Den gamla varianten stod skriven här,
+ * och sa samma sak om alla fem: "kräver en koppling". Det är sant men
+ * oanvändbart - skillnaden mellan "kräver ett avtal med Bolagsverket" och
+ * "får inte hämtas alls" är precis vad den som läser behöver veta.
+ */
+const missingNote = (source: BackgroundSource): string => {
+  const spec = sourceById(source);
+  if (!spec) return "";
+  return spec.needs;
 };
 
 interface Plan {
@@ -192,7 +210,7 @@ export const backgroundTasks = (ctx: BackgroundContext, upTo: number): Backgroun
         label: plan.label,
         source: plan.source,
         state: "ingen-kalla",
-        note: MISSING_NOTE[plan.source],
+        note: missingNote(plan.source),
       };
     }
     if (!answered) {

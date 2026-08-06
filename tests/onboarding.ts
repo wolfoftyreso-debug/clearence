@@ -16,6 +16,7 @@
  */
 
 import { ONBOARDING } from "../src/lib/advisor/dialog";
+import { sourceById } from "../src/lib/sources/registry";
 import {
   BACKGROUND_STEPS,
   backgroundSummary,
@@ -111,7 +112,19 @@ check(
 for (const id of ["webbplats", "sociala", "recensioner", "nyheter", "konkurrenter"]) {
   const task = allDone.find((t) => t.id === id)!;
   check(`"${id}" påstår inte att det gjorts`, task.state === "ingen-kalla", task.state);
-  check(`"${id}" säger vad som saknas`, /Ingen är ansluten ännu/.test(task.note), task.note);
+  /*
+   * Kravet är oförändrat: en källa som inte är ansluten ska säga VAD som
+   * saknas. Texten kommer numera ur källregistret och är specifik per
+   * källa - "avtal med Bolagsverket" respektive "får inte skrapas" i
+   * stället för samma generiska mening om alla. Testet prövar därför att
+   * skälet finns och är konkret, inte att det är en viss formulering.
+   */
+  check(`"${id}" säger vad som saknas`, task.note.trim().length > 25, task.note);
+  check(
+    `"${id}" skälet är källregistrets`,
+    task.note === (sourceById(task.source)?.needs ?? ""),
+    task.note.slice(0, 50),
+  );
 }
 check(
   "registret redovisas som klart när det svarade",
