@@ -61,7 +61,30 @@ check("service-workern registreras", swState !== "none", swState);
  * som prövar det som faktiskt händer i en tunnel.
  */
 {
+  /*
+   * EGEN PORT, OCH DEN MÅSTE VARA LEDIG.
+   *
+   * Sviten körde först mot en fast port. En avbruten körning lämnade en
+   * server kvar där, och nästa körning trodde sig stänga sajten men
+   * stängde bara sin egen process - den gamla serverade vidare. Testet
+   * såg då appskalet, dömde offline-sidan trasig, och hade lika gärna
+   * kunnat döma en trasig worker godkänd.
+   *
+   * En upptagen port är därför ett STOPP med besked, inte något att
+   * arbeta runt: ett test som mäter fel är värre än inget test.
+   */
   const PORT = 4311;
+  const upptagen = await fetch(`http://127.0.0.1:${PORT}/`)
+    .then(() => true)
+    .catch(() => false);
+  if (upptagen) {
+    check(
+      `port ${PORT} är ledig för offline-provet`,
+      false,
+      "en server lever redan där - stäng den och kör om",
+    );
+    throw new Error(`port ${PORT} upptagen`);
+  }
   const server = spawn("npx", ["vite", "preview", "--host", "127.0.0.1", "--port", String(PORT)], {
     cwd: KATALOG,
     stdio: "ignore",
@@ -77,8 +100,14 @@ check("service-workern registreras", swState !== "none", swState);
   await q.waitForTimeout(2500);
   check("workern kontrollerar sidan", await q.evaluate(() => !!navigator.serviceWorker.controller));
 
-  try { process.kill(-server.pid); } catch { /* redan död */ }
-  await new Promise((r) => setTimeout(r, 1500));
+  try { process.kill(-server.pid, "SIGKILL"); } catch { /* redan död */ }
+  // Vänta tills porten FAKTISKT slutat svara. Att sova en stund och hoppas
+  // är hur det förra felet kunde uppstå.
+  for (let i = 0; i < 30; i++) {
+    const lever = await fetch(`http://127.0.0.1:${PORT}/`).then(() => true).catch(() => false);
+    if (!lever) break;
+    await new Promise((r) => setTimeout(r, 200));
+  }
 
   await q.goto(`http://127.0.0.1:${PORT}/kunskap`, { waitUntil: "domcontentloaded" }).catch(() => {});
   await q.waitForTimeout(1000);

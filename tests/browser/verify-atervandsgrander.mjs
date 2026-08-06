@@ -112,10 +112,21 @@ let guideStuck = null;
 for (let i = 0; i < 8; i += 1) {
   const skip = page.locator('button:has-text("Hoppa över steget")');
   if ((await skip.count()) === 0) break;
-  const before = await page.locator("[data-guide-callout]").first().innerText().catch(() => "");
+  /*
+   * RÄKNAREN, inte texten.
+   *
+   * Att jämföra instruktionstexten gav falskt larm: två steg kan mycket
+   * väl förklaras med samma mening, och då såg guiden fastnad ut fast
+   * den gick vidare. Stegnumret ändras alltid när ett steg passeras -
+   * det är det påståendet handlar om.
+   */
+  const räknare = async () =>
+    (await page.locator('[data-guide-callout]').first().innerText().catch(() => ""))
+      .match(/Steg\s+(\d+)\s+av\s+(\d+)/i)?.[1] ?? "";
+  const before = await räknare();
   await skip.first().click();
   await page.waitForTimeout(2600);
-  const after = await page.locator("[data-guide-callout]").first().innerText().catch(() => "");
+  const after = await räknare();
   if (before === after && before !== "") { guideStuck = before.slice(0, 60); break; }
   guideSkips += 1;
 }

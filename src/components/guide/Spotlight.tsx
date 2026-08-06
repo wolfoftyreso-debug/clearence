@@ -233,10 +233,10 @@ export const Spotlight = ({
           och hålet blir exakt. */}
       {awaitingClick && (
         <div aria-hidden="true">
-          <div className="absolute bg-foreground/50 transition-all duration-300" style={{ top: 0, left: 0, right: 0, height: Math.max(0, ringTop) }} />
-          <div className="absolute bg-foreground/50 transition-all duration-300" style={{ top: ringBottom, left: 0, right: 0, bottom: 0 }} />
-          <div className="absolute bg-foreground/50 transition-all duration-300" style={{ top: ringTop, left: 0, width: Math.max(0, ringLeft), height: ringHeight + pad * 2 }} />
-          <div className="absolute bg-foreground/50 transition-all duration-300" style={{ top: ringTop, left: ringLeft + ringWidth, right: 0, height: ringHeight + pad * 2 }} />
+          <div className="absolute bg-foreground/50 transition-all duration-500" style={{ top: 0, left: 0, right: 0, height: Math.max(0, ringTop) }} />
+          <div className="absolute bg-foreground/50 transition-all duration-500" style={{ top: ringBottom, left: 0, right: 0, bottom: 0 }} />
+          <div className="absolute bg-foreground/50 transition-all duration-500" style={{ top: ringTop, left: 0, width: Math.max(0, ringLeft), height: ringHeight + pad * 2 }} />
+          <div className="absolute bg-foreground/50 transition-all duration-500" style={{ top: ringTop, left: ringLeft + ringWidth, right: 0, height: ringHeight + pad * 2 }} />
         </div>
       )}
 
