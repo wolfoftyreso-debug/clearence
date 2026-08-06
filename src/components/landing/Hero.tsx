@@ -1,9 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { ClaraIntro } from "@/components/advisor/ClaraIntro";
 import { hasResume } from "@/lib/advisor/onboardingResume";
-import { Clock, FileText, UserCheck } from "lucide-react";
+import { ChevronDown, Clock, FileText, UserCheck } from "lucide-react";
 
 /**
  * Startsidan: avsändare och tagline överst - och sedan SAMTALET, som
@@ -62,6 +62,46 @@ const Hero = () => {
    */
   const [resumable] = useState(() => hasResume());
 
+  /**
+   * SAMTALET TAR ÖVER SKÄRMEN när det väl börjat.
+   *
+   * Det låg tidigare inbäddat i marknadssidan. Konsekvensen syntes först
+   * i en telefon: man kunde rulla bort från samtalet mitt i en
+   * ifyllning, "Fortsätt" hamnade bakom demobannern, och under
+   * formuläret fortsatte sidan att sälja in en tjänst användaren redan
+   * hade börjat använda.
+   *
+   * Produkten säger att samtalet ÄR gränssnittet. Då kan det inte
+   * samtidigt vara ett inslag på en sida som handlar om något annat.
+   *
+   * `laast` är skilt från `conversationStarted` med flit. Den senare
+   * släpps aldrig under besöket - den finns för att inloggningen inte
+   * ska byta ut vyn under fötterna på användaren. Den förra styr bara
+   * hur samtalet visas, och den som fällt ihop det ska kunna fälla ut
+   * det igen utan att förlora något.
+   */
+  const [laast, setLaast] = useState(false);
+
+  /*
+   * Bakgrunden får inte rulla bakom ett samtal som tagit över skärmen.
+   * Utan det här rullar sidan under fingret när man drar i samtalet och
+   * hamnar på ett helt annat ställe när man fäller ihop det igen.
+   */
+  useEffect(() => {
+    if (!laast) return;
+    const kropp = document.body.style.overflow;
+    const rot = document.documentElement.style.overflow;
+    // BÅDA behövs. Med bara body rullade sidan ändå: på flera webbläsare
+    // är det documentElement som är rullbehållaren, och ett lås på body
+    // gick rakt igenom.
+    document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = kropp;
+      document.documentElement.style.overflow = rot;
+    };
+  }, [laast]);
+
   return (
     <section className="border-b border-border bg-secondary/30">
       <div className="container px-4 pb-12 pt-8 md:pb-20 md:pt-12">
@@ -95,13 +135,88 @@ const Hero = () => {
               </Link>
             </div>
           ) : (
-            <ClaraIntro
-              hasAccount={!!user}
-              onStart={() => setConversationStarted(true)}
-              onDone={() => navigate("/wizard")}
-            />
+            /*
+             * SAMMA KOMPONENT, TVÅ INRAMNINGAR.
+             *
+             * ClaraIntro monteras ALDRIG om när låset slås av och på -
+             * bara omslaget byts. Att rendera den på två ställen hade
+             * nollställt allt användaren skrivit i samma sekund som hen
+             * fällde ihop samtalet, vilket är precis det fel resten av
+             * produkten är byggd för att undvika.
+             */
+            <div
+              className={
+                laast
+                  ? "fixed inset-0 z-[60] flex flex-col bg-secondary/40"
+                  : "contents"
+              }
+            >
+              {laast && (
+                /* Avsändaren, och vägen ut. Ett samtal som tagit över
+                   skärmen utan att gå att lämna är en fälla - samma regel
+                   som gäller guidens genomgångar. */
+                <div className="flex flex-shrink-0 items-center justify-between gap-3 border-b border-border bg-background px-4 py-3">
+                  <span className="flex items-center gap-2">
+                    <span
+                      className="flex h-7 w-7 items-center justify-center rounded-sm bg-accent text-sm font-bold text-accent-foreground"
+                      aria-hidden="true"
+                    >
+                      C
+                    </span>
+                    <span className="font-display text-base text-foreground">CLEARANCE</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setLaast(false)}
+                    className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                  >
+                    <ChevronDown className="h-4 w-4" aria-hidden="true" />
+                    Fäll ihop
+                  </button>
+                </div>
+              )}
+
+              <div
+                className={
+                  laast
+                    ? /* Egen rullning, och botten fri från demobannern och
+                         telefonens eget fält. Utan utrymmet hamnar
+                         "Fortsätt" bakom bannern - vilket var precis vad
+                         som hände. */
+                      "flex-1 overflow-y-auto overscroll-contain px-4 py-4 pb-40"
+                    : "contents"
+                }
+              >
+                <div className={laast ? "mx-auto max-w-2xl" : "contents"}>
+                  <ClaraIntro
+                    hasAccount={!!user}
+                    onStart={() => {
+                      setConversationStarted(true);
+                      setLaast(true);
+                    }}
+                    onDone={() => navigate("/wizard")}
+                  />
+                </div>
+              </div>
+            </div>
           )}
         </div>
+
+        {conversationStarted && !laast && (
+          /* Ihopfällt: samtalet finns kvar där det stod, och vägen
+             tillbaka till helskärm står bredvid det. Att bara fälla ihop
+             utan att erbjuda vägen tillbaka vore att göra en åtgärd
+             oåterkallelig i onödan. */
+          <div className="mx-auto mt-3 max-w-2xl text-center">
+            <button
+              type="button"
+              onClick={() => setLaast(true)}
+              className="text-sm font-medium text-accent underline underline-offset-2"
+            >
+              Öppna samtalet i helskärm
+            </button>
+          </div>
+        )}
 
         {/* Pillerknapparna ("Gratis nulägesanalys", "Mina sidor") och
             "Se alla tjänster"-länken är borttagna på uttrycklig begäran,
