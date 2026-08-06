@@ -177,7 +177,10 @@ resource "aws_lb_target_group" "api" {
   vpc_id      = aws_vpc.main.id
 
   health_check {
-    path                = "/health"
+    # API:ets rutter ligger under /v1 - hälsorutten också. Med "/health"
+    # här hade varje uppgift underkänts och dödats i en loop, och det
+    # enda symtomet vore en driftsättning som aldrig blir klar.
+    path                = "/v1/health"
     healthy_threshold   = 2
     unhealthy_threshold = 3
     timeout             = 5

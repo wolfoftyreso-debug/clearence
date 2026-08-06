@@ -1,0 +1,107 @@
+# Grinden. Körs på varje push och varje pull request.
+#
+# Den kör exakt det startkontrollen kör lokalt, i samma ordning, så att
+# "det funkar hos mig" och "det funkar i CI" inte kan betyda olika saker.
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  prova:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - run: npm ci
+
+      # Lint, typer och hela enhetsbatteriet ligger i "npm test".
+      - name: Enhetsbatteriet
+        run: npm test
+
+      - name: Byggen
+        run: |
+          VITE_DEMO_MODE=false npx vite build
+          npm run build:api
+          npm run build:worker
+
+      # Produktionsbunten får aldrig bära demoläget.
+      - name: Inget demoläge i bunten
+        run: |
+          if grep -rq "DEMOLÄGE" dist/assets/*.js; then
+            echo "::error::demoläget finns i produktionsbunten"; exit 1
+          fi
+
+      - uses: hashicorp/setup-terraform@v3
+      - name: Terraform
+        run: |
+          terraform -chdir=infra fmt -check -recursive
+          terraform -chdir=infra init -backend=false
+          terraform -chdir=infra validate
+
+  databas:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: prov
+          POSTGRES_DB: clearance
+        options: >-
+          --health-cmd pg_isready --health-interval 5s
+          --health-timeout 5s --health-retries 10
+        ports: ["5432:5432"]
+    env:
+      DATABASE_URL: postgres://postgres:prov@127.0.0.1:5432/clearance
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - run: npm ci
+
+      # Migrationerna ska gå igenom på en TOM databas, i namnordning.
+      # Det är den enda körning som liknar en ny miljö.
+      - name: Migrationerna på tom databas
+        run: scripts/migrera.sh
+
+      - name: Databassviterna
+        run: npm run test:selfhosted
+
+      - name: API-sviterna
+        run: npm run test:api
+
+  webblasare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: VITE_DEMO_MODE=true npx vite build
+      - name: Förhandsserver
+        run: |
+          npx vite preview --host 127.0.0.1 --port 4310 &
+          npx wait-on http://127.0.0.1:4310 -t 60000
+      - name: Alla webbläsarsviter
+        run: |
+          fel=0
+          for f in tests/browser/verify-*.mjs tests/browser/walkthrough.mjs; do
+            [ "$(basename "$f")" = "verify-design.mjs" ] && continue
+            node "$f" || fel=1
+          done
+          node tests/browser/mobile.mjs http://127.0.0.1:4310 || fel=1
+          node tests/browser/no-external-requests.mjs http://127.0.0.1:4310 || fel=1
+          exit $fel
