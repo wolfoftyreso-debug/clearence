@@ -175,6 +175,36 @@ begin
     raise exception 'FAIL: stängningen returnerar inte mottagare och fakturanummer';
   end if;
   raise notice 'ok 15: stängningen berättar vem som ska få beskedet';
+end $$;
+
+/*
+ * ok 16: ARBETARENS FUNKTIONER ÄR STÄNGDA FÖR KLIENTEN.
+ *
+ * Samma vakt som notifikationstjänsten har (notifications.sql ok 24), men
+ * för de äldre arbetarfunktionerna. De hade kvar execute till public och
+ * till anon/authenticated - en inloggad kunde stänga andras konton med
+ * close_overdue_accounts() och läsa andra bolags e-post ur
+ * credit_check_candidates(). 20260819100000 tog bort rättigheten; den här
+ * kontrollen ser till att den inte kommer tillbaka.
+ */
+do $$
+declare
+  v_bad text;
+begin
+  select string_agg(p.proname, ', ') into v_bad
+  from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+  where n.nspname = 'public'
+    -- retry_outbound_email står MEDVETET inte här: den prövar
+    -- is_platform_admin() själv och är en klientanropbar driftfunktion.
+    and p.proname in (
+      'claim_outbound_emails', 'mark_email_sent', 'mark_email_failed',
+      'close_overdue_accounts', 'reminder_candidates', 'credit_check_candidates')
+    and (has_function_privilege('authenticated', p.oid, 'execute')
+         or has_function_privilege('anon', p.oid, 'execute'));
+  if v_bad is not null then
+    raise exception 'FAIL  klienten kan anropa arbetarfunktionen: %', v_bad;
+  end if;
+  raise notice 'ok 16: de äldre arbetarfunktionerna är stängda för klienten';
 
   raise notice 'ALL BILLING JOB TESTS PASSED';
 end $$;

@@ -32,6 +32,8 @@ import {
 } from "../src/lib/advisor/onboardingResume";
 import { emptyProfile } from "../src/lib/advisor/companyProfile";
 import { clearWorkTraces, PREFERENCE_KEYS, WORK_KEYS } from "../src/lib/localTraces";
+import fs from "node:fs";
+import path from "node:path";
 
 let passed = 0;
 let failed = 0;
@@ -214,6 +216,55 @@ check(
   "listorna överlappar inte",
   !WORK_KEYS.some((k) => (PREFERENCE_KEYS as readonly string[]).includes(k)),
 );
+
+/*
+ * VARJE localStorage-NYCKEL I KODEN MÅSTE VARA KLASSAD.
+ *
+ * Listorna ovan prövades förut mot en HANDSKRIVEN uppräkning: den fångar
+ * den som TAR BORT en nyckel ur WORK_KEYS, men inte den som LÄGGER TILL
+ * en ny nyckel med bolagsdata och glömmer båda listorna. Då överlever
+ * uppgifterna en utloggning i tysthet - nästa användare på en delad dator
+ * ser föregående bolags anteckningar. Det är precis den läckan
+ * clearWorkTraces finns för att stoppa.
+ *
+ * Den här kontrollen läser KÄLLAN: den plockar varje "clearance-*"-nyckel
+ * ur src/ och kräver att den är antingen städad (WORK_KEYS), bevarad
+ * (PREFERENCE_KEYS) eller uttryckligen undantagen nedan. En ny nyckel
+ * tvingar alltså fram ett beslut - inte en glömska.
+ */
+const KANDA_UNDANTAG = new Set([
+  // Sessionstoken. Städas av clearToken() i aws-klienten vid utloggning,
+  // en egen och avsiktlig väg - inte via clearWorkTraces.
+  "clearance-api-token",
+  // Hela demodatabasen. Att städa den vid utloggning hade raderat
+  // demoföretaget mitt under en visning (prövas även på raden ovan).
+  "clearance-demo-state",
+  // Efemärt UI-fokus, bär ingen uppgift om vare sig bolag eller person.
+  "clearance-focus-search",
+]);
+
+{
+  const rot = path.join(process.cwd(), "src");
+  const nycklar = new Set<string>();
+  const gaIgenom = (dir: string) => {
+    for (const post of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, post.name);
+      if (post.isDirectory()) gaIgenom(full);
+      else if (/\.tsx?$/.test(post.name)) {
+        const text = fs.readFileSync(full, "utf8");
+        for (const m of text.matchAll(/"(clearance-[a-z0-9-]+)"/g)) nycklar.add(m[1]);
+      }
+    }
+  };
+  gaIgenom(rot);
+  const klassade = new Set<string>([...WORK_KEYS, ...PREFERENCE_KEYS, ...KANDA_UNDANTAG]);
+  const oklassade = [...nycklar].filter((k) => !klassade.has(k)).sort();
+  check(
+    "varje localStorage-nyckel i koden är klassad (städas, bevaras eller undantas)",
+    oklassade.length === 0,
+    oklassade.join(", "),
+  );
+}
 
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);
