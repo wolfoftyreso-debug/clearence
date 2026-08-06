@@ -73,17 +73,27 @@ check("service-workern registreras", swState !== "none", swState);
    * En upptagen port är därför ett STOPP med besked, inte något att
    * arbeta runt: ett test som mäter fel är värre än inget test.
    */
-  const PORT = 4311;
-  const upptagen = await fetch(`http://127.0.0.1:${PORT}/`)
-    .then(() => true)
-    .catch(() => false);
-  if (upptagen) {
-    check(
-      `port ${PORT} är ledig för offline-provet`,
-      false,
-      "en server lever redan där - stäng den och kör om",
-    );
-    throw new Error(`port ${PORT} upptagen`);
+  /*
+   * LEDIG PORT, INTE EN FAST.
+   *
+   * Sviten körde först mot 4311. Två problem följde: en avbruten körning
+   * lämnade en server kvar där, och nästa körning stängde bara sin egen
+   * process medan den gamla serverade vidare - testet såg då appskalet
+   * och dömde offline-sidan trasig, fast den hade lika gärna kunnat döma
+   * en trasig worker godkänd. Dessutom gick sviten inte att köra
+   * parallellt med sig själv.
+   *
+   * En ledig port letas därför upp, och servern städas i finally - även
+   * när ett påstående faller.
+   */
+  let PORT = 0;
+  for (let kandidat = 4311; kandidat <= 4330; kandidat++) {
+    const upptagen = await fetch(`http://127.0.0.1:${kandidat}/`).then(() => true).catch(() => false);
+    if (!upptagen) { PORT = kandidat; break; }
+  }
+  if (PORT === 0) {
+    check("en ledig port för offline-provet", false, "4311-4330 är alla upptagna");
+    throw new Error("ingen ledig port");
   }
   const server = spawn("npx", ["vite", "preview", "--host", "127.0.0.1", "--port", String(PORT)], {
     cwd: KATALOG,
@@ -100,7 +110,9 @@ check("service-workern registreras", swState !== "none", swState);
   await q.waitForTimeout(2500);
   check("workern kontrollerar sidan", await q.evaluate(() => !!navigator.serviceWorker.controller));
 
-  try { process.kill(-server.pid, "SIGKILL"); } catch { /* redan död */ }
+  const stang = () => { try { process.kill(-server.pid, "SIGKILL"); } catch { /* redan död */ } };
+  process.once("exit", stang);
+  stang();
   // Vänta tills porten FAKTISKT slutat svara. Att sova en stund och hoppas
   // är hur det förra felet kunde uppstå.
   for (let i = 0; i < 30; i++) {
