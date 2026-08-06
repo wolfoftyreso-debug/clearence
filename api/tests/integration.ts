@@ -494,6 +494,154 @@ check("fel lösenord underkänns", !(await verifyPassword("fel-losenord", hash))
 check("två hashningar av samma lösenord skiljer sig (salt)", hash !== (await hashPassword("ett-losenord")));
 check("skräp i hashfältet underkänns tyst", !(await verifyPassword("ett-losenord", "inte-en-hash")));
 
+/* --- 8b. Profilen ---------------------------------------------------------- */
+
+const agnesProfil = await call("GET", "/v1/profile", { token: bertilToken });
+check("profilen går att hämta", agnesProfil.status === 200, agnesProfil.body);
+
+// Uppdateringen får inte kunna ändra rollen. En företagare som blir
+// rådgivare ska gå genom ansökan.
+const rollForsok = await call("PATCH", "/v1/profile", {
+  token: bertilToken,
+  body: { displayName: "Bertil B", phone: "0700000000", role: "admin" },
+});
+check("profilen går att uppdatera", rollForsok.status === 200, rollForsok.body);
+const efterPatch = await call("GET", "/v1/profile", { token: bertilToken });
+const profil = efterPatch.body.profile as { role?: string; displayName?: string } | null;
+check("namnet ändrades", profil?.displayName === "Bertil B", profil);
+check("men rollen gick inte att ändra via uppdateringen", profil?.role !== "admin", profil);
+
+/* --- 8c. Delningslänkarna -------------------------------------------------- */
+
+const skapad = await call("POST", `/v1/cases/${CASE_B}/share-links`, {
+  token: bertilToken,
+  body: { scope: "overview", label: "Till banken", validDays: 7 },
+});
+check("en delningslänk går att skapa", skapad.status === 201, skapad.body);
+const linkId = (skapad.body as { id?: string }).id ?? "";
+
+// Giltighetstiden KLÄMS, den avvisas inte - och taket ska gälla, annars
+// är en länk utan bortre gräns bara en siffra bort.
+const orimlig = await call("POST", `/v1/cases/${CASE_B}/share-links`, {
+  token: bertilToken,
+  body: { scope: "full", validDays: 99999 },
+});
+check("orimlig giltighetstid kläms i stället för att avvisas", orimlig.status === 201, orimlig.body);
+const utgang = new Date(String((orimlig.body as { expiresAt?: string }).expiresAt));
+const dagar = (utgang.getTime() - Date.now()) / 86_400_000;
+check("och taket är ett år", dagar > 364 && dagar < 366, dagar);
+
+const listade = await call("GET", `/v1/cases/${CASE_B}/share-links`, { token: bertilToken });
+check("länkarna listas för ärendet", (listade.body.shareLinks as unknown[]).length === 2, listade.body);
+
+/*
+ * DEN VIKTIGASTE KONTROLLEN I AVSNITTET: en annan användares ärende ska
+ * inte gå att dela. Radskyddet gör urvalet, och ett insert som inte
+ * träffar någon policy ger noll rader - vilket handlern ska översätta
+ * till ett nej, inte till en länk som pekar på ingenting.
+ */
+/*
+ * NY INLOGGNING FÖR AGNES. Avsnitt 7 loggade ut henne, och en återkallad
+ * session ger 401 - vilket hade sett ut som ett bevis på att radskyddet
+ * höll, fast det bara var en död token. Ett test som får rätt svar av fel
+ * skäl är värre än ett rött test.
+ */
+const agnesIgen = await call("POST", "/v1/auth/login", {
+  body: { email: "agnes@bolag-a.se", password: "hemligt-losen-agnes" },
+});
+const annanToken: string = agnesIgen.body.token;
+check("den utloggade kan logga in igen", agnesIgen.status === 200 && !!annanToken);
+
+const stulen = await call("POST", `/v1/cases/${CASE_B}/share-links`, {
+  token: annanToken,
+  body: { scope: "full", validDays: 30 },
+});
+check("en annan användare kan inte dela ärendet", stulen.status >= 400, stulen);
+const agnesSer = await call("GET", `/v1/cases/${CASE_B}/share-links`, { token: annanToken });
+check("och ser inte heller länkarna", (agnesSer.body.shareLinks as unknown[]).length === 0, agnesSer.body);
+
+// Läsningen är ANONYM - det är hela poängen med en delningslänk.
+const oppnad = await call("GET", `/v1/shared/${linkId}`);
+check("länken går att läsa utan inloggning", oppnad.status === 200, oppnad.body);
+check("och bär ärendets nuläge", oppnad.body.orgNumber === "556000-0002", oppnad.body);
+// Scope styr vad som följer med. "overview" ska inte bära dokumentlistan.
+check("overview bär inga dokument", oppnad.body.documents === null, oppnad.body.documents);
+
+// Varje öppning loggas. Utan det går det inte att svara på vem som läst.
+const efterLasning = await call("GET", `/v1/cases/${CASE_B}/share-links`, { token: bertilToken });
+const denLanken = (efterLasning.body.shareLinks as { id: string; accessCount: number }[])
+  .find((l) => l.id === linkId);
+check("öppningen räknades", denLanken?.accessCount === 1, denLanken);
+
+check("länken går att återkalla",
+  (await call("DELETE", `/v1/share-links/${linkId}`, { token: bertilToken })).status === 200);
+const efterAterkallelse = await call("GET", `/v1/shared/${linkId}`);
+check("en återkallad länk går inte att läsa", efterAterkallelse.status === 404, efterAterkallelse.body);
+// Ogiltig, utgången och återkallad ska se likadana ut för den som gissar.
+const paHitt = await call("GET", "/v1/shared/00000000-0000-0000-0000-0000000000ff");
+check("en påhittad token ger samma svar som en återkallad",
+  paHitt.status === 404 && paHitt.body.error.message === efterAterkallelse.body.error.message,
+  { paHitt: paHitt.body, aterkallad: efterAterkallelse.body });
+
+// Att trycka två gånger ska inte bli ett fel: den som återkallar igen har
+// redan fått det den ville ha.
+const igen = await call("DELETE", `/v1/share-links/${linkId}`, { token: bertilToken });
+check("dubbel återkallelse är inget fel", igen.status === 200 && igen.body.alreadyRevoked === true, igen.body);
+
+/* --- 8d. Avslut och återöppning -------------------------------------------- */
+
+const dåligtSkäl = await call("POST", `/v1/cases/${CASE_B}/close`, {
+  token: bertilToken,
+  body: { reason: "tröttnade" },
+});
+check("okänd exitorsak avvisas med besked",
+  dåligtSkäl.status === 400 && /reason/.test(dåligtSkäl.body.error.message), dåligtSkäl.body);
+
+check("ärendet går att avsluta med orsak",
+  (await call("POST", `/v1/cases/${CASE_B}/close`, {
+    token: bertilToken,
+    body: { reason: "stabilized", note: "Klarade sig.", enterHealth: true },
+  })).status === 200);
+
+const avslutat = await call("GET", `/v1/cases/${CASE_B}`, { token: bertilToken });
+check("avslutet syns på ärendet", avslutat.body.closedAt !== null, avslutat.body.closedAt);
+check("exitorsaken sparades", avslutat.body.exitReason === "stabilized", avslutat.body.exitReason);
+check("hälsoläget sattes", avslutat.body.healthMode === true, avslutat.body.healthMode);
+
+check("ärendet går att återöppna",
+  (await call("POST", `/v1/cases/${CASE_B}/reopen`, { token: bertilToken })).status === 200);
+const ateroppnat = await call("GET", `/v1/cases/${CASE_B}`, { token: bertilToken });
+check("och avslutet är borta", ateroppnat.body.closedAt === null, ateroppnat.body.closedAt);
+// Ingenting raderas - akten består. Journalen ska bära båda händelserna.
+const bJournal = await call("GET", `/v1/cases/${CASE_B}/journal`, { token: bertilToken });
+type JournalPost = { action: string; objectType: string; detail: string | null; caseId: string | null };
+const bPoster = bJournal.body.events as JournalPost[];
+/*
+ * Loggen skiljer INTE avslut från återöppning i sitt action-fält - båda
+ * är "update" på cases. Det är vad datamodellen faktiskt registrerar, och
+ * testet påstår därför inte något annat. Vad som prövas är att båda
+ * ändringarna lämnade spår: ingenting raderas, akten består.
+ */
+check("både avslutet och återöppningen lämnade spår i journalen",
+  bPoster.filter((e) => e.objectType === "cases" && e.action === "update").length >= 2,
+  bPoster.map((e) => `${e.objectType}:${e.action}`).slice(0, 12));
+
+/*
+ * OCH ATT POSTERNA ÄR HELA. `audit.listByCase` är en migrerad port som
+ * castar svaret rakt till AuditEventRecord. Servern returnerade sex av
+ * tio fält, så caseId, actorUserId och `detail` föll bort - och utan
+ * detail blir hela händelseloggen "update, update, insert" för den som
+ * kör mot eget API, medan samma logg via den gamla adaptern är läsbar.
+ * Ett fält som saknas i ett castat svar blir inte ett tomt fält, det blir
+ * ett löfte som inte hålls.
+ */
+check("journalposterna bär ärendet de gäller", bPoster.every((e) => e.caseId === CASE_B), bPoster[0]);
+check("och fältet detail finns på varje post",
+  bPoster.every((e) => Object.hasOwn(e, "detail")), bPoster[0]);
+check("bolagsnamnet står läsbart i posten om ärendet",
+  bPoster.some((e) => e.objectType === "cases" && /Bolag B AB/.test(e.detail ?? "")),
+  bPoster.filter((e) => e.objectType === "cases").map((e) => e.detail));
+
 /* --- 9. Hastighetsbegränsningen, mot den delade räknaren ------------------ */
 
 /*

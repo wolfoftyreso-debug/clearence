@@ -29,6 +29,7 @@ import {
 } from "./http";
 import { ALLMAN, klientNyckel, LOGIN, provaGrans, type Utfall } from "./rateLimit";
 import { googleConfigured, lookupCompany } from "./google";
+import { deriveAuditDetail } from "../../src/lib/auditDetail";
 import { withAnon, withUser } from "./db";
 import { hashPassword, issueToken, sessionTtlHours, sha256, verifyPassword } from "./auth";
 
@@ -161,12 +162,37 @@ const toDecision = (row: Record<string, unknown>) => ({
   watchAckAt: iso(row.watch_ack_at),
 });
 
+/**
+ * En journalpost, HELT.
+ *
+ * Den här returnerade sex av tio fält, och `audit.listByCase` är en
+ * MIGRERAD port som castar svaret rakt till AuditEventRecord. Följden var
+ * samma sort som toCase varnar för några rader upp: caseId, actorUserId
+ * och framför allt `detail` saknades - "vad händelsen gällde, läsbart".
+ *
+ * Utan detail blir hela händelseloggen "update, update, insert" för den
+ * som kör mot eget API, medan samma logg via den gamla adaptern säger
+ * "\"Ring revisorn\" bockades av". Det är inte ett saknat fält, det är en
+ * borttappad funktion - och den syns bara för den som jämför två
+ * adaptrar.
+ *
+ * Texten härleds med samma rena funktion som den gamla adaptern använder,
+ * så att de två inte kan glida isär.
+ */
 const toEvent = (row: Record<string, unknown>) => ({
-  id: String(row.id),
+  id: Number(row.id),
+  caseId: row.case_id ?? null,
+  actorUserId: row.actor_user_id ?? null,
+  actorRole: row.actor_role ?? null,
   action: row.action,
   objectType: row.object_type,
-  objectId: row.object_id,
-  actorRole: row.actor_role ?? null,
+  objectId: row.object_id ?? null,
+  detail: deriveAuditDetail(
+    String(row.object_type),
+    String(row.action),
+    (row.before ?? null) as Record<string, unknown> | null,
+    (row.after ?? null) as Record<string, unknown> | null,
+  ),
   occurredAt: iso(row.occurred_at),
 });
 
@@ -442,7 +468,8 @@ router.get("/v1/cases/:caseId/journal", async (req) => {
   const caller = await authenticate(req);
   const events = await withUser(caller.userId, async (tx) => {
     const { rows } = await tx.query(
-      `select id, action, object_type, object_id, occurred_at, actor_role
+      `select id, case_id, actor_user_id, actor_role, action, object_type, object_id,
+              before, after, occurred_at
          from public.audit_events where case_id = $1
         order by occurred_at desc limit 500`,
       [caseId],
@@ -737,6 +764,259 @@ const asHttpError = (error: unknown): ApiError => {
   if (err.code === "P0001") return new ApiError(409, "conflict", err.message ?? "Åtgärden gick inte att utföra.");
   return new ApiError(500, "internal_error", "Något gick fel. Försök igen.");
 };
+
+/* --- Profilen -------------------------------------------------------------- */
+
+/*
+ * Profilen är det första varje inloggad vy frågar efter: rollen avgör
+ * vilken startsida användaren möter. Den låg kvar hos den gamla adaptern
+ * och gjorde därmed att ingen inloggning kunde köras helt mot eget API.
+ */
+const toProfile = (row: Record<string, unknown>) => ({
+  userId: row.user_id,
+  role: row.role,
+  displayName: row.display_name ?? null,
+  phone: row.phone ?? null,
+});
+
+router.get("/v1/profile", async (req) => {
+  const caller = await authenticate(req);
+  const row = await withUser(caller.userId, async (tx) => {
+    // Ingen where-sats på användaren: radskyddet gör urvalet. Se
+    // resonemanget vid översiktens frågor.
+    const { rows } = await tx.query("select * from public.user_profiles limit 1");
+    return rows[0] ?? null;
+  });
+  // Ingen profil är ett giltigt läge - den skapas vid första inloggningen.
+  // 404 hade fått klienten att tro att något gått sönder.
+  return { status: 200, body: { profile: row ? toProfile(row) : null } };
+});
+
+router.post("/v1/profile", async (req) => {
+  const caller = await authenticate(req);
+  const role = str(req.body, "role", { max: 40 });
+  /*
+   * ROLLEN VÄLJS EN GÅNG. En företagare som vill bli rådgivare ska gå
+   * genom ansökan, inte genom att posta om sin profil - därför skapar den
+   * här rutten bara, och uppdateringen nedan rör aldrig role.
+   */
+  if (!["company", "advisor", "admin"].includes(role)) {
+    throw badRequest('Fältet "role" ska vara company, advisor eller admin.');
+  }
+  const displayName = str(req.body, "displayName", { max: 120, required: false });
+  const row = await withUser(caller.userId, async (tx) => {
+    const { rows } = await tx.query(
+      `insert into public.user_profiles (user_id, role, display_name)
+       values ($1, $2, $3)
+       on conflict (user_id) do nothing
+       returning *`,
+      [caller.userId, role, displayName || null],
+    );
+    if (rows[0]) return rows[0];
+    const { rows: befintlig } = await tx.query("select * from public.user_profiles limit 1");
+    return befintlig[0] ?? null;
+  });
+  if (!row) throw forbidden("Profilen kunde inte skapas.");
+  return { status: 201, body: toProfile(row) };
+});
+
+router.patch("/v1/profile", async (req) => {
+  const caller = await authenticate(req);
+  const displayName = str(req.body, "displayName", { max: 120, required: false });
+  const phone = str(req.body, "phone", { max: 40, required: false });
+  await withUser(caller.userId, async (tx) => {
+    await tx.query(
+      "update public.user_profiles set display_name = $1, phone = $2",
+      [displayName || null, phone || null],
+    );
+  });
+  return { status: 200, body: { updated: true } };
+});
+
+/* --- Ärendets livscykel ---------------------------------------------------- */
+
+const EXIT_REASONS = ["stabilized", "reconstruction_completed", "bankruptcy", "liquidated", "other"];
+
+router.post("/v1/cases/:caseId/close", async (req) => {
+  const caller = await authenticate(req);
+  const caseId = uuidParam(req, "caseId");
+  const reason = str(req.body, "reason", { max: 40 });
+  if (!EXIT_REASONS.includes(reason)) {
+    throw badRequest(`Fältet "reason" ska vara en av: ${EXIT_REASONS.join(", ")}.`);
+  }
+  const note = str(req.body, "note", { max: 2000, required: false });
+  const enterHealth = (req.body as Record<string, unknown> | undefined)?.enterHealth === true;
+  // Genom funktionen: den skriver händelseloggen och sätter hälsoläget i
+  // samma transaktion. Att göra delarna här hade gett ett avslut utan
+  // spår om något gick fel mitt i.
+  await withUser(caller.userId, async (tx) => {
+    await tx.query("select public.close_case($1, $2, $3, $4)", [
+      caseId,
+      reason,
+      note || null,
+      enterHealth,
+    ]);
+  });
+  return { status: 200, body: { closed: true } };
+});
+
+router.post("/v1/cases/:caseId/reopen", async (req) => {
+  const caller = await authenticate(req);
+  const caseId = uuidParam(req, "caseId");
+  await withUser(caller.userId, async (tx) => {
+    await tx.query("select public.reopen_case($1)", [caseId]);
+  });
+  return { status: 200, body: { reopened: true } };
+});
+
+router.post("/v1/cases/:caseId/plan-approval", async (req) => {
+  const caller = await authenticate(req);
+  const caseId = uuidParam(req, "caseId");
+  const approved = (req.body as Record<string, unknown> | undefined)?.approved;
+  if (typeof approved !== "boolean") {
+    throw badRequest('Fältet "approved" ska vara true eller false.');
+  }
+  // Att bara en rådgivarroll i ärendet får stämpla prövas i funktionen.
+  await withUser(caller.userId, async (tx) => {
+    await tx.query("select public.set_plan_approval($1, $2)", [caseId, approved]);
+  });
+  return { status: 200, body: { approved } };
+});
+
+/* --- Live ärendelänkar ----------------------------------------------------- */
+
+const toShareLink = (row: Record<string, unknown>) => ({
+  id: row.id,
+  caseId: row.case_id,
+  scope: row.scope === "full" ? "full" : "overview",
+  label: row.label ?? null,
+  createdAt: iso(row.created_at),
+  expiresAt: iso(row.expires_at),
+  revokedAt: iso(row.revoked_at),
+  accessCount: Number(row.access_count ?? 0),
+});
+
+router.get("/v1/cases/:caseId/share-links", async (req) => {
+  const caller = await authenticate(req);
+  const caseId = uuidParam(req, "caseId");
+  const rows = await withUser(caller.userId, async (tx) => {
+    // Öppningarna räknas i frågan i stället för i två anrop. Den gamla
+    // vägen hämtade länkarna, sedan alla åtkomstrader, och räknade i
+    // klienten - vilket blir fel så fort någon läser mellan de två.
+    const { rows } = await tx.query(
+      `select l.*, (select count(*) from public.share_link_access a where a.link_id = l.id) as access_count
+         from public.case_share_links l
+        where l.case_id = $1
+        order by l.created_at desc`,
+      [caseId],
+    );
+    return rows;
+  });
+  return { status: 200, body: { shareLinks: rows.map(toShareLink) } };
+});
+
+router.post("/v1/cases/:caseId/share-links", async (req) => {
+  const caller = await authenticate(req);
+  const caseId = uuidParam(req, "caseId");
+  const scope = str(req.body, "scope", { max: 20 });
+  if (!["overview", "full"].includes(scope)) {
+    throw badRequest('Fältet "scope" ska vara overview eller full.');
+  }
+  const label = str(req.body, "label", { max: 120, required: false });
+  const rawDays = (req.body as Record<string, unknown> | undefined)?.validDays;
+  if (typeof rawDays !== "number" || !Number.isFinite(rawDays)) {
+    throw badRequest('Fältet "validDays" ska vara ett tal.');
+  }
+  /*
+   * Giltighetstiden KLÄMS, den avvisas inte. En länk utan bortre gräns är
+   * en läcka som ingen minns, och samma klämning finns i den gamla
+   * adaptern - att de två räknade olika hade gett länkar med olika
+   * livslängd beroende på vilken väg in klienten råkade ta.
+   */
+  const days = Math.min(Math.max(Math.round(rawDays), 1), 365);
+  const row = await withUser(caller.userId, async (tx) => {
+    const { rows } = await tx.query(
+      `insert into public.case_share_links (case_id, scope, label, expires_at)
+       values ($1, $2, $3, now() + make_interval(days => $4))
+       returning *`,
+      [caseId, scope, label || null, days],
+    );
+    return rows[0] ?? null;
+  });
+  if (!row) throw forbidden("Länken kunde inte skapas i det här ärendet.");
+  return { status: 201, body: toShareLink({ ...row, access_count: 0 }) };
+});
+
+router.del("/v1/share-links/:linkId", async (req) => {
+  const caller = await authenticate(req);
+  const linkId = uuidParam(req, "linkId");
+  // Återkallas, raderas inte: en borttagen rad tar med sig åtkomstloggen,
+  // och då går det inte längre att svara på vem som läst vad.
+  const row = await withUser(caller.userId, async (tx) => {
+    const { rows } = await tx.query(
+      "update public.case_share_links set revoked_at = now() where id = $1 and revoked_at is null returning id",
+      [linkId],
+    );
+    return rows[0] ?? null;
+  });
+  // Redan återkallad ska inte bli ett fel: den som trycker två gånger har
+  // fått det den ville ha.
+  return { status: 200, body: { revoked: true, alreadyRevoked: !row } };
+});
+
+/**
+ * Live-länkens läsning. ANONYM, precis som kontraktet säger.
+ *
+ * Funktionen prövar token, giltighetstid och återkallelse, loggar
+ * öppningen och returnerar bara det som ryms i länkens scope. Ingen
+ * autentisering här är alltså inte en glömd kontroll - det är hela
+ * poängen med en delningslänk, och prövningen ligger där den inte går
+ * att kringgå.
+ */
+router.get("/v1/shared/:token", async (req) => {
+  const token = uuidParam(req, "token");
+  const payload = await withAnon(async (tx) => {
+    const { rows } = await tx.query("select public.fetch_shared_case($1) as data", [token]);
+    return (rows[0]?.data ?? null) as Record<string, unknown> | null;
+  });
+  // Ogiltig, utgången och återkallad ger SAMMA svar. Skillnaden hjälper
+  // bara den som gissar tokens.
+  if (!payload) throw notFound("Länken är ogiltig, har gått ut eller är återkallad.");
+  return {
+    status: 200,
+    body: {
+      scope: payload.scope,
+      expiresAt: iso(payload.expires_at),
+      companyName: payload.company_name ?? null,
+      orgNumber: payload.org_number,
+      recommendationType: payload.recommendation_type ?? null,
+      recommendationTitle: payload.recommendation_title ?? null,
+      totalDebt: payload.total_debt ?? null,
+      quickLiquidationValue: payload.quick_liquidation_value ?? null,
+      canPaySalary: payload.can_pay_salary ?? null,
+      canPayTax: payload.can_pay_tax ?? null,
+      canPayRent: payload.can_pay_rent ?? null,
+      canPaySuppliers: payload.can_pay_suppliers ?? null,
+      salaryAmount: payload.salary_amount ?? null,
+      salaryDay: payload.salary_day ?? null,
+      taxAmount: payload.tax_amount ?? null,
+      taxDay: payload.tax_day ?? null,
+      rentAmount: payload.rent_amount ?? null,
+      rentDay: payload.rent_day ?? null,
+      closedAt: iso(payload.closed_at),
+      healthMode: payload.health_mode === true,
+      updatedAt: iso(payload.updated_at),
+      documents: Array.isArray(payload.documents)
+        ? (payload.documents as Record<string, unknown>[]).map((d) => ({
+            fileName: d.file_name,
+            kind: d.kind,
+            reviewStatus: d.review_status,
+            createdAt: iso(d.created_at),
+          }))
+        : null,
+    },
+  };
+});
 
 export const handle = async (
   method: string,

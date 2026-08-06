@@ -186,11 +186,16 @@ for (const rutt of rutter) {
  * och en glömd.
  */
 const ANNU_INTE_I_EGNA_SERVERN = [
-  "/cases/{caseId}/close",
+  /*
+   * Rapporten är det som återstår, och den är inte en rutt som glömts
+   * bort: den renderar en PDF, vilket kräver dokumenthinken och den
+   * signering som inte finns förrän det finns en hink att signera mot.
+   * Samma skäl som documents.upload ligger kvar hos den gamla adaptern.
+   *
+   * Listan var fem rader lång. Delningen, avslutet och profilen är
+   * flyttade; den här raden är kvar.
+   */
   "/cases/{caseId}/report",
-  "/cases/{caseId}/share-links",
-  "/share-links/{linkId}",
-  "/shared/{token}",
 ];
 
 const oimplementerade = Object.keys(spec.paths)

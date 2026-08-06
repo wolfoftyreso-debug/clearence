@@ -70,6 +70,14 @@ export class Router {
 
   get = (p: string, h: Handler) => this.add("GET", p, h);
   post = (p: string, h: Handler) => this.add("POST", p, h);
+  /*
+   * PATCH och DELETE finns för att kontraktet redan lovar dem - t.ex.
+   * DELETE /share-links/{linkId}. Att i stället bygga en POST-variant
+   * hade betytt att servern och kontraktet sa olika saker om samma
+   * resurs, och det är precis den glidning tests/apiSpec.ts numera vaktar.
+   */
+  patch = (p: string, h: Handler) => this.add("PATCH", p, h);
+  del = (p: string, h: Handler) => this.add("DELETE", p, h);
 
   match(method: string, path: string): { handler: Handler; params: Record<string, string> } | null {
     const parts = path.split("/").filter(Boolean);

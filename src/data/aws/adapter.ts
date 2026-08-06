@@ -24,12 +24,16 @@ import type {
   CaseDecisionRecord,
   CaseMessage,
   CaseRecord,
+  CaseShareLinkRecord,
   CaseTask,
   DocumentRecord,
   PaymentRecord,
+  SharedCaseView,
+  UserProfile,
+  UserRole,
 } from "../types";
 import { supabaseAdapter } from "../supabase/adapter";
-import { apiFetch, clearToken, setToken } from "./client";
+import { ApiRequestError, apiFetch, clearToken, setToken } from "./client";
 
 /**
  * Portarna som verkligen går mot eget API. Listan är produktens
@@ -37,6 +41,16 @@ import { apiFetch, clearToken, setToken } from "./client";
  */
 export const MIGRATED_PORTS = [
   "cases.getLatest",
+  "cases.close",
+  "cases.reopen",
+  "cases.setPlanApproval",
+  "profile.getMine",
+  "profile.create",
+  "profile.update",
+  "shares.list",
+  "shares.create",
+  "shares.revoke",
+  "shares.fetch",
   "dialogue.listDecisions",
   "dialogue.recordDecision",
   "dialogue.reconsiderDecision",
@@ -83,6 +97,95 @@ const cases = {
   async getLatest(): Promise<CaseRecord | null> {
     const res = await apiFetch<{ cases: CaseRecord[] }>("/v1/cases");
     return res.cases[0] ?? null;
+  },
+  async close(input: Parameters<DataPort["cases"]["close"]>[0]): Promise<void> {
+    await apiFetch(`/v1/cases/${input.caseId}/close`, {
+      method: "POST",
+      body: {
+        reason: input.reason,
+        note: input.note ?? null,
+        enterHealth: input.enterHealth ?? false,
+      },
+    });
+  },
+  async reopen(caseId: string): Promise<void> {
+    await apiFetch(`/v1/cases/${caseId}/reopen`, { method: "POST" });
+  },
+  async setPlanApproval(caseId: string, approved: boolean): Promise<void> {
+    await apiFetch(`/v1/cases/${caseId}/plan-approval`, { method: "POST", body: { approved } });
+  },
+};
+
+/**
+ * Profilen.
+ *
+ * `getMine` svarar med null när profilen inte finns ännu, och det är ett
+ * giltigt läge - den skapas vid första inloggningen. API:t svarar därför
+ * 200 med profile: null i stället för 404; ett 404 hade fått klienten att
+ * tro att något gått sönder när ingenting gjort det.
+ */
+const profile = {
+  ...supabaseAdapter.profile,
+  async getMine(): Promise<UserProfile | null> {
+    const res = await apiFetch<{ profile: UserProfile | null }>("/v1/profile");
+    return res.profile;
+  },
+  async create(input: { role: UserRole; displayName: string | null }): Promise<UserProfile> {
+    return apiFetch<UserProfile>("/v1/profile", {
+      method: "POST",
+      body: { role: input.role, displayName: input.displayName },
+    });
+  },
+  async update(input: { displayName: string | null; phone: string | null }): Promise<void> {
+    await apiFetch("/v1/profile", {
+      method: "PATCH",
+      body: { displayName: input.displayName, phone: input.phone },
+    });
+  },
+};
+
+/**
+ * Live ärendelänkarna.
+ *
+ * `fetch` går ANONYMT: det är hela poängen med en delningslänk, och
+ * mottagaren har inget konto. Prövningen av token, giltighetstid och
+ * återkallelse ligger i databasfunktionen där den inte går att kringgå.
+ *
+ * Den svarar null i stället för att kasta när länken inte gäller, för att
+ * vyn ska kunna visa "länken gäller inte längre" i stället för ett fel -
+ * och för att ogiltig, utgången och återkallad ska se likadana ut för
+ * den som gissar.
+ */
+const shares = {
+  ...supabaseAdapter.shares,
+  async list(caseId: string): Promise<CaseShareLinkRecord[]> {
+    const res = await apiFetch<{ shareLinks: CaseShareLinkRecord[] }>(
+      `/v1/cases/${caseId}/share-links`,
+    );
+    return res.shareLinks;
+  },
+  async create(
+    input: Parameters<DataPort["shares"]["create"]>[0],
+  ): Promise<CaseShareLinkRecord> {
+    return apiFetch<CaseShareLinkRecord>(`/v1/cases/${input.caseId}/share-links`, {
+      method: "POST",
+      body: {
+        scope: input.scope,
+        label: input.label ?? null,
+        validDays: input.validDays,
+      },
+    });
+  },
+  async revoke(id: string): Promise<void> {
+    await apiFetch(`/v1/share-links/${id}`, { method: "DELETE" });
+  },
+  async fetch(token: string): Promise<SharedCaseView | null> {
+    try {
+      return await apiFetch<SharedCaseView>(`/v1/shared/${token}`, { anonymous: true });
+    } catch (error) {
+      if (error instanceof ApiRequestError && error.status === 404) return null;
+      throw error;
+    }
   },
 };
 
@@ -198,4 +301,6 @@ export const awsAdapter: DataPort = {
   messages: messages as DataPort["messages"],
   kbr: kbr as DataPort["kbr"],
   audit: audit as DataPort["audit"],
+  profile: profile as DataPort["profile"],
+  shares: shares as DataPort["shares"],
 };

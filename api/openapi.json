@@ -885,6 +885,236 @@
           }
         }
       }
+    },
+    "/profile": {
+      "get": {
+        "operationId": "getMyProfile",
+        "summary": "Den inloggades profil",
+        "description": "Svarar 200 med profile: null när profilen inte skapats ännu. Det är ett giltigt läge - profilen skapas vid första inloggningen - och ett 404 hade fått klienten att tro att något gått sönder.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Profilen, eller null",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "profile": {
+                      "oneOf": [
+                        {
+                          "$ref": "#/components/schemas/UserProfile"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "createMyProfile",
+        "summary": "Skapar profilen vid första inloggningen",
+        "description": "Rollen väljs EN gång. En företagare som vill bli rådgivare går genom ansökan, inte genom att posta om sin profil - därför sätter bara den här operationen role, och PATCH rör den aldrig. Anropet är idempotent: en profil som redan finns returneras oförändrad.",
+        "x-status": "beta",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "role"
+                ],
+                "properties": {
+                  "role": {
+                    "type": "string",
+                    "enum": [
+                      "company",
+                      "advisor",
+                      "admin"
+                    ]
+                  },
+                  "displayName": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Profilen",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserProfile"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "operationId": "updateMyProfile",
+        "summary": "Uppdaterar namn och telefon",
+        "description": "Rollen går inte att ändra här; se createMyProfile.",
+        "x-status": "beta",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "displayName": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "phone": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Uppdaterad"
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/cases/{caseId}/reopen": {
+      "post": {
+        "operationId": "reopenCase",
+        "summary": "Tillbaka till krisläget",
+        "description": "Från avslut eller hälsoläge. Ingenting raderades vid avslutet - akten består - så återöppningen återställer läget utan att återskapa något.",
+        "x-status": "beta",
+        "parameters": [
+          {
+            "name": "caseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Återöppnat"
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/cases/{caseId}/plan-approval": {
+      "post": {
+        "operationId": "setPlanApproval",
+        "summary": "Rådgivarens stämpel på handlingsplanen",
+        "description": "Endast en rådgivarroll i ärendet kan sätta eller återta den. Regeln prövas i databasfunktionen, aldrig i anroparen - ett API som gör sin egen bedömning vid sidan om blir en andra sanning som glider isär från den första.",
+        "x-status": "beta",
+        "parameters": [
+          {
+            "name": "caseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "approved"
+                ],
+                "properties": {
+                  "approved": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Stämpeln satt eller återtagen"
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "webhooks": {
@@ -1483,6 +1713,35 @@
                 }
               }
             }
+          }
+        }
+      },
+      "UserProfile": {
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "company",
+              "advisor",
+              "admin"
+            ]
+          },
+          "displayName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "phone": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         }
       }
