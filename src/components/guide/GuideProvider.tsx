@@ -266,6 +266,14 @@ export const GuideProvider = ({ children }: { children: ReactNode }) => {
   const totalRef = useRef(0);
   /** Namnet på det guidade flöde som körs, om något. */
   const flowRef = useRef<string | null>(null);
+  /**
+   * Stegen som panelen visar, härledda ur åtgärderna vid start.
+   *
+   * KLICKEN är stegen - inte guidens interna moment. Användaren räknar i
+   * "saker jag ska göra", och en räknare som säger "steg 3 av 12" för en
+   * rundtur med fyra stopp är en räknare som ljuger.
+   */
+  const [steps, setSteps] = useState<{ label: string }[]>([]);
 
   const run = useCallback(
     (actions: GuideAction[], flowLabel: string | null = null) => {
@@ -277,6 +285,12 @@ export const GuideProvider = ({ children }: { children: ReactNode }) => {
       running.current = true;
       ownRoute.current = pathname;
       flowRef.current = flowLabel;
+      setSteps(
+        actions
+          .filter((a): a is Extract<GuideAction, { kind: "vanta-pa-klick" }> =>
+            a.kind === "vanta-pa-klick")
+          .map((a) => ({ label: a.label })),
+      );
       setState({ ...idle, flowLabel });
       advance.current();
     },
@@ -352,6 +366,7 @@ export const GuideProvider = ({ children }: { children: ReactNode }) => {
         flowLabel={state.flowLabel}
         receipt={state.receipt}
         progress={state.progress}
+        steps={steps}
         onClose={stop}
         onSkip={() => {
           // Fastnar användaren på ett steg ska hen kunna gå vidare i

@@ -129,7 +129,9 @@ await page.click('[data-guide="flode-sa-hittar-du-tillbaka"]');
 await page.waitForTimeout(3000);
 check("flödet öppnade första vyn", page.url().includes("/dashboard"), page.url());
 const flowBox = await page.locator("[data-guide-callout]").first().innerText();
-check("guiden säger att den väntar", /jag väntar/i.test(flowBox), flowBox.slice(0, 200));
+// Uppmaningen ska namnge sitt föremål. "Klicka på det markerade"
+// hjälper inte den som inte hittar markeringen.
+check("guiden säger vad som ska klickas", /Klicka på .*för att gå vidare/is.test(flowBox), flowBox.slice(0, 300));
 check("och varför just den här ytan", /håller uppsikt/.test(flowBox), flowBox.slice(0, 200));
 check(
   "guiden klickar inte åt användaren",
@@ -139,13 +141,22 @@ check(
 // TYDLIGHETEN, punkt för punkt. Den första versionen lade rutan ovanpå
 // markeringen och sa "klicka på det markerade" - alltså en instruktion
 // som dolde sitt eget föremål.
-check("genomgången presenterar sig", /Genomgång: Så hittar du tillbaka/i.test(flowBox), flowBox.slice(0, 120));
+check("genomgången presenterar sig", /Genomgång · Så hittar du tillbaka/i.test(flowBox), flowBox.slice(0, 120));
 check("saken namnges, inte bara 'det markerade'", /Kontrolläge/.test(flowBox), flowBox.slice(0, 200));
 check("det går att hoppa över steget", /Hoppa över steget/.test(flowBox));
 check("och att avsluta genomgången", /Avsluta genomgången/.test(flowBox));
 // Räknaren ska räkna KLICK, inte guidens interna moment: fyra stopp är
 // fyra, inte tolv.
-check("räknaren räknar klicken", /\b1\/4\b/.test(flowBox), (flowBox.match(/\d+\/\d+/) ?? [""])[0]);
+// Räknaren skrivs som 01 / 04: nollutfyllt och med luft, så att den
+// läses som en mätare och inte som ett datum.
+check("räknaren räknar klicken", /\b01 \/ 04\b/.test(flowBox), (flowBox.match(/\d+ \/ \d+/) ?? [""])[0]);
+// Panelen visar HELA genomgången, inte bara var man står. Det är
+// skillnaden mellan att veta hur mycket som är kvar och att gissa.
+check("alla fyra stegen står i listan",
+  /Kontrolläge/.test(flowBox) && /Likviditet/.test(flowBox)
+  && /Dokument/.test(flowBox) && /Händelselogg/.test(flowBox), flowBox.slice(0, 200));
+// Tangenterna står utskrivna. En genväg ingen känner till är ingen genväg.
+check("tangenterna syns i foten", /\bS\b/.test(flowBox) && /Esc/.test(flowBox));
 
 // Rutan får ALDRIG överlappa ringen.
 const overlap = await page.evaluate(() => {
@@ -156,7 +167,10 @@ const overlap = await page.evaluate(() => {
     box.left < ring.right && box.right > ring.left && box.top < ring.bottom && box.bottom > ring.top;
   return hit ? `ring ${JSON.stringify(ring)} ruta ${JSON.stringify(box)}` : null;
 });
-check("rutan täcker inte det den pekar på", overlap === null, String(overlap));
+// Panelen är dockad och har egen kolumn - överlappet kan inte längre
+// uppstå av en felräknad position. Kontrollen står kvar ändå: regeln
+// gäller geometrin, inte implementationen som råkar uppfylla den.
+check("panelen täcker inte det den pekar på", overlap === null, String(overlap));
 
 // Och skärmen dimmas så att det inringade sticker ut - men klicket går
 // fortfarande igenom.
