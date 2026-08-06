@@ -2,7 +2,7 @@ import { useState } from "react";
 import { SectionLink } from "./HowItWorksLink";
 import { Button } from "@/components/ui/button";
 import { Menu, X } from "lucide-react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router";
 import { useAuth } from "@/hooks/useAuth";
 
 const Header = () => {

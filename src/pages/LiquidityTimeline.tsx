@@ -1,5 +1,5 @@
 import { useMemo, useState, type FormEvent } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router";
 import { buildKeyFigures, figureById, type FigureId } from "@/lib/liquidityKeyFigures";
 import { KeyFigureDetail } from "@/components/liquidity/KeyFigureDetail";
 import { GuidedArrival } from "@/components/GuidedArrival";

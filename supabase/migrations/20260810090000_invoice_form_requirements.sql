@@ -195,6 +195,12 @@ grant execute on function app.issue_customer_invoice to authenticated;
  * - som ett avbrutet jobb, inte som en dubblett. Rätt lösning är att
  * jobben anropar app.next_invoice_number() inne i sin loop, vilket kräver
  * att deras definitioner skrivs om. Det är inte gjort här.
+ *
+ * EFTERSKRIFT: det är gjort i 20260811090000_jobben_tar_samma_lopnummer.sql.
+ * Båda jobben hämtar numret inne i loopen, fönstret ovan finns inte längre,
+ * och triggern är kvar som sista skydd. Raderna ovan står oförändrade för
+ * att migrationen redan är körd - den här efterskriften är för den som
+ * läser filen, inte för databasen.
  */
 create or replace function app.lock_invoice_series()
 returns trigger

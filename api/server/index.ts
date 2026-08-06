@@ -27,7 +27,7 @@ import {
   unauthorized,
   type ApiRequest,
 } from "./http";
-import { ALLMAN, klientNyckel, LOGIN, provaGrans } from "./rateLimit";
+import { ALLMAN, klientNyckel, LOGIN, provaGrans, type Utfall } from "./rateLimit";
 import { withAnon, withUser } from "./db";
 import { hashPassword, issueToken, sessionTtlHours, sha256, verifyPassword } from "./auth";
 
@@ -742,10 +742,35 @@ export const createApiServer = () =>
        */
       const inloggning = url.pathname === "/v1/auth/login";
       const nyckel = klientNyckel(req.headers, req.socket.remoteAddress ?? "okand");
-      const grans = provaGrans(
-        `${inloggning ? "login" : "allman"}:${nyckel}`,
-        inloggning ? LOGIN : ALLMAN,
-      );
+      let grans: Utfall;
+      try {
+        grans = await provaGrans(
+          `${inloggning ? "login" : "allman"}:${nyckel}`,
+          inloggning ? LOGIN : ALLMAN,
+        );
+      } catch (error) {
+        /*
+         * VI STÄNGER VID FEL.
+         *
+         * Räkningen ligger i databasen sedan 20260811100000. Går den inte
+         * att göra vet vi inte om anropet ryms - och att släppa igenom det
+         * ändå gör en databasstörning till ett öppet fönster för
+         * forcering av inloggningen.
+         *
+         * Att stänga kostar ingenting utöver det som ändå är förlorat:
+         * API:et kan inte svara på någonting utan databasen. 503 och inte
+         * 500, eftersom det är ett läge som går över.
+         */
+        console.error("hastighetsgränsen kunde inte prövas", error);
+        res.setHeader("retry-after", "5");
+        sendJson(res, 503, {
+          error: {
+            code: "tjansten_ar_upptagen",
+            message: "Tjänsten kan inte ta emot anropet just nu. Försök igen om en stund.",
+          },
+        });
+        return;
+      }
       if (!grans.tillaten) {
         res.setHeader("retry-after", String(grans.retryAfter));
         sendJson(res, 429, {

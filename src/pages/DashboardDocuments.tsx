@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+import { Link } from "react-router";
 import { GuidedArrival } from "@/components/GuidedArrival";
 import { DashboardShell } from "@/components/dashboard/DashboardShell";
 import { CaseDocuments } from "@/components/documents/CaseDocuments";

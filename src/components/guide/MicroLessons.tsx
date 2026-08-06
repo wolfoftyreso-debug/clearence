@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation } from "react-router";
 import { useGuide } from "@/components/guide/GuideProvider";
 import { dueLesson, rememberReminded, rememberShown } from "@/lib/guide/microLessons";
 

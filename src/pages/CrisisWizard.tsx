@@ -9,7 +9,7 @@ import {
   Loader2,
   Info,
 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router";
 import { WizardCard, WizardCardHeader } from "@/components/wizard/WizardCard";
 import { YesNoButtons } from "@/components/wizard/YesNoButtons";
 import { AmountInput } from "@/components/wizard/AmountInput";

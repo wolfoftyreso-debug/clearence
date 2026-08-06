@@ -21,7 +21,7 @@ import {
 import { AlertChannelSection, AlertHistorySection } from "@/components/settings/AlertChannels";
 import type { CustomerInvoiceRecord } from "@/data/types";
 import { LockedFeature, useEntitlements } from "@/components/billing/LockedFeature";
-import { Link } from "react-router-dom";
+import { Link } from "react-router";
 import { CheckCircle2, Copy, Download, KeyRound, Loader2, Receipt } from "lucide-react";
 
 /**

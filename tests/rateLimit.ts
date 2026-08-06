@@ -1,27 +1,22 @@
 /**
- * HASTIGHETSBEGRÄNSNINGEN.
+ * HASTIGHETSBEGRÄNSNINGEN: den del som inte kräver en databas.
  *
- * Utan den kan vem som helst pröva lösenord mot inloggningen så fort
- * nätet orkar, och ett forcerat konto är hela ärendet - ett bolag i
- * rekonstruktion har sin samlade dokumentation där.
+ * SJÄLVA RÄKNINGEN PRÖVAS INTE HÄR LÄNGRE, och det är en följd av att den
+ * flyttat. Den bodde i minnet i den här processen, och gick därför att
+ * prova med en påhittad klocka. Nu räknas anropet av app.rate_limit_hit()
+ * i databasen - delat mellan alla uppgifter, vilket var hela poängen - och
+ * ett test av en attrapp hade prövat attrappen.
  *
- * Fyra saker prövas, och den tredje är den som är lätt att missa:
+ *     Taket, fönstret, retry-after och att två klienter räknas var för sig:
+ *     api/tests/integration.ts, avsnitt 9, mot en riktig Postgres.
  *
- *  1. Att taket faktiskt håller.
- *  2. Att fönstret öppnar igen när tiden gått.
- *  3. Att två klienter räknas var för sig. En delad räknare betyder att
- *     första angriparen stänger ute alla riktiga användare - en
- *     överbelastning byggd av oss själva.
- *  4. Att inloggningen har ett hårdare tak än övrigt.
+ * Kvar här är det som är den här processens eget: konstanterna, och
+ * uppslaget av vem anropet kommer ifrån. Det senare är trivialt att läsa
+ * och lätt att få fel - en tom rubrik som blir en tom nyckel gör hela
+ * världen till en enda klient.
  */
 
-import {
-  ALLMAN,
-  klientNyckel,
-  LOGIN,
-  nollstallGranser,
-  provaGrans,
-} from "../api/server/rateLimit";
+import { ALLMAN, klientNyckel, LOGIN } from "../api/server/rateLimit";
 
 let passed = 0;
 let failed = 0;
@@ -33,39 +28,18 @@ const check = (name: string, ok: boolean, extra = "") => {
   }
 };
 
-const NU = 1_800_000_000_000;
-
-/* --- Taket håller --------------------------------------------------------- */
-
-nollstallGranser();
-let sista = { tillaten: true, retryAfter: 0 };
-for (let i = 0; i < LOGIN.tak; i++) {
-  sista = provaGrans("login:1.2.3.4", LOGIN, NU);
-}
-check("alla försök inom taket släpps igenom", sista.tillaten);
-const over = provaGrans("login:1.2.3.4", LOGIN, NU);
-check("försöket över taket avvisas", !over.tillaten);
-// Ett avslag utan besked om när man får försöka igen får klienten att
-// försöka direkt - och göra saken värre.
-check("avslaget säger när man får försöka igen", over.retryAfter > 0, String(over.retryAfter));
-check("och det ligger inom fönstret", over.retryAfter <= LOGIN.fonsterSek, String(over.retryAfter));
-
-/* --- Fönstret öppnar igen -------------------------------------------------- */
-
-const efter = provaGrans("login:1.2.3.4", LOGIN, NU + LOGIN.fonsterSek * 1000 + 1);
-check("fönstret öppnar när tiden gått", efter.tillaten);
-
-/* --- Klienter räknas var för sig ------------------------------------------- */
-
-nollstallGranser();
-for (let i = 0; i < LOGIN.tak + 5; i++) provaGrans("login:9.9.9.9", LOGIN, NU);
-const annan = provaGrans("login:8.8.8.8", LOGIN, NU);
-check("en spärrad klient stänger inte ute en annan", annan.tillaten);
-
 /* --- Inloggningen är hårdare satt ------------------------------------------ */
 
+/*
+ * Inloggningen är den enda ytan där ett gissat värde ger åtkomst. Blir de
+ * två gränserna någon gång lika hårda är det för att någon höjt
+ * inloggningens tak utan att tänka på vad ytan är.
+ */
 check("inloggningen har lägre tak än övrigt", LOGIN.tak < ALLMAN.tak);
 check("inloggningens fönster är längre", LOGIN.fonsterSek > ALLMAN.fonsterSek);
+// Ett tak på noll spärrar alla; ett tak på tusen spärrar ingen.
+check("inloggningens tak är satt i en rimlig storleksordning", LOGIN.tak >= 3 && LOGIN.tak <= 30, String(LOGIN.tak));
+check("och fönstret mäts i minuter, inte sekunder", LOGIN.fonsterSek >= 60, String(LOGIN.fonsterSek));
 
 /* --- Vem anropet kommer ifrån ---------------------------------------------- */
 
@@ -85,6 +59,17 @@ check(
 check(
   "en tom rubrik faller tillbaka i stället för att ge tom nyckel",
   klientNyckel({ "x-forwarded-for": "" }, "198.51.100.4") === "198.51.100.4",
+);
+// Rubriken kan komma som en lista när flera mellanled satt sin egen.
+check(
+  "en upprepad rubrik läses från den första raden",
+  klientNyckel({ "x-forwarded-for": ["198.51.100.9, 10.0.0.1", "10.0.0.2"] }, "10.0.0.1") ===
+    "198.51.100.9",
+);
+// Mellanslag runt adressen är vanligt och får inte bli en egen nyckel.
+check(
+  "blanktecken trimmas bort",
+  klientNyckel({ "x-forwarded-for": "  203.0.113.9 , 10.0.0.1" }, "10.0.0.1") === "203.0.113.9",
 );
 
 console.log(`\n${passed} passed, ${failed} failed`);

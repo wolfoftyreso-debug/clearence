@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router";
 import { Button } from "@/components/ui/button";
 import { WizardCard } from "@/components/wizard/WizardCard";
 import { AmountInput } from "@/components/wizard/AmountInput";

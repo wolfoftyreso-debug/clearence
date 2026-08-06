@@ -38,5 +38,8 @@ $PSQL -d "$DB" -f supabase/tests/referralInvoicing.sql 2>&1 \
 $PSQL -d "$DB" -f supabase/tests/usageInvoicing.sql 2>&1 \
   | grep -E "^(NOTICE|ERROR|psql:)|ALL USAGE" | sed 's/^NOTICE:  //'
 
+$PSQL -d "$DB" -f supabase/tests/invoiceNumbering.sql 2>&1 \
+  | grep -E "^(NOTICE|ERROR|psql:)|ALL INVOICE NUMBERING" | sed 's/^NOTICE:  //'
+
 $PSQL -d "$DB" -f supabase/tests/notifications.sql 2>&1 \
   | grep -E "^(NOTICE|ERROR|psql:)|ALL NOTIFICATION" | sed 's/^NOTICE:  //'

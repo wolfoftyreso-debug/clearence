@@ -7,7 +7,7 @@ import { countdownTo, type Countdown } from "@/lib/actionPlan";
 import type { CaseRecord } from "@/data/types";
 import type { TimelineEvent } from "@/lib/crisisAnalysis";
 import { matchProfessionals, playbookForTask, type TaskContext } from "@/lib/taskIntelligence";
-import { Link } from "react-router-dom";
+import { Link } from "react-router";
 import { ArrowRight, CalendarClock, Check, CheckCircle2, ChevronDown, ListTodo, Loader2, Plus, ListChecks } from "lucide-react";
 import { destinationFor } from "@/lib/guidedArrival";
 

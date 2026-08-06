@@ -300,3 +300,18 @@ instans — den skriver inte över den trasiga, så du hinner jämföra.
 
 **Loggarna** finns i CloudWatch under `/clearance/`. Larmen går till
 `alert_email`.
+
+**Om API:t svarar 503 på allt** — leta efter `hastighetsgränsen kunde inte
+prövas` i loggen innan du misstänker något annat. Varje anrop räknas mot
+`app.rate_limit_hit()` i databasen, och API:t **stänger** när räkningen
+inte går att göra: att i stället släppa igenom anropen hade gjort en
+databasstörning till ett öppet fönster för lösenordsforcering. Två orsaker,
+i den ordning de är sannolika:
+
+1. Migrationerna har inte körts mot den här databasen (funktionen kommer
+   ur `20260811100000_hastighetsgrans_i_databasen.sql`). `scripts/startkontroll.sh`
+   fångar det som ett STOPP före driftsättning.
+2. Databasen är faktiskt nere — och då är 503 rätt svar ändå.
+
+Gränsen är delad mellan alla uppgifter. Skalar du upp tjänsten ändras
+alltså inte taket, vilket var hela poängen med att flytta räkningen hit.

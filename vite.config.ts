@@ -23,7 +23,7 @@ export default defineConfig(({ mode }) => ({
         // (recharts) splittras redan via ChartSlots lazy-import.
         manualChunks: (id) => {
           if (!id.includes("node_modules")) return undefined;
-          if (/node_modules\/(react|react-dom|react-router|react-router-dom|scheduler)\//.test(id)) {
+          if (/node_modules\/(react|react-dom|react-router|scheduler)\//.test(id)) {
             return "vendor-react";
           }
           if (id.includes("node_modules/@supabase/")) return "vendor-supabase";

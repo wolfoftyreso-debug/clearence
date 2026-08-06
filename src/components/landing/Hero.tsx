@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router";
 import { useAuth } from "@/hooks/useAuth";
 import { ClaraIntro } from "@/components/advisor/ClaraIntro";
 import { hasResume } from "@/lib/advisor/onboardingResume";

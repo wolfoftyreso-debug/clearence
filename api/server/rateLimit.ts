@@ -5,47 +5,32 @@
  * nätet orkar. Ett bolag i rekonstruktion har sin samlade ekonomiska
  * dokumentation här, och ett konto som forceras är hela ärendet.
  *
- * VAD DEN HÄR ÄR, OCH VAD DEN INTE ÄR
+ * RÄKNINGEN BOR I DATABASEN, INTE I MINNET.
  *
- * Räknaren bor I MINNET, per container. Kör tjänsten på tre uppgifter
- * blir den effektiva gränsen tre gånger den angivna. Det är en verklig
- * begränsning och den ska stå utskriven här i stället för att upptäckas
- * av någon som trodde att taket var absolut.
+ * Den bodde i minnet, per container, och den här filen skrev ut vad det
+ * innebar: "Kör tjänsten på tre uppgifter blir den effektiva gränsen tre
+ * gånger den angivna." Det gjorde taket till en funktion av hur många
+ * containrar driften råkade köra - tio försök blev trettio vid tre
+ * uppgifter, sextio vid sex, utan att någon ändrat en siffra.
  *
- * Den duger ändå, av två skäl: den stoppar den enkla forceringen från en
- * enskild källa, som är det överlägset vanligaste, och den kostar
- * ingenting att ha. Ett verkligt tak över alla containrar kräver delad
- * lagring - databasen har redan mönstret ("fem koder per timme och
- * nummer" i notifications), och det är dit det här ska flytta när
- * inloggningen får riktig trafik.
+ * Nu räknas anropet av app.rate_limit_hit() (migration 20260811100000):
+ * en enda INSERT ... ON CONFLICT DO UPDATE, serialiserad på radlåset, delad
+ * mellan alla uppgifter. Taket är taket.
+ *
+ * DET KOSTAR EN DATABASFRÅGA PER ANROP. Det är avsiktligt. Frågan är ett
+ * indexuppslag och en uppdatering på en rad; API:et kan ändå inte svara på
+ * något utan databasen, så beroendet är inte nytt - bara tidigarelagt.
+ *
+ * VID FEL STÄNGER VI. Går räkningen inte att göra vet vi inte om anropet
+ * ryms, och att då släppa igenom det gör en databasstörning till ett öppet
+ * fönster för forcering. Anroparen får 503; se createApiServer.
  *
  * SVARET ÄR 429 MED Retry-After. En klient som får veta när den får
  * försöka igen kan vänta; en som bara blir avvisad försöker direkt igen
  * och gör saken värre.
  */
 
-interface Fonster {
-  antal: number;
-  /** Millisekunder sedan epok när fönstret nollställs. */
-  nollstalls: number;
-}
-
-const rakning = new Map<string, Fonster>();
-
-/**
- * Städning av utgångna rader.
- *
- * Utan den växer kartan med varje ny IP tills processen dör - en
- * minnesläcka som ser ut som en långsam container. Städningen sker vid
- * anrop och inte på en timer: en timer håller processen vid liv och gör
- * en ren avstängning svårare.
- */
-const stada = (nu: number): void => {
-  if (rakning.size < 5000) return;
-  for (const [nyckel, f] of rakning) {
-    if (f.nollstalls <= nu) rakning.delete(nyckel);
-  }
-};
+import { withAnon, type Tx } from "./db";
 
 export interface Gransvarde {
   /** Antal tillåtna anrop per fönster. */
@@ -70,22 +55,31 @@ export interface Utfall {
   retryAfter: number;
 }
 
-export const provaGrans = (
+/**
+ * Räknar anropet och svarar om det ryms.
+ *
+ * `tx` finns för sviterna, som kör flera anrop i följd och vill se
+ * räkningen utan att gå genom poolen varje gång. I drift utelämnas den och
+ * varje prövning får sin egen transaktion - det är hela poängen: räkningen
+ * ska stå kvar även när det anrop den gällde rullas tillbaka.
+ */
+export const provaGrans = async (
   nyckel: string,
   grans: Gransvarde,
-  nu: number = Date.now(),
-): Utfall => {
-  stada(nu);
-  const f = rakning.get(nyckel);
-  if (!f || f.nollstalls <= nu) {
-    rakning.set(nyckel, { antal: 1, nollstalls: nu + grans.fonsterSek * 1000 });
-    return { tillaten: true, retryAfter: 0 };
-  }
-  f.antal += 1;
-  if (f.antal > grans.tak) {
-    return { tillaten: false, retryAfter: Math.ceil((f.nollstalls - nu) / 1000) };
-  }
-  return { tillaten: true, retryAfter: 0 };
+  tx?: Tx,
+): Promise<Utfall> => {
+  const fraga = async (t: Tx): Promise<Utfall> => {
+    const { rows } = await t.query(
+      "select tillaten, retry_after from app.rate_limit_hit($1, $2, $3)",
+      [nyckel, grans.tak, grans.fonsterSek],
+    );
+    const rad = rows[0];
+    // Ett svar utan rad är inte "tillåtet" - det är ett fel som ska
+    // behandlas som ett fel.
+    if (!rad) throw new Error("hastighetsgränsen svarade inte");
+    return { tillaten: rad.tillaten === true, retryAfter: Number(rad.retry_after) || 0 };
+  };
+  return tx ? fraga(tx) : withAnon(fraga);
 };
 
 /**
@@ -110,5 +104,16 @@ export const klientNyckel = (
   return forsta && forsta.length > 0 ? forsta : fallback;
 };
 
-/** Nollställer räkningen. Endast för tester. */
-export const nollstallGranser = (): void => rakning.clear();
+/**
+ * Nollställer räkningen. Endast för tester.
+ *
+ * Raderar allt UTOM bokföringsraden: den styr bara hur ofta städningen
+ * körs, och att nollställa den hade fått nästa prövning att städa i
+ * onödan mitt i en svit.
+ */
+export const nollstallGranser = async (tx?: Tx): Promise<void> => {
+  const rensa = async (t: Tx) => {
+    await t.query("delete from app.rate_limits where nyckel <> '__stadning__'");
+  };
+  return tx ? rensa(tx) : withAnon(rensa);
+};

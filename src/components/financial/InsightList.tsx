@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+import { Link } from "react-router";
 import type { Insight, InsightSeverity } from "@/lib/financial/insights";
 import { AlertCircle, AlertTriangle, ArrowRight, Info } from "lucide-react";
 

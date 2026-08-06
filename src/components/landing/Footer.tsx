@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+import { Link } from "react-router";
 import { ExternalLink, MapPin, MessageSquare } from "lucide-react";
 import { COMPANY, formatAddress, legalIdentityIsComplete } from "@/lib/company";
 

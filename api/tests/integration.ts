@@ -20,9 +20,10 @@
  * Körs av api/tests/run.sh, som reser databasen först.
  */
 
-import { handle } from "../server/index";
+import { createApiServer, handle } from "../server/index";
 import { closePool, withAnon, withUser } from "../server/db";
 import { hashPassword, verifyPassword } from "../server/auth";
+import { nollstallGranser, provaGrans } from "../server/rateLimit";
 
 let passed = 0;
 let failed = 0;
@@ -493,6 +494,115 @@ check("fel lösenord underkänns", !(await verifyPassword("fel-losenord", hash))
 check("två hashningar av samma lösenord skiljer sig (salt)", hash !== (await hashPassword("ett-losenord")));
 check("skräp i hashfältet underkänns tyst", !(await verifyPassword("ett-losenord", "inte-en-hash")));
 
+/* --- 9. Hastighetsbegränsningen, mot den delade räknaren ------------------ */
+
+/*
+ * Räkningen låg i minnet per container fram till 20260811100000, och
+ * prövades då med en påhittad klocka i tests/rateLimit.ts. Den ligger nu i
+ * databasen, delad mellan alla uppgifter, och därför prövas den här - mot
+ * en riktig Postgres, genom samma funktion API:et anropar.
+ *
+ * Fyra saker, och den tredje är den lätta att missa: två klienter måste
+ * räknas var för sig, annars stänger första angriparen ute alla riktiga
+ * användare. En överbelastning byggd av oss själva.
+ */
+
+await nollstallGranser();
+
+const SMAL = { tak: 3, fonsterSek: 60 };
+const utfall = [];
+for (let i = 0; i < SMAL.tak + 1; i++) {
+  utfall.push(await provaGrans("test:198.51.100.1", SMAL));
+}
+check("alla anrop inom taket släpps igenom", utfall.slice(0, SMAL.tak).every((u) => u.tillaten), utfall);
+check("anropet över taket avvisas", utfall[SMAL.tak].tillaten === false, utfall[SMAL.tak]);
+// Ett avslag utan besked om när man får försöka igen får klienten att
+// försöka direkt - och göra saken värre.
+check("avslaget säger när man får försöka igen", utfall[SMAL.tak].retryAfter > 0, utfall[SMAL.tak]);
+check(
+  "och det ligger inom fönstret",
+  utfall[SMAL.tak].retryAfter <= SMAL.fonsterSek,
+  utfall[SMAL.tak],
+);
+
+const annanKlient = await provaGrans("test:198.51.100.2", SMAL);
+check("en spärrad klient stänger inte ute en annan", annanKlient.tillaten, annanKlient);
+
+/*
+ * Fönstret öppnar igen. Klockan går inte att ställa fram i en databas som
+ * inte är vår att stanna, så testet ställer i stället tillbaka radens
+ * nollställningstid - vilket är samma sak sett från funktionen.
+ */
+await withAnon(async (tx) => {
+  await tx.query(
+    "update app.rate_limits set nollstalls = clock_timestamp() - interval '1 second' where nyckel = $1",
+    ["test:198.51.100.1"],
+  );
+});
+const efterFonstret = await provaGrans("test:198.51.100.1", SMAL);
+check("fönstret öppnar när tiden gått", efterFonstret.tillaten, efterFonstret);
+
+/*
+ * DET SOM VAR HELA POÄNGEN MED FLYTTEN: räkningen ska vara delad, inte
+ * per process. Två separata anslutningar ur poolen är det närmaste den här
+ * sviten kommer två containrar - de delar databas men inte processminne,
+ * precis som två uppgifter i drift gör.
+ */
+await nollstallGranser();
+const delad = await Promise.all(
+  Array.from({ length: SMAL.tak + 2 }, () => provaGrans("test:198.51.100.3", SMAL)),
+);
+check(
+  "taket håller även när anropen kommer parallellt över flera anslutningar",
+  delad.filter((u) => u.tillaten).length === SMAL.tak,
+  delad,
+);
+
+// Bokföringsraden är inte en klient och får aldrig räknas som en.
+let reserveradAvvisad = false;
+try {
+  await provaGrans("__stadning__", SMAL);
+} catch {
+  reserveradAvvisad = true;
+}
+check("städningens egen rad går inte att räkna upp utifrån", reserveradAvvisad);
+
+await nollstallGranser();
+
+/* --- 10. Vad som händer när räkningen inte går att göra ------------------- */
+
+/*
+ * "Vid fel stänger vi" stod som en avsikt i två kommentarer. Det här är
+ * enda stället i sviten där den faktiska servern reses - handle() anropas
+ * direkt av alla andra avsnitt och går därmed förbi begränsningen helt.
+ *
+ * Databasen pekas om till en port där ingenting lyssnar. Släpper API:et
+ * igenom anropet ändå är en databasstörning ett öppet fönster för
+ * forcering av inloggningen, och det är den sortens fel som upptäcks efteråt.
+ *
+ * Sist i filen med flit: efter det här är poolen riktad mot ingenting.
+ */
+const riktigUrl = process.env.DATABASE_URL;
 await closePool();
+process.env.DATABASE_URL = "postgres://ingen@127.0.0.1:1/finns-inte";
+
+const server = createApiServer();
+await new Promise<void>((klar) => server.listen(0, "127.0.0.1", klar));
+const port = (server.address() as { port: number }).port;
+const stangt = await fetch(`http://127.0.0.1:${port}/v1/health`);
+check("utan räkning svarar API:et 503 i stället för att släppa igenom", stangt.status === 503, stangt.status);
+check("och säger när man får försöka igen", stangt.headers.get("retry-after") !== null);
+const stangtSvar = (await stangt.json()) as { error?: { code?: string; message?: string } };
+check(
+  "beskedet är begripligt och avslöjar ingenting",
+  /Försök igen/i.test(stangtSvar.error?.message ?? "") &&
+    !/postgres|ECONNREFUSED|127\.0\.0\.1/i.test(JSON.stringify(stangtSvar)),
+  stangtSvar,
+);
+server.close();
+
+process.env.DATABASE_URL = riktigUrl;
+await closePool();
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

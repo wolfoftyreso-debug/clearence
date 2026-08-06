@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "react-router-dom";
+import { Link } from "react-router";
 import { data } from "@/data";
 import {
   DEFAULT_COMPANY_PLAN,

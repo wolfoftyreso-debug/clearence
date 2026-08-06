@@ -61,6 +61,18 @@ if grep -q "\"$HK\"" api/server/index.ts; then
 else
   stopp "ALB kontrollerar $HK men API:t har ingen sådan rutt"
 fi
+# Hastighetsbegränsningen räknas i databasen sedan 20260811100000, och
+# API:t STÄNGER när räkningen inte går att göra. Det är rätt beteende vid en
+# störning - men saknas funktionen svarar tjänsten 503 på allt, från första
+# sekunden, och felet ser då ut som en trasig databas i stället för en
+# migration som inte följt med.
+if grep -q "app.rate_limit_hit" api/server/rateLimit.ts; then
+  if grep -rq "function app.rate_limit_hit" supabase/migrations/; then
+    ok "hastighetsgränsens funktion finns i migrationerna"
+  else
+    stopp "API:t räknar mot app.rate_limit_hit men ingen migration skapar den"
+  fi
+fi
 [ -f api/Dockerfile ] && ok "api/Dockerfile finns" || stopp "api/Dockerfile saknas"
 [ -f db/Dockerfile ] && ok "db/Dockerfile finns" || stopp "db/Dockerfile saknas"
 [ -f infra/terraform.tfvars ] && ok "terraform.tfvars finns" || varning "terraform.tfvars saknas (kopiera .example)"

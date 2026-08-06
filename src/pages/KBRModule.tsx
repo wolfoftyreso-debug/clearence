@@ -15,7 +15,7 @@ import {
   Loader2,
   Save
 } from "lucide-react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router";
 import { WizardCard, WizardCardHeader } from "@/components/wizard/WizardCard";
 import { AmountInput } from "@/components/wizard/AmountInput";
 import { ReportButton } from "@/components/reports/ReportButton";

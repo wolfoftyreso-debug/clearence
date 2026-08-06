@@ -1,4 +1,4 @@
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams } from "react-router";
 import Header from "@/components/landing/Header";
 import Footer from "@/components/landing/Footer";
 import {
