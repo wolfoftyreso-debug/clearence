@@ -27,6 +27,7 @@ import {
   unauthorized,
   type ApiRequest,
 } from "./http";
+import { ALLMAN, klientNyckel, LOGIN, provaGrans } from "./rateLimit";
 import { withAnon, withUser } from "./db";
 import { hashPassword, issueToken, sessionTtlHours, sha256, verifyPassword } from "./auth";
 
@@ -728,6 +729,34 @@ export const createApiServer = () =>
   createServer((req, res) => {
     void (async () => {
       const url = new URL(req.url ?? "/", "http://localhost");
+
+      /*
+       * Hastighetsbegränsningen ligger FÖRE kroppsläsningen.
+       *
+       * Ordningen är inte likgiltig: läser vi kroppen först har vi redan
+       * lagt tid och minne på ett anrop vi tänker avvisa, och en
+       * forcering blir billigare för angriparen än för oss.
+       *
+       * Inloggningen har eget, hårdare tak - den är den enda ytan där
+       * ett gissat värde ger åtkomst.
+       */
+      const inloggning = url.pathname === "/v1/auth/login";
+      const nyckel = klientNyckel(req.headers, req.socket.remoteAddress ?? "okand");
+      const grans = provaGrans(
+        `${inloggning ? "login" : "allman"}:${nyckel}`,
+        inloggning ? LOGIN : ALLMAN,
+      );
+      if (!grans.tillaten) {
+        res.setHeader("retry-after", String(grans.retryAfter));
+        sendJson(res, 429, {
+          error: {
+            code: "for_manga_forsok",
+            message: `För många försök. Försök igen om ${grans.retryAfter} sekunder.`,
+          },
+        });
+        return;
+      }
+
       let body: unknown;
       try {
         body = await readBody(req);
