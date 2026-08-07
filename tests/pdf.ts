@@ -17,8 +17,9 @@ import { COMPANY } from "../src/lib/company";
 import { buildTimeBasisReport } from "../src/lib/reports/timeBasis";
 import { analyseCrisis } from "../src/lib/crisisAnalysis";
 import { projectLiquidity } from "../src/lib/liquidityPlan";
-import { COMPANY } from "../src/lib/company";
 import type { ReportModel } from "../src/lib/reports/types";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 let passed = 0;
 let failed = 0;
@@ -334,6 +335,40 @@ validatePdf("tidsunderlag", renderReportPdf(timeBasis), ["Fakturaunderlag"]);
     utan.ok === false && utan.blockedBy.includes("köparens adress"),
   );
 }
+
+
+/* --- Rapportvisaren: EN knapp, ETT budskap ------------------------------- */
+
+/*
+ * Felet som togs ner var två stackade "Spara filen": verktygsradens knapp
+ * OCH en egen knapp inne i <object>-reservvyn, plus rubriken "Filen är
+ * klar" - samma uppmaning två gånger (dubbla budskap). Reservvyn ska i
+ * stället peka UPP mot den enda knappen. Och knappen får inte vara död i
+ * demons ram: den måste ha vägen som räddar det inbäddade fallet
+ * (window.open i ny flik) när nedladdningen blockeras tyst.
+ *
+ * Kontrollen läser komponentens källa som text. En regel som inte testas
+ * är en åsikt, och den här regeln syntes bara för ögon förut.
+ */
+const visareKod = readFileSync(
+  join(process.cwd(), "src/components/reports/useInlineReport.tsx"),
+  "utf8",
+);
+const sparaKnappar = (visareKod.match(/onClick=\{\(\) => void savePdf\(/g) ?? []).length;
+check("rapportvisaren har exakt EN spara-knapp", sparaKnappar === 1, `hittade ${sparaKnappar}`);
+check("spara-knappen har vägen för inbäddat läge (ny flik)", visareKod.includes("window.open("));
+const objektIndex = visareKod.indexOf("<object");
+check("reservvyn <object> finns kvar", objektIndex !== -1);
+check(
+  "reservvyn har ingen egen knapp - den pekar upp",
+  objektIndex !== -1 && !visareKod.slice(objektIndex).includes("void savePdf("),
+);
+// Den RENDERADE rubriken (>...</p>), inte förklaringen i kommentaren som
+// citerar det gamla felet. Det är headingen som var det dubbla budskapet.
+check(
+  "den dubbla rubriken 'Filen är klar' är borta ur vyn",
+  !visareKod.includes("Filen är klar</p>"),
+);
 
 
 console.log(`\n${passed} passed, ${failed} failed`);

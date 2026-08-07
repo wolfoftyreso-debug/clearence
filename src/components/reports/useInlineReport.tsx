@@ -91,14 +91,26 @@ export const useInlineReport = (): {
   };
 
   /**
-   * "Spara filen" i inbäddat läge. iOS-fallet från verkligheten: PDF:en
-   * VISAS i lagret, men iOS ritar den utan egen spara-knapp - "det går
-   * inte att spara". Delningsmenyn (Web Share med fil) är den väg iOS
-   * faktiskt erbjuder: därifrån finns "Spara i Filer", AirDrop och
-   * e-post. Där delning med fil inte stöds försöker vi vanlig
-   * nedladdning - alltid en synlig väg, aldrig en död knapp.
+   * "Spara filen" i inbäddat läge. Tre vägar, i tur och ordning, och var
+   * och en täcker ett läge där den föregående tyst faller:
+   *
+   *  1. DELNINGSMENYN (Web Share med fil). iOS och Android:s egen väg -
+   *     därifrån finns "Spara i Filer", AirDrop och e-post. Fungerar på en
+   *     riktig telefon, men blockeras i en inbäddad ram utan
+   *     allow="web-share" (t.ex. den publicerade demon).
+   *  2. ÖPPNA I NY FLIK. En blob-URL i en riktig flik visas i
+   *     webbläsarens egen PDF-visare, som HAR spara och dela. Det här är
+   *     vägen som räddar det inbäddade fallet: en programmerad nedladdning
+   *     blockeras tyst i en sandlåda, men en ny flik gör det inte.
+   *  3. ANKARNEDLADDNING. Sista utväg, för vanliga fönster där de två
+   *     ovan inte behövdes.
+   *
+   * Poängen är att knappen ALLTID gör något synligt. Den gjorde det inte
+   * förut: i demons ram föll delningen, nedladdningen blockerades tyst,
+   * och "Spara filen" var en död knapp - precis det den här kroken finns
+   * för att undvika.
    */
-  const savePdf = async (current: { blob: Blob; fileName: string; title: string }) => {
+  const savePdf = async (current: { url: string; blob: Blob; fileName: string; title: string }) => {
     const file = new File([current.blob], current.fileName, { type: "application/pdf" });
     const nav = navigator as Navigator & {
       canShare?: (data: { files: File[] }) => boolean;
@@ -108,11 +120,18 @@ export const useInlineReport = (): {
       try {
         await nav.share({ files: [file], title: current.title });
         return;
-      } catch {
-        // Avbruten delning är ett val, inte ett fel - och faller
-        // delningen ändå, står nedladdningsförsöket nedanför.
+      } catch (error) {
+        // Avbruten delning är ett VAL, inte ett fel - då ska vi inte
+        // öppna en flik efteråt. Andra fel (blockerad i en ram) faller
+        // vidare till nästa väg.
+        if (error instanceof DOMException && error.name === "AbortError") return;
       }
     }
+    // Ny flik före nedladdning: den fungerar där nedladdningen tyst
+    // blockeras, och ger dessutom webbläsarens egen visare. `noopener`
+    // för att den nya fliken inte ska nå vår.
+    const opened = window.open(current.url, "_blank", "noopener");
+    if (opened) return;
     triggerDownload(current.blob, current.fileName);
   };
 
@@ -185,8 +204,9 @@ export const useInlineReport = (): {
              Det är värre än att inte visa något alls. */
           <p className="border-b border-border bg-secondary/40 px-4 py-2 text-xs leading-relaxed text-muted-foreground">
             PDF:en är skapad. Tryck på{" "}
-            <span className="font-medium text-foreground">Spara filen</span> så laddas den ner –
-            eller öppnas i delningsmenyn, där du kan välja t.ex. "Spara i Filer".
+            <span className="font-medium text-foreground">Spara filen</span> – den öppnas i
+            delningsmenyn ("Spara i Filer"), i en ny flik eller som nedladdning, beroende på
+            vad enheten stödjer.
           </p>
         )}
 
@@ -210,17 +230,21 @@ export const useInlineReport = (): {
            * blockerad sida ser trasig ut även när filen är helt färdig.
            */
           <object data={pdf.url} type="application/pdf" className="w-full flex-1 bg-white">
-            <div className="flex h-full flex-col items-center justify-center gap-3 p-8 text-center">
+            {/*
+              EN knapp, ETT budskap. Reservvyn upprepade förut både
+              rubriken "Filen är klar" och en EGEN "Spara filen"-knapp -
+              samtidigt som verktygsraden och bannern ovanför sa exakt
+              samma sak. Två identiska uppmaningar staplade på varandra
+              (dubbla budskap). Här pekar reservvyn i stället UPP mot den
+              enda knappen; själva åtgärden bor på ett ställe.
+            */}
+            <div className="flex h-full flex-col items-center justify-center gap-2 p-8 text-center">
               <FileText className="h-8 w-8 text-muted-foreground" aria-hidden="true" />
-              <p className="text-base font-semibold text-foreground">Filen är klar</p>
               <p className="max-w-md text-sm leading-relaxed text-muted-foreground">
-                Webbläsaren visar inte inbäddade PDF:er här, så förhandsvisningen uteblir.
-                Det påverkar inte filen – den är färdig och innehåller allt.
+                Förhandsvisningen visas inte i den här vyn. Filen är färdig – använd{" "}
+                <span className="font-medium text-foreground">Spara filen</span> ovan för att
+                öppna eller ladda ner den.
               </p>
-              <Button type="button" variant="accent" onClick={() => void savePdf(pdf)}>
-                <Download className="h-4 w-4" aria-hidden="true" />
-                Spara filen
-              </Button>
               <p className="text-xs text-muted-foreground">{pdf.fileName}</p>
             </div>
           </object>
