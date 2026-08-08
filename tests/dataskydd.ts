@@ -19,6 +19,7 @@ import {
   retentionCutoff,
   retentionSummary,
 } from "../src/lib/retention";
+import { buildMyDataExport } from "../src/lib/dataExport";
 
 let passed = 0;
 let failed = 0;
@@ -110,6 +111,47 @@ check(
 // Och driftpanelen visar policyn ärligt.
 const admin = read("src/pages/AdminOverview.tsx");
 check("driftpanelen visar gallringspolicyn", /RetentionSection/.test(admin) && /getRetentionPolicy/.test(admin));
+
+/* --- 3. Den registrerades rättigheter (art. 15, 16, 17, 20) ------------- */
+
+const utdrag = buildMyDataExport(
+  {
+    epost: "erik@demobolaget.se",
+    profil: { displayName: "Erik", phone: "070-1234567" },
+    ekonomi: { startedAt: "2026-01-01", status: "trial" },
+    aviseringar: { email: true },
+    arenden: [{ id: "c1", companyName: "Demobolaget AB" }],
+  },
+  "2026-08-08T09:30:00.000Z",
+);
+check("utdraget bär en stabil formatstämpel", utdrag.data.format === "clearance-personuppgifter-v1");
+check("utdraget ekar tidpunkten det togs", utdrag.data.uttaget === "2026-08-08T09:30:00.000Z");
+check("utdraget förklarar vilken rätt det svarar mot", /art\. 15/.test(utdrag.data.om) && /portabilitet/i.test(utdrag.data.om));
+check("utdraget bär kontots e-post", utdrag.data.konto.epost === "erik@demobolaget.se");
+check("utdraget bär profil, ekonomi, aviseringar och ärenden",
+  utdrag.data.profil !== null && utdrag.data.ekonomi !== null &&
+  utdrag.data.aviseringar !== null && (utdrag.data.arenden as unknown[]).length === 1);
+check("filnamnet bär datumet och är en json", /clearance-mina-uppgifter-2026-08-08\.json/.test(utdrag.fileName));
+// Tomma delar ska ge tomma värden, inte krascha.
+const tomtUtdrag = buildMyDataExport(
+  { epost: null, profil: null, ekonomi: null, aviseringar: null, arenden: [] },
+  "2026-08-08T00:00:00.000Z",
+);
+check("ett tomt utdrag är fortfarande giltigt", tomtUtdrag.data.konto.epost === null && Array.isArray(tomtUtdrag.data.arenden));
+
+// Sidan: exporten laddas ned, rättelse pekar på profilen, radering går via
+// dataskyddskanalen. Och det står rakt ut vad som ändå måste sparas.
+const settings = read("src/pages/DashboardSettings.tsx");
+check("inställningarna har en dataskyddssektion", /DataskyddSection/.test(settings));
+check("registerutdraget laddas ned lokalt", /buildMyDataExport/.test(settings) && /downloadTextFile/.test(settings));
+check("raderingen går via dataskyddskanalen", /amne=dataskydd/.test(settings));
+check(
+  "raderingen är ärlig om vad som måste sparas",
+  /bokföringsunderlag|bokföring/i.test(settings) && /spårbarhet/i.test(settings),
+);
+// Kontaktsidan förväljer Personuppgifter när dataskyddslänken följs.
+const kontakt = read("src/pages/Contact.tsx");
+check("kontaktsidan förväljer personuppgifter från länken", /amne.*dataskydd/.test(kontakt) && /setTopic\("privacy"\)/.test(kontakt));
 
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

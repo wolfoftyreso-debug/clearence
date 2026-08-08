@@ -23,7 +23,9 @@ import { AlertChannelSection, AlertHistorySection } from "@/components/settings/
 import type { CustomerInvoiceRecord } from "@/data/types";
 import { LockedFeature, useEntitlements } from "@/components/billing/LockedFeature";
 import { Link } from "react-router";
-import { CheckCircle2, Copy, Download, KeyRound, Loader2, Receipt } from "lucide-react";
+import { buildMyDataExport } from "@/lib/dataExport";
+import { downloadTextFile } from "@/lib/integrations/download";
+import { CheckCircle2, Copy, Download, KeyRound, Loader2, Receipt, ShieldCheck } from "lucide-react";
 
 /**
  * Kontot: uppgifter, läge och alla fakturor och kvitton.
@@ -172,6 +174,103 @@ const ApiKeysSection = () => {
           ))}
         </ul>
       )}
+    </WizardCard>
+  );
+};
+
+/**
+ * DATASKYDD OCH RÄTTIGHETER (GDPR art. 15–20).
+ *
+ * Tre rättigheter, tre vägar, alla ärliga:
+ *  - REGISTERUTDRAG / DATAPORTABILITET: laddas ned direkt som JSON, byggt
+ *    lokalt ur samma läsvägar som appen använder (buildMyDataExport).
+ *  - RÄTTELSE: namn och telefon ändras i "Dina uppgifter" ovan.
+ *  - RADERING: en formell begäran via kontaktkanalen (ämne Personuppgifter),
+ *    med rakt besked om vad som MÅSTE sparas (fakturor/bokföring, händelse-
+ *    loggens spårbarhet) och vad som gallras enligt policyn.
+ */
+const DataskyddSection = () => {
+  const { user } = useAuth();
+  const [downloading, setDownloading] = useState(false);
+  const [done, setDone] = useState(false);
+
+  const exportMyData = async () => {
+    setDownloading(true);
+    setDone(false);
+    try {
+      const [profil, ekonomi, aviseringar, arenden] = await Promise.all([
+        data.profile.getMine(),
+        data.billing.getMine().catch(() => null),
+        data.notificationSettings.getPrefs().catch(() => null),
+        data.cases.listMine().catch(() => []),
+      ]);
+      const { data: payload, fileName } = buildMyDataExport(
+        { epost: user?.email ?? null, profil, ekonomi, aviseringar, arenden },
+        new Date().toISOString(),
+      );
+      downloadTextFile(JSON.stringify(payload, null, 2), fileName, "application/json");
+      setDone(true);
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  return (
+    <WizardCard data-guide="dataskydd">
+      <WizardCardHeader
+        title="Dataskydd och dina rättigheter"
+        description="Du bestämmer över dina uppgifter. Här ser du vad vi har, kan ta med dig det, och kan begära rättelse eller radering."
+      />
+      <div className="space-y-4 text-sm leading-relaxed text-muted-foreground">
+        <div>
+          <p className="font-medium text-foreground">Registerutdrag och dataportabilitet</p>
+          <p className="mt-1">
+            Ladda ner de personuppgifter kontot äger, i ett maskinläsbart format
+            (JSON) du kan ta med dig. Filen byggs lokalt i din webbläsare.
+          </p>
+          <div className="mt-2 flex items-center gap-3">
+            <Button type="button" variant="outline" size="sm" onClick={() => void exportMyData()} disabled={downloading}>
+              {downloading ? (
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+              ) : (
+                <Download className="h-4 w-4" aria-hidden="true" />
+              )}
+              Ladda ner mina uppgifter
+            </Button>
+            {done && (
+              <span className="flex items-center gap-1.5 text-success">
+                <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+                Nedladdad
+              </span>
+            )}
+          </div>
+        </div>
+
+        <div>
+          <p className="font-medium text-foreground">Rättelse</p>
+          <p className="mt-1">
+            Namn och telefon ändrar du under <span className="font-medium text-foreground">Dina uppgifter</span> ovan.
+            Uppgifter i ett ärende rättas i ärendet.
+          </p>
+        </div>
+
+        <div>
+          <p className="font-medium text-foreground">Radering</p>
+          <p className="mt-1">
+            Du kan begära att dina uppgifter raderas. Vi är raka med vad som ändå
+            måste sparas: fakturor och bokföringsunderlag har egna lagringskrav,
+            och händelseloggen behålls för spårbarhet. Resten raderas eller
+            anonymiseras enligt gallringspolicyn.
+          </p>
+          <Link
+            to="/kontakt?amne=dataskydd"
+            className="mt-2 inline-flex items-center gap-1.5 text-sm font-medium text-accent underline-offset-4 hover:underline"
+          >
+            <ShieldCheck className="h-4 w-4" aria-hidden="true" />
+            Begär radering eller registerutdrag
+          </Link>
+        </div>
+      </div>
     </WizardCard>
   );
 };
@@ -443,6 +542,8 @@ const DashboardSettings = () => {
             </ul>
           )}
         </WizardCard>
+
+        <DataskyddSection />
 
         <AccountSecuritySection />
       </div>

@@ -1,4 +1,5 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
+import { useSearchParams } from "react-router";
 import { useMutation } from "@tanstack/react-query";
 import { Link } from "react-router";
 import Header from "@/components/landing/Header";
@@ -75,6 +76,13 @@ const Contact = () => {
   const [company, setCompany] = useState("");
   const [topic, setTopic] = useState<ContactTopic>("question");
   const [message, setMessage] = useState("");
+
+  // Dataskyddssidan länkar hit med ?amne=dataskydd för att förvälja
+  // Personuppgifter - så att en rättighetsbegäran landar rätt direkt.
+  const [searchParams] = useSearchParams();
+  useEffect(() => {
+    if (searchParams.get("amne") === "dataskydd") setTopic("privacy");
+  }, [searchParams]);
 
   const send = useMutation({
     mutationFn: () =>
