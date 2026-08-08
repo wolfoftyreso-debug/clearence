@@ -15,7 +15,22 @@ import { AlertTriangle, ArrowRight, Lightbulb, MapPin } from "lucide-react";
  * Varje observation bär sitt underlag. "Du svarade X" under varje punkt
  * är det som skiljer en analys från en spådom.
  */
-export const FirstAnalysisCard = ({ analysis }: { analysis: FirstAnalysis }) => {
+/**
+ * `showNextStep` styr om kortet bär sin egen "gå vidare"-knapp.
+ *
+ * I onboardingen äger STEGET nästa steg - där finns redan en enda tydlig
+ * knapp längst ned, och en andra knapp inuti kortet som pekar åt samma
+ * håll blev dubbla budskap (och tog dessutom en genväg förbi
+ * överlämningen). Kortet visar då bara analysen; knappen bor på ett ställe.
+ * Står kortet ensamt någon annanstans behåller det sin knapp.
+ */
+export const FirstAnalysisCard = ({
+  analysis,
+  showNextStep = true,
+}: {
+  analysis: FirstAnalysis;
+  showNextStep?: boolean;
+}) => {
   const guide = useGuide();
   return (
   <section aria-label="Första analysen" className="rounded-md border border-border bg-card p-4">
@@ -89,15 +104,17 @@ export const FirstAnalysisCard = ({ analysis }: { analysis: FirstAnalysis }) => 
       </button>
     </div>
 
-    <div className="mt-4">
-      <p className="text-sm leading-relaxed text-muted-foreground">{analysis.nextStep.why}</p>
-      <Button asChild variant="accent" className="mt-2.5">
-        <Link to={analysis.nextStep.href}>
-          {analysis.nextStep.label}
-          <ArrowRight className="h-4 w-4" aria-hidden="true" />
-        </Link>
-      </Button>
-    </div>
+    {showNextStep && (
+      <div className="mt-4">
+        <p className="text-sm leading-relaxed text-muted-foreground">{analysis.nextStep.why}</p>
+        <Button asChild variant="accent" className="mt-2.5">
+          <Link to={analysis.nextStep.href}>
+            {analysis.nextStep.label}
+            <ArrowRight className="h-4 w-4" aria-hidden="true" />
+          </Link>
+        </Button>
+      </div>
+    )}
   </section>
   );
 };

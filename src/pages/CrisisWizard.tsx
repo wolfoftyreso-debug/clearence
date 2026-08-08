@@ -25,7 +25,7 @@ import { useAutosavedState } from "@/hooks/useAutosavedState";
 import { ResumeNotice } from "@/components/wizard/ResumeNotice";
 import { SaveWithAccountPrompt } from "@/components/SaveWithAccountPrompt";
 import { analyseCrisis, formatSwedishDate } from "@/lib/crisisAnalysis";
-import { clearOnboarding, readOnboarding } from "@/lib/advisor/onboardingHandoff";
+import { clearOnboarding, readOnboarding, wizardEmployees } from "@/lib/advisor/onboardingHandoff";
 import { WAITS, waitText, type TransitionId } from "@/lib/advisor/prepare";
 import { TransitionNotice } from "@/components/advisor/TransitionNotice";
 
@@ -160,26 +160,33 @@ const CrisisWizard = () => {
   }, [setFormData]);
 
   // Grunduppgifterna från onboardingen följer med hit. CLEARANCE lovade
-  // att de sparar tid; att fråga om organisationsnumret en gång till
-  // vore att lära användaren att samtalet inte får konsekvenser.
-  // Körs EN gång, och bara i ett tomt utkast - ett återupptaget utkast
-  // äger sina egna svar.
+  // att de sparar tid; att fråga om organisationsnumret ELLER antalet
+  // anställda en gång till vore att lära användaren att samtalet inte får
+  // konsekvenser.
+  //
+  // Körs EN gång, och fyller bara TOMMA fält. Det gäller även ett
+  // återupptaget utkast: ett fält som redan har ett svar äger sitt svar
+  // (vi skriver aldrig över), men ett fält som står tomt ska fyllas ur
+  // överlämningen och inte frågas om på nytt. Den tidigare regeln hoppade
+  // över hela förifyllningen så fort ett utkast fanns - och då stod både
+  // organisationsnummer och anställda tomma trots att de redan lämnats.
   const seeded = useRef(false);
   useEffect(() => {
     if (seeded.current) return;
     seeded.current = true;
-    if (draft.restored) return;
     const handoff = readOnboarding();
     if (!handoff) return;
     setFormData((prev) => {
-      if (prev.orgNumber || prev.manualCompanyName) return prev;
-      return {
-        ...prev,
-        orgNumber: handoff.orgNumber ? formatOrgNumber(handoff.orgNumber) : prev.orgNumber,
-        manualCompanyName: handoff.company || prev.manualCompanyName,
-      };
+      const next = { ...prev };
+      if (!next.orgNumber && handoff.orgNumber) next.orgNumber = formatOrgNumber(handoff.orgNumber);
+      if (!next.manualCompanyName && handoff.company) next.manualCompanyName = handoff.company;
+      if (!next.employees) {
+        const mapped = wizardEmployees(handoff.profile?.employees ?? null);
+        if (mapped) next.employees = mapped;
+      }
+      return next;
     });
-  }, [draft.restored, setFormData]);
+  }, [setFormData]);
 
   // Auto-lookup company when org number is valid.
   // lookupRequestId guards against a slower, stale request overwriting a

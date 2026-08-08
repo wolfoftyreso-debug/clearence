@@ -74,3 +74,35 @@ export const clearOnboarding = (): void => {
     // Se ovan: det värsta som händer är en förifyllning för mycket.
   }
 };
+
+/**
+ * Onboardingens storleksintervall → nulägesanalysens.
+ *
+ * De två frågorna använde olika trappor: onboardingen frågar
+ * "1 / 2–5 / 6–20 / 21–50 / fler än 50", nulägesanalysen
+ * "0 / 1-5 / 6-10 / 11-25 / 26-50 / 50+". Just den skillnaden gjorde att
+ * antalet anställda frågades EN GÅNG TILL fast det redan var lämnat - och
+ * ett löfte om att grunduppgifterna sparar tid, som bryts i nästa vy, är
+ * värre än inget löfte alls.
+ *
+ * Bryggan mappar på intervallets mittpunkt. Den är inte exakt (6–20 kan
+ * vara 6 eller 20), men ett förifyllt och ändringsbart svar slår att fråga
+ * om samma sak igen med tom ruta. Okänt eller tomt ger null - då står
+ * analysens egen fråga kvar, som förut.
+ */
+export const wizardEmployees = (fromOnboarding: string | null | undefined): string | null => {
+  switch ((fromOnboarding ?? "").trim()) {
+    case "1 person":
+      return "1-5";
+    case "2–5":
+      return "1-5";
+    case "6–20":
+      return "11-25";
+    case "21–50":
+      return "26-50";
+    case "Fler än 50":
+      return "50+";
+    default:
+      return null;
+  }
+};

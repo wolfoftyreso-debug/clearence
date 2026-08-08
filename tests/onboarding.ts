@@ -41,6 +41,9 @@ import {
   nextQuestion,
 } from "../src/lib/advisor/interview";
 import { buildFirstAnalysis } from "../src/lib/advisor/firstAnalysis";
+import { wizardEmployees } from "../src/lib/advisor/onboardingHandoff";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 let passed = 0;
 let failed = 0;
@@ -475,6 +478,49 @@ check(
   "och ingen av intervjufrågorna frågar efter det heller",
   !/telefon|mobilnummer/i.test(JSON.stringify(INTERVIEW)),
 );
+
+/* --- Överlämningen: fråga aldrig om samma sak två gånger ------------------ */
+
+/*
+ * Löftet i onboardingen är att grunduppgifterna sparar tid. Det bröts i
+ * nulägesanalysen: den frågade om antalet anställda EN GÅNG TILL, för att
+ * de två frågorna använde olika storleksintervall. Bryggan wizardEmployees
+ * mappar mellan trapporna - och den här kontrollen binder ihop de två så
+ * att de inte kan glida isär i tysthet.
+ */
+
+// Onboardingens intervall, direkt ur intervjufrågan (inte hårdkodade här).
+const anstalldaFraga = INTERVIEW.find((q) => q.id === "anstallda")!;
+const onboardingIntervall = anstalldaFraga.options
+  .map((o) => o.fills.employees)
+  .filter((v): v is string => typeof v === "string");
+check("onboardingen har storleksintervall att lämna över", onboardingIntervall.length >= 4);
+
+// Nulägesanalysens intervall, lästa ur dess källa - så testet ser samma
+// knappar som användaren.
+const wizardSource = readFileSync(join(process.cwd(), "src/pages/CrisisWizard.tsx"), "utf8");
+const wizardMatch = wizardSource.match(/\[('0',[^\]]*'50\+')\]/);
+check("nulägesanalysens intervall gick att läsa", wizardMatch !== null);
+const wizardIntervall = (wizardMatch?.[1] ?? "")
+  .split(",")
+  .map((s) => s.trim().replace(/^'|'$/g, ""));
+check("de sex knapparna hittades", wizardIntervall.length === 6, wizardIntervall);
+
+// Varje onboardingsvar ska mappa till ett intervall som FAKTISKT finns som
+// knapp i analysen. Annars förifylls ett värde ingen knapp kan visa.
+for (const bucket of onboardingIntervall) {
+  const mapped = wizardEmployees(bucket);
+  check(`"${bucket}" mappas till ett analysintervall`, mapped !== null, mapped);
+  check(
+    `"${bucket}" → "${mapped}" finns som knapp i analysen`,
+    mapped !== null && wizardIntervall.includes(mapped),
+    mapped,
+  );
+}
+
+// Okänt och tomt ger null - då står analysens egen fråga kvar, som förut.
+check("okänt intervall ger null", wizardEmployees("något helt annat") === null);
+check("tomt ger null", wizardEmployees("") === null && wizardEmployees(null) === null);
 
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

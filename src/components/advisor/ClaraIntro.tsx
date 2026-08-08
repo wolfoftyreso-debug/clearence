@@ -651,7 +651,11 @@ export const ClaraIntro = ({
 
           {stage === "analys" && (
             <div className="mt-4 space-y-4">
-              <FirstAnalysisCard analysis={analysis} />
+              {/* Kortet visar analysen, inte en egen "gå vidare"-knapp:
+                  nästa steg är en enda knapp längst ned. Två knappar mot
+                  samma vy, med SMS-erbjudandet inklämt emellan, blev dubbla
+                  budskap. */}
+              <FirstAnalysisCard analysis={analysis} showNextStep={false} />
 
               {/* PREMIUM SIST. Först nu har användaren sett vad tjänsten
                   gör - och först nu är ett telefonnummer en uppgradering
@@ -684,9 +688,16 @@ export const ClaraIntro = ({
                 )}
               </section>
 
-              <Button variant="accent" size="lg" onClick={finish} className="w-full sm:w-auto">
-                Gå vidare till nulägesanalysen
-              </Button>
+              {/* Det enda nästa steget - med sin förklaring intill, den som
+                  förut bodde inne i analyskortet. En knapp, ett budskap. */}
+              <div>
+                <p className="text-sm leading-relaxed text-muted-foreground">
+                  {analysis.nextStep.why}
+                </p>
+                <Button variant="accent" size="lg" onClick={finish} className="mt-2.5 w-full sm:w-auto">
+                  Gå vidare till nulägesanalysen
+                </Button>
+              </div>
             </div>
           )}
 
