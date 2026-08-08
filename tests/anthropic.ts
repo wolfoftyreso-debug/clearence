@@ -34,6 +34,9 @@ check("systemprompten kräver en fråga i taget", /EN \(1\) fråga i taget/.test
 check("systemprompten sätter taket på tre rekommendationer", /HÖGST tre rekommendationer/.test(P));
 check("systemprompten förbjuder påhittade fakta", /Hitta ALDRIG på siffror/.test(P));
 check("systemprompten håller rådgivningsgränsen", /inte juridisk eller finansiell rådgivning/.test(P));
+check("systemprompten eskalerar höga insatser", /HÖGA INSATSER/.test(P) && /säkert juridiskt besked/i.test(P));
+check("systemprompten pekar ut personligt betalningsansvar", /personligt betalningsansvar/i.test(P));
+check("systemprompten kräver mänsklig bekräftelse på det tunga", /bekräftas av en revisor, jurist eller rekonstrukt/i.test(P));
 check("systemprompten svarar på svenska", /på svenska/.test(P));
 
 /* --- fail-closed: ingen nyckel, inget anrop ------------------------------ */
