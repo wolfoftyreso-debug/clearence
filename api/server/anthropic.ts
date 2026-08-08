@@ -142,6 +142,13 @@ export const clearanceReply = async (
         "x-api-key": key,
         "anthropic-version": API_VERSION,
       },
+      // DATAMINIMERING (GDPR): vi skickar ENBART det synliga samtalet och
+      // systemprompten. Aldrig `metadata`/user_id, aldrig ärendedata,
+      // aldrig något om bolaget utöver det användaren själv skrivit. Och
+      // ingenstans i den här filen loggas meddelandeinnehållet - bara
+      // statuskoder. Ju mindre som lämnar servern, desto mindre kan läcka.
+      // (Nolldataretention hos modellleverantören sätts på kontonivå; se
+      // docs/dataskydd.md.)
       body: JSON.stringify({
         model: MODEL,
         max_tokens: MAX_TOKENS,

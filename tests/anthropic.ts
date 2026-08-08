@@ -13,6 +13,8 @@ import {
   CLEARANCE_SYSTEM_PROMPT,
   type AdvisorMessage,
 } from "../api/server/anthropic";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 let passed = 0;
 let failed = 0;
@@ -38,6 +40,12 @@ check("systemprompten eskalerar höga insatser", /HÖGA INSATSER/.test(P) && /s�
 check("systemprompten pekar ut personligt betalningsansvar", /personligt betalningsansvar/i.test(P));
 check("systemprompten kräver mänsklig bekräftelse på det tunga", /bekräftas av en revisor, jurist eller rekonstrukt/i.test(P));
 check("systemprompten svarar på svenska", /på svenska/.test(P));
+
+// Dataskydd: samtalsinnehållet loggas ALDRIG server-sidan. Ett känsligt
+// krissamtal i en loggrad är precis det som inte får hända.
+const anthropicKod = readFileSync(join(process.cwd(), "api/server/anthropic.ts"), "utf8");
+check("röret loggar aldrig samtalsinnehållet", !/console\.(log|error|info|warn)/.test(anthropicKod));
+check("dataminimeringen är utskriven", /DATAMINIMERING/.test(anthropicKod));
 
 /* --- fail-closed: ingen nyckel, inget anrop ------------------------------ */
 
@@ -98,6 +106,14 @@ const gorFetch = (svar: Response) => {
   check("anthropic-version är satt", typeof headers["anthropic-version"] === "string");
   check("systemprompten skickas som system", body.system === CLEARANCE_SYSTEM_PROMPT);
   check("meddelandena skickas med", Array.isArray(body.messages) && body.messages.length === 1);
+  // Dataminimering (GDPR): inget user_id/metadata följer med begäran, och
+  // begäran bär bara de fält som behövs - inget extra som identifierar någon.
+  check("ingen metadata/user_id skickas med", !("metadata" in body));
+  check(
+    "begäran bär bara de nödvändiga fälten",
+    Object.keys(body).sort().join(",") === "max_tokens,messages,model,system",
+    Object.keys(body),
+  );
   check("ett tak på max_tokens finns", typeof body.max_tokens === "number" && body.max_tokens > 0);
 }
 
