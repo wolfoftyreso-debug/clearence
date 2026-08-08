@@ -7,6 +7,7 @@
  */
 
 import {
+  CHAIN_LABEL,
   INTEGRITY_LABEL,
   SIGNATURE_LIMITS,
   SIGNATURE_STATEMENT,
@@ -16,6 +17,9 @@ import {
   formatSignedAt,
   isValidSignerName,
   sha256Hex,
+  signatureRecordHash,
+  verifyChain,
+  type SignatureEvidence,
 } from "../src/lib/signing";
 import { buildSignatureCertificate } from "../src/lib/reports/signatureDocument";
 import { renderReport } from "../src/lib/reports/render";
@@ -56,7 +60,8 @@ check(
   "begränsningarna nämner formkravet",
   SIGNATURE_LIMITS.some((t) => /bevittnad namnteckning/i.test(t)),
 );
-check("styrkorna täcker vem, vad, när", SIGNATURE_STRENGTHS.length === 4);
+check("styrkorna täcker vem, vad, när och kedjan", SIGNATURE_STRENGTHS.length === 5);
+check("styrkorna nämner kedjan", SIGNATURE_STRENGTHS.some((t) => /kedj/i.test(t)));
 check(
   "styrkorna lovar aldrig identitetskontroll",
   !SIGNATURE_STRENGTHS.some((t) => /legitim|identitetskontroll|BankID/i.test(t)),
@@ -156,6 +161,44 @@ const run = async () => {
   /* --- tidpunkten --------------------------------------------------- */
 
   check("tidpunkten skrivs på svenska", /1 mars 2026 kl\. \d{2}:\d{2}/.test(formatSignedAt(signature.signedAt)), formatSignedAt(signature.signedAt));
+
+  /* --- beviskedjan: oföränderlig länkad rad av signaturer ----------- */
+
+  const mkRec = async (ev: SignatureEvidence) => ({ evidence: ev, recordHash: await signatureRecordHash(ev) });
+  const e1: SignatureEvidence = {
+    documentHash: a,
+    statementVersion: SIGNATURE_STATEMENT.version,
+    signerName: "Anna Ek",
+    signerAccountId: "acc-1",
+    signedAt: "2026-03-01T10:00:00.000Z",
+    prevRecordHash: null,
+  };
+  const r1 = await mkRec(e1);
+  const e2: SignatureEvidence = {
+    documentHash: c,
+    statementVersion: SIGNATURE_STATEMENT.version,
+    signerName: "Bo Berg",
+    signerAccountId: "acc-2",
+    signedAt: "2026-03-02T11:00:00.000Z",
+    prevRecordHash: r1.recordHash,
+  };
+  const r2 = await mkRec(e2);
+
+  check("en obruten kedja är intakt", (await verifyChain([r1, r2])) === "intact");
+
+  // Ändrat namn i en TIDIGARE post: kontrollsumman räknas inte längre fram.
+  const namnandrad = { evidence: { ...e1, signerName: "Någon Annan" }, recordHash: r1.recordHash };
+  check("ändrat namn i en tidigare post bryter kedjan", (await verifyChain([namnandrad, r2])) === "broken");
+
+  // Bakdaterad tid: annan kontrollsumma än den som ligger i kedjan.
+  const bakdaterad = await mkRec({ ...e2, signedAt: "2026-01-01T00:00:00.000Z" });
+  check("bakdaterad tid ger en annan kontrollsumma", bakdaterad.recordHash !== r2.recordHash);
+
+  // Bruten länk: pekar på fel föregående post.
+  const felLank = { evidence: { ...e2, prevRecordHash: "deadbeef" }, recordHash: r2.recordHash };
+  check("en bruten länk bryter kedjan", (await verifyChain([r1, felLank])) === "broken");
+
+  check("kedjeetiketterna är skrivna", CHAIN_LABEL.intact.length > 10 && CHAIN_LABEL.broken.length > 10);
 
   console.log(`\n${passed} passed, ${failed} failed`);
   process.exit(failed > 0 ? 1 : 0);

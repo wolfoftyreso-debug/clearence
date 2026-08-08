@@ -43,6 +43,7 @@ export const SIGNATURE_STRENGTHS = [
   "Vad: handlingens innehåll förseglas med en kontrollsumma.",
   "När: tidpunkten sätts av servern, inte av din enhet.",
   "Att det syns om innehållet ändras efteråt.",
+  "Signaturerna länkas i en kedja – ändras en tidigare post syns det på alla följande.",
 ] as const;
 
 /** SHA-256 som gemener hex. Samma funktion vid signering och kontroll. */
@@ -84,6 +85,85 @@ export const INTEGRITY_LABEL: Record<SignatureIntegrity, string> = {
 export const isValidSignerName = (name: string): boolean => {
   const trimmed = name.trim();
   return trimmed.length >= 2 && trimmed.length <= 120 && /\p{L}/u.test(trimmed);
+};
+
+/**
+ * BEVISKEDJAN: en oföränderlig länkad rad av signaturhändelser.
+ *
+ * En kontrollsumma på dokumentet visar att just DEN handlingen inte ändrats.
+ * Men en angripare som kommer åt lagret kan ta bort en signatur, ändra ett
+ * namn eller backa en tidsstämpel. Kedjan täpper till det: varje post bär
+ * kontrollsumman av den FÖREGÅENDE posten, och postens egen kontrollsumma
+ * räknas över allt i posten plus den länken. Ändras något i en tidigare post
+ * går den inte längre ihop - och alla följande länkar brister med den. Man
+ * kan alltså inte tyst skriva om historien; man måste räkna om HELA kedjan,
+ * och att den räknats om syns.
+ *
+ * Det här är inte en kvalificerad signatur och ersätter inte BankID (se
+ * SIGNATURE_LIMITS). Det är en ärlig, kontrollerbar beviskedja - vem, vad,
+ * när, i vilken ordning - och det är det bevisvärde en enkel elektronisk
+ * signatur kan bära under fri bevisprövning.
+ */
+export interface SignatureEvidence {
+  /** Kontrollsumman av det EXAKTA innehåll som signerades. */
+  documentHash: string;
+  /** Vilken intygstext som gällde (SIGNATURE_STATEMENT.version). */
+  statementVersion: string;
+  /** Namnet undertecknaren skrev. */
+  signerName: string;
+  /**
+   * Identiteten: det inloggade kontots id. Signaturen binds till kontot,
+   * inte till legitimation - och det är det SIGNATURE_LIMITS säger rakt ut.
+   */
+  signerAccountId: string;
+  /** Serverns tidpunkt (ISO), inte enhetens. */
+  signedAt: string;
+  /** Föregående posts kontrollsumma. null = första länken i kedjan. */
+  prevRecordHash: string | null;
+}
+
+/** Ett kanoniskt, entydigt textavtryck av posten - underlaget för hashen. */
+const canonicalEvidence = (e: SignatureEvidence): string =>
+  [
+    e.documentHash.toLowerCase(),
+    e.statementVersion,
+    e.signerName.trim(),
+    e.signerAccountId,
+    e.signedAt,
+    e.prevRecordHash?.toLowerCase() ?? "",
+  ].join("\n");
+
+/**
+ * Postens egen kontrollsumma. Binder ihop ALLT i posten med föregående länk,
+ * så att varken innehåll, namn, tid, ordning eller identitet går att ändra
+ * i efterhand utan att det syns.
+ */
+export const signatureRecordHash = async (e: SignatureEvidence): Promise<string> =>
+  sha256Hex(new TextEncoder().encode(canonicalEvidence(e)).buffer);
+
+export type ChainStatus = "intact" | "broken";
+
+/**
+ * Kontrollerar hela kedjan: att varje post pekar på rätt föregående länk och
+ * att varje kontrollsumma faktiskt räknas fram ur postens innehåll. Ett enda
+ * ändrat tecken någonstans ger "broken".
+ */
+export const verifyChain = async (
+  records: { evidence: SignatureEvidence; recordHash: string }[],
+): Promise<ChainStatus> => {
+  let prev: string | null = null;
+  for (const r of records) {
+    if ((r.evidence.prevRecordHash ?? null) !== prev) return "broken";
+    const beraknad = await signatureRecordHash(r.evidence);
+    if (beraknad.toLowerCase() !== r.recordHash.toLowerCase()) return "broken";
+    prev = r.recordHash;
+  }
+  return "intact";
+};
+
+export const CHAIN_LABEL: Record<ChainStatus, string> = {
+  intact: "Signaturkedjan är obruten – ingen post har ändrats i efterhand",
+  broken: "Signaturkedjan går inte ihop – en post har ändrats eller tagits bort",
 };
 
 /** "3 mars 2026 kl. 14:07" - tidpunkten ska gå att läsa högt. */
