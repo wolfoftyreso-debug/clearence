@@ -39,6 +39,18 @@ check("systemprompten håller rådgivningsgränsen", /inte juridisk eller finans
 check("systemprompten eskalerar höga insatser", /HÖGA INSATSER/.test(P) && /säkert juridiskt besked/i.test(P));
 check("systemprompten pekar ut personligt betalningsansvar", /personligt betalningsansvar/i.test(P));
 check("systemprompten kräver mänsklig bekräftelse på det tunga", /bekräftas av en revisor, jurist eller rekonstrukt/i.test(P));
+// Regelaktualitet: lagar ändras och modellens kunskap har en gräns. Den får
+// aldrig påstå en specifik frist/regel som säkert gällande - den ska säga att
+// lydelsen ska verifieras mot primärkälla eller av en människa.
+check("systemprompten flaggar regelaktualitet", /REGELAKTUALITET/.test(P) && /din kunskap har en/i.test(P));
+check(
+  "systemprompten förbjuder att påstå frister/regler som säkert gällande",
+  /ALDRIG en specifik frist/i.test(P) && /aldrig att en regel är ny,\s+ändrad eller borttagen/i.test(P),
+);
+check(
+  "systemprompten kräver verifiering mot primärkälla",
+  /verifieras mot primärkälla/i.test(P) && /f(ö|o)retagsrekonstruktion \(2022:964\)/i.test(P),
+);
 check("systemprompten svarar på svenska", /på svenska/.test(P));
 
 // Dataskydd: samtalsinnehållet loggas ALDRIG server-sidan. Ett känsligt
