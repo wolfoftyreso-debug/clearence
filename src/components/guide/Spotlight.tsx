@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Check, CornerDownLeft, MousePointerClick, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, CornerDownLeft, MousePointerClick, X } from "lucide-react";
 
 /**
  * RINGEN OCH SYSTEMPANELEN.
@@ -75,11 +75,16 @@ export const Spotlight = ({
   heading,
   text,
   awaitingClick,
+  awaitingNext,
   targetLabel,
   flowLabel,
   stops,
   receipt,
   progress,
+  canBack,
+  isLast,
+  onNext,
+  onBack,
   onClose,
   onSkip,
 }: {
@@ -87,11 +92,19 @@ export const Spotlight = ({
   heading: string | null;
   text: string | null;
   awaitingClick: boolean;
+  /** Rundtursläge: guiden väntar på Nästa i panelen, inte på ett klick i vyn. */
+  awaitingNext: boolean;
   targetLabel: string | null;
   flowLabel: string | null;
   stops: { step: number; label: string }[];
   receipt: boolean;
   progress: { current: number; total: number } | null;
+  /** Sant när det finns ett steg att gå tillbaka till. */
+  canBack: boolean;
+  /** Sant på rundturens sista steg - då blir Nästa till Klar. */
+  isLast: boolean;
+  onNext: () => void;
+  onBack: () => void;
   onClose: () => void;
   onSkip: () => void;
 }) => {
@@ -160,6 +173,29 @@ export const Spotlight = ({
     return () => window.removeEventListener("keydown", onKey);
   }, [awaitingClick, onSkip]);
 
+  /*
+   * Tangentbordet i rundtursläge. Enter och högerpil bläddrar framåt,
+   * vänsterpil bakåt - som en installationsguide. Aldrig när användaren
+   * skriver, av samma skäl som S-genvägen ovan.
+   */
+  useEffect(() => {
+    if (!awaitingNext) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      const el = document.activeElement as HTMLElement | null;
+      if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable)) return;
+      if (e.key === "Enter" || e.key === "ArrowRight") {
+        e.preventDefault();
+        onNext();
+      } else if (e.key === "ArrowLeft" && canBack) {
+        e.preventDefault();
+        onBack();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [awaitingNext, canBack, onNext, onBack]);
+
   useLayoutEffect(() => {
     const h = panelRef.current?.getBoundingClientRect().height;
     if (h && Math.abs(h - panelHojd) > 4) setPanelHojd(h);
@@ -170,6 +206,10 @@ export const Spotlight = ({
   const vh = window.innerHeight;
   const pad = 8;
   const smal = vw < SMAL_SKARM;
+  // Framhävning (dimning + tjock ring) gäller när guiden väntar - antingen
+  // på ett klick i vyn (arbetsläge) eller på Nästa i panelen (rundtur). I
+  // båda fallen ska blicken dras till EN sak.
+  const framhav = awaitingClick || awaitingNext;
 
   /*
    * PANELEN ÄGER EN FIL, OCH RINGEN HÅLLER SIG UR DEN.
@@ -231,7 +271,7 @@ export const Spotlight = ({
     <div className="pointer-events-none fixed inset-0 z-[90]" aria-live="polite">
       {/* Dimningen: fyra rutor runt hålet i stället för en mask - enklare,
           och hålet blir exakt. */}
-      {awaitingClick && (
+      {framhav && (
         <div aria-hidden="true">
           <div className="absolute bg-foreground/50 transition-all duration-500" style={{ top: 0, left: 0, right: 0, height: Math.max(0, ringTop) }} />
           <div className="absolute bg-foreground/50 transition-all duration-500" style={{ top: ringBottom, left: 0, right: 0, bottom: 0 }} />
@@ -247,7 +287,7 @@ export const Spotlight = ({
         className={`absolute rounded-md transition-all duration-500 ${
           receipt
             ? "border-2 border-success"
-            : awaitingClick
+            : framhav
               ? "border-[3px] border-accent shadow-[0_0_0_4px_hsl(var(--accent)/0.3)]"
               : "border-2 border-accent"
         }`}
@@ -375,6 +415,42 @@ export const Spotlight = ({
                 </span>
               </p>
             )}
+
+            {awaitingNext && (
+              /* Rundtursläge: bläddra som i en installationsguide. Nästa är
+                 den tydliga vägen framåt, Tillbaka finns när det finns ett
+                 steg bakåt, och sista steget säger Klar - inte Nästa som
+                 leder till ingenting. */
+              <div className="mt-3 flex items-center gap-2">
+                {canBack && (
+                  <button
+                    type="button"
+                    onClick={onBack}
+                    className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-3 py-2 text-sm font-medium text-foreground transition-colors hover:border-accent"
+                  >
+                    <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+                    Tillbaka
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={onNext}
+                  className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-md bg-accent px-3 py-2 text-sm font-semibold text-accent-foreground transition-opacity hover:opacity-90"
+                >
+                  {isLast ? (
+                    <>
+                      <Check className="h-4 w-4" aria-hidden="true" />
+                      Klar
+                    </>
+                  ) : (
+                    <>
+                      Nästa
+                      <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                    </>
+                  )}
+                </button>
+              </div>
+            )}
           </div>
 
           {/* FOTEN: vägarna ut, och tangenterna som gör samma sak. Att
@@ -403,6 +479,11 @@ export const Spotlight = ({
               {awaitingClick && (
                 <kbd className="rounded border border-border bg-card px-1.5 py-0.5 font-sans font-semibold">
                   S
+                </kbd>
+              )}
+              {awaitingNext && (
+                <kbd className="rounded border border-border bg-card px-1.5 py-0.5 font-sans font-semibold">
+                  ↵ Nästa
                 </kbd>
               )}
               <kbd className="flex items-center gap-1 rounded border border-border bg-card px-1.5 py-0.5 font-sans font-semibold">

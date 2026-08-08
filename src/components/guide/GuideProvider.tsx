@@ -15,7 +15,10 @@ import {
   savedSteps,
   showMeSteps,
   STEP_MS,
+  tour,
+  tourGroups,
   type GuideAction,
+  type GuidedFlow,
 } from "@/lib/guide/actions";
 import { guideEntry, type GuideAudience } from "@/lib/guide/catalogue";
 import { Spotlight } from "@/components/guide/Spotlight";
@@ -47,6 +50,14 @@ interface GuideState {
   text: string | null;
   /** Sant när guiden väntar på att användaren själv klickar. */
   awaitingClick: boolean;
+  /**
+   * Sant när guiden väntar på Nästa i panelen (rundtursläge).
+   *
+   * Skilt från awaitingClick med flit: en rundtur bläddrar med en knapp i
+   * rutan, ett guidat arbetsläge väntar på en hand ute i vyn. Samma motor,
+   * två väntor, och de får aldrig se likadana ut för användaren.
+   */
+  awaitingNext: boolean;
   /** Vad saken HETER på skärmen, när guiden väntar på ett klick. */
   targetLabel: string | null;
   /** Vilken genomgång som pågår, så att användaren vet vad hen är mitt i. */
@@ -85,6 +96,8 @@ interface GuideApi {
   savedTo: (entryId: string, what: string) => void;
   /** Kör ett guidat arbetsflöde. */
   runFlow: (flowId: string) => void;
+  /** Kör en rundtur: bläddras med Nästa/Tillbaka, inga klick ute i vyn. */
+  runTour: (tourId: string) => void;
   /** Visa en enstaka förklaring vid en yta - mikrolektionerna. */
   teach: (anchor: string, text: string, heading?: string) => void;
   /** Avbryt allt. */
@@ -105,6 +118,7 @@ const idle: GuideState = {
   heading: null,
   text: null,
   awaitingClick: false,
+  awaitingNext: false,
   targetLabel: null,
   flowLabel: null,
   stops: [],
@@ -132,6 +146,8 @@ export const GuideProvider = ({ children }: { children: ReactNode }) => {
   const clickCleanup = useRef<(() => void) | null>(null);
   /** Sidomenyns öppnare, registrerad av skalet. */
   const menu = useRef<((open: boolean) => void) | null>(null);
+  /** Pågående rundtur: grupperna och var i dem vi är. */
+  const tourRef = useRef<{ flow: GuidedFlow; groups: GuideAction[][]; index: number } | null>(null);
 
   const clearTimer = () => {
     if (timer.current !== null) window.clearTimeout(timer.current);
@@ -146,6 +162,7 @@ export const GuideProvider = ({ children }: { children: ReactNode }) => {
     running.current = false;
     ownRoute.current = null;
     flowRef.current = null;
+    tourRef.current = null;
     setState(idle);
   }, []);
 
@@ -159,7 +176,7 @@ export const GuideProvider = ({ children }: { children: ReactNode }) => {
       running.current = false;
       // Sista förklaringen står kvar. Att sudda den i samma ögonblick
       // sekvensen tar slut vore att avsluta med att dölja poängen.
-      setState((s) => ({ ...s, awaitingClick: false, progress: null }));
+      setState((s) => ({ ...s, awaitingClick: false, awaitingNext: false, progress: null }));
       return;
     }
     const done = total - queue.current.length;
@@ -241,6 +258,24 @@ export const GuideProvider = ({ children }: { children: ReactNode }) => {
       case "andas":
         step(() => {}, action.ms);
         break;
+      case "tur-steg": {
+        // Rundtursläge: guiden pekar och förklarar, och väntar på Nästa i
+        // panelen. Ingen klicklyssnare ute i vyn - det är hela skillnaden
+        // mot vanta-pa-klick, och skälet till att den här grenen finns.
+        clearTimer();
+        setState((s) => ({
+          ...s,
+          anchor: action.anchor,
+          heading: null,
+          text: action.text,
+          awaitingClick: false,
+          awaitingNext: true,
+          targetLabel: null,
+          receipt: false,
+          progress: { current: action.step, total: action.of },
+        }));
+        break;
+      }
       case "vanta-pa-klick": {
         // Guidat arbetsläge: här slutar guiden att göra och börjar vänta.
         clearTimer();
@@ -250,6 +285,7 @@ export const GuideProvider = ({ children }: { children: ReactNode }) => {
           heading: null,
           text: action.text,
           awaitingClick: true,
+          awaitingNext: false,
           targetLabel: action.label,
           receipt: false,
           progress: { current: action.step, total: action.of },
@@ -301,6 +337,62 @@ export const GuideProvider = ({ children }: { children: ReactNode }) => {
     [pathname],
   );
 
+  /**
+   * Rundturens motor, skild från kön.
+   *
+   * En rundtur körs som GRUPPER (en per stopp), inte som en enda kö. Det
+   * är det som gör TILLBAKA möjligt: att spela om grupp k är samma sak
+   * framåt som bakåt. Varje grupp navigerar, rullar fram och stannar på
+   * sitt tur-steg, som väntar på Nästa.
+   */
+  const playTourGroup = useCallback((i: number) => {
+    const t = tourRef.current;
+    if (!t || i < 0 || i >= t.groups.length) return;
+    clearTimer();
+    clickCleanup.current?.();
+    clickCleanup.current = null;
+    t.index = i;
+    queue.current = [...t.groups[i]];
+    running.current = true;
+    // Panelen ska inte stå kvar med förra stegets Nästa medan nästa laddar.
+    setState((s) => ({ ...s, awaitingNext: false }));
+    advance.current();
+  }, []);
+
+  const runTour = useCallback(
+    (tourId: string) => {
+      const t = tour(tourId);
+      if (!t) return;
+      clearTimer();
+      clickCleanup.current?.();
+      clickCleanup.current = null;
+      tourRef.current = { flow: t, groups: tourGroups(t), index: 0 };
+      running.current = true;
+      ownRoute.current = pathname;
+      flowRef.current = t.label;
+      setState({
+        ...idle,
+        flowLabel: t.label,
+        stops: t.steps.map((st, idx) => ({ step: idx + 1, label: st.label })),
+      });
+      playTourGroup(0);
+    },
+    [pathname, playTourGroup],
+  );
+
+  const nextTour = useCallback(() => {
+    const t = tourRef.current;
+    if (!t) return;
+    if (t.index + 1 < t.groups.length) playTourGroup(t.index + 1);
+    else stop();
+  }, [playTourGroup, stop]);
+
+  const backTour = useCallback(() => {
+    const t = tourRef.current;
+    if (!t || t.index === 0) return;
+    playTourGroup(t.index - 1);
+  }, [playTourGroup]);
+
   // Byter användaren vy själv avbryts sekvensen. `ownRoute` sätts av
   // guidens egna vybyten, så bara främmande navigering fångas här.
   useEffect(() => {
@@ -341,6 +433,7 @@ export const GuideProvider = ({ children }: { children: ReactNode }) => {
         if (!flow) return;
         run(flowSteps(flow), flow.label);
       },
+      runTour,
       teach: (anchor, text, heading) => {
         run([
           { kind: "rulla-till", anchor },
@@ -355,7 +448,7 @@ export const GuideProvider = ({ children }: { children: ReactNode }) => {
       active: state.anchor !== null,
       state,
     }),
-    [run, stop, state, pathname],
+    [run, runTour, stop, state, pathname],
   );
 
   return (
@@ -366,11 +459,18 @@ export const GuideProvider = ({ children }: { children: ReactNode }) => {
         heading={state.heading}
         text={state.text}
         awaitingClick={state.awaitingClick}
+        awaitingNext={state.awaitingNext}
         targetLabel={state.targetLabel}
         flowLabel={state.flowLabel}
         stops={state.stops}
         receipt={state.receipt}
         progress={state.progress}
+        canBack={(state.progress?.current ?? 1) > 1}
+        isLast={
+          state.progress !== null && state.progress.current >= state.progress.total
+        }
+        onNext={nextTour}
+        onBack={backTour}
         onClose={stop}
         onSkip={() => {
           // Fastnar användaren på ett steg ska hen kunna gå vidare i
@@ -399,6 +499,7 @@ export const useGuide = (): GuideApi =>
     showMe: () => {},
     savedTo: () => {},
     runFlow: () => {},
+    runTour: () => {},
     teach: () => {},
     stop: () => {},
     registerMenu: () => {},

@@ -27,10 +27,13 @@ import {
 } from "../src/lib/guide/catalogue";
 import {
   GUIDED_FLOWS,
+  TOURS,
   flowSteps,
   guidedFlow,
   savedSteps,
   showMeSteps,
+  tour,
+  tourGroups,
   type GuideAction,
 } from "../src/lib/guide/actions";
 import { noMatchMessage, resolveShowMe } from "../src/lib/guide/showMe";
@@ -310,6 +313,66 @@ for (const flow of GUIDED_FLOWS) {
   );
 }
 check("okänt flöde ger null", guidedFlow("finns-inte") === null);
+
+/* --- 4b. Rundturerna: bläddras med Nästa, ALDRIG med ett klick i vyn ------- */
+
+/*
+ * En rundtur är en presentation, inte ett prov. Skillnaden mot ett guidat
+ * arbetsläge är hela poängen med att de ligger i skilda listor, och den
+ * mäts här: en rundtur får inte innehålla ett enda vanta-pa-klick. Gjorde
+ * den det vore vi tillbaka i "klicka på rutan för att komma vidare", som
+ * var precis det som kändes bakvänt.
+ */
+check("det finns minst en rundtur", TOURS.length >= 1, TOURS.length);
+check("okänd rundtur ger null", tour("finns-inte") === null);
+check(
+  "en rundtur och ett guidat flöde delar aldrig id",
+  TOURS.every((t) => !GUIDED_FLOWS.some((f) => f.id === t.id)),
+);
+for (const t of TOURS) {
+  check(`${t.id}: säger vad den leder till`, t.outcome.length > 40, t.outcome);
+  check(`${t.id}: har minst en roll`, t.roles.length >= 1, t.roles);
+  check(`${t.id}: har minst tre stopp`, t.steps.length >= 3, t.steps.length);
+  check(`${t.id}: går att slå upp`, tour(t.id)?.id === t.id);
+  for (const step of t.steps) {
+    check(`${t.id}: ankaret ${step.anchor} finns`, anchorsInUi.has(step.anchor), step.anchor);
+    if (step.route) {
+      check(`${t.id}: adressen ${step.route} finns`, ROUTES.includes(step.route), step.route);
+    }
+    check(`${t.id}: stoppet säger något`, step.text.length > 40, step.text);
+  }
+  const groups = tourGroups(t);
+  check(`${t.id}: en grupp per stopp`, groups.length === t.steps.length, groups.length);
+  const alla = groups.flat();
+  // KÄRNAN: en rundtur bläddras, den kräver inga klick ute i vyn.
+  check(
+    `${t.id}: inget stopp kräver ett klick i vyn`,
+    !alla.some((a) => a.kind === "vanta-pa-klick"),
+    kinds(alla),
+  );
+  check(
+    `${t.id}: varje stopp är ett tur-steg`,
+    alla.filter((a) => a.kind === "tur-steg").length === t.steps.length,
+    kinds(alla),
+  );
+  check(
+    `${t.id}: varje grupp slutar på sitt tur-steg`,
+    groups.every((g) => g.at(-1)?.kind === "tur-steg"),
+  );
+  check(`${t.id}: guiden klickar inte åt användaren`, !alla.some((a) => a.kind === "vaxla-flik"));
+}
+
+// Motorn måste faktiskt köra rundturen med Nästa, annars är listan ovan en
+// oanvänd datastruktur. Vaktas som text i källan.
+{
+  const provider = readFileSync(join(process.cwd(), "src/components/guide/GuideProvider.tsx"), "utf8");
+  check("motorn har ett rundtursläge", provider.includes("awaitingNext"));
+  check("motorn kan starta en rundtur", provider.includes("runTour"));
+  const spotlight = readFileSync(join(process.cwd(), "src/components/guide/Spotlight.tsx"), "utf8");
+  check("panelen har en Nästa-väg", spotlight.includes("onNext") && spotlight.includes("Nästa"));
+  const bar = readFileSync(join(process.cwd(), "src/components/guide/ShowMeBar.tsx"), "utf8");
+  check("rundturen går att starta från ytan", bar.includes("runTour"));
+}
 
 /* --- 5. "Visa mig": fritext in, rätt plats ut ------------------------------ */
 

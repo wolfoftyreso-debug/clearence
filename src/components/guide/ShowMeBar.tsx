@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { data } from "@/data";
 import { useGuide } from "@/components/guide/GuideProvider";
-import { GUIDED_FLOWS } from "@/lib/guide/actions";
+import { GUIDED_FLOWS, TOURS } from "@/lib/guide/actions";
 import { noMatchMessage, resolveShowMe, type ShowMeResult } from "@/lib/guide/showMe";
 import type { GuideAudience } from "@/lib/guide/catalogue";
 import { Compass, Play } from "lucide-react";
@@ -113,7 +113,19 @@ export const ShowMeBar = () => {
           Eller låt mig gå igenom det med dig
         </p>
         <div className="mt-1.5 space-y-1.5">
-          {GUIDED_FLOWS.filter((f) => f.roles.some((r) => audience.includes(r))).map((flow) => (
+          {/* Rundturerna först (bläddras med Nästa), sedan de guidade
+              arbetslägena (där guiden väntar på ditt klick). Två sorter,
+              samma lista - men de startar olika motorer. */}
+          {[
+            ...TOURS.filter((f) => f.roles.some((r) => audience.includes(r))).map((flow) => ({
+              flow,
+              tour: true,
+            })),
+            ...GUIDED_FLOWS.filter((f) => f.roles.some((r) => audience.includes(r))).map((flow) => ({
+              flow,
+              tour: false,
+            })),
+          ].map(({ flow, tour }) => (
             <div key={flow.id} className="flex flex-wrap items-baseline justify-between gap-2">
               <div className="min-w-0">
                 <p className="text-sm font-medium text-foreground">{flow.label}</p>
@@ -124,7 +136,7 @@ export const ShowMeBar = () => {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => guide.runFlow(flow.id)}
+                onClick={() => (tour ? guide.runTour(flow.id) : guide.runFlow(flow.id))}
                 data-guide={`flode-${flow.id}`}
               >
                 <Play className="h-3.5 w-3.5" aria-hidden="true" />

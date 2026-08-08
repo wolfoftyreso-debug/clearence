@@ -50,6 +50,15 @@ export type GuideAction =
    * ha nio steg kvar hoppar av.
    */
   | { kind: "vanta-pa-klick"; anchor: string; text: string; label: string; step: number; of: number }
+  /**
+   * Ett steg i en RUNDTUR. Skillnaden mot vanta-pa-klick är hela poängen
+   * med den här ändringen: en rundtur VISAR var saker ligger, den ber inte
+   * användaren utföra något. Därför väntar guiden här på en Nästa-knapp i
+   * panelen, inte på ett klick ute i vyn. Att tvinga ett klick på själva
+   * ytan för att bara komma vidare i en presentation är att förväxla en
+   * demonstration med ett prov - och det var precis det som kändes bakvänt.
+   */
+  | { kind: "tur-steg"; anchor: string; text: string; label: string; step: number; of: number }
   /** En kort paus, så att ögat hinner följa med. */
   | { kind: "andas"; ms: number };
 
@@ -183,18 +192,6 @@ export const GUIDED_FLOWS: GuidedFlow[] = [
     ],
   },
   {
-    id: "sa-hittar-du-tillbaka",
-    label: "Så hittar du tillbaka till allt",
-    outcome: "En rundtur på under en minut genom de fyra ytor du kommer att använda mest.",
-    roles: ["company", "advisor"],
-    steps: [
-      { route: "/dashboard", anchor: "kontrollomrade", label: "Kontrolläge", text: "Kontrolläget: svaret på om systemet håller uppsikt åt dig." },
-      { route: "/dashboard/liquidity", anchor: "likviditetsvyn", label: "Likviditet", text: "Likviditeten: dagen kassan tar slut, och vad som ligger bakom siffran." },
-      { route: "/dashboard/dokument", anchor: "dokumentvyn", label: "Dokument", text: "Dokumenten: allt som produceras i ärendet hamnar här av sig självt." },
-      { route: "/dashboard/handelser", anchor: "handelseloggen", label: "Händelselogg", text: "Händelseloggen: spåret som visar när ni insåg och när ni agerade." },
-    ],
-  },
-  {
     id: "sa-arbetar-du-i-ett-klientarende",
     label: "Så arbetar du i ett klientärende",
     outcome: "Vägen från uppdragslistan till det aktiva ärendet, och var du ser vad klienten själv har gjort.",
@@ -248,3 +245,60 @@ export const flowSteps = (flow: GuidedFlow): GuideAction[] => {
   });
   return steps;
 };
+
+/**
+ * RUNDTURERNA: presentationer, inte prov.
+ *
+ * En rundtur svarar på "var ligger allt?", och skiljer sig från ett guidat
+ * arbetsläge på en enda men avgörande punkt: den ber dig inte GÖRA något.
+ * Den pekar, förklarar, och går vidare när DU säger till - med en
+ * Nästa-knapp, som en installationsguide. Att i stället kräva ett klick på
+ * själva ytan bara för att bläddra framåt kändes bakvänt, och det var det:
+ * en presentation ska inte hålla dig gisslan tills du prickat rätt ruta.
+ *
+ * Rundturerna bor i en egen lista, skild från GUIDED_FLOWS, just för att
+ * de två inte får blandas ihop igen: det guidade arbetsläget SKA vänta på
+ * användarens hand (man minns det man gjort själv), rundturen ska inte.
+ */
+export const TOURS: GuidedFlow[] = [
+  {
+    id: "sa-hittar-du-tillbaka",
+    label: "Så hittar du tillbaka till allt",
+    outcome: "En rundtur på under en minut genom de fyra ytor du kommer att använda mest. Bläddra med Nästa.",
+    roles: ["company", "advisor"],
+    steps: [
+      { route: "/dashboard", anchor: "kontrollomrade", label: "Kontrolläge", text: "Kontrolläget: svaret på om systemet håller uppsikt åt dig. Här ligger bevakningen av frister och nyckeltal." },
+      { route: "/dashboard/liquidity", anchor: "likviditetsvyn", label: "Likviditet", text: "Likviditeten: dagen kassan tar slut, och vad som ligger bakom siffran. Det är den viktigaste siffran i hela läget." },
+      { route: "/dashboard/dokument", anchor: "dokumentvyn", label: "Dokument", text: "Dokumenten: allt som produceras i ärendet hamnar här av sig självt – rapporter, underlag och mallar." },
+      { route: "/dashboard/handelser", anchor: "handelseloggen", label: "Händelselogg", text: "Händelseloggen: spåret som visar när ni insåg och när ni agerade. Den skrivs av systemet och går inte att ändra i efterhand." },
+    ],
+  },
+];
+
+export const tour = (id: string): GuidedFlow | null =>
+  TOURS.find((t) => t.id === id) ?? null;
+
+/**
+ * En rundtur som grupper av åtgärder, en grupp per stopp.
+ *
+ * Grupperna, och inte en enda platt kö, är det som gör TILLBAKA möjligt:
+ * motorn kan spela om vilken grupp som helst, i vilken ordning som helst.
+ * Varje grupp navigerar (även till samma vy - react-router struntar i det)
+ * så att ett hopp bakåt landar rätt oavsett var man kom ifrån, rullar fram
+ * och stannar på ett tur-steg som väntar på Nästa.
+ */
+export const tourGroups = (t: GuidedFlow): GuideAction[][] =>
+  t.steps.map((step, i) => {
+    const grupp: GuideAction[] = [];
+    if (step.route) grupp.push({ kind: "oppna-vy", route: step.route });
+    grupp.push({ kind: "rulla-till", anchor: step.anchor });
+    grupp.push({
+      kind: "tur-steg",
+      anchor: step.anchor,
+      text: step.text,
+      label: step.label,
+      step: i + 1,
+      of: t.steps.length,
+    });
+    return grupp;
+  });
