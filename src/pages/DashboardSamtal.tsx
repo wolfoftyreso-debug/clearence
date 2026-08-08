@@ -48,6 +48,7 @@ import { analysisInputFromCase, parseAmount } from "@/lib/caseAnalysis";
 import { countdownTo } from "@/lib/actionPlan";
 import type { AdvisorSessionRecord } from "@/data/types";
 import { useInlineReport } from "@/components/reports/useInlineReport";
+import { DataMinimeringHint } from "@/components/privacy/DataMinimeringHint";
 import { buildInvoiceDocument, invoiceFromCustomerRecord } from "@/lib/reports/invoiceDocuments";
 import { ArrowRight, ChevronDown, Compass, FileCheck2, FileText, Gavel, RotateCcw, Send } from "lucide-react";
 
@@ -1260,6 +1261,12 @@ const DashboardSamtal = () => {
                   </Button>
                 </form>
               ) : null}
+              {/* Dataminimering vid fritext (GDPR art. 9): en känslig
+                  krissituation drar åt sig personuppgifter fältet inte
+                  behöver. Påminnelsen står där texten skrivs. */}
+              {!assessment && invite?.stage !== "confirm" && currentStep?.kind !== "amount" && (
+                <DataMinimeringHint className="mt-2" />
+              )}
               <div ref={bottomRef} />
             </section>
 

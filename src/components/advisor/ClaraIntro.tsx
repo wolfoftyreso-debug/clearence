@@ -29,6 +29,7 @@ import {
 } from "@/lib/advisor/companyProfile";
 import { interviewProgress, nextQuestion } from "@/lib/advisor/interview";
 import { buildFirstAnalysis } from "@/lib/advisor/firstAnalysis";
+import { DataMinimeringHint } from "@/components/privacy/DataMinimeringHint";
 import type { CompanyInfo } from "@/data/types";
 import { Check, ChevronDown } from "lucide-react";
 
@@ -835,6 +836,10 @@ export const ClaraIntro = ({
                   </dl>
                 </div>
               )}
+
+              {/* Dataminimering redan i onboardingen: fälten ber om företag
+                  och kontakt, inte om känsliga privatuppgifter. */}
+              <DataMinimeringHint />
 
               <Button type="submit" variant="accent" size="lg" disabled={!canContinue} className="w-full sm:w-auto">
                 {ONBOARDING.submitLabel}
