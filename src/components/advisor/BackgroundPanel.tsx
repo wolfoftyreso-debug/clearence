@@ -7,7 +7,7 @@ import {
   type BackgroundContext,
 } from "@/lib/advisor/backgroundWork";
 import { WAITS, waitText } from "@/lib/advisor/prepare";
-import { Check, Loader2, MinusCircle } from "lucide-react";
+import { Check, Loader2, MinusCircle, PlugZap } from "lucide-react";
 
 /**
  * Panelen som visar att något faktiskt pågår medan användaren svarar.
@@ -64,11 +64,15 @@ export const BackgroundPanel = ({ ctx }: { ctx: BackgroundContext }) => {
               {task.state === "klar" && <Check className="h-3.5 w-3.5 text-success" />}
               {task.state === "pagar" && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
               {task.state === "ingen-kalla" && <MinusCircle className="h-3.5 w-3.5 text-muted-foreground" />}
+              {task.state === "i-drift" && <PlugZap className="h-3.5 w-3.5 text-primary" />}
             </span>
             <span className={task.state === "pagar" ? "text-muted-foreground" : "text-foreground"}>
               {task.label}
               {task.state === "ingen-kalla" && (
                 <span className="text-muted-foreground"> – ingen källa ansluten</span>
+              )}
+              {task.state === "i-drift" && (
+                <span className="text-primary"> – blir live i drift</span>
               )}
               {task.note && <span className="block text-muted-foreground">{task.note}</span>}
             </span>

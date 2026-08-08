@@ -29,6 +29,7 @@ import {
 } from "./http";
 import { ALLMAN, klientNyckel, LOGIN, provaGrans, type Utfall } from "./rateLimit";
 import { googleConfigured, lookupCompany } from "./google";
+import { fetchWebsite, websiteConfigured } from "./website";
 import { anthropicConfigured, clearanceReply, type AdvisorMessage } from "./anthropic";
 import { deriveAuditDetail } from "../../src/lib/auditDetail";
 import { withAnon, withUser } from "./db";
@@ -286,7 +287,7 @@ router.get("/v1/health", async () => ({
   body: {
     status: "ok",
     version: "1.0",
-    sources: { google: googleConfigured() },
+    sources: { google: googleConfigured(), website: websiteConfigured() },
     advisor: anthropicConfigured(),
   },
 }));
@@ -311,6 +312,26 @@ router.post("/v1/sources/google", async (req) => {
   if (companyName.length === 0) throw badRequest("companyName krävs.");
   const ort = typeof body.ort === "string" ? body.ort.trim() : undefined;
   return { status: 200, body: await lookupCompany(companyName, ort) };
+});
+
+/**
+ * Hämtning av bolagets EGEN webbplats.
+ *
+ * KRÄVER INLOGGNING, inte för att sidan är hemlig - den är publik - utan för
+ * att en öppen rutt som hämtar en URL åt vem som helst är en öppen proxy. Med
+ * inloggning bakom och SSRF-skyddet i website.ts (privata adresser vägras) kan
+ * den inte lockas att hämta något internt.
+ *
+ * Svaret bär samma sorts status-fält som Google: "traff", "forbjuden" (sidans
+ * robots.txt säger nej), "ingen-traff" och "fel" hålls isär i stället för att
+ * tyst bli ett tomt resultat.
+ */
+router.post("/v1/sources/website", async (req) => {
+  await authenticate(req);
+  const body = (req.body ?? {}) as { url?: unknown };
+  const url = typeof body.url === "string" ? body.url.trim() : "";
+  if (url.length === 0) throw badRequest("url krävs.");
+  return { status: 200, body: await fetchWebsite(url) };
 });
 
 /**

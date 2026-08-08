@@ -34,7 +34,15 @@ export type BackgroundSource =
 
 import { liveSources, sourceById } from "@/lib/sources/registry";
 
-export type BackgroundState = "pagar" | "klar" | "ingen-kalla";
+/*
+ * Fyra tillstånd, och "i-drift" är det som skiljer en ärlig tom ruta från en
+ * nedslående. En källa kan vara BYGGD OCH PÅSLAGEN men ändå inte ha hämtat
+ * något i just den här förhandsvisningen - webbplatsläsaren kör mot ett
+ * riktigt bolags sida först i skarp drift. Att då skriva "ingen källa
+ * ansluten" vore fel: källan FINNS. "i-drift" säger det som är sant - blir
+ * live i drift - i stället för "kan inte".
+ */
+export type BackgroundState = "pagar" | "klar" | "ingen-kalla" | "i-drift";
 
 export interface BackgroundTask {
   id: string;
@@ -99,6 +107,12 @@ export interface BackgroundContext {
   orgNumber: string;
   /** Sant när uppslaget mot företagsregistret gav svar. */
   registryHit: boolean;
+  /**
+   * Sant när webbplatsen faktiskt hämtades och lästes den här körningen.
+   * I demo-/förhandsläget hämtas ingen sida - då är den false och raden
+   * redovisas som "i-drift" (blir live i drift), inte som klar eller saknad.
+   */
+  websiteFetched?: boolean;
   /** Antal besvarade intervjufrågor just nu. */
   answered: number;
   /** Antal ifyllda profilfält just nu. */
@@ -213,6 +227,20 @@ export const backgroundTasks = (ctx: BackgroundContext, upTo: number): Backgroun
         note: missingNote(plan.source),
       };
     }
+    // Webbplatsläsaren är byggd och påslagen, men hämtar en riktig sida
+    // först i skarp drift. Utan en verklig hämtning i den här körningen är
+    // det varken klart eller saknat - det blir live i drift.
+    if (plan.source === "webb" && !ctx.websiteFetched) {
+      return {
+        id: plan.id,
+        label: plan.label,
+        source: plan.source,
+        state: "i-drift",
+        note:
+          "Byggd och påslagen. Läser bolagets egen webbplats när tjänsten " +
+          "körs skarpt mot ett riktigt bolag – robots.txt först, aldrig något gissat.",
+      };
+    }
     if (!answered) {
       return {
         id: plan.id,
@@ -231,6 +259,12 @@ export const BACKGROUND_STEPS = PLAN.length;
 export const backgroundSummary = (tasks: BackgroundTask[]): string => {
   const done = tasks.filter((t) => t.state === "klar").length;
   const missing = tasks.filter((t) => t.state === "ingen-kalla").length;
-  if (missing === 0) return `${done} av ${tasks.length} moment klara.`;
-  return `${done} av ${tasks.length} moment klara. ${missing} kunde inte göras – källan är inte ansluten, och då säger jag hellre det än gissar.`;
+  const iDrift = tasks.filter((t) => t.state === "i-drift").length;
+  const grund = `${done} av ${tasks.length} moment klara.`;
+  const driftDel =
+    iDrift > 0
+      ? ` ${iDrift} ${iDrift === 1 ? "moment blir" : "moment blir"} live i drift – byggt och påslaget, hämtas mot ett riktigt bolag skarpt.`
+      : "";
+  if (missing === 0) return `${grund}${driftDel}`;
+  return `${grund}${driftDel} ${missing} kunde inte göras – källan är inte ansluten, och då säger jag hellre det än gissar.`;
 };

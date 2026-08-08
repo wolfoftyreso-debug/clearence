@@ -109,10 +109,24 @@ check(
   allDone.every((t) => t.state !== "pagar"),
 );
 
+// Webbplatsläsaren är byggd OCH påslagen, men hämtar en riktig sida först
+// i skarp drift. I demoläget (websiteFetched saknas) får den varken bockas
+// av eller sägas sakna källa - den blir live i drift. Det är skillnaden
+// mellan en ärlig tom ruta och en nedslående.
+{
+  const webb = allDone.find((t) => t.id === "webbplats")!;
+  check(`"webbplats" påstår inte att det gjorts`, webb.state === "i-drift", webb.state);
+  check(`"webbplats" ramas som byggt, inte saknat`, /Byggd och påslagen/.test(webb.note), webb.note);
+  // Och när sidan FAKTISKT hämtats en körning blir den klar, inte i-drift.
+  const medHamtning = backgroundTasks({ ...ctx, websiteFetched: true }, BACKGROUND_STEPS)
+    .find((t) => t.id === "webbplats")!;
+  check(`"webbplats" blir klar när sidan hämtats`, medHamtning.state === "klar", medHamtning.state);
+}
+
 // Kärnan i hela filen: momenten utan ansluten källa MÅSTE redovisas som
 // sådana. Blir något av dem "klar" har någon råkat lova en integration
 // som inte finns.
-for (const id of ["webbplats", "sociala", "recensioner", "nyheter", "konkurrenter"]) {
+for (const id of ["sociala", "recensioner", "nyheter", "konkurrenter"]) {
   const task = allDone.find((t) => t.id === id)!;
   check(`"${id}" påstår inte att det gjorts`, task.state === "ingen-kalla", task.state);
   /*

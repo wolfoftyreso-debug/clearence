@@ -766,6 +766,99 @@
         }
       }
     },
+    "/sources/website": {
+      "post": {
+        "operationId": "fetchCompanyWebsite",
+        "summary": "Hämtar och läser bolagets egen webbplats",
+        "description": "Hämtar bolagets egen publika webbplats och läser ut det som går att stå för: beskrivning, namn, egna kontaktvägar och länkade sociala konton. Ingenting gissas, och namngivna personers uppgifter plockas aldrig ut. Robots.txt frågas först – tillåter den inte hämtning blir svaret forbjuden i stället för ett tyst tomt resultat. Kräver inloggning trots att sidan är publik: en öppen rutt som hämtar en URL åt vem som helst vore en öppen proxy, och servern vägrar dessutom adresser som pekar på interna, loopback- eller länklokala nät. Svarets status skiljer på traff, forbjuden (robots säger nej), ingen-traff (sidan gick att hämta men bar inget användbart) och fel (adressen gick inte att nå). De fyra får inte slås ihop.",
+        "x-status": "beta",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "url"
+                ],
+                "properties": {
+                  "url": {
+                    "type": "string",
+                    "description": "Bolagets webbadress (http eller https). Interna, loopback- och länklokala adresser vägras."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Utfallet av hämtningen",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "required": [
+                        "status",
+                        "facts",
+                        "note"
+                      ],
+                      "properties": {
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "traff"
+                          ]
+                        },
+                        "facts": {
+                          "$ref": "#/components/schemas/WebsiteFacts"
+                        },
+                        "note": {
+                          "type": "string",
+                          "description": "Läsbar sammanfattning av vad som hittades."
+                        }
+                      }
+                    },
+                    {
+                      "type": "object",
+                      "required": [
+                        "status",
+                        "reason"
+                      ],
+                      "properties": {
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "forbjuden",
+                            "ingen-traff",
+                            "fel"
+                          ]
+                        },
+                        "reason": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/advisor/reply": {
       "post": {
         "operationId": "clearanceReply",
@@ -1822,6 +1915,58 @@
                   "type": "string"
                 }
               }
+            }
+          }
+        }
+      },
+      "WebsiteFacts": {
+        "type": "object",
+        "description": "Uppgifter ur bolagets egen webbplats. Bara det som går att stå för läses ut – strukturerad data (JSON-LD, OpenGraph) före brödtext, som aldrig tolkas. Namngivna personers uppgifter plockas aldrig ut; bara bolagets egna kontaktvägar.",
+        "properties": {
+          "description": {
+            "type": "string",
+            "nullable": true,
+            "description": "Bolagets egen beskrivning av sig självt."
+          },
+          "name": {
+            "type": "string",
+            "nullable": true,
+            "description": "Namnet sidan själv anger."
+          },
+          "socials": {
+            "type": "array",
+            "description": "Konton bolaget självt länkar till. Plattformarna hämtas aldrig.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "platform": {
+                  "type": "string"
+                },
+                "url": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "contact": {
+            "type": "object",
+            "description": "Bolagets egna kontaktvägar – aldrig namngivna personers.",
+            "properties": {
+              "email": {
+                "type": "string",
+                "nullable": true
+              },
+              "phone": {
+                "type": "string",
+                "nullable": true
+              }
+            }
+          },
+          "basis": {
+            "type": "array",
+            "description": "Var varje uppgift kom ifrån, så att frågan hur vet ni det går att besvara.",
+            "items": {
+              "type": "string"
             }
           }
         }

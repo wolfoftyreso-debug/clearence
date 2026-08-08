@@ -110,32 +110,31 @@ export const SOURCES: SourceSpec[] = [
     label: "Bolagets webbplats",
     acquisition: "hamta",
     /*
-     * INTE LIVE ÄNNU, och skillnaden är viktig: tolken är skriven och
-     * prövad (sources/website.ts, tests/sources.ts), men ingen hämtare är
-     * kopplad. Att märka källan som ansluten för att koden finns vore att
-     * påstå att vi läst en sida vi aldrig hämtat - samma sorts osanning
-     * som resten av produkten är byggd för att undvika.
+     * LIVE, OCH KÖRNINGSBEROENDE. Skillnaden mot förut är att hämtaren nu
+     * finns: API-slutpunkten /v1/sources/website hämtar sidan på riktigt,
+     * med robots.txt först och SSRF-skydd (api/server/website.ts), och
+     * tolkningen är prövad (sources/website.ts, tests/sources.ts).
      *
-     * Den här raden vänds till true samtidigt som API-slutpunkten kopplas
-     * in, inte före.
+     * Ingen nyckel och inget avtal krävs - sidan är publik och kunden äger
+     * den - så till skillnad från företagsregistret och recensionerna är
+     * den här live utan förbehåll. Men OM den ger något avgörs ändå vid
+     * körning: en sida kan vara nere, robots.txt kan säga nej, eller sidan
+     * kan sakna strukturerad data. Panelen visar då utfallet i klartext
+     * (traff / robots säger nej / hämtad men tom / gick inte att nå) i
+     * stället för en tyst lucka.
      */
-    live: false,
+    live: true,
+    runtime: true,
     value:
       "Vad bolaget säger att det gör, kontaktvägar, och vilka sociala konton " +
       "det själv länkar till.",
-    /*
-     * "Webbadressen från dig" stod här förut. Den behöver inte längre
-     * komma från användaren: Google Places returnerar websiteUri, och det
-     * var precis den saknade biten. Kvar är hämtaren av själva sidan.
-     */
-    needs:
-      "Slutpunkten i API:et som hämtar sidan. Webbadressen behöver du inte " +
-      "längre lämna själv - den kommer ur Google-uppslaget. Tolkningen är " +
-      "byggd och prövad; det som saknas är hämtningen av sidan.",
+    /* Byggd och påslagen. Inget kvarstår att koppla in. */
+    needs: "",
     basis:
       "Sidan är publicerad för att läsas, och kunden äger den. Vi läser " +
       "robots.txt först och respekterar den, anger vem vi är i user-agent, " +
-      "och hämtar ett fåtal sidor - inte hela sajten.",
+      "och hämtar ett fåtal sidor - inte hela sajten. Servern vägrar " +
+      "dessutom adresser som pekar på interna nät (SSRF-skydd).",
   },
   {
     id: "sociala-medier",
