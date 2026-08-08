@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { Link } from "react-router";
+import { useNavigate } from "react-router";
+import { ProUpgradeOffer } from "@/components/pricing/ProUpgradeOffer";
+import { markProOfferSeen, proOfferSeen } from "@/lib/proOffer";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { data } from "@/data";
@@ -142,6 +144,29 @@ export const ClaraIntro = ({
   const [resumeNoticeOpen, setResumeNoticeOpen] = useState(resumed !== null);
   const [profileOpen, setProfileOpen] = useState(false);
   const [smsChoice, setSmsChoice] = useState<"none" | "yes" | "no">("none");
+  const [proOfferOpen, setProOfferOpen] = useState(false);
+  const navigate = useNavigate();
+
+  /**
+   * "Ja, visa hur" på SMS-kortet. Förut bar den rakt in i inställningarna.
+   * Nu tar den vägen förbi engångserbjudandet - en enda gång. Har det redan
+   * visats går vi direkt vidare; ingen ska mötas av samma "sista chans" två
+   * gånger (det vore den falska brådska produkten inte ägnar sig åt).
+   */
+  const SMS_SETTINGS = "/dashboard/installningar";
+  const handleSmsYes = () => {
+    setSmsChoice("yes");
+    if (proOfferSeen()) {
+      navigate(SMS_SETTINGS);
+      return;
+    }
+    markProOfferSeen();
+    setProOfferOpen(true);
+  };
+  const leaveOffer = () => {
+    setProOfferOpen(false);
+    navigate(SMS_SETTINGS);
+  };
 
   const bottomRef = useRef<HTMLDivElement | null>(null);
   // Namnet räknas som "vårt" så länge användaren inte själv har skrivit i
@@ -675,8 +700,8 @@ export const ClaraIntro = ({
                   <div className="mt-3">
                     <p className="text-sm font-medium text-foreground">{ONBOARDING.premium.question}</p>
                     <div className="mt-2 flex flex-wrap gap-2">
-                      <Button asChild variant="accent" size="sm" onClick={() => setSmsChoice("yes")}>
-                        <Link to="/dashboard/installningar">{ONBOARDING.premium.yes}</Link>
+                      <Button variant="accent" size="sm" onClick={handleSmsYes}>
+                        {ONBOARDING.premium.yes}
                       </Button>
                       <Button variant="outline" size="sm" onClick={() => setSmsChoice("no")}>
                         {ONBOARDING.premium.no}
@@ -856,6 +881,11 @@ export const ClaraIntro = ({
         </>
       )}
       <div ref={bottomRef} />
+
+      {/* Engångserbjudandet: visas en gång, med en nedräkning som tar slut
+          på riktigt. Accept och avböj landar båda i inställningarna - det
+          var dit "Ja, visa hur" var på väg. */}
+      <ProUpgradeOffer open={proOfferOpen} onAccept={leaveOffer} onDismiss={leaveOffer} />
     </section>
   );
 };

@@ -15,6 +15,8 @@ import {
   formatPlanPrice,
   lockMessage,
 } from "../src/lib/pricing";
+import { OFFER_SECONDS, smsTier } from "../src/lib/proOffer";
+import { ONBOARDING } from "../src/lib/advisor/dialog";
 import type { AccountBillingRecord } from "../src/data/types";
 
 let passed = 0;
@@ -82,6 +84,29 @@ check("villkoren: uppsägning när som helst", PLAN_TERMS.some((t) => t.includes
 check("villkoren: data sparas vid paus", PLAN_TERMS.some((t) => t.includes("sparas även om abonnemanget pausas")));
 check("låslistan täcker export och delning", LOCKED_UNTIL_FIRST_PAYMENT.some((i) => i.includes("Export")) && LOCKED_UNTIL_FIRST_PAYMENT.some((i) => i.includes("Delning")));
 check("ordet AI förekommer inte", !/\bAI\b/i.test(msg + PLAN_TERMS.join(" ") + LOCKED_UNTIL_FIRST_PAYMENT.join(" ")));
+
+/* --- Engångserbjudandet: äkta brådska, rätt nivå, inget hårdkodat pris --- */
+
+// Nivån erbjudandet gäller ska vara den som FAKTISKT låser upp SMS - läst
+// ur prislistan, inte gissad. SMS-kortet kallade den "Professional"; den
+// heter Clearance Business, och det är den som ger SMS.
+check("erbjudandet gäller nivån som låser upp SMS", smsTier.includes.some((r) => /SMS/i.test(r)), smsTier.name);
+check("den nivån är Clearance Business", smsTier.name === "Clearance Business", smsTier.name);
+
+// Nedräkningen är en minut - tydlig, inte utdragen.
+check("nedräkningen är 60 sekunder", OFFER_SECONDS === 60, OFFER_SECONDS);
+
+// SMS-kortet och erbjudandet ska säga samma sanna nivå, inte var sin.
+check(
+  "SMS-kortet namnger rätt nivå",
+  ONBOARDING.premium.tiers.includes(smsTier.name),
+  ONBOARDING.premium.tiers,
+);
+check(
+  "SMS-kortet säger inte längre den felaktiga 'Professional'",
+  !/\bProfessional\b/.test(ONBOARDING.premium.tiers),
+  ONBOARDING.premium.tiers,
+);
 
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);

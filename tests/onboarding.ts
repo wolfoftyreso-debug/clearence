@@ -446,7 +446,7 @@ check(
 check("premiumsteget handlar om SMS", ONBOARDING.premium.heading === "SMS-aviseringar");
 check(
   "det säger vilka nivåer det ingår i",
-  /Professional och Enterprise/.test(ONBOARDING.premium.tiers),
+  /Clearance Business och Enterprise/.test(ONBOARDING.premium.tiers),
 );
 check("det räknar upp vad som skickas", ONBOARDING.premium.examples.length === 4);
 check(

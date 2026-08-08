@@ -722,7 +722,7 @@ export const ONBOARDING = {
       "Daglig VD-sammanfattning",
       "Kritiska avvikelser",
     ],
-    tiers: "Det ingår i Professional och Enterprise.",
+    tiers: "Det ingår i Clearance Business och Enterprise.",
     question: "Vill du aktivera SMS-aviseringar?",
     yes: "Ja, visa hur",
     no: "Inte nu",

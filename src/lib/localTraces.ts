@@ -65,6 +65,10 @@ export const PREFERENCE_KEYS = [
   "clearance-presentation-scope",
   "clearance-mikrolektioner",
   "clearance-notification-prefs",
+  // Att engångserbjudandet redan visats. BEVARAS med flit över utloggning:
+  // en "sista chans" som återkommer varje gång vore just den falska
+  // brådska erbjudandet är byggt för att undvika.
+  "clearance-pro-offer-seen",
 ] as const;
 
 /**
