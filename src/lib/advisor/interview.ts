@@ -88,15 +88,29 @@ export const INTERVIEW: InterviewQuestion[] = [
     id: "bransch",
     text: "Vilken bransch ligger närmast?",
     why: "Branschen avgör vad som är normalt: byggbolag och konsultbolag har helt olika betalningsmönster.",
+    /*
+     * Listan var för grov. En bilverkstad, en frisör, en elektriker och en
+     * lantbrukare hade inget eget val och tvingades till "Något annat" -
+     * och en bransch-fråga där var fjärde bolag svarar "annat" ger ingen
+     * branschbild att luta sig mot. Alternativen nedan täcker de vanligaste
+     * småföretagen i Sverige, grovt i linje med SNI:s huvudgrupper så att
+     * de kan bytas mot företagsregistrets SNI-kod den dag den kopplas in.
+     * "Något annat" finns kvar som sista utväg, inte som förstahandssvar.
+     */
     options: [
       { label: "Bygg och anläggning", fills: { industry: "Bygg" } },
+      { label: "Hantverk och installation", fills: { industry: "Hantverk och installation" } },
+      { label: "Bil och verkstad", fills: { industry: "Bil och verkstad" } },
       { label: "Handel", fills: { industry: "Handel" } },
-      { label: "Tillverkning", fills: { industry: "Tillverkning" } },
-      { label: "Transport", fills: { industry: "Transport" } },
       { label: "Restaurang och hotell", fills: { industry: "Restaurang och hotell" } },
+      { label: "Transport och åkeri", fills: { industry: "Transport" } },
+      { label: "Tillverkning och industri", fills: { industry: "Tillverkning" } },
+      { label: "IT och teknik", fills: { industry: "IT och teknik" } },
       { label: "Konsult och tjänster", fills: { industry: "Konsult och tjänster" } },
       { label: "Vård och omsorg", fills: { industry: "Vård och omsorg" } },
-      { label: "IT och teknik", fills: { industry: "IT och teknik" } },
+      { label: "Skönhet och hälsa", fills: { industry: "Skönhet och hälsa" } },
+      { label: "Fastighet och förvaltning", fills: { industry: "Fastighet" } },
+      { label: "Jordbruk och skog", fills: { industry: "Jordbruk och skog" } },
       { label: "Något annat", fills: { industry: "Övrigt" } },
     ],
   },
