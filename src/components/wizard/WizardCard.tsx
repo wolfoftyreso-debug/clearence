@@ -11,11 +11,18 @@ interface WizardCardProps {
    * guiden utan att något klagar.
    */
   "data-guide"?: string;
+  /**
+   * DOM-id, för länkar som rullar hit (#fakturor). Samma skäl som ovan:
+   * det måste nå ut till elementet, annars pekar ankarlänken på tomma
+   * intet och sidan står still.
+   */
+  id?: string;
 }
 
-export const WizardCard = ({ children, className, "data-guide": guide }: WizardCardProps) => {
+export const WizardCard = ({ children, className, "data-guide": guide, id }: WizardCardProps) => {
   return (
     <div
+      id={id}
       data-guide={guide}
       className={cn(
         "bg-card rounded-md border border-border p-5 md:p-6 shadow-soft",

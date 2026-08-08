@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
+import { useLocation } from "react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { DashboardShell } from "@/components/dashboard/DashboardShell";
 import { Button } from "@/components/ui/button";
@@ -196,6 +197,17 @@ const DashboardSettings = () => {
     queryFn: () => data.billing.listMyInvoices(),
   });
 
+  // "Se fakturor" i bannern länkar hit med #fakturor. Rulla fram avsnittet
+  // när det finns - annars pekar knappen på sidan man redan står på och
+  // ingenting händer, vilket är precis det som fick fakturan att kännas
+  // oklickbar. Kör om när fakturorna laddats så elementet har sin höjd.
+  const { hash } = useLocation();
+  useEffect(() => {
+    if (hash !== "#fakturor") return;
+    const el = document.getElementById("fakturor");
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [hash, invoices, loadingInvoices]);
+
   const [displayName, setDisplayName] = useState("");
   const [phone, setPhone] = useState("");
 
@@ -383,7 +395,10 @@ const DashboardSettings = () => {
           )}
         </WizardCard>
 
-        <WizardCard data-guide="fakturor">
+        {/* id="fakturor": "Se fakturor" i bannern rullar hit. Utan ankaret
+            pekade knappen på sidan man redan stod på, och ingenting hände -
+            fakturan gick inte att klicka upp. */}
+        <WizardCard id="fakturor" data-guide="fakturor">
           <WizardCardHeader
             title="Fakturor och kvitton"
             description="Ligger kvar här. Du behöver aldrig leta i mejlen."

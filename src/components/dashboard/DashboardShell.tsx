@@ -151,7 +151,7 @@ const BillingNotice = () => {
           <p className="text-sm leading-relaxed text-muted-foreground">{message.body}</p>
         </div>
         <Button variant="outline" size="sm" className="flex-shrink-0" asChild>
-          <Link to="/dashboard/installningar">Se fakturor</Link>
+          <Link to="/dashboard/installningar#fakturor">Se fakturor</Link>
         </Button>
       </div>
     </div>
@@ -208,7 +208,7 @@ const LockedAccountView = ({ signOut }: { signOut: () => void }) => {
 
         <div className="mt-6 flex flex-col gap-3 sm:flex-row">
           <Button variant="accent" asChild>
-            <Link to="/dashboard/installningar">Se din faktura</Link>
+            <Link to="/dashboard/installningar#fakturor">Se din faktura</Link>
           </Button>
           <Button variant="outline" asChild>
             <Link to="/kontakt">Stämmer inte det här?</Link>

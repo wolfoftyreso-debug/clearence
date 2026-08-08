@@ -18,6 +18,8 @@ import {
 import { OFFER_SECONDS, smsTier } from "../src/lib/proOffer";
 import { ONBOARDING } from "../src/lib/advisor/dialog";
 import type { AccountBillingRecord } from "../src/data/types";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 let passed = 0;
 let failed = 0;
@@ -107,6 +109,13 @@ check(
   !/\bProfessional\b/.test(ONBOARDING.premium.tiers),
   ONBOARDING.premium.tiers,
 );
+
+// Erbjudandet ska visa ALLT som ingår, med SMS-raden med. Förut kapade en
+// slice(0,3) bort just SMS - det användaren klickade för. Vaktas i källan.
+const offerSrc = readFileSync(join(process.cwd(), "src/components/pricing/ProUpgradeOffer.tsx"), "utf8");
+check("erbjudandet kapar inte listan till tre", !/\.slice\(0,\s*3\)/.test(offerSrc), "slice(0,3) tillbaka");
+check("erbjudandet lyfter SMS-raden överst", /find\(\(rad\) => \/SMS\/i\.test\(rad\)\)/.test(offerSrc));
+check("erbjudandet renderar varje ingående rad", /punkter\.map/.test(offerSrc));
 
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);

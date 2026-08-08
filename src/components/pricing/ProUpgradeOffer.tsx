@@ -52,6 +52,13 @@ export const ProUpgradeOffer = ({
   // Andelen kvar, för nedräkningsstapeln.
   const kvar = Math.max(0, Math.min(100, (left / OFFER_SECONDS) * 100));
 
+  // SMS överst - det var det klicket handlade om - sedan resten. Förut
+  // visades bara tre rader, och SMS låg fjärde och föll bort helt.
+  const smsRad = smsTier.includes.find((rad) => /SMS/i.test(rad));
+  const punkter = smsRad
+    ? [smsRad, ...smsTier.includes.filter((rad) => rad !== smsRad)]
+    : smsTier.includes;
+
   return (
     <div
       className="fixed inset-0 z-[100] flex items-center justify-center bg-foreground/70 p-4"
@@ -112,14 +119,24 @@ export const ProUpgradeOffer = ({
             provar du hela nivån utan att betala första veckan.
           </p>
 
-          {/* Vad man faktiskt får. De tre vassaste, inte hela listan. */}
-          <ul className="mx-auto mt-4 max-w-xs space-y-1.5 text-left">
-            {smsTier.includes.slice(0, 3).map((rad) => (
-              <li key={rad} className="flex items-start gap-2 text-sm text-foreground">
-                <Check className="mt-0.5 h-4 w-4 flex-shrink-0 text-success" aria-hidden="true" />
-                {rad}
-              </li>
-            ))}
+          {/* Allt som ingår, med SMS överst - det var det klicket handlade
+              om, och förut kapades just den raden bort. Varje rad sin bock. */}
+          <p className="mt-4 text-left text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+            Allt i {smsTier.name} ingår:
+          </p>
+          <ul className="mt-1.5 space-y-1.5 text-left">
+            {punkter.map((rad) => {
+              const arSms = /SMS/i.test(rad);
+              return (
+                <li
+                  key={rad}
+                  className={`flex items-start gap-2 text-sm ${arSms ? "font-semibold text-foreground" : "text-foreground"}`}
+                >
+                  <Check className="mt-0.5 h-4 w-4 flex-shrink-0 text-success" aria-hidden="true" />
+                  {rad}
+                </li>
+              );
+            })}
           </ul>
 
           <p className="mt-4 text-xs text-muted-foreground">
