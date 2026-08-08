@@ -22,9 +22,9 @@ Legend: 🟢 klart · 🟡 påbörjat/underlag finns · 🔴 ej gjort
 
 | # | Krav | Typ | Status | Var / hur |
 |---|---|---|---|---|
-| P1-1 | Gallringstider fastställda och tekniskt genomförda (driftparameter + gallringsjobb) | [KOD] | 🟡 | (byggs i denna omgång) |
-| P1-2 | Den registrerades rättigheter: registerutdrag, dataportabilitet, rättelse, radering | [KOD] | 🟡 | (byggs i denna omgång) |
-| P1-3 | Art. 9-risk i fritext hanterad: dataminimeringsinstruktion vid fritextfält | [KOD] | 🟡 | (byggs i denna omgång) |
+| P1-1 | Gallringstider fastställda (driftparameter) och tekniskt genomförda (worker) | [KOD] | 🟢 | `src/lib/retention.ts` (policy), driftpanelens RetentionSection, worker `--gallra` (skuggläge). Vaktat i `tests/dataskydd.ts`. Skarp per-kategori-radering aktiveras medvetet av DBA. |
+| P1-2 | Den registrerades rättigheter: registerutdrag, dataportabilitet, rättelse, radering | [KOD] | 🟢 | Dataskyddssektion i `src/pages/DashboardSettings.tsx`; `src/lib/dataExport.ts` (utdrag/portabilitet); radering via dataskyddskanalen. Vaktat i `tests/dataskydd.ts`. |
+| P1-3 | Art. 9-risk i fritext hanterad: dataminimeringsinstruktion vid fritextfält | [KOD] | 🟢 | `src/lib/dataMinimering.ts` + `DataMinimeringHint` i samtalet och onboardingen. Vaktat i `tests/dataskydd.ts`. |
 | P1-4 | E-signeringens beviskedja (vem/vad/när, oföränderlig länkad kedja, ärliga eIDAS-gränser) | [KOD] | 🟢 | `src/lib/signing.ts`, vaktat i `tests/signing.ts`. |
 | P1-5 | Webbhämtaren live med robots.txt + SSRF-skydd (halvtomma källpaneler undvikna) | [KOD] | 🟢 | `api/server/website.ts`, vaktat i `tests/website.ts`. |
 | P1-6 | Avtal för företagsregister (Bolagsverket/kreditupplysare) | [EXTERNT] | 🔴 | Registret märker källan som ej-live tills avtal finns (`src/lib/sources/registry.ts`). |

@@ -36,19 +36,36 @@ Särskilda kategorier (art. 9) samlas inte in avsiktligt; fritextfält kan dock 
 - **API-nycklar lagras endast som SHA-256**; sessionstokens aldrig i klartext.
 - **Transaktionslokal identitet** + **RLS** i databasen; API kör som `authenticated`, aldrig ägare/BYPASSRLS.
 - Hemligheter (`ANTHROPIC_API_KEY`, `GOOGLE_MAPS_API_KEY`, `DATABASE_URL`) i **Secrets Manager**, aldrig i frontend-bunten.
+- **Dataminimering vid fritext:** en kort påminnelse står intill fritextfälten (samtalet, onboardingen) om att inte dela fler personuppgifter än läget kräver — motmedel mot art. 9-uppgifter i fritext. (`src/lib/dataMinimering.ts`, vaktat i `tests/dataskydd.ts`.)
+- **Regelaktualitet i samtalet:** modellen får aldrig påstå en specifik frist, ett belopp eller ett gränsvärde som säkert gällande, utan hänvisar till primärkälla eller en människa. (`api/server/anthropic.ts`, vaktat i `tests/anthropic.ts`.)
 
-## 6. Lagring & gallring (förslag — [ÖPPET])
+## 6. Lagring & gallring — policy satt i kod
+Gallringspolicyn är **satt**, inte längre bara ett förslag: en tid och en åtgärd per kategori i `src/lib/retention.ts`, med tiderna som **driftparametrar** (app_settings, nyckeln `retention_policy`) och åtgärden (radera / anonymisera / behåll) medveten per kategori. Driftpanelen visar policyn ärligt (RetentionSection), och workern kör den via `--gallra`. Vaktat i `tests/dataskydd.ts`.
+- **Skuggläge som default:** gallringen räknar vad som skulle tas bort men raderar inget förrän en kategori aktiveras medvetet — samma försiktighet som skuggdebiteringen. Bara hastighetsgränsens sekundfärska teknikrader gallras skarpt från start.
 - Aktiva ärenden: bevaras under uppdraget.
-- Avslutade ärenden: föreslå gallringstid (t.ex. X månader) vägt mot bokförings-/preskriptionskrav. [ÖPPET]
-- Samtalsloggar/journal: bevaras för spårbarhet men minimeras. [ÖPPET]
-- Modell-leverantör: **ZDR** så inget innehåll lagras hos underbiträdet. [ÖPPET: aktivera på kontonivå]
+- Avslutade ärenden: kontaktuppgifter anonymiseras efter satt tid (standard 24 mån, driftparameter). **[ÖPPET: DBA bekräftar tid mot bokförings-/preskriptionskrav och aktiverar kategorin.]**
+- Samtalsloggar/journal: anonymiseras i sedan länge avslutade ärenden (fritexten bort, posten/tidslinjen kvar). **[ÖPPET: DBA aktiverar och skriver den per-kategori DB-funktion som utför raderingen, prövad i db/tests.]**
+- Händelseloggen: **behålls** för spårbarhet, gallras inte på tid (medvetet val i policyn).
+- Modell-leverantör: **ZDR** så inget innehåll lagras hos underbiträdet. **[ÖPPET: aktivera på kontonivå.]**
 
-## 7. Den registrerades rättigheter
-Rutiner för registerutdrag, rättelse, radering, dataportabilitet och invändning ska finnas och testas före drift. [ÖPPET: process + ansvarig.]
+## 7. Den registrerades rättigheter — byggt i produkten
+En dataskyddssektion under Inställningar (`src/pages/DashboardSettings.tsx`) ger den registrerade tre raka vägar, vaktade i `tests/dataskydd.ts`:
+- **Registerutdrag & dataportabilitet (art. 15, 20):** "Ladda ner mina uppgifter" bygger en maskinläsbar JSON lokalt i webbläsaren ur samma läsvägar appen använder (`src/lib/dataExport.ts`).
+- **Rättelse (art. 16):** namn och telefon i profilen; ärendefakta i ärendet.
+- **Radering (art. 17):** formell begäran via dataskyddskanalen (kontakt, ämne Personuppgifter), med rakt besked om vad som ändå måste sparas (fakturor/bokföring, händelseloggens spårbarhet) och vad som gallras enligt policyn.
+
+**[ÖPPET: fastställ svarstid (en månad enligt art. 12.3), utpekad ansvarig och en rutin för identitetskontroll av den som begär utdrag/radering.]**
 
 ## 8. Öppna punkter före deploy (sammanfattning)
+
+**Kräver människa/jurist (externt — kan inte byggas bort i kod):**
 1. Signera DPA med Anthropic, Google, AWS, SMS- och kreditupplysningsleverantör.
 2. Bekräfta **EU-dataregion** för varje underbiträde; aktivera **ZDR** hos modell-leverantören.
 3. Genomför och dokumentera **DPIA**.
-4. Fastställ **gallringstider** och rättighetsprocesser.
-5. Bedöm art. 9-risk i fritext och skriv en kort användarinstruktion ("skriv inte in mer personuppgifter än nödvändigt").
+4. Rättighetsprocessen: fastställ svarstid, ansvarig och identitetskontroll (rutinen kring den byggda funktionen i §7).
+5. Gallringen: DBA bekräftar tiderna och aktiverar kategorierna, och skriver+prövar den per-kategori DB-funktion som utför anonymiseringen/raderingen (§6).
+
+**Byggt i koden i den här omgången (se `docs/deploy-compliance.md`):**
+- Gallringspolicy som driftparameter + skuggläges-worker (§6).
+- Registerutdrag, dataportabilitet, rättelse- och raderingsvägar (§7).
+- Dataminimeringspåminnelse vid fritext och regelaktualitet i samtalet (§5).
