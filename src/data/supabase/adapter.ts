@@ -14,6 +14,7 @@ import {
 import { invoiceEmail, receiptEmail } from "@/lib/email/messages";
 import { COMPANY } from "@/lib/company";
 import { deriveAuditDetail } from "@/lib/auditDetail";
+import { DEFAULT_RETENTION, mergeRetentionPolicy, type RetentionOverride } from "@/lib/retention";
 import type { DataPort } from "../ports";
 import type {
   AccountBillingRecord,
@@ -1558,6 +1559,25 @@ export const supabaseAdapter: DataPort = {
           business_ex_vat_sek: businessExVatSek == null ? null : Math.round(businessExVatSek),
           enterprise_ex_vat_sek: enterpriseExVatSek == null ? null : Math.round(enterpriseExVatSek),
         },
+        updated_at: new Date().toISOString(),
+      });
+      if (error) throw error;
+    },
+    async getRetentionPolicy() {
+      // Driftparametern i app_settings; standarden i koden som reserv.
+      const { data, error } = await supabase
+        .from("app_settings")
+        .select("value")
+        .eq("key", "retention_policy")
+        .maybeSingle();
+      if (error) throw error;
+      const raw = (data?.value as { overrides?: RetentionOverride[] } | null) ?? null;
+      return mergeRetentionPolicy(DEFAULT_RETENTION, raw?.overrides ?? []);
+    },
+    async setRetentionPolicy(overrides) {
+      const { error } = await supabase.from("app_settings").upsert({
+        key: "retention_policy",
+        value: toJson({ overrides }),
         updated_at: new Date().toISOString(),
       });
       if (error) throw error;

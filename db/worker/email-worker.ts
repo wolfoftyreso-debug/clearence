@@ -5,6 +5,7 @@
  *   node db/dist/email-worker.cjs --remind   per timme: köa påminnelser
  *   node db/dist/email-worker.cjs --close    per dygn: stäng + köa besked
  *   node db/dist/email-worker.cjs --credit   per dygn: kreditbevakning
+ *   node db/dist/email-worker.cjs --gallra   per dygn: gallring (skuggläge)
  *   node db/dist/email-worker.cjs --invoice-referrals   1:a varje månad
  *   node db/dist/email-worker.cjs --invoice-usage       1:a varje månad
  *
@@ -38,6 +39,12 @@ import {
   type EmailMessage,
 } from "../../src/lib/email/messages";
 import { COMPANY, missingInvoiceFields } from "../../src/lib/company";
+import {
+  DEFAULT_RETENTION,
+  mergeRetentionPolicy,
+  retentionSummary,
+  type RetentionOverride,
+} from "../../src/lib/retention";
 import {
   CASE_ROLE_DESCRIPTIONS,
   CASE_ROLE_LABELS,
@@ -153,6 +160,42 @@ const runCreditChecks = async (): Promise<void> => {
     }
   }
   console.log(`kreditbevakning: kontrollerade ${checked}, misslyckade ${failedChecks}`);
+};
+
+/**
+ * GALLRINGEN (GDPR art. 5.1 e). Körs t.ex. dagligen.
+ *
+ * Policyn - en tid och en åtgärd per kategori - bor i src/lib/retention.ts
+ * (samma byggare som testas), och drift kan lägga en override i app_settings
+ * (nyckeln retention_policy). Här läses den, slås ihop, och en plan loggas.
+ *
+ * SKUGGLÄGE ÄR MEDVETET. Precis som skuggdebiteringen registreras vad som
+ * SKULLE gallras utan att något raderas, tills en människa slår på en
+ * kategori (aktiv=true). Den skarpa, destruktiva gallringen per kategori
+ * kopplas in när respektive DB-funktion är skriven och prövad i
+ * db/tests-sviten - att radera fel, eller det spårbarheten kräver, är värre
+ * än att spara en månad för länge. Den här körningen rör därför ingen rad
+ * ännu; den gör mekaniken och planen synlig och granskningsbar först.
+ */
+const runGallring = async (): Promise<void> => {
+  const { rows } = await db.query(
+    "select value from public.app_settings where key = 'retention_policy'",
+  );
+  const override = ((rows[0]?.value as { overrides?: RetentionOverride[] } | undefined)?.overrides) ?? [];
+  const policy = mergeRetentionPolicy(DEFAULT_RETENTION, override);
+
+  console.log(`gallring (skuggläge): ${retentionSummary(policy)}`);
+  for (const cat of policy) {
+    if (cat.action === "behall") {
+      console.log(`  ${cat.id}: behålls för spårbarhet, gallras inte på tid.`);
+      continue;
+    }
+    const nar = cat.months === null ? "ingen tidsgräns" : `efter ${cat.months} mån`;
+    const lage = cat.aktiv
+      ? "AKTIV – skarp gallring kopplas in via DB-funktion (ännu ej driftsatt)"
+      : "skuggläge – räknas, gallras inte";
+    console.log(`  ${cat.id}: ${cat.action} ${nar} · ${lage}`);
+  }
 };
 
 /**
@@ -275,6 +318,12 @@ const main = async () => {
 
   if (process.argv.includes("--credit")) {
     await runCreditChecks();
+    await db.end();
+    return;
+  }
+
+  if (process.argv.includes("--gallra")) {
+    await runGallring();
     await db.end();
     return;
   }

@@ -72,6 +72,7 @@ import { nextInvoiceNumber } from "@/lib/invoice";
 import { accountClosedEmail, caseInvitationEmail, invoiceEmail, receiptEmail } from "@/lib/email/messages";
 import { COMPANY } from "@/lib/company";
 import { CASE_ROLE_DESCRIPTIONS, CASE_ROLE_LABELS, type CaseRole } from "@/lib/caseRoles";
+import { DEFAULT_RETENTION, mergeRetentionPolicy, type RetentionOverride } from "@/lib/retention";
 
 const STORAGE_KEY = "clearance-demo-state";
 
@@ -135,6 +136,8 @@ interface DemoState {
   documentSignatures: DocumentSignature[];
   companyPlanBusinessExVatSek: number | null;
   companyPlanEnterpriseExVatSek: number | null;
+  /** Gallringspolicyns drift-override per kategori - driftparameter. */
+  retentionOverrides: RetentionOverride[];
 }
 
 const emptyState = (): DemoState => ({
@@ -176,6 +179,7 @@ const emptyState = (): DemoState => ({
   documentSignatures: [],
   companyPlanBusinessExVatSek: null,
   companyPlanEnterpriseExVatSek: null,
+  retentionOverrides: [],
 });
 
 /** Files cannot go in localStorage, so they live for the session only. */
@@ -1534,6 +1538,14 @@ export const demoAdapter: DataPort = {
       if (enterpriseExVatSek !== undefined) {
         state.companyPlanEnterpriseExVatSek = enterpriseExVatSek === null ? null : Math.round(enterpriseExVatSek);
       }
+      save();
+    },
+    async getRetentionPolicy() {
+      return mergeRetentionPolicy(DEFAULT_RETENTION, state.retentionOverrides);
+    },
+    async setRetentionPolicy(overrides) {
+      // Demoläget lagrar bara valet; den skarpa gallringen kör i workern.
+      state.retentionOverrides = overrides;
       save();
     },
     async northStarCounts() {

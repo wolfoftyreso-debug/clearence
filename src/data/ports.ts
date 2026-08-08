@@ -1,4 +1,5 @@
 import type { CaseRole } from "@/lib/caseRoles";
+import type { RetentionCategory, RetentionOverride } from "@/lib/retention";
 import type {
   AccountBillingRecord,
   ApplicationForReview,
@@ -586,6 +587,20 @@ export interface OpsPort {
     businessExVatSek?: number | null;
     enterpriseExVatSek?: number | null;
   }): Promise<void>;
+
+  /**
+   * Gallringspolicyn: en tid och en åtgärd per kategori (GDPR art. 5.1 e).
+   * Standarden bor i koden (src/lib/retention.ts); den här läser drifts
+   * override ur app_settings (nyckeln retention_policy) och lägger den
+   * ovanpå. Läsbar utan admin - policyn är transparens, inte en hemlighet.
+   */
+  getRetentionPolicy(): Promise<RetentionCategory[]>;
+  /**
+   * Sätter drift-overriden per kategori (tid, åtgärd, aktiv/skuggläge).
+   * Skrivs bara av administratör, som prövas i databasen. Att slå på
+   * skarp gallring för en kategori är ett medvetet beslut, inte en default.
+   */
+  setRetentionPolicy(overrides: RetentionOverride[]): Promise<void>;
 
   /** North Star och churn: återhämtade, i hälsoläge, dålig churn, öppna. */
   northStarCounts(): Promise<{

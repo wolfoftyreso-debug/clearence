@@ -9,6 +9,7 @@ import { billingState } from "@/lib/billing";
 import { ProviderLogo } from "@/components/integrations/ProviderLogo";
 import type { ProfessionalTerms, ProfileClaimForReview, SecretInfo } from "@/data/types";
 import { SMS_SECRET_PROVIDER } from "@/lib/notifications/events";
+import { ACTION_LABEL, retentionSummary, SKUGGLAGE_NOTE } from "@/lib/retention";
 import {
   AlertTriangle,
   Banknote,
@@ -691,6 +692,68 @@ const NorthStarSection = () => {
 };
 
 /**
+ * Gallringen: hur länge uppgifter sparas och vad som händer sen (GDPR
+ * art. 5.1 e). Läser policyn ur driftparametern och visar den ärligt -
+ * inklusive vilka kategorier som ännu bara räknar i skuggläge. Att slå på
+ * skarp gallring är ett beslut som tas medvetet, inte en default, så den
+ * här vyn visar men styr inte: värdena sätts i app_settings.
+ */
+const RetentionSection = () => {
+  const { data: policy } = useQuery({
+    queryKey: ["retention-policy"],
+    queryFn: () => data.ops.getRetentionPolicy(),
+  });
+
+  return (
+    <section aria-labelledby="retention-heading">
+      <h2
+        id="retention-heading"
+        className="flex items-center gap-2 text-lg font-semibold text-foreground"
+      >
+        <Trash2 className="h-5 w-5 text-accent" aria-hidden="true" />
+        Gallring av uppgifter
+      </h2>
+      <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+        Hur länge varje kategori sparas och vad som händer sen. Tiderna är
+        driftparametrar (app_settings, nyckeln retention_policy); åtgärden är
+        medveten per kategori. {policy ? retentionSummary(policy) : ""}
+      </p>
+      <ul className="mt-3 space-y-2">
+        {(policy ?? []).map((cat) => (
+          <li
+            key={cat.id}
+            className="rounded-md border border-border bg-card p-3 text-sm"
+          >
+            <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+              <span className="font-medium text-foreground">{cat.label}</span>
+              <span className="text-xs tabular-nums text-muted-foreground">
+                {cat.months === null ? "sparas (ingen tidsgräns)" : `efter ${cat.months} mån`} · {ACTION_LABEL[cat.action]}
+              </span>
+            </div>
+            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{cat.description}</p>
+            {cat.action !== "behall" && (
+              <span
+                className={`mt-2 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                  cat.aktiv
+                    ? "bg-success/10 text-success"
+                    : "bg-secondary text-muted-foreground"
+                }`}
+              >
+                {cat.aktiv ? "Gallrar skarpt" : "Skuggläge – räknas, gallras inte"}
+              </span>
+            )}
+          </li>
+        ))}
+      </ul>
+      <p className="mt-3 flex items-start gap-2 rounded-md bg-secondary/40 p-3 text-xs leading-relaxed text-muted-foreground">
+        <AlertTriangle className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
+        {SKUGGLAGE_NOTE} Själva gallringen körs av arbetaren (worker --gallra).
+      </p>
+    </section>
+  );
+};
+
+/**
  * Plattformen i siffror: konton och katalog. Räknat ur samma frågor som
  * kund- och katalogvyerna - inga egna, avvikande summeringar.
  */
@@ -831,6 +894,8 @@ const AdminOverview = () => {
         <PlanSection />
 
         <FeeSection />
+
+        <RetentionSection />
 
         <section aria-labelledby="api-keys-heading">
           <h2
