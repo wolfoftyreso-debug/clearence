@@ -337,38 +337,43 @@ validatePdf("tidsunderlag", renderReportPdf(timeBasis), ["Fakturaunderlag"]);
 }
 
 
-/* --- Rapportvisaren: EN knapp, ETT budskap ------------------------------- */
+/* --- Rapportvisaren: EN vy, nedladdning som en riktig länk --------------- */
 
 /*
- * Felet som togs ner var två stackade "Spara filen": verktygsradens knapp
- * OCH en egen knapp inne i <object>-reservvyn, plus rubriken "Filen är
- * klar" - samma uppmaning två gånger (dubbla budskap). Reservvyn ska i
- * stället peka UPP mot den enda knappen. Och knappen får inte vara död i
- * demons ram: den måste ha vägen som räddar det inbäddade fallet
- * (window.open i ny flik) när nedladdningen blockeras tyst.
+ * Felet som togs ner: man klickade fram fakturan (HTML-vyn), tryckte "Ladda
+ * ner PDF" och hamnade i ännu en helskärmsvy - en andra spara-knapp och en
+ * andra banner som sa samma sak igen. Dubbla budskap och en onödig vy.
  *
- * Kontrollen läser komponentens källa som text. En regel som inte testas
- * är en åsikt, och den här regeln syntes bara för ögon förut.
+ * Nu är nedladdningen en RIKTIG LÄNK (<a href download>) till en
+ * förgenererad PDF, direkt i verktygsraden. Ett användarklick på en verklig
+ * länk är dessutom det enda som pålitligt tar sig förbi en sandlådas
+ * blockering - ingen död knapp. Ingen nästlad <object>-visare, ingen andra
+ * spara-knapp. Kontrollen läser källan; en regel som inte testas är en åsikt.
  */
 const visareKod = readFileSync(
   join(process.cwd(), "src/components/reports/useInlineReport.tsx"),
   "utf8",
 );
-const sparaKnappar = (visareKod.match(/onClick=\{\(\) => void savePdf\(/g) ?? []).length;
-check("rapportvisaren har exakt EN spara-knapp", sparaKnappar === 1, `hittade ${sparaKnappar}`);
-check("spara-knappen har vägen för inbäddat läge (ny flik)", visareKod.includes("window.open("));
-const objektIndex = visareKod.indexOf("<object");
-check("reservvyn <object> finns kvar", objektIndex !== -1);
 check(
-  "reservvyn har ingen egen knapp - den pekar upp",
-  objektIndex !== -1 && !visareKod.slice(objektIndex).includes("void savePdf("),
+  "nedladdningen i HTML-vyn är en riktig länk till PDF:en",
+  /href=\{pdf\.url\}\s+download=\{pdf\.fileName\}/.test(visareKod),
 );
-// Den RENDERADE rubriken (>...</p>), inte förklaringen i kommentaren som
-// citerar det gamla felet. Det är headingen som var det dubbla budskapet.
+check(
+  "det finns ingen nästlad <object>-pdf-visare (den onödiga vyn)",
+  !visareKod.includes("<object"),
+);
+check(
+  "fristående PDF levereras också via en riktig länk",
+  /href=\{standalone\.url\}\s+download=\{standalone\.fileName\}/.test(visareKod),
+);
+// Den gamla dubbla rubriken ska vara borta.
 check(
   "den dubbla rubriken 'Filen är klar' är borta ur vyn",
   !visareKod.includes("Filen är klar</p>"),
 );
+// Ingen svårförklarad tredje spara-väg kvar (Spara HTML var den förvirrande
+// extra knappen); nedladdningen och utskriften räcker.
+check("den förvirrande 'Spara HTML'-knappen är borttagen", !visareKod.includes("Spara HTML"));
 
 
 console.log(`\n${passed} passed, ${failed} failed`);

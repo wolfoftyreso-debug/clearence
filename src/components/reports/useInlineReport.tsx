@@ -1,33 +1,29 @@
 import { useRef, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
-import { downloadReport, reportFileName } from "@/lib/reports/deliver";
+import { reportFileName } from "@/lib/reports/deliver";
 import { renderReport } from "@/lib/reports/render";
 import { renderReportPdf } from "@/lib/reports/pdf";
 import type { ReportModel } from "@/lib/reports/types";
 import { Download, FileText, Printer, X } from "lucide-react";
 
 /**
- * Rapportvisaren: ett helskärmslager INUTI appen, aldrig en ny flik.
+ * Rapportvisaren: ett helskärmslager INUTI appen.
  *
- * Beslutet kom från verkligheten: i inbäddade vyer (mobil, den publicerade
- * demon, strikta företagsmiljöer) blockeras window.open tyst och
- * nedladdningar kan blockeras lika tyst - rapportknappen såg trasig ut
- * precis för den som behövde rapporten som mest. Ett lager i samma
- * dokument kan ingen sandlåda stoppa.
+ * EN VY, INTE TVÅ. Förut öppnades rapporten som HTML, och "Ladda ner PDF"
+ * bytte sedan till en ANDRA helskärmsvy med en egen spara-knapp och en egen
+ * banner - man klickade fram fakturan, tryckte ladda ner, och hamnade i
+ * ännu en vy som sa samma sak igen. Det var dubbla budskap och ett steg för
+ * mycket.
  *
- * PDF-VÄGEN HAR TVÅ LÄGEN, ETT BUDSKAP VARDERA:
- *  - I en vanlig flik laddas PDF-filen ner direkt. Punkt.
- *  - Inbäddat (window.self !== window.top) kan nedladdningen blockeras
- *    tyst; då VISAS den färdiga PDF:en i visaren i stället, med
- *    webbläsarens egen spara-knapp. Funktionen gör alltid något synligt.
+ * Nu är nedladdningen en RIKTIG LÄNK i verktygsraden. PDF:en förgenereras
+ * när rapporten öppnas, så knappen är en `<a href download>` - ett
+ * användarklick på en verklig länk, vilket är det enda som pålitligt tar
+ * sig förbi en sandlådas blockering av popup och programmerad nedladdning.
+ * Inget vybyte, ingen andra spara-knapp, inget upprepat budskap.
  *
- * Utskriftsbannern som ligger inne i rapportens HTML är till för den
- * NEDLADDADE fristående filen - i visaren döljs den, för här är
- * verktygsraden budskapet. Dubbla utskriftsbudskap var ett verkligt fel.
- *
- * En krok i stället för en komponent per sida: alla ställen som visar
- * rapporter eller levererar PDF (ärenderapporten, fakturor, kvitton,
- * kreditunderlaget, dokumentmallarna) ska gå genom SAMMA väg.
+ * Direkt-PDF utan HTML-vy (dokumentmallarna) levereras likadant: i en
+ * vanlig flik laddas den ner direkt; inbäddat visas ETT litet kort med EN
+ * riktig länk. Aldrig en död knapp, aldrig ett dubbelt budskap.
  */
 
 const isEmbedded = (): boolean => {
@@ -51,7 +47,7 @@ const triggerDownload = (blob: Blob, fileName: string): void => {
 
 export const useInlineReport = (): {
   open: (model: ReportModel) => void;
-  /** Levererar rapporten som PDF: nedladdning, eller inbäddat visning. */
+  /** Levererar rapporten som PDF direkt (utan HTML-vy först). */
   openPdf: (model: ReportModel) => void;
   /** Samma leverans för färdiga PDF-byte (dokumentmallarna). */
   deliverPdfBytes: (bytes: Uint8Array, fileName: string, title: string) => void;
@@ -59,101 +55,88 @@ export const useInlineReport = (): {
 } => {
   const [model, setModel] = useState<ReportModel | null>(null);
   const [html, setHtml] = useState<string | null>(null);
-  const [pdf, setPdf] = useState<{ url: string; title: string; blob: Blob; fileName: string } | null>(
+  /** Den färdiga PDF:en för den öppna HTML-rapporten - som en riktig länk. */
+  const [pdf, setPdf] = useState<{ url: string; fileName: string } | null>(null);
+  /** Fristående PDF-leverans (dokumentmallar) i inbäddat läge. */
+  const [standalone, setStandalone] = useState<{ url: string; fileName: string; title: string } | null>(
     null,
   );
   const frameRef = useRef<HTMLIFrameElement>(null);
 
-  const open = (next: ReportModel) => {
+  const clearPdf = () =>
     setPdf((prev) => {
       if (prev) URL.revokeObjectURL(prev.url);
       return null;
     });
+  const clearStandalone = () =>
+    setStandalone((prev) => {
+      if (prev) URL.revokeObjectURL(prev.url);
+      return null;
+    });
+
+  const open = (next: ReportModel) => {
+    clearStandalone();
     setModel(next);
     // Bannern i dokumentet hör till den sparade fristående filen; i
     // visaren är verktygsraden budskapet. Ett budskap per funktion.
-    setHtml(renderReport(next).replace("</head>", "<style>.print-bar{display:none !important}</style></head>"));
+    setHtml(
+      renderReport(next).replace(
+        "</head>",
+        "<style>.print-bar{display:none !important}</style></head>",
+      ),
+    );
+    // Förgenerera PDF:en så "Ladda ner PDF" är en riktig länk - ett klick,
+    // ingen vybytesdans.
+    const fileName = reportFileName(next).replace(/\.html$/, ".pdf");
+    const blob = new Blob([renderReportPdf(next) as BlobPart], { type: "application/pdf" });
+    const url = URL.createObjectURL(blob);
+    setPdf((prev) => {
+      if (prev) URL.revokeObjectURL(prev.url);
+      return { url, fileName };
+    });
   };
 
-  const deliverPdfBytes = (bytes: Uint8Array, fileName: string, title: string) => {
+  const deliverPdf = (bytes: Uint8Array, fileName: string, title: string) => {
     const blob = new Blob([bytes as BlobPart], { type: "application/pdf" });
+    // Vanlig flik: ladda ner direkt, ingen vy behövs.
     if (!isEmbedded()) {
       triggerDownload(blob, fileName);
       return;
     }
+    // Inbäddat: ETT litet kort med EN riktig länk.
     const url = URL.createObjectURL(blob);
     setModel(null);
     setHtml(null);
-    setPdf((prev) => {
+    clearPdf();
+    setStandalone((prev) => {
       if (prev) URL.revokeObjectURL(prev.url);
-      return { url, title, blob, fileName };
+      return { url, fileName, title };
     });
   };
 
-  /**
-   * "Spara filen" i inbäddat läge. Tre vägar, i tur och ordning, och var
-   * och en täcker ett läge där den föregående tyst faller:
-   *
-   *  1. DELNINGSMENYN (Web Share med fil). iOS och Android:s egen väg -
-   *     därifrån finns "Spara i Filer", AirDrop och e-post. Fungerar på en
-   *     riktig telefon, men blockeras i en inbäddad ram utan
-   *     allow="web-share" (t.ex. den publicerade demon).
-   *  2. ÖPPNA I NY FLIK. En blob-URL i en riktig flik visas i
-   *     webbläsarens egen PDF-visare, som HAR spara och dela. Det här är
-   *     vägen som räddar det inbäddade fallet: en programmerad nedladdning
-   *     blockeras tyst i en sandlåda, men en ny flik gör det inte.
-   *  3. ANKARNEDLADDNING. Sista utväg, för vanliga fönster där de två
-   *     ovan inte behövdes.
-   *
-   * Poängen är att knappen ALLTID gör något synligt. Den gjorde det inte
-   * förut: i demons ram föll delningen, nedladdningen blockerades tyst,
-   * och "Spara filen" var en död knapp - precis det den här kroken finns
-   * för att undvika.
-   */
-  const savePdf = async (current: { url: string; blob: Blob; fileName: string; title: string }) => {
-    const file = new File([current.blob], current.fileName, { type: "application/pdf" });
-    const nav = navigator as Navigator & {
-      canShare?: (data: { files: File[] }) => boolean;
-      share?: (data: { files: File[]; title?: string }) => Promise<void>;
-    };
-    if (nav.canShare?.({ files: [file] }) && nav.share) {
-      try {
-        await nav.share({ files: [file], title: current.title });
-        return;
-      } catch (error) {
-        // Avbruten delning är ett VAL, inte ett fel - då ska vi inte
-        // öppna en flik efteråt. Andra fel (blockerad i en ram) faller
-        // vidare till nästa väg.
-        if (error instanceof DOMException && error.name === "AbortError") return;
-      }
-    }
-    // Ny flik före nedladdning: den fungerar där nedladdningen tyst
-    // blockeras, och ger dessutom webbläsarens egen visare. `noopener`
-    // för att den nya fliken inte ska nå vår.
-    const opened = window.open(current.url, "_blank", "noopener");
-    if (opened) return;
-    triggerDownload(current.blob, current.fileName);
-  };
-
   const openPdf = (next: ReportModel) => {
-    deliverPdfBytes(
+    deliverPdf(
       renderReportPdf(next),
       reportFileName(next).replace(/\.html$/, ".pdf"),
       next.meta.documentTitle,
     );
   };
 
+  const deliverPdfBytes = (bytes: Uint8Array, fileName: string, title: string) => {
+    deliverPdf(bytes, fileName, title);
+  };
+
   const close = () => {
-    setPdf((prev) => {
-      if (prev) URL.revokeObjectURL(prev.url);
-      return null;
-    });
+    clearPdf();
+    clearStandalone();
     setHtml(null);
     setModel(null);
   };
 
+  const title = standalone?.title ?? model?.meta.documentTitle ?? "Rapport";
+
   const viewer =
-    html === null && pdf === null ? null : (
+    html === null && standalone === null ? null : (
       <div
         className="panel-reveal fixed inset-0 z-50 flex flex-col bg-background"
         role="dialog"
@@ -161,20 +144,17 @@ export const useInlineReport = (): {
         aria-label="Rapport"
       >
         <div className="flex flex-wrap items-center gap-2 border-b border-border bg-card px-4 py-3">
-          <p className="min-w-0 flex-1 truncate font-medium text-foreground">
-            {pdf?.title ?? model?.meta.documentTitle ?? "Rapport"}
-          </p>
-          {pdf !== null && (
-            <Button type="button" variant="accent" size="sm" onClick={() => void savePdf(pdf)}>
-              <Download className="h-4 w-4" aria-hidden="true" />
-              Spara filen
-            </Button>
-          )}
-          {html !== null && model !== null && (
+          <p className="min-w-0 flex-1 truncate font-medium text-foreground">{title}</p>
+
+          {/* HTML-vyn: nedladdningen är en RIKTIG LÄNK till den redan
+              skapade PDF:en. Ett klick, ingen andra vy. */}
+          {html !== null && pdf !== null && (
             <>
-              <Button type="button" variant="accent" size="sm" onClick={() => openPdf(model)}>
-                <Download className="h-4 w-4" aria-hidden="true" />
-                Ladda ner PDF
+              <Button asChild variant="accent" size="sm">
+                <a href={pdf.url} download={pdf.fileName} target="_blank" rel="noopener noreferrer">
+                  <Download className="h-4 w-4" aria-hidden="true" />
+                  Ladda ner PDF
+                </a>
               </Button>
               <Button
                 type="button"
@@ -185,30 +165,14 @@ export const useInlineReport = (): {
                 <Printer className="h-4 w-4" aria-hidden="true" />
                 Skriv ut
               </Button>
-              <Button type="button" variant="ghost" size="sm" onClick={() => downloadReport(model)}>
-                Spara HTML
-              </Button>
             </>
           )}
+
           <Button type="button" variant="ghost" size="sm" onClick={close} aria-label="Stäng rapporten">
             <X className="h-4 w-4" aria-hidden="true" />
             Stäng
           </Button>
         </div>
-
-        {pdf !== null && (
-          /* Texten säger vad som ÄR sant: filen är skapad, och knappen
-             levererar den. Den lovar INTE en förhandsvisning - den
-             lovade det förut, och när webbläsaren blockerade den stod
-             produkten och påstod något användaren kunde se var fel.
-             Det är värre än att inte visa något alls. */
-          <p className="border-b border-border bg-secondary/40 px-4 py-2 text-xs leading-relaxed text-muted-foreground">
-            PDF:en är skapad. Tryck på{" "}
-            <span className="font-medium text-foreground">Spara filen</span> – den öppnas i
-            delningsmenyn ("Spara i Filer"), i en ny flik eller som nedladdning, beroende på
-            vad enheten stödjer.
-          </p>
-        )}
 
         {/* srcDoc i samma dokument: fungerar även där popupfönster och
             nedladdningar blockeras. Innehållet är vår egen rendering. */}
@@ -216,38 +180,31 @@ export const useInlineReport = (): {
           <iframe
             ref={frameRef}
             srcDoc={html}
-            title={model?.meta.documentTitle ?? "Rapport"}
+            title={title}
             className="w-full flex-1 border-0 bg-white"
           />
-        ) : pdf !== null ? (
-          /*
-           * <object> och inte <iframe>: en <object> som inte kan visa sin
-           * typ renderar sina BARN i stället. Det är webbens egen
-           * inbyggda reservväg, och den behövs här - inbäddat i en
-           * sandlåda (den publicerade demon, en app-webbvy) blockerar
-           * Chrome PDF-visaren och en iframe blir en grå ruta med
-           * "Den här sidan har blockerats". En produkt som visar en
-           * blockerad sida ser trasig ut även när filen är helt färdig.
-           */
-          <object data={pdf.url} type="application/pdf" className="w-full flex-1 bg-white">
-            {/*
-              EN knapp, ETT budskap. Reservvyn upprepade förut både
-              rubriken "Filen är klar" och en EGEN "Spara filen"-knapp -
-              samtidigt som verktygsraden och bannern ovanför sa exakt
-              samma sak. Två identiska uppmaningar staplade på varandra
-              (dubbla budskap). Här pekar reservvyn i stället UPP mot den
-              enda knappen; själva åtgärden bor på ett ställe.
-            */}
-            <div className="flex h-full flex-col items-center justify-center gap-2 p-8 text-center">
-              <FileText className="h-8 w-8 text-muted-foreground" aria-hidden="true" />
-              <p className="max-w-md text-sm leading-relaxed text-muted-foreground">
-                Förhandsvisningen visas inte i den här vyn. Filen är färdig – använd{" "}
-                <span className="font-medium text-foreground">Spara filen</span> ovan för att
-                öppna eller ladda ner den.
-              </p>
-              <p className="text-xs text-muted-foreground">{pdf.fileName}</p>
+        ) : standalone !== null ? (
+          /* Fristående PDF utan HTML-vy (dokumentmallar). ETT kort, EN
+             rubrik, EN riktig länk. Ingen andra spara-knapp, inget upprepat
+             budskap - det var precis det som gjorde fakturaflödet rörigt. */
+          <div className="flex flex-1 items-center justify-center p-8">
+            <div className="max-w-sm text-center">
+              <FileText className="mx-auto h-8 w-8 text-muted-foreground" aria-hidden="true" />
+              <p className="mt-2 text-base font-semibold text-foreground">PDF:en är klar</p>
+              <p className="mt-1 text-xs text-muted-foreground">{standalone.fileName}</p>
+              <Button asChild variant="accent" className="mt-3">
+                <a
+                  href={standalone.url}
+                  download={standalone.fileName}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <Download className="h-4 w-4" aria-hidden="true" />
+                  Öppna eller spara PDF
+                </a>
+              </Button>
             </div>
-          </object>
+          </div>
         ) : null}
       </div>
     );
