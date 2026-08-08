@@ -766,6 +766,116 @@
         }
       }
     },
+    "/advisor/reply": {
+      "post": {
+        "operationId": "clearanceReply",
+        "summary": "CLEARANCE:s svar i samtalet",
+        "description": "Driver rådgivarsamtalet med en språkmodell. Kräver inloggning: varje anrop debiteras per token, och en öppen rutt vore någon annans körning på vår faktura. Klienten skickar det synliga samtalet (user/assistant) – aldrig en systemprompt. CLEARANCE:s konstitution (ton, gränser, en fråga i taget, högst tre rekommendationer, inga påhittade fakta) bor på servern och kan inte skrivas om från en klient. Svarets status skiljer på svar, ingen-kalla (ingen modellnyckel i driften) och fel (modellen svarade inte). Det här är vägledning i samtalet, inte de strukturerade objekt som resten av API:t levererar.",
+        "x-status": "beta",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "messages"
+                ],
+                "properties": {
+                  "messages": {
+                    "type": "array",
+                    "description": "Hela det synliga samtalet, i tur och ordning. Måste sluta med ett meddelande från användaren.",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "role",
+                        "content"
+                      ],
+                      "properties": {
+                        "role": {
+                          "type": "string",
+                          "enum": [
+                            "user",
+                            "assistant"
+                          ]
+                        },
+                        "content": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "CLEARANCE:s svar, eller varför det uteblev",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "required": [
+                        "status",
+                        "reply",
+                        "model"
+                      ],
+                      "properties": {
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "svar"
+                          ]
+                        },
+                        "reply": {
+                          "type": "string"
+                        },
+                        "model": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    {
+                      "type": "object",
+                      "required": [
+                        "status",
+                        "reason"
+                      ],
+                      "properties": {
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "ingen-kalla",
+                            "fel"
+                          ]
+                        },
+                        "reason": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/tasks/{taskId}/done": {
       "post": {
         "operationId": "setTaskDone",

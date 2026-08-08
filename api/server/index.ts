@@ -29,6 +29,7 @@ import {
 } from "./http";
 import { ALLMAN, klientNyckel, LOGIN, provaGrans, type Utfall } from "./rateLimit";
 import { googleConfigured, lookupCompany } from "./google";
+import { anthropicConfigured, clearanceReply, type AdvisorMessage } from "./anthropic";
 import { deriveAuditDetail } from "../../src/lib/auditDetail";
 import { withAnon, withUser } from "./db";
 import { hashPassword, issueToken, sessionTtlHours, sha256, verifyPassword } from "./auth";
@@ -282,7 +283,12 @@ export const router = new Router();
  */
 router.get("/v1/health", async () => ({
   status: 200,
-  body: { status: "ok", version: "1.0", sources: { google: googleConfigured() } },
+  body: {
+    status: "ok",
+    version: "1.0",
+    sources: { google: googleConfigured() },
+    advisor: anthropicConfigured(),
+  },
 }));
 
 /**
@@ -305,6 +311,37 @@ router.post("/v1/sources/google", async (req) => {
   if (companyName.length === 0) throw badRequest("companyName krävs.");
   const ort = typeof body.ort === "string" ? body.ort.trim() : undefined;
   return { status: 200, body: await lookupCompany(companyName, ort) };
+});
+
+/**
+ * CLEARANCE-samtalet, drivet av modellen.
+ *
+ * KRÄVER INLOGGNING, av samma skäl som Google-uppslaget: varje anrop
+ * kostar pengar per token, och en öppen rutt vore någon annans gratis
+ * körning på vår faktura. Den allmänna hastighetsgränsen gäller dessutom
+ * före den här handlern.
+ *
+ * Klienten skickar hela det synliga samtalet (user/assistant), aldrig en
+ * systemprompt - konstitutionen bor på servern (anthropic.ts) och kan inte
+ * skrivas om från en webbläsare. Svaret bär ett status-fält som skiljer
+ * "svar", "källan inte ansluten" och "det gick fel", precis som Google.
+ */
+router.post("/v1/advisor/reply", async (req) => {
+  await authenticate(req);
+  const body = (req.body ?? {}) as { messages?: unknown };
+  if (!Array.isArray(body.messages)) throw badRequest("messages (en lista) krävs.");
+  const messages: AdvisorMessage[] = [];
+  for (const rad of body.messages) {
+    const m = rad as { role?: unknown; content?: unknown };
+    const role = m.role === "assistant" ? "assistant" : m.role === "user" ? "user" : null;
+    if (role === null) throw badRequest('varje meddelande måste ha role "user" eller "assistant".');
+    if (typeof m.content !== "string") throw badRequest("varje meddelande måste ha content som text.");
+    messages.push({ role, content: m.content });
+  }
+  if (messages.length === 0) throw badRequest("messages får inte vara tom.");
+  // Ett tak även på antalet: ett helt samtal, inte en oändlig historik.
+  if (messages.length > 100) throw badRequest("samtalet är för långt (max 100 meddelanden).");
+  return { status: 200, body: await clearanceReply(messages) };
 });
 
 /**
