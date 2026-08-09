@@ -89,7 +89,9 @@ flowchart TB
 
 - `deploy/helm/clearance/` — hela stacken som chart (fylls i grundat på de faktiska env-varen; se avsnittet Env nedan).
 - Frontend-image som servar SPA:n med **runtime**-injicerad API-bas-URL (samma image i alla miljöer).
-- MinIO + S3-endpoint-konfig i API:et.
+- MinIO + presignerade dokument-URL:er i API:et (`api/server/storage.ts`,
+  `GET /v1/documents/{id}/url`): `app.may_read_document()` → 60 s GET-URL,
+  `storage_path` lämnar aldrig servern. Vaktat i `npm run test:storage`.
 - SMTP-transport i e-postarbetaren (`MAIL_TRANSPORT=smtp`).
 - Gitea-deploy + `.gitea/workflows/ci.yml`.
 - Migrations-Job.
@@ -105,6 +107,11 @@ flowchart TB
 | `ANTHROPIC_API_KEY` | API | nej | Secret | tom = samtalet ej anslutet (kraschar inte) |
 | `ANTHROPIC_MODEL` | API | nej | ConfigMap | default `claude-sonnet-5` |
 | `GOOGLE_MAPS_API_KEY` | API | nej | Secret | tom = källan ej ansluten |
+| `DOCUMENTS_BUCKET` | API | nej | ConfigMap (via `documents.*`) | tom = lagringen ej ansluten (`/health` `storage:false`, `/url` → 404) |
+| `S3_ENDPOINT` | API | nej | Deployment-env | tom = AWS S3; satt (t.ex. intern MinIO) = egen/extern lagring |
+| `S3_REGION` | API | nej | Deployment-env | default `eu-north-1` |
+| `S3_FORCE_PATH_STYLE` | API | nej | Deployment-env | `true` när endpoint satt (MinIO), annars `false` |
+| `S3_ACCESS_KEY_ID` / `S3_SECRET_ACCESS_KEY` | API | nej | Secret (ärver MinIO:s rot) | S3-nycklarna; utan dem används instansprofil (AWS) |
 | `DATABASE_URL` | arbetare | **ja** | Secret `worker-database-url` | rollen **app_worker** (LOGIN) |
 | `MAIL_FROM` | arbetare | **ja** | ConfigMap | avsändaradress |
 | `APP_BASE_URL` | arbetare | nej | ConfigMap | länkbas i mejl |

@@ -25,9 +25,13 @@ done
 # det är precis den mekanismen sviten prövar.
 export DATABASE_URL="postgres://${PGUSER:-postgres}@localhost:${PGPORT:-55432}/${DB}?host=${PGHOST:-/tmp}"
 
+# AWS SDK:n lämnas extern: den lastas bara när dokumentlagringen faktiskt
+# används, och dess CJS-interna dynamic require("node:https") går inte att
+# bunta till ESM. Node löser den ur node_modules vid körning.
 npx esbuild api/tests/integration.ts \
   --bundle --platform=node --format=esm --target=node20 \
   --external:pg \
+  --external:@aws-sdk/client-s3 --external:@aws-sdk/s3-request-presigner \
   --outfile=node_modules/.cache/api-integration.mjs --log-level=error
 
 node node_modules/.cache/api-integration.mjs

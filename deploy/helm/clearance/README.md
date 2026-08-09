@@ -57,9 +57,17 @@ helm upgrade --install clearance deploy/helm/clearance \
 Migrations-Jobbet kör `scripts/migrera.sh` som en `pre-install,pre-upgrade`-hook
 före API:t rullas. Det är idempotent (`schema_migrations`).
 
+## Dokumentlagringen
+
+API:t signerar kortlivade nedladdnings-URL:er mot MinIO/S3
+(`api/server/storage.ts`) efter `app.may_read_document()` — `storage_path`
+lämnar aldrig servern. När `minio.enabled=true` pekas API:t hit automatiskt
+(`documents.*`); sätt `documents.endpoint`/`region`/`credentials` för att peka
+på AWS S3 eller extern MinIO i stället. `/v1/health` rapporterar `storage:
+true` när en hink är konfigurerad; tom hink ⇒ `/v1/documents/{id}/url` svarar
+404 (byggt, men ej anslutet).
+
 ## Vad som INTE är byggt än (ärligt)
 
-- **Dokumentens presignering** i API:t (MinIO reses, men S3-signeringskoden
-  saknas — se `db/README.md`).
 - Delar av `DataPort` går ännu mot Supabase (halvmigrerat) — en ren
   självhostad körning kräver att migreringen slutförs.

@@ -92,8 +92,9 @@ postgres:
       existingSecret: ""
 
 # --- MinIO (S3-kompatibel objektlagring för dokument) -------------------
-# OBS: dokumentens presignering är ännu inte byggd i API:t (se README).
-# MinIO reses här så att den finns när signeringsfunktionen kopplas in.
+# API:t signerar kortlivade nedladdnings-URL:er mot den här lagringen
+# (api/server/storage.ts). storage_path lämnar aldrig servern - bara en
+# presignerad GET-URL som går ut på 60 s, efter app.may_read_document().
 minio:
   enabled: true
   image: "quay.io/minio/minio:RELEASE.2024-09-13T20-26-02Z"
@@ -104,6 +105,21 @@ minio:
   auth:
     existingSecret: ""
   bucket: clearance-documents
+
+# --- Dokumentlagringens anslutning (S3/MinIO) ---------------------------
+# Vad API:t signerar mot. När minio.enabled=true ärvs allt automatiskt från
+# den interna MinIO-tjänsten - lämna då detta tomt. Sätt värden för att peka
+# på AWS S3 (tom endpoint) eller en extern MinIO i stället.
+documents:
+  bucket: ""          # tom = ärver minio.bucket
+  endpoint: ""        # tom + minio.enabled = intern MinIO; tom utan minio = AWS S3
+  region: "eu-north-1"
+  forcePathStyle: ""  # tom = true när endpoint satt (MinIO), annars false (AWS)
+  # S3-nycklarna. Tom existingSecret = ärver MinIO:s rotcredentials.
+  credentials:
+    existingSecret: ""
+    accessKeyIdKey: "root-user"
+    secretAccessKeyKey: "root-password"
 
 # --- API ----------------------------------------------------------------
 api:

@@ -36,6 +36,42 @@ app.kubernetes.io/component: {{ .component }}
 {{- end -}}
 {{- end -}}
 
+{{/* Dokumentlagringen (S3/MinIO). minio.enabled ger interna standarder;
+     documents.* överlagrar för AWS S3 eller extern MinIO. Tom hink => API:t
+     rapporterar storage:false och /url svarar 404 (byggt, men ej anslutet). */}}
+{{- define "clearance.documents.enabled" -}}
+{{- if or .Values.minio.enabled .Values.documents.bucket -}}true{{- end -}}
+{{- end -}}
+
+{{- define "clearance.documents.bucket" -}}
+{{- default .Values.minio.bucket .Values.documents.bucket -}}
+{{- end -}}
+
+{{/* Tom = AWS S3. Satt = MinIO/extern (kräver forcePathStyle). När minio.enabled
+     pekar den på den interna tjänsten om inget annat angetts. */}}
+{{- define "clearance.documents.endpoint" -}}
+{{- if .Values.documents.endpoint -}}
+{{- .Values.documents.endpoint -}}
+{{- else if .Values.minio.enabled -}}
+{{- printf "http://%s-minio:9000" (include "clearance.fullname" .) -}}
+{{- end -}}
+{{- end -}}
+
+{{- define "clearance.documents.forcePathStyle" -}}
+{{- if .Values.documents.forcePathStyle -}}
+{{- .Values.documents.forcePathStyle -}}
+{{- else if (include "clearance.documents.endpoint" .) -}}true{{- else -}}false{{- end -}}
+{{- end -}}
+
+{{/* Hemligheten med S3-nycklarna. Ärver MinIO:s rotcredentials om inget eget satts. */}}
+{{- define "clearance.documents.secretName" -}}
+{{- if .Values.documents.credentials.existingSecret -}}
+{{- .Values.documents.credentials.existingSecret -}}
+{{- else -}}
+{{- .Values.minio.auth.existingSecret -}}
+{{- end -}}
+{{- end -}}
+
 {{/* Den fullständiga avbildsreferensen för en komponent. */}}
 {{- define "clearance.image" -}}
 {{- $ := .ctx -}}

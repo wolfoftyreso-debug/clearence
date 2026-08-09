@@ -41,6 +41,17 @@ minio:
   storage:
     size: 50Gi
 
+# Dokumentlagringen ärver den interna MinIO:n automatiskt när minio.enabled.
+# Lämna documents.* tomt för det. Peka mot AWS S3 i stället så här:
+#   documents:
+#     endpoint: ""              # tom = AWS S3
+#     region: "eu-north-1"
+#     bucket: "clearance-prod-dokument"
+#     credentials:
+#       existingSecret: clearance-s3
+#       accessKeyIdKey: access-key-id
+#       secretAccessKeyKey: secret-access-key
+
 api:
   replicaCount: 2
   autoscaling:

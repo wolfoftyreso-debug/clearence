@@ -30,6 +30,7 @@ import {
 import { ALLMAN, klientNyckel, LOGIN, provaGrans, type Utfall } from "./rateLimit";
 import { googleConfigured, lookupCompany } from "./google";
 import { fetchWebsite, websiteConfigured } from "./website";
+import { DOCUMENT_URL_TTL_SECONDS, presignDocument, storageConfigured } from "./storage";
 import { anthropicConfigured, clearanceReply, type AdvisorMessage } from "./anthropic";
 import { deriveAuditDetail } from "../../src/lib/auditDetail";
 import { withAnon, withUser } from "./db";
@@ -288,6 +289,7 @@ router.get("/v1/health", async () => ({
     status: "ok",
     version: "1.0",
     sources: { google: googleConfigured(), website: websiteConfigured() },
+    storage: storageConfigured(),
     advisor: anthropicConfigured(),
   },
 }));
@@ -783,6 +785,35 @@ router.post("/v1/cases/:caseId/messages", async (req) => {
   });
   if (!row) throw forbidden("Meddelandet kunde inte skickas i det här ärendet.");
   return { status: 201, body: toMessage(row) };
+});
+
+/**
+ * En kortlivad, signerad nedladdnings-URL för ett dokument.
+ *
+ * DEN ENDA behörighetsfrågan är app.may_read_document(): en signerad URL
+ * kringgår all databasbehörighet, så den får aldrig signeras utan ett `true`
+ * därifrån. storage_path lämnar ALDRIG servern - bara den signerade URL:en,
+ * och den går ut på 60 sekunder. Okänt dokument och dokument man inte får se
+ * ger samma svar (404), så rutten inte röjer vilka id:n som finns.
+ */
+router.get("/v1/documents/:documentId/url", async (req) => {
+  const caller = await authenticate(req);
+  const documentId = uuidParam(req, "documentId");
+  if (!storageConfigured()) {
+    throw notFound("Dokumentlagringen är inte ansluten i den här driften.");
+  }
+  const row = await withUser(caller.userId, async (tx) => {
+    const may = await tx.query("select app.may_read_document($1) as ok", [documentId]);
+    if (may.rows[0]?.ok !== true) return null;
+    const doc = await tx.query(
+      "select storage_path, file_name from public.case_documents where id = $1",
+      [documentId],
+    );
+    return doc.rows[0] ?? null;
+  });
+  if (!row) throw notFound("Dokumentet finns inte, eller är inte ditt.");
+  const url = await presignDocument(String(row.storage_path), String(row.file_name ?? "dokument"));
+  return { status: 200, body: { url, fileName: row.file_name, expiresInSeconds: DOCUMENT_URL_TTL_SECONDS } };
 });
 
 router.post("/v1/documents/:documentId/review", async (req) => {

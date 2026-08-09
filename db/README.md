@@ -24,8 +24,8 @@ Samma testfil körs mot båda. Den sätter både `request.jwt.claim.sub` och `ap
 | `auth.users` | Egen tabell med `password_hash` | **Klart** i `db/bootstrap.sql` |
 | Sessioner | `auth.sessions`, token lagras som SHA-256 | Schema klart, API saknas |
 | Row Level Security | Oförändrad — det var alltid vanlig Postgres | **Klart, 45 tester** |
-| Storage-bucket | S3, privat bucket | Metadata klar, signering saknas |
-| Signerade URL:er | S3 presigned URLs | `app.may_read_document()` klar |
+| Storage-bucket | S3, privat bucket | **Klart** — MinIO/S3 via `api/server/storage.ts` |
+| Signerade URL:er | S3 presigned URLs | **Klart** — `GET /v1/documents/{id}/url`, 60 s, efter `app.may_read_document()` |
 | Edge function `lookup-company` | Endpoint i eget API | Saknas |
 | PostgREST | Eget API | Saknas — se nedan |
 

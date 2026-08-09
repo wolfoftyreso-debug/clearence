@@ -62,6 +62,7 @@ export const MIGRATED_PORTS = [
   "payments.listByCase",
   "documents.listByCase",
   "documents.setReview",
+  "documents.getDownloadUrl",
   "messages.listByCase",
   "messages.send",
   "kbr.getLatestByCase",
@@ -253,8 +254,22 @@ const documents = {
   async setReview(id: string, action: "request" | "approve" | "reset"): Promise<void> {
     await apiFetch(`/v1/documents/${id}/review`, { method: "POST", body: { action } });
   },
-  // upload/download ligger kvar: de kräver signerade URL:er mot S3, och
-  // den koden finns inte förrän det finns en hink att signera mot.
+  async getDownloadUrl(id: string, _expiresInSeconds: number): Promise<string | null> {
+    // Livslängden bestäms av SERVERN (60 s), inte av klienten - en klient
+    // kan inte förlänga en signerad URL:s liv. Argumentet behålls för
+    // portens signatur men skickas inte med.
+    try {
+      const res = await apiFetch<{ url: string }>(`/v1/documents/${id}/url`);
+      return res.url;
+    } catch (err) {
+      // 404 = dokumentet finns inte eller är inte ditt. Kontraktet vill ha
+      // null, inte ett kastat fel - samma tystnad som resten av porten.
+      if (err instanceof ApiRequestError && err.status === 404) return null;
+      throw err;
+    }
+  },
+  // upload ligger kvar: den kräver en PUT-signering mot S3, som byggs när
+  // uppladdningsvägen migreras (samma hink, andra riktningen).
 };
 
 const messages = {

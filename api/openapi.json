@@ -227,6 +227,41 @@
         }
       }
     },
+    "/documents/{documentId}/url": {
+      "get": {
+        "operationId": "getDocumentDownloadUrl",
+        "summary": "En kortlivad, signerad nedladdnings-URL. Signeras bara efter app.may_read_document(); storage_path lämnar aldrig servern. Okänt och obehörigt dokument ger samma 404.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Den signerade URL:en",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["url", "expiresInSeconds"],
+                  "properties": {
+                    "url": { "type": "string" },
+                    "fileName": { "type": "string" },
+                    "expiresInSeconds": { "type": "integer" }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/documents/{documentId}/review": {
       "post": {
         "operationId": "setDocumentReview",

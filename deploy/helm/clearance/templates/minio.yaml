@@ -1,9 +1,9 @@
 {{- if .Values.minio.enabled }}
 # MinIO: S3-kompatibel objektlagring för dokumenten (signerade URL:er).
 #
-# OBS: presigneringen i API:t är ännu inte byggd (db/README: "signering
-# saknas"). MinIO reses här så att lagringen finns när den funktionen
-# kopplas in - den ska peka S3-klienten hit med endpoint + forcePathStyle.
+# API:t signerar kortlivade nedladdnings-URL:er hit (api/server/storage.ts);
+# api-deploymenten pekas hit automatiskt via documents.* (endpoint +
+# forcePathStyle) när minio.enabled=true.
 # En enkel enkelnod; produktion vill ha MinIO-operatorn eller distribuerat.
 apiVersion: v1
 kind: PersistentVolumeClaim
