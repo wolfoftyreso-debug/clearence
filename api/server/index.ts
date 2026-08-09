@@ -33,7 +33,7 @@ import { fetchWebsite, websiteConfigured } from "./website";
 import { DOCUMENT_URL_TTL_SECONDS, presignDocument, storageConfigured } from "./storage";
 import { anthropicConfigured, clearanceReply, type AdvisorMessage } from "./anthropic";
 import { deriveAuditDetail } from "../../src/lib/auditDetail";
-import { withAnon, withUser } from "./db";
+import { withAnon, withUser, type Tx } from "./db";
 import { hashPassword, issueToken, sessionTtlHours, sha256, verifyPassword } from "./auth";
 
 /* --- Identiteten bakom en request ----------------------------------------- */
@@ -78,6 +78,24 @@ const authenticate = async (req: ApiRequest): Promise<Caller> => {
   // hjälper bara den som gissar.
   if (!row) throw unauthorized("Sessionen är ogiltig eller har gått ut.");
   return { userId: row.user_id, sessionId: row.id };
+};
+
+/**
+ * Som authenticate(), men KRÄVER ingen token.
+ *
+ * Kontaktformuläret ska fungera oinloggat - ett bolag som håller på att gå
+ * omkull ska inte behöva ett konto för att ställa en fråga. Är avsändaren
+ * ändå inloggad fästs meddelandet vid kontot (kolumnens default läser
+ * app.user_id). En ogiltig token behandlas som ingen alls, inte som ett
+ * fel: den här ytan hänger inte på en identitet.
+ */
+const optionalCaller = async (req: ApiRequest): Promise<Caller | null> => {
+  if (!bearer(req)) return null;
+  try {
+    return await authenticate(req);
+  } catch {
+    return null;
+  }
 };
 
 /* --- Serialisering: kontraktets namn, aldrig kolumnnamnen ----------------- */
@@ -245,6 +263,32 @@ const toMessage = (row: Record<string, unknown>) => ({
   authorUserId: row.author_user_id,
   createdAt: iso(row.created_at),
 });
+
+/**
+ * Ett kontaktmeddelande, HELT. Fälten är ContactMessageRecord i
+ * src/data/types.ts; adaptern castar rakt till den, så ett utelämnat fält
+ * blir ett löfte som inte hålls (samma regel som toCase). handled_at och
+ * created_at är timestamptz - iso() eller kontraktet ljuger om formen.
+ */
+const toContactMessage = (row: Record<string, unknown>) => ({
+  id: row.id,
+  name: row.name,
+  email: row.email,
+  phone: row.phone ?? null,
+  company: row.company ?? null,
+  topic: row.topic,
+  message: row.message,
+  userId: row.user_id ?? null,
+  status: row.status,
+  handledBy: row.handled_by ?? null,
+  handledAt: iso(row.handled_at),
+  internalNote: row.internal_note ?? null,
+  createdAt: iso(row.created_at),
+});
+
+/** Kontaktformulärets ämnen och handläggningsstatusar - kontraktets enum:er. */
+const CONTACT_TOPICS = ["question", "company", "advisor", "invoice", "privacy", "bug", "other"];
+const CONTACT_STATUSES = ["new", "in_progress", "answered", "closed"];
 
 /* --- Läshjälp -------------------------------------------------------------- */
 
@@ -830,6 +874,117 @@ router.post("/v1/documents/:documentId/review", async (req) => {
     await tx.query("select public.set_document_review($1, $2)", [documentId, action]);
   });
   return { status: 200, body: { reviewed: true } };
+});
+
+/* --- Kontaktinkorgen ------------------------------------------------------- */
+
+/*
+ * Kontaktformuläret är sajtens ENDA skrivbara yta för oinloggade, och
+ * inkorgen bakom det är läsbar bara för driftadministratörer. Båda
+ * gränserna bor i databasen (contact_messages: öppen insert på utvalda
+ * kolumner, RLS-läsning via is_platform_admin) - rutterna här sätter aldrig
+ * status, user_id eller handläggare från klientens data. Det är själva
+ * poängen: en avsändare ska inte kunna tillskriva sig ett annat konto eller
+ * stänga sitt eget ärende genom att posta direkt mot API:et.
+ */
+
+router.post("/v1/contact", async (req) => {
+  // Får ske utan inloggning. Är avsändaren ändå inloggad fäster kolumnens
+  // default meddelandet vid kontot - därför withUser när vi har en identitet
+  // (då läser auth.uid() app.user_id), annars withAnon (då blir user_id null).
+  const caller = await optionalCaller(req);
+  const topic = str(req.body, "topic", { max: 40, required: false }) || "question";
+  if (!CONTACT_TOPICS.includes(topic)) {
+    throw badRequest(`Fältet "topic" ska vara en av: ${CONTACT_TOPICS.join(", ")}.`);
+  }
+  const values = [
+    str(req.body, "name", { max: 200 }),
+    str(req.body, "email", { max: 320 }),
+    str(req.body, "phone", { max: 40, required: false }) || null,
+    str(req.body, "company", { max: 200, required: false }) || null,
+    topic,
+    str(req.body, "message", { max: 5000 }),
+  ];
+  // BARA avsändarens egna kolumner. status, user_id och handled_* utelämnas
+  // med flit - kolumnrättigheten (grant insert (...)) skulle neka dem ändå.
+  const insert = (tx: Tx) =>
+    tx.query(
+      `insert into public.contact_messages (name, email, phone, company, topic, message)
+       values ($1, $2, $3, $4, $5, $6)`,
+      values,
+    );
+  if (caller) await withUser(caller.userId, insert);
+  else await withAnon(insert);
+  return { status: 201, body: { submitted: true } };
+});
+
+router.get("/v1/contact/admin-status", async (req) => {
+  const caller = await authenticate(req);
+  // Gränssnittsbeslut, inte säkerhetsgräns: den riktiga gränsen är RLS. Om
+  // det här svaret vore fel vore inkorgen ändå tom för en icke-administratör.
+  const isAdmin = await withUser(caller.userId, async (tx) => {
+    const { rows } = await tx.query("select public.is_platform_admin() as ok");
+    return rows[0]?.ok === true;
+  });
+  return { status: 200, body: { isAdmin } };
+});
+
+router.get("/v1/contact", async (req) => {
+  const caller = await authenticate(req);
+  // Ingen egen administratörskontroll: RLS ger en icke-administratör noll
+  // rader, och det är rätt svar. Behörigheten hålls i databasen, inte av att
+  // rutten gissar rätt.
+  const rows = await withUser(caller.userId, async (tx) => {
+    const { rows } = await tx.query(
+      "select * from public.contact_messages order by created_at desc",
+    );
+    return rows;
+  });
+  return { status: 200, body: { messages: rows.map(toContactMessage) } };
+});
+
+router.post("/v1/contact/:id/status", async (req) => {
+  const caller = await authenticate(req);
+  const id = uuidParam(req, "id");
+  const status = str(req.body, "status", { max: 20 });
+  if (!CONTACT_STATUSES.includes(status)) {
+    throw badRequest(`Fältet "status" ska vara en av: ${CONTACT_STATUSES.join(", ")}.`);
+  }
+  // Handläggaren sätts av SERVERN till den inloggade, aldrig av klienten -
+  // och bara när ärendet tas ur "new". CHECK-villkoret kräver att handled_by
+  // och handled_at sätts tillsammans eller inte alls.
+  const closing = status !== "new";
+  const handledBy = closing ? caller.userId : null;
+  // "internalNote" i kroppen = uppdatera anteckningen (även till null för att
+  // rensa den). Saknas fältet lämnas den orörd.
+  const touchNote = req.body !== null && typeof req.body === "object" && "internalNote" in req.body;
+  const note = touchNote ? (str(req.body, "internalNote", { max: 5000, required: false }) || null) : null;
+
+  const updated = await withUser(caller.userId, async (tx) => {
+    const { rowCount } = touchNote
+      ? await tx.query(
+          `update public.contact_messages
+              set status = $2,
+                  handled_by = $3,
+                  handled_at = case when $4 then now() else null end,
+                  internal_note = $5
+            where id = $1`,
+          [id, status, handledBy, closing, note],
+        )
+      : await tx.query(
+          `update public.contact_messages
+              set status = $2,
+                  handled_by = $3,
+                  handled_at = case when $4 then now() else null end
+            where id = $1`,
+          [id, status, handledBy, closing],
+        );
+    return (rowCount ?? 0) > 0;
+  });
+  // 0 rader = finns inte ELLER så är den som frågar inte administratör. Samma
+  // tystnad: en icke-administratör ska inte kunna avläsa att inkorgen finns.
+  if (!updated) throw notFound("Meddelandet finns inte, eller är inte ditt att handlägga.");
+  return { status: 200, body: { updated: true } };
 });
 
 /* --- Servern --------------------------------------------------------------- */

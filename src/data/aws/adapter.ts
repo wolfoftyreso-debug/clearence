@@ -26,7 +26,10 @@ import type {
   CaseRecord,
   CaseShareLinkRecord,
   CaseTask,
+  ContactMessageRecord,
+  ContactStatus,
   DocumentRecord,
+  NewContactMessage,
   PaymentRecord,
   SharedCaseView,
   UserProfile,
@@ -40,6 +43,10 @@ import { ApiRequestError, apiFetch, clearToken, setToken } from "./client";
  * migreringsmätare - den ska växa tills delegeringen kan tas bort.
  */
 export const MIGRATED_PORTS = [
+  "contact.submit",
+  "contact.amIAdmin",
+  "contact.listAll",
+  "contact.updateStatus",
   "cases.getLatest",
   "cases.close",
   "cases.reopen",
@@ -272,6 +279,54 @@ const documents = {
   // uppladdningsvägen migreras (samma hink, andra riktningen).
 };
 
+const contact = {
+  ...supabaseAdapter.contact,
+  async submit(input: NewContactMessage): Promise<void> {
+    // INTE anonymous: är avsändaren inloggad följer token med och servern
+    // fäster meddelandet vid kontot. Är den inte det skickas ingen token,
+    // och rutten tar emot ändå. Bara avsändarens egna fält skickas.
+    await apiFetch("/v1/contact", {
+      method: "POST",
+      body: {
+        name: input.name,
+        email: input.email,
+        phone: input.phone,
+        company: input.company,
+        topic: input.topic,
+        message: input.message,
+      },
+    });
+  },
+  async amIAdmin(): Promise<boolean> {
+    // Fel (t.ex. 401 för en oinloggad) läses som "inte administratör". Den
+    // riktiga gränsen är radskyddet - vore det här svaret fel vore inkorgen
+    // ändå tom.
+    try {
+      const res = await apiFetch<{ isAdmin: boolean }>("/v1/contact/admin-status");
+      return res.isAdmin === true;
+    } catch (err) {
+      if (err instanceof ApiRequestError) return false;
+      throw err;
+    }
+  },
+  async listAll(): Promise<ContactMessageRecord[]> {
+    const res = await apiFetch<{ messages: ContactMessageRecord[] }>("/v1/contact");
+    return res.messages;
+  },
+  async updateStatus(
+    id: string,
+    status: ContactStatus,
+    internalNote?: string | null,
+  ): Promise<void> {
+    // internalNote utelämnas ur kroppen när anroparen inte skickade det, så
+    // servern lämnar anteckningen orörd (skickas den, även som null, skrivs
+    // den). Handläggaren sätter servern, aldrig klienten.
+    const body: { status: ContactStatus; internalNote?: string | null } = { status };
+    if (internalNote !== undefined) body.internalNote = internalNote;
+    await apiFetch(`/v1/contact/${id}/status`, { method: "POST", body });
+  },
+};
+
 const messages = {
   ...supabaseAdapter.messages,
   async listByCase(caseId: string): Promise<CaseMessage[]> {
@@ -308,6 +363,7 @@ const audit = {
  */
 export const awsAdapter: DataPort = {
   ...supabaseAdapter,
+  contact: contact as DataPort["contact"],
   cases: cases as DataPort["cases"],
   dialogue: dialogue as DataPort["dialogue"],
   tasks: tasks as DataPort["tasks"],

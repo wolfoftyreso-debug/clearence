@@ -239,11 +239,20 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": ["url", "expiresInSeconds"],
+                  "required": [
+                    "url",
+                    "expiresInSeconds"
+                  ],
                   "properties": {
-                    "url": { "type": "string" },
-                    "fileName": { "type": "string" },
-                    "expiresInSeconds": { "type": "integer" }
+                    "url": {
+                      "type": "string"
+                    },
+                    "fileName": {
+                      "type": "string"
+                    },
+                    "expiresInSeconds": {
+                      "type": "integer"
+                    }
                   }
                 }
               }
@@ -1340,6 +1349,155 @@
         "responses": {
           "200": {
             "description": "Stämpeln satt eller återtagen"
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/contact": {
+      "post": {
+        "operationId": "submitContactMessage",
+        "summary": "Skicka ett meddelande från kontaktformuläret. Får ske utan inloggning; status, avsändarens konto och handläggare sätts av servern, aldrig av klienten.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Mottaget",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "submitted"
+                  ],
+                  "properties": {
+                    "submitted": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "listContactMessages",
+        "summary": "Hela inkorgen, nyast först. Läsbar bara för driftadministratörer – radskyddet ger andra noll rader.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Inkorgen",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "messages"
+                  ],
+                  "properties": {
+                    "messages": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/contact/admin-status": {
+      "get": {
+        "operationId": "getContactAdminStatus",
+        "summary": "Säger om den inloggade är driftadministratör. Gränssnittsbeslut, inte behörighetsgräns – den håller i databasen.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Administratörsstatus",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "isAdmin"
+                  ],
+                  "properties": {
+                    "isAdmin": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/contact/{id}/status": {
+      "post": {
+        "operationId": "setContactStatus",
+        "summary": "Handläggning: sätter status och valfri intern anteckning. Handläggaren sätts av servern. Endast driftadministratörer.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Uppdaterat",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "updated"
+                  ],
+                  "properties": {
+                    "updated": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
           },
           "default": {
             "description": "Fel",

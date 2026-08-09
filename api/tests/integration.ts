@@ -642,6 +642,150 @@ check("bolagsnamnet står läsbart i posten om ärendet",
   bPoster.some((e) => e.objectType === "cases" && /Bolag B AB/.test(e.detail ?? "")),
   bPoster.filter((e) => e.objectType === "cases").map((e) => e.detail));
 
+/* --- 8e. Kontaktinkorgen: öppen insert, admin-läsning via radskyddet ------ */
+
+/*
+ * Kontaktformuläret är sajtens enda skrivbara yta för oinloggade, och
+ * inkorgen bakom det får bara administratörer läsa. Två invarianter prövas
+ * mot en riktig databas: (1) servern, inte klienten, bestämmer user_id,
+ * status och handläggare; (2) en icke-administratör ser en TOM inkorg och
+ * kan inte handlägga - och får samma 404 som för ett okänt id, så att
+ * inkorgens existens inte går att avläsa.
+ */
+
+// Agnes görs till driftadministratör; Bertil förblir vanlig användare.
+// Seedas som ägaren, förbi radskyddet - fixturen ska inte bero på policyn.
+await withAnon(async (tx) => {
+  await tx.query(
+    "insert into public.platform_admins (user_id, note) values ($1, 'test') on conflict (user_id) do nothing",
+    [AGNES],
+  );
+});
+
+// Agnes loggades ut i avsnitt 7; hämta en ny session för administratören.
+const adminToken: string = (
+  await call("POST", "/v1/auth/login", {
+    body: { email: "agnes@bolag-a.se", password: "hemligt-losen-agnes" },
+  })
+).body.token as string;
+
+const laesRad = (email: string) =>
+  withAnon(async (tx) => {
+    const { rows } = await tx.query(
+      "select id, user_id, status, handled_by, handled_at, internal_note from public.contact_messages where email = $1 order by created_at desc limit 1",
+      [email],
+    );
+    return rows[0];
+  });
+
+const anonSubmit = await call("POST", "/v1/contact", {
+  body: {
+    name: "Nöd AB",
+    email: "nod@example.se",
+    topic: "company",
+    message: "Vi kan inte betala löner nästa vecka och vet inte vad vi ska göra.",
+  },
+});
+check("kontaktformuläret tar emot utan inloggning", anonSubmit.status === 201, anonSubmit);
+const anonRad = await laesRad("nod@example.se");
+check("ett oinloggat meddelande får user_id null - servern, inte klienten, bestämmer", anonRad.user_id === null, anonRad);
+check("och landar med status new", anonRad.status === "new");
+
+const authedSubmit = await call("POST", "/v1/contact", {
+  token: bertilToken,
+  body: {
+    name: "Bertil",
+    email: "bertil-kontakt@bolag-b.se",
+    topic: "question",
+    message: "En helt vanlig fråga om hur tjänsten fungerar i praktiken.",
+  },
+});
+check("en inloggad avsändare tas också emot", authedSubmit.status === 201, authedSubmit);
+const authedRad = await laesRad("bertil-kontakt@bolag-b.se");
+check("och fästs vid kontot av servern (kolumnens default), inte av klientens data", authedRad.user_id === BERTIL, authedRad);
+
+const utanMeddelande = await call("POST", "/v1/contact", {
+  body: { name: "X", email: "x@example.se", topic: "other" },
+});
+check("meddelande som saknas ger 400", utanMeddelande.status === 400);
+const koruMeddelande = await call("POST", "/v1/contact", {
+  body: { name: "X", email: "x@example.se", topic: "other", message: "kort" },
+});
+check("för kort meddelande nekas av databasregeln, inte tyst", koruMeddelande.status === 400, koruMeddelande);
+const felAmne = await call("POST", "/v1/contact", {
+  body: { name: "X", email: "x@example.se", topic: "sabotage", message: "Ett giltigt och tillräckligt långt meddelande." },
+});
+check("okänt ämne ger 400", felAmne.status === 400, felAmne);
+
+const agnesAdmin = await call("GET", "/v1/contact/admin-status", { token: adminToken });
+check("administratören känns igen", agnesAdmin.status === 200 && agnesAdmin.body.isAdmin === true, agnesAdmin.body);
+const bertilAdmin = await call("GET", "/v1/contact/admin-status", { token: bertilToken });
+check("en vanlig användare är inte administratör", bertilAdmin.body.isAdmin === false, bertilAdmin.body);
+const anonAdmin = await call("GET", "/v1/contact/admin-status");
+check("utan token nekas admin-statusfrågan", anonAdmin.status === 401);
+
+const agnesInkorg = await call("GET", "/v1/contact", { token: adminToken });
+check(
+  "administratören ser inkorgen",
+  agnesInkorg.status === 200 && Array.isArray(agnesInkorg.body.messages) && agnesInkorg.body.messages.length >= 2,
+  agnesInkorg.body,
+);
+check(
+  "posterna bär kontraktets fält, hela",
+  (agnesInkorg.body.messages as Array<Record<string, unknown>>).every(
+    (m) => Object.hasOwn(m, "internalNote") && Object.hasOwn(m, "handledAt") && Object.hasOwn(m, "userId"),
+  ),
+  (agnesInkorg.body.messages as unknown[])[0],
+);
+const bertilInkorg = await call("GET", "/v1/contact", { token: bertilToken });
+check(
+  "en icke-administratör ser en TOM inkorg - radskyddet, inte en dold knapp",
+  bertilInkorg.status === 200 && Array.isArray(bertilInkorg.body.messages) && bertilInkorg.body.messages.length === 0,
+  bertilInkorg.body,
+);
+const anonInkorg = await call("GET", "/v1/contact");
+check("utan token nekas inkorgen", anonInkorg.status === 401);
+
+const malId = anonRad.id as string;
+const svarat = await call("POST", `/v1/contact/${malId}/status`, {
+  token: adminToken,
+  body: { status: "answered", internalNote: "Ringde upp och bokade möte." },
+});
+check("administratören kan handlägga", svarat.status === 200, svarat.body);
+const handlagd = await laesRad("nod@example.se");
+check("handläggaren sätts av servern till den inloggade, aldrig av klienten", handlagd.handled_by === AGNES, handlagd);
+check("och handled_at sätts samtidigt (CHECK-paret håller)", handlagd.handled_at !== null);
+check("den interna anteckningen sparades", handlagd.internal_note === "Ringde upp och bokade möte.");
+check("statusen uppdaterades", handlagd.status === "answered");
+
+const aterlast = await call("POST", `/v1/contact/${malId}/status`, {
+  token: adminToken,
+  body: { status: "new" },
+});
+check("åter till new tas emot", aterlast.status === 200);
+const nollstalld = await laesRad("nod@example.se");
+check("handläggarparet nollställs tillsammans", nollstalld.handled_by === null && nollstalld.handled_at === null, nollstalld);
+check("och anteckningen lämnas orörd när fältet inte skickas", nollstalld.internal_note === "Ringde upp och bokade möte.");
+
+const bertilForsok = await call("POST", `/v1/contact/${malId}/status`, {
+  token: bertilToken,
+  body: { status: "closed" },
+});
+check("en icke-administratör kan inte handlägga - samma 404 som ett okänt id", bertilForsok.status === 404, bertilForsok);
+const oforandrad = await laesRad("nod@example.se");
+check("och meddelandet är oförändrat efter försöket", oforandrad.status === "new");
+
+const spoke = await call("POST", "/v1/contact/00000000-0000-0000-0000-000000000000/status", {
+  token: adminToken,
+  body: { status: "closed" },
+});
+check("okänt id ger 404 även för administratören", spoke.status === 404);
+const felStatus = await call("POST", `/v1/contact/${malId}/status`, {
+  token: adminToken,
+  body: { status: "sabotage" },
+});
+check("ogiltig status ger 400", felStatus.status === 400, felStatus);
+
 /* --- 9. Hastighetsbegränsningen, mot den delade räknaren ------------------ */
 
 /*
