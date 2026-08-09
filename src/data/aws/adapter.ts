@@ -22,6 +22,7 @@
 import type { DataPort } from "../ports";
 import type { CaseRole } from "@/lib/caseRoles";
 import type {
+  ApiKeyRecord,
   CaseDecisionRecord,
   CaseInvitationRecord,
   CaseMemberRecord,
@@ -65,6 +66,9 @@ export const MIGRATED_PORTS = [
   "advisorTools.listTime",
   "advisorTools.logTime",
   "advisorTools.removeTime",
+  "apiKeys.listMine",
+  "apiKeys.create",
+  "apiKeys.revoke",
   "cases.getLatest",
   "cases.close",
   "cases.reopen",
@@ -297,6 +301,25 @@ const documents = {
   // uppladdningsvägen migreras (samma hink, andra riktningen).
 };
 
+const apiKeys = {
+  ...supabaseAdapter.apiKeys,
+  async listMine(): Promise<ApiKeyRecord[]> {
+    const res = await apiFetch<{ keys: ApiKeyRecord[] }>("/v1/api-keys");
+    return res.keys;
+  },
+  async create(label: string): Promise<{ record: ApiKeyRecord; secret: string }> {
+    // Hemligheten kommer tillbaka EN gång. Den lagras aldrig - visas för
+    // användaren i skapandeögonblicket och kan sedan bara bytas ut.
+    return apiFetch<{ record: ApiKeyRecord; secret: string }>("/v1/api-keys", {
+      method: "POST",
+      body: { label },
+    });
+  },
+  async revoke(id: string): Promise<void> {
+    await apiFetch(`/v1/api-keys/${id}/revoke`, { method: "POST" });
+  },
+};
+
 const advisorTools = {
   ...supabaseAdapter.advisorTools,
   async listNotes(caseId: string): Promise<CaseNoteRecord[]> {
@@ -444,6 +467,7 @@ const audit = {
 export const awsAdapter: DataPort = {
   ...supabaseAdapter,
   contact: contact as DataPort["contact"],
+  apiKeys: apiKeys as DataPort["apiKeys"],
   advisorTools: advisorTools as DataPort["advisorTools"],
   members: members as DataPort["members"],
   cases: cases as DataPort["cases"],

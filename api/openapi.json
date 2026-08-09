@@ -1953,6 +1953,122 @@
           }
         }
       }
+    },
+    "/api-keys": {
+      "get": {
+        "operationId": "listApiKeys",
+        "summary": "Dina API-nycklar: prefix och metadata, aldrig hemligheten. Bara den egna ägarens (radskyddet).",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Nycklarna",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "keys"
+                  ],
+                  "properties": {
+                    "keys": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "createApiKey",
+        "summary": "Skapa en API-nyckel (create_api_key: genereras och hashas i databasen). Hemligheten returneras EN gång och lagras aldrig.",
+        "x-status": "beta",
+        "responses": {
+          "201": {
+            "description": "Nyckeln skapad",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "record",
+                    "secret"
+                  ],
+                  "properties": {
+                    "record": {
+                      "type": "object"
+                    },
+                    "secret": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api-keys/{keyId}/revoke": {
+      "post": {
+        "operationId": "revokeApiKey",
+        "summary": "Återkalla en nyckel. Idempotent; en återkallad nyckel förblir återkallad. Bara den egna nyckeln.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Återkallad",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "revoked"
+                  ],
+                  "properties": {
+                    "revoked": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "webhooks": {

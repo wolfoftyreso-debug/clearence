@@ -22,7 +22,7 @@
 
 import { createApiServer, handle } from "../server/index";
 import { closePool, withAnon, withUser } from "../server/db";
-import { hashPassword, verifyPassword } from "../server/auth";
+import { hashPassword, sha256, verifyPassword } from "../server/auth";
 import { nollstallGranser, provaGrans } from "../server/rateLimit";
 
 let passed = 0;
@@ -976,6 +976,58 @@ const agnesTider = await call("GET", `/v1/cases/${CASE_A}/time-entries`, { token
 check("en annan deltagare ser INTE den posten", !arr(agnesTider.body.entries).some((e) => e.id === ceciliaTidId), agnesTider.body);
 const raderaTid = await call("DELETE", `/v1/time-entries/${ceciliaTidId}`, { token: ceciliaToken });
 check("ägaren kan ta bort sin tidspost", raderaTid.status === 200, raderaTid);
+
+/* --- 8h. API-nycklar: hemligheten lagras aldrig -------------------------- */
+
+/*
+ * Nyckelvalvets löfte: hemligheten LAGRAS ALDRIG - bara en sha256-hash och
+ * ett prefix - och den visas EN gång. Nycklar återkallas, raderas inte. Och
+ * radskyddet gör dem till ägarens ensak.
+ */
+
+const skapaNyckel = await call("POST", "/v1/api-keys", {
+  token: adminToken,
+  body: { label: "Integrationsnyckel" },
+});
+check("en nyckel skapas", skapaNyckel.status === 201, skapaNyckel.body);
+const nyckelSecret = skapaNyckel.body.secret as string;
+const nyckelRecord = skapaNyckel.body.record as Json;
+const nyckelId = nyckelRecord.id as string;
+const nyckelPrefix = nyckelRecord.keyPrefix as string;
+check("hemligheten har rätt form (clr_...)", nyckelSecret.startsWith("clr_"), nyckelSecret.slice(0, 4));
+check("prefixet är nyckelns synliga början", nyckelSecret.startsWith(nyckelPrefix) && nyckelPrefix.length === 12, nyckelPrefix);
+
+const lagrad = await withAnon(async (tx) => {
+  const { rows } = await tx.query("select key_hash, key_prefix from public.api_keys where id = $1", [nyckelId]);
+  return rows[0];
+});
+check("hemligheten lagras BARA som sha256-hash", lagrad.key_hash === sha256(nyckelSecret), {
+  stored: lagrad.key_hash?.slice(0, 12),
+});
+check("klartexthemligheten finns ingenstans i raden", lagrad.key_hash !== nyckelSecret && lagrad.key_prefix === nyckelPrefix);
+
+const nycklar = await call("GET", "/v1/api-keys", { token: adminToken });
+const min = arr(nycklar.body.keys).find((k) => k.id === nyckelId);
+check("nyckeln listas med prefix", !!min && (min as Json).keyPrefix === nyckelPrefix, nycklar.body);
+check("listan bär ALDRIG hemligheten", !JSON.stringify(nycklar.body).includes(nyckelSecret));
+
+const bertilNycklar = await call("GET", "/v1/api-keys", { token: bertilToken });
+check(
+  "en annan användare ser inte nyckeln (radskyddet)",
+  !arr(bertilNycklar.body.keys).some((k) => k.id === nyckelId),
+  bertilNycklar.body,
+);
+
+const kortEtikett = await call("POST", "/v1/api-keys", { token: adminToken, body: { label: "ab" } });
+check("för kort etikett ger 400", kortEtikett.status === 400, kortEtikett);
+
+const aterkalla2 = await call("POST", `/v1/api-keys/${nyckelId}/revoke`, { token: adminToken });
+check("nyckeln kan återkallas", aterkalla2.status === 200, aterkalla2);
+const efterAterkall = await call("GET", "/v1/api-keys", { token: adminToken });
+const aterkalladNyckel = arr(efterAterkall.body.keys).find((k) => k.id === nyckelId);
+check("den återkallade nyckeln bär revokedAt", (aterkalladNyckel as Json | undefined)?.revokedAt != null, aterkalladNyckel);
+const aterkallaIgen = await call("POST", `/v1/api-keys/${nyckelId}/revoke`, { token: adminToken });
+check("dubbel återkallelse är ofarlig (idempotent 200)", aterkallaIgen.status === 200, aterkallaIgen);
 
 /* --- 9. Hastighetsbegränsningen, mot den delade räknaren ------------------ */
 

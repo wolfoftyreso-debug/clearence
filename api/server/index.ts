@@ -358,6 +358,16 @@ const toTimeEntry = (row: Record<string, unknown>) => ({
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
+/** En API-nyckel som den får visas: prefix och metadata, ALDRIG hemligheten. */
+const toApiKey = (row: Record<string, unknown>) => ({
+  id: row.id,
+  label: row.label,
+  keyPrefix: row.key_prefix,
+  createdAt: iso(row.created_at),
+  lastUsedAt: iso(row.last_used_at),
+  revokedAt: iso(row.revoked_at),
+});
+
 /* --- Läshjälp -------------------------------------------------------------- */
 
 const str = (body: unknown, field: string, opts: { max?: number; required?: boolean } = {}): string => {
@@ -1241,6 +1251,70 @@ router.del("/v1/time-entries/:entryId", async (req) => {
     await tx.query("delete from public.time_entries where id = $1", [entryId]);
   });
   return { status: 200, body: { deleted: true } };
+});
+
+/* --- API-nycklar för det öppna API:t -------------------------------------- */
+
+/*
+ * Nyckelvalvets regler, som schemat redan bär: hemligheten LAGRAS ALDRIG -
+ * bara en SHA-256-hash och ett synligt prefix, och den visas EN gång i
+ * skapandeögonblicket. Nycklar raderas inte, de återkallas (spårbarheten är
+ * löftet). Skapandet går genom create_api_key (security definer) så att
+ * generering och hashning sker i databasen; hemligheten passerar aldrig
+ * någon annan lagring.
+ */
+
+router.get("/v1/api-keys", async (req) => {
+  const caller = await authenticate(req);
+  const rows = await withUser(caller.userId, async (tx) => {
+    const { rows } = await tx.query(
+      `select id, label, key_prefix, created_at, last_used_at, revoked_at
+         from public.api_keys order by created_at desc`,
+    );
+    return rows;
+  });
+  return { status: 200, body: { keys: rows.map(toApiKey) } };
+});
+
+router.post("/v1/api-keys", async (req) => {
+  const caller = await authenticate(req);
+  const label = str(req.body, "label", { max: 80 });
+  if (label.length < 3) throw badRequest('Fältet "label" ska vara minst 3 tecken.');
+  const created = await withUser(caller.userId, async (tx) => {
+    const { rows } = await tx.query("select * from public.create_api_key($1)", [label]);
+    return rows[0] ?? null;
+  });
+  if (!created) throw new ApiError(500, "internal_error", "Nyckeln kunde inte skapas.");
+  // Hemligheten returneras EN gång och lagras aldrig. Prefixet är det enda
+  // som går att läsa igen.
+  return {
+    status: 201,
+    body: {
+      record: {
+        id: created.id,
+        label,
+        keyPrefix: created.key_prefix,
+        createdAt: iso(created.created_at),
+        lastUsedAt: null,
+        revokedAt: null,
+      },
+      secret: created.secret,
+    },
+  };
+});
+
+router.post("/v1/api-keys/:keyId/revoke", async (req) => {
+  const caller = await authenticate(req);
+  const keyId = uuidParam(req, "keyId");
+  // Idempotent och trigger-vänligt: rör bara en icke-återkallad nyckel. RLS
+  // ser till att det bara är den egna nyckeln.
+  await withUser(caller.userId, async (tx) => {
+    await tx.query(
+      "update public.api_keys set revoked_at = now() where id = $1 and revoked_at is null",
+      [keyId],
+    );
+  });
+  return { status: 200, body: { revoked: true } };
 });
 
 /* --- Servern --------------------------------------------------------------- */
