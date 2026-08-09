@@ -1727,6 +1727,232 @@
           }
         }
       }
+    },
+    "/cases/{caseId}/notes": {
+      "get": {
+        "operationId": "listCaseNotes",
+        "summary": "Interna anteckningar i ärendet. Synliga endast för författaren (radskyddet) - inte för bolaget eller andra deltagare.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Anteckningarna",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "notes"
+                  ],
+                  "properties": {
+                    "notes": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "addCaseNote",
+        "summary": "Lägg en intern anteckning. Författaren sätts av servern; kräver aktivt deltagande i ärendet.",
+        "x-status": "beta",
+        "responses": {
+          "201": {
+            "description": "Anteckning skapad",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "noteId"
+                  ],
+                  "properties": {
+                    "noteId": {
+                      "type": "string",
+                      "format": "uuid"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/notes/{noteId}": {
+      "delete": {
+        "operationId": "removeCaseNote",
+        "summary": "Ta bort en egen anteckning. Idempotent; radskyddet släpper bara författarens egen rad.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Borttagen",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "deleted"
+                  ],
+                  "properties": {
+                    "deleted": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/cases/{caseId}/time-entries": {
+      "get": {
+        "operationId": "listTimeEntries",
+        "summary": "Nedlagd tid i ärendet. Var och en ser bara sina egna poster (radskyddet).",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Tidsposterna",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "entries"
+                  ],
+                  "properties": {
+                    "entries": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "logTimeEntry",
+        "summary": "Registrera nedlagd tid (minuter 1-1440, valfri anteckning och datum). Personen sätts av servern; kräver aktivt deltagande.",
+        "x-status": "beta",
+        "responses": {
+          "201": {
+            "description": "Tidspost skapad",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "entryId"
+                  ],
+                  "properties": {
+                    "entryId": {
+                      "type": "string",
+                      "format": "uuid"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/time-entries/{entryId}": {
+      "delete": {
+        "operationId": "removeTimeEntry",
+        "summary": "Ta bort en egen tidspost. Idempotent; radskyddet släpper bara den egna posten.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Borttagen",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "deleted"
+                  ],
+                  "properties": {
+                    "deleted": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "webhooks": {

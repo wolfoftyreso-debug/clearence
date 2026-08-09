@@ -914,6 +914,69 @@ const peekOkant = await call("GET", "/v1/invitations/00000000-0000-0000-0000-000
 });
 check("ett okänt inbjudnings-id ger null, inte ett fel", peekOkant.status === 200 && peekOkant.body.invitation === null, peekOkant.body);
 
+/* --- 8g. Rådgivarens klientverktyg: författarens ensak ------------------- */
+
+/*
+ * Anteckningar och tidsposter är byråns EGNA arbetsmaterial. Cecilia
+ * (legal_advisor) och Agnes (owner) är båda deltagare i CASE_A med
+ * skrivrätt - och ändå ser ingen den andras anteckningar eller tid. Det är
+ * hela poängen, och den bor i radskyddet (author_user_id = auth.uid()).
+ */
+
+const ceciliaNote = await call("POST", `/v1/cases/${CASE_A}/notes`, {
+  token: ceciliaToken,
+  body: { body: "Cecilias interna minnesanteckning om ärendet." },
+});
+check("en deltagare kan lägga en intern anteckning", ceciliaNote.status === 201, ceciliaNote.body);
+const ceciliaNoteId = ceciliaNote.body.noteId as string;
+const agnesNote = await call("POST", `/v1/cases/${CASE_A}/notes`, {
+  token: adminToken,
+  body: { body: "Agnes egen anteckning i samma ärende." },
+});
+const agnesNoteId = agnesNote.body.noteId as string;
+check("en annan deltagare lägger sin egen", agnesNote.status === 201, agnesNote.body);
+
+const ceciliaNotes = await call("GET", `/v1/cases/${CASE_A}/notes`, { token: ceciliaToken });
+check("författaren ser sin anteckning", arr(ceciliaNotes.body.notes).some((n) => n.id === ceciliaNoteId), ceciliaNotes.body);
+check(
+  "men INTE en annan deltagares - även i samma ärende (radskyddet)",
+  !arr(ceciliaNotes.body.notes).some((n) => n.id === agnesNoteId),
+  ceciliaNotes.body,
+);
+
+const bertilNote = await call("POST", `/v1/cases/${CASE_A}/notes`, {
+  token: bertilToken,
+  body: { body: "Bertil är inte deltagare i CASE_A och ska nekas." },
+});
+check("en utomstående kan inte lägga anteckning i ärendet (403)", bertilNote.status === 403, bertilNote);
+
+const raderaEgen = await call("DELETE", `/v1/notes/${ceciliaNoteId}`, { token: ceciliaToken });
+check("författaren kan ta bort sin anteckning", raderaEgen.status === 200, raderaEgen);
+const raderaAnnans = await call("DELETE", `/v1/notes/${agnesNoteId}`, { token: ceciliaToken });
+check("att 'ta bort' en annans anteckning är en tyst no-op (idempotent 200)", raderaAnnans.status === 200, raderaAnnans);
+const agnesKvar = await call("GET", `/v1/cases/${CASE_A}/notes`, { token: adminToken });
+check("och den andras anteckning finns kvar", arr(agnesKvar.body.notes).some((n) => n.id === agnesNoteId), agnesKvar.body);
+
+const ceciliaTid = await call("POST", `/v1/cases/${CASE_A}/time-entries`, {
+  token: ceciliaToken,
+  body: { minutes: 90, note: "Genomgång av likviditetsplanen", occurredOn: "2026-01-15" },
+});
+check("en deltagare kan registrera tid", ceciliaTid.status === 201, ceciliaTid.body);
+const ceciliaTidId = ceciliaTid.body.entryId as string;
+const nollMin = await call("POST", `/v1/cases/${CASE_A}/time-entries`, { token: ceciliaToken, body: { minutes: 0 } });
+check("noll minuter nekas (400)", nollMin.status === 400, nollMin);
+const forMycket = await call("POST", `/v1/cases/${CASE_A}/time-entries`, { token: ceciliaToken, body: { minutes: 5000 } });
+check("orimligt många minuter nekas (400)", forMycket.status === 400, forMycket);
+
+const ceciliaTider = await call("GET", `/v1/cases/${CASE_A}/time-entries`, { token: ceciliaToken });
+const posten = arr(ceciliaTider.body.entries).find((e) => e.id === ceciliaTidId);
+check("tidsposten listas för sin ägare", !!posten, ceciliaTider.body);
+check("datumet läses som ÅÅÅÅ-MM-DD, inte en tidsstämpel", (posten as Json | undefined)?.occurredOn === "2026-01-15", posten);
+const agnesTider = await call("GET", `/v1/cases/${CASE_A}/time-entries`, { token: adminToken });
+check("en annan deltagare ser INTE den posten", !arr(agnesTider.body.entries).some((e) => e.id === ceciliaTidId), agnesTider.body);
+const raderaTid = await call("DELETE", `/v1/time-entries/${ceciliaTidId}`, { token: ceciliaToken });
+check("ägaren kan ta bort sin tidspost", raderaTid.status === 200, raderaTid);
+
 /* --- 9. Hastighetsbegränsningen, mot den delade räknaren ------------------ */
 
 /*

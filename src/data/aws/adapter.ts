@@ -26,6 +26,7 @@ import type {
   CaseInvitationRecord,
   CaseMemberRecord,
   CaseMessage,
+  CaseNoteRecord,
   CaseRecord,
   CaseShareLinkRecord,
   CaseTask,
@@ -36,6 +37,7 @@ import type {
   NewContactMessage,
   PaymentRecord,
   SharedCaseView,
+  TimeEntryRecord,
   UserProfile,
   UserRole,
 } from "../types";
@@ -57,6 +59,12 @@ export const MIGRATED_PORTS = [
   "members.revokeInvitation",
   "members.peekInvitation",
   "members.acceptInvitation",
+  "advisorTools.listNotes",
+  "advisorTools.addNote",
+  "advisorTools.removeNote",
+  "advisorTools.listTime",
+  "advisorTools.logTime",
+  "advisorTools.removeTime",
   "cases.getLatest",
   "cases.close",
   "cases.reopen",
@@ -289,6 +297,38 @@ const documents = {
   // uppladdningsvägen migreras (samma hink, andra riktningen).
 };
 
+const advisorTools = {
+  ...supabaseAdapter.advisorTools,
+  async listNotes(caseId: string): Promise<CaseNoteRecord[]> {
+    const res = await apiFetch<{ notes: CaseNoteRecord[] }>(`/v1/cases/${caseId}/notes`);
+    return res.notes;
+  },
+  async addNote(caseId: string, body: string): Promise<void> {
+    await apiFetch(`/v1/cases/${caseId}/notes`, { method: "POST", body: { body } });
+  },
+  async removeNote(id: string): Promise<void> {
+    await apiFetch(`/v1/notes/${id}`, { method: "DELETE" });
+  },
+  async listTime(caseId: string): Promise<TimeEntryRecord[]> {
+    const res = await apiFetch<{ entries: TimeEntryRecord[] }>(`/v1/cases/${caseId}/time-entries`);
+    return res.entries;
+  },
+  async logTime(input: {
+    caseId: string;
+    minutes: number;
+    note?: string | null;
+    occurredOn?: string;
+  }): Promise<void> {
+    const body: { minutes: number; note?: string | null; occurredOn?: string } = { minutes: input.minutes };
+    if (input.note !== undefined) body.note = input.note;
+    if (input.occurredOn !== undefined) body.occurredOn = input.occurredOn;
+    await apiFetch(`/v1/cases/${input.caseId}/time-entries`, { method: "POST", body });
+  },
+  async removeTime(id: string): Promise<void> {
+    await apiFetch(`/v1/time-entries/${id}`, { method: "DELETE" });
+  },
+};
+
 const members = {
   ...supabaseAdapter.members,
   async listMembers(caseId: string): Promise<CaseMemberRecord[]> {
@@ -404,6 +444,7 @@ const audit = {
 export const awsAdapter: DataPort = {
   ...supabaseAdapter,
   contact: contact as DataPort["contact"],
+  advisorTools: advisorTools as DataPort["advisorTools"],
   members: members as DataPort["members"],
   cases: cases as DataPort["cases"],
   dialogue: dialogue as DataPort["dialogue"],

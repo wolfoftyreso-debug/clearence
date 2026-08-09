@@ -338,6 +338,26 @@ const toInvitationPeek = (row: Record<string, unknown>) => ({
   revokedAt: iso(row.revoked_at),
 });
 
+/** Byråns egna arbetsmaterial: intern anteckning och tidspost. */
+const toNote = (row: Record<string, unknown>) => ({
+  id: row.id,
+  caseId: row.case_id,
+  body: row.body,
+  createdAt: iso(row.created_at),
+});
+
+const toTimeEntry = (row: Record<string, unknown>) => ({
+  id: row.id,
+  caseId: row.case_id,
+  minutes: Number(row.minutes),
+  note: row.note ?? null,
+  // occurred_on är ett date - läses som text (YYYY-MM-DD), inte en tidsstämpel.
+  occurredOn: row.occurred_on === null || row.occurred_on === undefined ? null : String(row.occurred_on),
+  createdAt: iso(row.created_at),
+});
+
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
 /* --- Läshjälp -------------------------------------------------------------- */
 
 const str = (body: unknown, field: string, opts: { max?: number; required?: boolean } = {}): string => {
@@ -1118,6 +1138,109 @@ router.post("/v1/invitations/:invitationId/accept", async (req) => {
     return rows[0]?.case_id ?? null;
   });
   return { status: 200, body: { caseId } };
+});
+
+/* --- Rådgivarens klientverktyg: anteckningar och tidsposter --------------- */
+
+/*
+ * Byråns EGNA arbetsmaterial, inte ärendekommunikation: en anteckning är
+ * synlig bara för sin författare, en tidspost bara för den som lade den -
+ * inte för bolaget, inte för andra deltagare, inte ens för en annan
+ * rådgivare i samma ärende. Hela den gränsen bor i radskyddet
+ * (author_user_id = auth.uid()); rutterna filtrerar bara på ärende och
+ * skrivningen kräver aktivt deltagande (has_case_role). Ska något delas
+ * finns meddelandena.
+ */
+
+router.get("/v1/cases/:caseId/notes", async (req) => {
+  const caller = await authenticate(req);
+  const caseId = uuidParam(req, "caseId");
+  const rows = await withUser(caller.userId, async (tx) => {
+    const { rows } = await tx.query(
+      "select * from public.case_notes where case_id = $1 order by created_at desc",
+      [caseId],
+    );
+    return rows;
+  });
+  return { status: 200, body: { notes: rows.map(toNote) } };
+});
+
+router.post("/v1/cases/:caseId/notes", async (req) => {
+  const caller = await authenticate(req);
+  const caseId = uuidParam(req, "caseId");
+  const body = str(req.body, "body", { max: 4000 });
+  // author_user_id sätts av kolumnens default (auth.uid()), aldrig av
+  // klienten - RLS kräver dessutom att den matchar den inloggade.
+  const noteId = await withUser(caller.userId, async (tx) => {
+    const { rows } = await tx.query(
+      "insert into public.case_notes (case_id, body) values ($1, $2) returning id",
+      [caseId, body],
+    );
+    return rows[0]?.id ?? null;
+  });
+  return { status: 201, body: { noteId } };
+});
+
+router.del("/v1/notes/:noteId", async (req) => {
+  const caller = await authenticate(req);
+  const noteId = uuidParam(req, "noteId");
+  // Idempotent: RLS släpper bara författarens egen rad, och en delete som
+  // inte träffar något är inget fel - anteckningen är borta hur som helst.
+  await withUser(caller.userId, async (tx) => {
+    await tx.query("delete from public.case_notes where id = $1", [noteId]);
+  });
+  return { status: 200, body: { deleted: true } };
+});
+
+router.get("/v1/cases/:caseId/time-entries", async (req) => {
+  const caller = await authenticate(req);
+  const caseId = uuidParam(req, "caseId");
+  const rows = await withUser(caller.userId, async (tx) => {
+    const { rows } = await tx.query(
+      `select id, case_id, minutes, note, occurred_on::text as occurred_on, created_at
+         from public.time_entries where case_id = $1 order by occurred_on desc`,
+      [caseId],
+    );
+    return rows;
+  });
+  return { status: 200, body: { entries: rows.map(toTimeEntry) } };
+});
+
+router.post("/v1/cases/:caseId/time-entries", async (req) => {
+  const caller = await authenticate(req);
+  const caseId = uuidParam(req, "caseId");
+  const raw = (req.body ?? {}) as Record<string, unknown>;
+  const minutes = typeof raw.minutes === "number" ? raw.minutes : Number(raw.minutes);
+  if (!Number.isInteger(minutes) || minutes <= 0 || minutes > 1440) {
+    throw badRequest('Fältet "minutes" ska vara ett heltal mellan 1 och 1440.');
+  }
+  const note = str(req.body, "note", { max: 500, required: false }) || null;
+  const occurredOn = str(req.body, "occurredOn", { max: 10, required: false }) || null;
+  if (occurredOn && !ISO_DATE.test(occurredOn)) {
+    throw badRequest('Fältet "occurredOn" ska vara ett datum på formen ÅÅÅÅ-MM-DD.');
+  }
+  const entryId = await withUser(caller.userId, async (tx) => {
+    const { rows } = occurredOn
+      ? await tx.query(
+          "insert into public.time_entries (case_id, minutes, note, occurred_on) values ($1, $2, $3, $4) returning id",
+          [caseId, minutes, note, occurredOn],
+        )
+      : await tx.query(
+          "insert into public.time_entries (case_id, minutes, note) values ($1, $2, $3) returning id",
+          [caseId, minutes, note],
+        );
+    return rows[0]?.id ?? null;
+  });
+  return { status: 201, body: { entryId } };
+});
+
+router.del("/v1/time-entries/:entryId", async (req) => {
+  const caller = await authenticate(req);
+  const entryId = uuidParam(req, "entryId");
+  await withUser(caller.userId, async (tx) => {
+    await tx.query("delete from public.time_entries where id = $1", [entryId]);
+  });
+  return { status: 200, body: { deleted: true } };
 });
 
 /* --- Servern --------------------------------------------------------------- */
