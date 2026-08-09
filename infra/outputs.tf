@@ -56,6 +56,38 @@ output "worker_schedules" {
   value       = { for k, v in local.worker_jobs : k => v.schedule }
 }
 
+/**
+ * Dataresidensen, som utdata man kan granska mot.
+ *
+ * Terraform KAN styra var VÅR egen infrastruktur ligger - beräkning,
+ * databas, lagring, e-post och loggar reser alla i var.aws_region, som
+ * valideras till EU. Terraform kan INTE styra underbiträdenas residens
+ * eller nolldataretention (ZDR): Anthropic, Google och SMS-leverantören
+ * styrs på konto-/avtalsnivå. Den här utdatan skiljer de två åt rakt, så
+ * att en granskare ser exakt vad infrastrukturen garanterar och vad som
+ * vilar på ett avtal. De avtalade raderna följs upp i
+ * docs/subprocessors-dpa.md.
+ */
+output "data_residency_posture" {
+  description = "Var varje dataklass ligger - och vad som styrs av avtal, inte av Terraform."
+  value = {
+    styrs_av_terraform = {
+      region    = var.aws_region
+      berakning = "ECS Fargate i ${var.aws_region}"
+      databas   = "RDS Postgres i ${var.aws_region}, krypterad (KMS)"
+      lagring   = "S3 i ${var.aws_region}, krypterad (KMS)"
+      epost     = "SES i regionen, verifierad domän"
+      loggar    = "CloudWatch i regionen, ${var.log_retention_days} dagars retention"
+    }
+    styrs_av_avtal_ej_terraform = {
+      anthropic  = "EU-residens + nolldataretention (ZDR) sätts på kontonivå - se docs/subprocessors-dpa.md"
+      google     = "Places: dataregion/villkor enligt avtal; cache <=30 dagar i koden"
+      sms        = "Leverantör och region enligt DPA - se docs/subprocessors-dpa.md"
+      creditsafe = "Kreditupplysning enligt avtal + kreditupplysningslagen"
+    }
+  }
+}
+
 output "deploy_command" {
   description = "Utrullning av webbappen, i ordning."
   value = join(" && ", [

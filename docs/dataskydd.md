@@ -20,6 +20,7 @@ Behandlingen når flera av kriterierna för hög risk: (a) **känslig och utsatt
 Särskilda kategorier (art. 9) samlas inte in avsiktligt; fritextfält kan dock råka innehålla sådant → se dataminimering och användarinstruktion. [ÖPPET: bedöm art. 9-risk i fritext.]
 
 ## 4. Underbiträden (subprocessors) — att avtala (DPA) före drift
+> Detaljerat register med per-part-krav, dataregion, ZDR/retention och en signeringskolumn: **`docs/subprocessors-dpa.md`**. Tabellen nedan är sammanfattningen.
 | Underbiträde | Funktion | Dataregion (att bekräfta) | Krav |
 |---|---|---|---|
 | **AWS** | Hosting, databas, Secrets Manager | EU (t.ex. eu-north-1) **[ÖPPET]** | DPA, EU-region, kryptering i vila/transit |

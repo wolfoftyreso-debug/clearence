@@ -10,8 +10,8 @@ Legend: 🟢 klart · 🟡 påbörjat/underlag finns · 🔴 ej gjort
 
 | # | Krav | Typ | Status | Var / hur |
 |---|---|---|---|---|
-| P0-1 | DPA (personuppgiftsbiträdesavtal) med Anthropic, Google, AWS, SMS- och kreditupplysningsleverantör | [EXTERNT] | 🔴 | Underlag: `docs/dataskydd.md` §4. Signeras av bolaget. |
-| P0-2 | EU-dataregion bekräftad för varje underbiträde; **nolldataretention (ZDR)** aktiverad hos modell-leverantören | [EXTERNT] | 🔴 | Konto-/avtalsbeslut. Koden skickar redan dataminimerat (se P0-6). |
+| P0-1 | DPA (personuppgiftsbiträdesavtal) med Anthropic, Google, AWS, SMS- och kreditupplysningsleverantör | [EXTERNT] | 🔴 | Register + per-part-checklista med signeringskolumn: `docs/subprocessors-dpa.md`. Signeras av bolaget. |
+| P0-2 | EU-dataregion bekräftad för varje underbiträde; **nolldataretention (ZDR)** aktiverad hos modell-leverantören | [EXTERNT] | 🔴 | Konto-/avtalsbeslut, spårat i `docs/subprocessors-dpa.md`. Egen infra är EU-låst i Terraform (`data_residency_posture`); koden skickar dataminimerat (P0-6). |
 | P0-3 | DPIA genomförd och dokumenterad före skarp pilot | [EXTERNT] | 🟡 | Underlag klart i `docs/dataskydd.md` §2–7. DPO slutför. |
 | P0-4 | Rättslig grund för behandlingen fastställd per kategori | [EXTERNT] | 🟡 | Förslag i behandlingsregistret, `docs/dataskydd.md` §3. |
 | P0-5 | Säkerhetsinvarianter verifierade i skarp miljö (RLS, roller, signerade URL:er, SHA-256-nycklar) | [KOD] | 🟡 | Byggt och testat i demo/self-hosted; ska köras om i produktionsmiljön. RLS-tester: `supabase/tests`, `db/tests`. |

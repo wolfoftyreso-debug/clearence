@@ -26,7 +26,7 @@ flowchart TB
             end
             subgraph priv["Privata subnät (ingen väg in)"]
                 api["ECS: API<br/>DataPort-kontraktet"]
-                worker["ECS: e-postarbetaren<br/>sex schemalagda körningar"]
+                worker["ECS: e-postarbetaren<br/>sju schemalagda körningar"]
             end
             subgraph data["Datasubnät (ingen väg ut)"]
                 db[("RDS PostgreSQL 16<br/>RLS · journalen · besluten")]
@@ -84,6 +84,7 @@ i resurser:
 | `--remind` | varje timme | Dubblettskyddet bor i databasen, så den kan gå ofta |
 | `--close` | 03:15 | Stänger förfallna konton **och köar beskedet i samma körning** |
 | `--credit` | 05:30 | Högst en kreditslagning per bolag och dygn — varje kostar |
+| `--gallra` | 04:00 | Gallring (GDPR art. 5.1 e) i skuggläge tills en kategori aktiveras |
 | `--invoice-referrals` | 1:a kl. 06 | Föregående månads förmedlingsfakturor |
 | `--invoice-usage` | 1:a kl. 07 | En samlingsfaktura per byrå |
 | `notification-worker` | var 5:e minut | Aviseringskön. Beslut per rad, uppskjutning vid tyst tid — se `docs/aviseringar.md` |

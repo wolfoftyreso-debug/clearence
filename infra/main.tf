@@ -55,6 +55,11 @@ locals {
       schedule    = "cron(30 4 * * ? *)" # 05:30 svensk tid
       args        = ["--credit"]
     }
+    gallra = {
+      description = "Daglig gallring (GDPR art. 5.1 e). Skuggläge tills en kategori aktiveras."
+      schedule    = "cron(0 3 * * ? *)" # 04:00 svensk tid
+      args        = ["--gallra"]
+    }
     invoice_referrals = {
       description = "Månadsfaktura till rådgivarna, 1:a varje månad"
       schedule    = "cron(0 5 1 * ? *)" # 06:00 svensk tid
