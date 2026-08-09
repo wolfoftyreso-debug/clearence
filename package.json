@@ -51,7 +51,7 @@
     "test:presentation": "esbuild tests/presentation.ts --bundle --platform=node --format=cjs --outfile=node_modules/.cache/test-presentation.cjs --log-level=error && node node_modules/.cache/test-presentation.cjs",
     "test:prepare": "esbuild tests/prepare.ts --bundle --platform=node --format=cjs --outfile=node_modules/.cache/test-prepare.cjs --log-level=error && node node_modules/.cache/test-prepare.cjs",
     "test:aviseringar": "esbuild tests/notificationService.ts --bundle --platform=node --format=cjs --outfile=node_modules/.cache/test-aviseringar.cjs --log-level=error && node node_modules/.cache/test-aviseringar.cjs",
-    "build:notification-worker": "esbuild db/worker/notification-worker.ts --bundle --platform=node --format=cjs --target=node20 --external:pg --external:@aws-sdk/client-ses --outfile=db/dist/notification-worker.cjs --log-level=error",
+    "build:notification-worker": "esbuild db/worker/notification-worker.ts --bundle --platform=node --format=cjs --target=node20 --external:pg --external:@aws-sdk/client-ses --external:nodemailer --outfile=db/dist/notification-worker.cjs --log-level=error",
     "test:oppningsbar": "esbuild tests/openable.ts --bundle --platform=node --format=cjs --outfile=node_modules/.cache/test-oppningsbar.cjs --log-level=error && node node_modules/.cache/test-oppningsbar.cjs",
     "test:introduktion": "esbuild tests/onboarding.ts --bundle --platform=node --format=cjs --outfile=node_modules/.cache/test-introduktion.cjs --log-level=error && node node_modules/.cache/test-introduktion.cjs",
     "test:guide": "esbuild tests/guide.ts --bundle --platform=node --format=cjs --outfile=node_modules/.cache/test-guide.cjs --log-level=error && node node_modules/.cache/test-guide.cjs",

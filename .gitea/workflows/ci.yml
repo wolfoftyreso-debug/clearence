@@ -126,3 +126,10 @@ jobs:
           file: deploy/migrate/Dockerfile
           push: ${{ vars.REGISTRY != '' }}
           tags: ${{ vars.REGISTRY }}/clearance/migrate:${{ github.sha }}
+      - name: Notification-worker
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/notification/Dockerfile
+          push: ${{ vars.REGISTRY != '' }}
+          tags: ${{ vars.REGISTRY }}/clearance/notification-worker:${{ github.sha }}

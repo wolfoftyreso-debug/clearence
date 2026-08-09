@@ -98,5 +98,11 @@ const worker = read("db/worker/email-worker.ts");
 check("arbetaren väljer transport ur miljön", /makeMailSender/.test(worker) && /resolveMailConfig/.test(worker));
 check("arbetaren har ingen hårdkodad SES-klient kvar", !/new SESClient/.test(worker));
 
+// Aviseringsarbetaren använder samma transport - inte en egen SES-klient.
+const notif = read("db/worker/notification-worker.ts");
+check("aviseringsarbetaren använder mejltransporten", /makeMailSender/.test(notif) && /resolveMailConfig/.test(notif));
+check("aviseringsarbetaren har ingen hårdkodad SES-klient", !/new SESClient/.test(notif));
+check("aviseringsarbetaren har en egen avbild", read("deploy/notification/Dockerfile").includes("notification-worker.ts"));
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

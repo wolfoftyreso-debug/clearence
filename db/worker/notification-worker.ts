@@ -30,7 +30,7 @@
  */
 
 import { Client } from "pg";
-import { SESClient, SendEmailCommand } from "@aws-sdk/client-ses";
+import { makeMailSender, resolveMailConfig, type MailSender } from "./mail";
 import {
   decideDelivery,
   localHour,
@@ -45,7 +45,6 @@ import { buildMessage } from "../../src/lib/notifications/messages";
 import { SMS_SECRET_PROVIDER, providerFromSecret, type SmsProvider } from "./sms";
 
 const DATABASE_URL = process.env.DATABASE_URL;
-const SES_REGION = process.env.SES_REGION ?? "eu-north-1";
 const MAIL_FROM = process.env.MAIL_FROM;
 
 if (!DATABASE_URL || !MAIL_FROM) {
@@ -53,7 +52,13 @@ if (!DATABASE_URL || !MAIL_FROM) {
   process.exit(1);
 }
 
-const ses = new SESClient({ region: SES_REGION });
+// Mejltransporten (SES eller SMTP) väljs av MAIL_TRANSPORT, som i
+// e-postarbetaren. Byggs en gång och återanvänds.
+let mailSender: MailSender | null = null;
+const getMailSender = async (): Promise<MailSender> => {
+  if (!mailSender) mailSender = await makeMailSender(resolveMailConfig(process.env));
+  return mailSender;
+};
 
 interface ClaimedRow {
   delivery_id: string;
@@ -101,22 +106,13 @@ const emailFor = async (db: Client, userId: string): Promise<string | null> => {
 const sendEmail = async (db: Client, row: ClaimedRow): Promise<void> => {
   const to = await emailFor(db, row.user_id);
   if (!to) throw new Error("Mottagaren saknar e-postadress.");
-  await ses.send(
-    new SendEmailCommand({
-      Source: MAIL_FROM,
-      Destination: { ToAddresses: [to] },
-      Message: {
-        Subject: { Data: `CLEARANCE: ${row.title}`, Charset: "UTF-8" },
-        Body: {
-          Text: { Data: `${row.body}\n\n${row.href}`, Charset: "UTF-8" },
-          Html: {
-            Data: `<p>${row.body}</p><p><a href="${row.href}">Öppna i CLEARANCE</a></p>`,
-            Charset: "UTF-8",
-          },
-        },
-      },
-    }),
-  );
+  const sender = await getMailSender();
+  await sender({
+    recipient: to,
+    subject: `CLEARANCE: ${row.title}`,
+    bodyText: `${row.body}\n\n${row.href}`,
+    bodyHtml: `<p>${row.body}</p><p><a href="${row.href}">Öppna i CLEARANCE</a></p>`,
+  });
 };
 
 const runVerificationQueue = async (db: Client, sms: SmsProvider): Promise<void> => {

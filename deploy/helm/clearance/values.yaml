@@ -159,11 +159,11 @@ worker:
     - name: invoice-usage
       schedule: "0 6 1 * *"
       args: ["--invoice-usage"]
-  # Aviseringsarbetaren är en egen binär (notification-worker.cjs) och
-  # behöver en EGEN avbild - db/Dockerfile bygger bara e-postarbetaren.
-  # Håll av tills den avbilden finns; se docs/selfhosted-kubernetes.md.
+  # Aviseringsarbetaren: egen binär, egen avbild (deploy/notification/Dockerfile,
+  # byggd av CI). Använder samma mejltransport (MAIL_TRANSPORT) och 46elks för
+  # SMS via integration_secrets. Kör kontinuerligt (var 5:e minut internt).
   notification:
-    enabled: false
+    enabled: true
     image:
       repository: clearance/notification-worker
 
