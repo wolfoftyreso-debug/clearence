@@ -108,7 +108,7 @@ flowchart TB
 | `DATABASE_URL` | arbetare | **ja** | Secret `worker-database-url` | rollen **app_worker** (LOGIN) |
 | `MAIL_FROM` | arbetare | **ja** | ConfigMap | avsändaradress |
 | `APP_BASE_URL` | arbetare | nej | ConfigMap | länkbas i mejl |
-| `MAIL_TRANSPORT` | arbetare | nej | ConfigMap | `smtp` (egenhostat) eller `ses` — SMTP-vägen byggs i nästa steg |
+| `MAIL_TRANSPORT` | arbetare | nej | ConfigMap | `smtp` (egenhostat, byggt) eller `ses`. SMTP_HOST/PORT/SECURE/USER + SMTP_PASS (Secret) |
 | `SES_REGION` | arbetare | nej | ConfigMap | endast om `MAIL_TRANSPORT=ses` |
 | `DATABASE_URL` | migrate | **ja** | Secret `migrate-database-url` | **superanvändare** (skapar roller/extensions) |
 | `API_UPSTREAM` | frontend | nej | Deployment-env | default API-tjänsten; nginx proxar hit |
