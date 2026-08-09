@@ -94,9 +94,31 @@ flowchart TB
 - Gitea-deploy + `.gitea/workflows/ci.yml`.
 - Migrations-Job.
 
-## Env-kontraktet (fylls i från kartläggningen)
+## Env-kontraktet (load-bearing — exakt som koden läser det)
 
-> Fylls i exakt när backend-kartläggningen är klar — varje variabel med namn, syfte, obligatorisk/valfri, och var den injiceras (Secret vs ConfigMap). Load-bearing för chartet, så den listas explicit och inte gissas.
+| Variabel | Komponent | Obl.? | Källa | Notis |
+|---|---|---|---|---|
+| `PORT` | API | nej | ConfigMap/inline | default 8080 |
+| `DATABASE_URL` | API | **ja** | Secret `database-url` | rollen **app_user** (LOGIN), icke-ägare, ingen BYPASSRLS |
+| `PGPOOL_MAX` | API | nej | ConfigMap | default 10 |
+| `SESSION_TTL_HOURS` | API | nej | ConfigMap | default 12 |
+| `ANTHROPIC_API_KEY` | API | nej | Secret | tom = samtalet ej anslutet (kraschar inte) |
+| `ANTHROPIC_MODEL` | API | nej | ConfigMap | default `claude-sonnet-5` |
+| `GOOGLE_MAPS_API_KEY` | API | nej | Secret | tom = källan ej ansluten |
+| `DATABASE_URL` | arbetare | **ja** | Secret `worker-database-url` | rollen **app_worker** (LOGIN) |
+| `MAIL_FROM` | arbetare | **ja** | ConfigMap | avsändaradress |
+| `APP_BASE_URL` | arbetare | nej | ConfigMap | länkbas i mejl |
+| `MAIL_TRANSPORT` | arbetare | nej | ConfigMap | `smtp` (egenhostat) eller `ses` — SMTP-vägen byggs i nästa steg |
+| `SES_REGION` | arbetare | nej | ConfigMap | endast om `MAIL_TRANSPORT=ses` |
+| `DATABASE_URL` | migrate | **ja** | Secret `migrate-database-url` | **superanvändare** (skapar roller/extensions) |
+| `API_UPSTREAM` | frontend | nej | Deployment-env | default API-tjänsten; nginx proxar hit |
+| `API_BASE_URL` | frontend | nej | Deployment-env | tom = samma origin |
+
+**Ingen** signeringsnyckel finns (sessioner är slumpbytes, lagras som SHA-256), och API:t har **ingen CORS** — därför den samma-origin-proxande frontenden. SMS-nyckeln (46elks) bor i `public.integration_secrets` (`elks46` = `user:password`), **inte** i en k8s-Secret.
+
+## Rollerna — det medvetet lämnade steget
+
+`db/bootstrap.sql` skapar `app_user`/`app_worker` som **NOLOGIN**, och `app_worker` skapas i praktiken inte alls. Egenhostat behöver **LOGIN-roller** (en medlem i `authenticated` för API:t, en i `app_worker` för arbetaren) med lösenord som matchar `database-url`/`worker-database-url`. Det är load-bearing SQL som ska prövas mot en riktig Postgres (CI-jobbet `databas`), inte gissas i YAML — därför är det ett flaggat nästa steg, inte något chartet låtsas lösa.
 
 ## Öppna beslut för driftägaren
 

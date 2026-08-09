@@ -1,0 +1,189 @@
+# CLEARANCE - standardvärden.
+#
+# Varje miljö överlagrar det den behöver i en egen values-fil
+# (se values-prod.example.yaml). Hemligheter hör INTE hit i klartext -
+# sätt existingSecret eller injicera via SOPS/Sealed Secrets. Se
+# docs/selfhosted-kubernetes.md.
+
+# Avbilderna. Byggs av Gitea Actions och pushas till Giteas registry.
+image:
+  registry: git.clearance.internal
+  pullPolicy: IfNotPresent
+  # Sätts per release till commit-SHA:t. "latest" är medvetet inte default.
+  tag: ""
+  api:
+    repository: clearance/api
+  frontend:
+    repository: clearance/frontend
+  worker:
+    repository: clearance/worker
+  migrate:
+    repository: clearance/migrate
+imagePullSecrets: []
+
+# --- Icke-hemlig konfiguration (blir en ConfigMap) ----------------------
+config:
+  # Modellen bakom CLEARANCE-samtalet. Nyckeln är hemlig (se secrets).
+  anthropicModel: "claude-sonnet-5"
+  # pg-poolens tak i API:t.
+  pgPoolMax: "10"
+  # Sessionens livslängd i timmar.
+  sessionTtlHours: "12"
+  # Avsändaradress för utkorgen. Måste ligga under din domän.
+  mailFrom: "faktura@clearance.se"
+  # Bas för länkar i mejl (inbjudans acceptlänk m.m.).
+  appBaseUrl: "https://clearance.se"
+  # Mejltransport: "ses" (AWS/SES-kompatibel endpoint) eller "smtp".
+  mailTransport: "smtp"
+  # SES-region används bara när mailTransport=ses.
+  sesRegion: "eu-north-1"
+
+# --- Hemligheter --------------------------------------------------------
+# Antingen namnger du en redan skapad Secret (existingSecret) med rätt
+# nycklar, ELLER låter chartet skapa en ur create.* (bara för test - lägg
+# ALDRIG riktiga värden i git). Nycklar som förväntas i secreten:
+#   database-url            app_user (icke-ägare, ingen BYPASSRLS)
+#   worker-database-url     app_worker
+#   migrate-database-url    superanvändare (skapar roller/extensions)
+#   anthropic-api-key       valfri (tom = samtalet ej anslutet)
+#   google-maps-api-key     valfri
+secret:
+  existingSecret: ""
+  create:
+    databaseUrl: ""
+    workerDatabaseUrl: ""
+    migrateDatabaseUrl: ""
+    anthropicApiKey: ""
+    googleMapsApiKey: ""
+
+# --- Självhostad Postgres via CloudNativePG -----------------------------
+# Kräver att CNPG-operatorn är installerad i klustret. Sätt enabled=false
+# och peka DATABASE_URL:erna mot en extern Postgres om du kör den utanför.
+postgres:
+  enabled: true
+  instances: 2            # 1 primär + 1 standby (HA). 1 för en enda nod.
+  imageName: "ghcr.io/cloudnative-pg/postgresql:16.4"
+  storage:
+    size: 20Gi
+    storageClass: ""
+  # Databasnamn + ägarroll som CNPG skapar. app_user/app_worker och rollerna
+  # skapas av migrations-jobbet (db/bootstrap.sql), inte här.
+  database: clearance
+  owner: clearance_owner
+  # PITR-backup till MinIO/S3 (rekommenderas separat lagringsmål i prod).
+  backup:
+    enabled: false
+    destinationPath: ""
+    endpointURL: ""
+    s3Credentials:
+      existingSecret: ""
+
+# --- MinIO (S3-kompatibel objektlagring för dokument) -------------------
+# OBS: dokumentens presignering är ännu inte byggd i API:t (se README).
+# MinIO reses här så att den finns när signeringsfunktionen kopplas in.
+minio:
+  enabled: true
+  image: "quay.io/minio/minio:RELEASE.2024-09-13T20-26-02Z"
+  storage:
+    size: 20Gi
+    storageClass: ""
+  # Skapa via existingSecret med nycklarna root-user/root-password.
+  auth:
+    existingSecret: ""
+  bucket: clearance-documents
+
+# --- API ----------------------------------------------------------------
+api:
+  replicaCount: 2
+  port: 8080
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits: { cpu: "1", memory: 512Mi }
+  autoscaling:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 6
+    targetCPUUtilizationPercentage: 70
+
+# --- Frontend (nginx: SPA + /v1-proxy till API:t) -----------------------
+frontend:
+  replicaCount: 2
+  port: 8080
+  # Tom API-bas = samma origin (nginx proxar /v1). Låt den vara tom.
+  apiBaseUrl: ""
+  resources:
+    requests: { cpu: 25m, memory: 64Mi }
+    limits: { cpu: 250m, memory: 128Mi }
+
+# --- Arbetarna ----------------------------------------------------------
+# E-postarbetaren körs som CronJobs, en per flagga. Tiderna är i UTC om
+# timeZone inte sätts; k8s 1.27+ stöder spec.timeZone.
+worker:
+  timeZone: "Europe/Stockholm"
+  resources:
+    requests: { cpu: 50m, memory: 128Mi }
+    limits: { cpu: 500m, memory: 256Mi }
+  # Namn → schema (cron) + argument. Speglar infra/main.tf.
+  jobs:
+    - name: send
+      schedule: "*/5 * * * *"
+      args: []
+    - name: remind
+      schedule: "0 * * * *"
+      args: ["--remind"]
+    - name: close
+      schedule: "15 2 * * *"
+      args: ["--close"]
+    - name: gallra
+      schedule: "0 3 * * *"
+      args: ["--gallra"]
+    - name: credit
+      schedule: "30 4 * * *"
+      args: ["--credit"]
+    - name: invoice-referrals
+      schedule: "0 5 1 * *"
+      args: ["--invoice-referrals"]
+    - name: invoice-usage
+      schedule: "0 6 1 * *"
+      args: ["--invoice-usage"]
+  # Aviseringsarbetaren är en egen binär (notification-worker.cjs) och
+  # behöver en EGEN avbild - db/Dockerfile bygger bara e-postarbetaren.
+  # Håll av tills den avbilden finns; se docs/selfhosted-kubernetes.md.
+  notification:
+    enabled: false
+    image:
+      repository: clearance/notification-worker
+
+# --- Migrations-jobbet (Helm-hook före install/upgrade) -----------------
+migrate:
+  enabled: true
+  resources:
+    requests: { cpu: 50m, memory: 128Mi }
+    limits: { cpu: 500m, memory: 256Mi }
+
+# --- Ingång -------------------------------------------------------------
+ingress:
+  enabled: true
+  className: nginx
+  host: clearance.example
+  annotations: {}
+  tls:
+    enabled: true
+    # cert-manager-utfärdare. Tom = ingen automatisk utfärdning (egen CA).
+    clusterIssuer: "letsencrypt-prod"
+    secretName: clearance-tls
+
+# --- Nätpolicyer (default deny + de tillåtna flödena) -------------------
+networkPolicy:
+  enabled: true
+
+# Pod-säkerhet: kör aldrig som root, tappa alla capabilities.
+podSecurityContext:
+  runAsNonRoot: true
+  seccompProfile:
+    type: RuntimeDefault
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: ["ALL"]

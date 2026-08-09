@@ -1,0 +1,89 @@
+{{- if .Values.networkPolicy.enabled }}
+# Grundregeln: TÄCK ALLT, tillåt sedan bara de flöden som behövs. Databasen
+# är aldrig publik (regel 1) - det bevakas här, inte bara i löftet.
+#
+# OBS: "default deny" nedan täcker BARA poddar med den här appens etiketter,
+# inte hela namespacet, så CNPG-operatorn och ingress-controllern störs inte.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "clearance.fullname" . }}-default-deny
+  labels:
+    {{- include "clearance.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/part-of: clearance
+  policyTypes: [Ingress, Egress]
+  egress:
+    # DNS måste alltid fungera.
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - { protocol: UDP, port: 53 }
+        - { protocol: TCP, port: 53 }
+---
+# Frontend tar emot trafik från ingress-controllern och når API:t.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "clearance.fullname" . }}-frontend
+  labels:
+    {{- include "clearance.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "clearance.selectorLabels" (dict "ctx" . "component" "frontend") | nindent 6 }}
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - {} # ingress-controllern (håll enkelt; controllern är betrodd)
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              {{- include "clearance.selectorLabels" (dict "ctx" . "component" "api") | nindent 14 }}
+      ports:
+        - { protocol: TCP, port: {{ .Values.api.port }} }
+---
+# API:t tar emot från frontend, når Postgres och (för samtalet) ut mot
+# modellen. Ingen annan väg in.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "clearance.fullname" . }}-api
+  labels:
+    {{- include "clearance.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "clearance.selectorLabels" (dict "ctx" . "component" "api") | nindent 6 }}
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- include "clearance.selectorLabels" (dict "ctx" . "component" "frontend") | nindent 14 }}
+      ports:
+        - { protocol: TCP, port: {{ .Values.api.port }} }
+  egress:
+    # Postgres (CNPG-klustret).
+    - to:
+        - podSelector:
+            matchLabels:
+              cnpg.io/cluster: {{ include "clearance.fullname" . }}-db
+      ports:
+        - { protocol: TCP, port: 5432 }
+    {{- if .Values.minio.enabled }}
+    # MinIO (dokument).
+    - to:
+        - podSelector:
+            matchLabels:
+              {{- include "clearance.selectorLabels" (dict "ctx" . "component" "minio") | nindent 14 }}
+      ports:
+        - { protocol: TCP, port: 9000 }
+    {{- end }}
+    # Ut mot modellen (Anthropic) över https. Dataminimerat, avstängbart.
+    - to: []
+      ports:
+        - { protocol: TCP, port: 443 }
+{{- end }}

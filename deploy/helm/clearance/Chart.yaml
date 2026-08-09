@@ -1,0 +1,16 @@
+apiVersion: v2
+name: clearance
+description: >-
+  CLEARANCE helt egenhostad på Kubernetes - API, frontend, arbetare,
+  självhostad Postgres (CloudNativePG) och MinIO. Ingen hanterad molnbackend.
+type: application
+# Chartets egen version. App-versionen (avbildernas tagg) sätts i values.
+version: 0.1.0
+appVersion: "1.0"
+keywords:
+  - clearance
+  - self-hosted
+  - postgres
+home: https://clearance.se
+maintainers:
+  - name: Landvex AB

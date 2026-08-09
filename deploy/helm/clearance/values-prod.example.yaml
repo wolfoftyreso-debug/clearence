@@ -1,0 +1,62 @@
+# Exempel på en prod-overlay. Kopiera, fyll i, och kör:
+#   helm upgrade --install clearance deploy/helm/clearance \
+#     -n clearance --create-namespace \
+#     -f deploy/helm/clearance/values-prod.example.yaml \
+#     --set image.tag=$GIT_SHA
+#
+# Hemligheter hör INTE hit. Skapa en Secret (SOPS/Sealed Secrets) med
+# nycklarna database-url, worker-database-url, migrate-database-url,
+# anthropic-api-key, google-maps-api-key och peka ut den med
+# secret.existingSecret.
+
+image:
+  registry: git.clearance.internal
+  tag: "" # sätts av CI till commit-SHA:t
+
+secret:
+  existingSecret: clearance-secrets
+
+config:
+  mailFrom: "faktura@ditt-bolag.se"
+  appBaseUrl: "https://ditt-bolag.se"
+  mailTransport: "smtp"
+
+postgres:
+  enabled: true
+  instances: 2
+  storage:
+    size: 50Gi
+    storageClass: "" # din klass, t.ex. local-path eller longhorn
+  backup:
+    enabled: true
+    destinationPath: "s3://clearance-backup/"
+    endpointURL: "https://minio.ditt-bolag.se"
+    s3Credentials:
+      existingSecret: clearance-backup-s3
+
+minio:
+  enabled: true
+  auth:
+    existingSecret: clearance-minio
+  storage:
+    size: 50Gi
+
+api:
+  replicaCount: 2
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 6
+
+frontend:
+  replicaCount: 2
+  apiBaseUrl: "" # tom = samma origin (nginx proxar /v1)
+
+ingress:
+  enabled: true
+  className: nginx
+  host: ditt-bolag.se
+  tls:
+    enabled: true
+    clusterIssuer: letsencrypt-prod
+    secretName: clearance-tls

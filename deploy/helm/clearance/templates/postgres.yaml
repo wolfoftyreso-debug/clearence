@@ -1,0 +1,54 @@
+{{- if .Values.postgres.enabled }}
+# Självhostad Postgres via CloudNativePG. KRÄVER att CNPG-operatorn är
+# installerad i klustret (kubectl apply -f cnpg-operator.yaml).
+#
+# CNPG skapar två hemligheter: <namn>-superuser och <namn>-app. Migrations-
+# jobbet ska använda SUPERUSER-strängen (det skapar roller/extensions);
+# API:t och arbetaren använder LOGIN-roller som db/bootstrap.sql delar ut.
+#
+# VIKTIGT (se docs/selfhosted-kubernetes.md): db/bootstrap.sql skapar
+# app_user/app_worker som NOLOGIN. Egenhostat behöver därför separata
+# LOGIN-roller (medlemmar i authenticated resp. app_worker) med lösenord -
+# den biten wiras in i migrations-steget och får inte glömmas.
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: {{ include "clearance.fullname" . }}-db
+  labels:
+    {{- include "clearance.labels" . | nindent 4 }}
+    app.kubernetes.io/component: postgres
+spec:
+  instances: {{ .Values.postgres.instances }}
+  imageName: {{ .Values.postgres.imageName | quote }}
+  primaryUpdateStrategy: unsupervised
+  storage:
+    size: {{ .Values.postgres.storage.size }}
+    {{- with .Values.postgres.storage.storageClass }}
+    storageClass: {{ . }}
+    {{- end }}
+  bootstrap:
+    initdb:
+      database: {{ .Values.postgres.database }}
+      owner: {{ .Values.postgres.owner }}
+  postgresql:
+    parameters:
+      # En poolad anslutning per API-replik; håll taket rimligt.
+      max_connections: "100"
+      # Identiteten är transaktionslokal - en transaktion som glöms öppen
+      # med satt identitet är en läcka. Ett tak fångar den.
+      idle_in_transaction_session_timeout: "10000"
+  {{- if .Values.postgres.backup.enabled }}
+  backup:
+    barmanObjectStore:
+      destinationPath: {{ .Values.postgres.backup.destinationPath | quote }}
+      endpointURL: {{ .Values.postgres.backup.endpointURL | quote }}
+      s3Credentials:
+        accessKeyId:
+          name: {{ .Values.postgres.backup.s3Credentials.existingSecret | quote }}
+          key: ACCESS_KEY_ID
+        secretAccessKey:
+          name: {{ .Values.postgres.backup.s3Credentials.existingSecret | quote }}
+          key: ACCESS_SECRET_KEY
+    retentionPolicy: "30d"
+  {{- end }}
+{{- end }}
