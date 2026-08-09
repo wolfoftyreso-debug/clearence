@@ -290,6 +290,54 @@ const toContactMessage = (row: Record<string, unknown>) => ({
 const CONTACT_TOPICS = ["question", "company", "advisor", "invoice", "privacy", "bug", "other"];
 const CONTACT_STATUSES = ["new", "in_progress", "answered", "closed"];
 
+/** Ärendets roller (public.case_role). 'owner'/'creditor' delas inte ut per mejl. */
+const CASE_ROLES = [
+  "owner",
+  "company_staff",
+  "reconstructor",
+  "trustee",
+  "auditor",
+  "legal_advisor",
+  "board_member",
+  "creditor",
+  "observer",
+];
+
+/** En ärendemedlem, som list_case_members lämnar ut den (caseId ur rutten). */
+const toMember = (row: Record<string, unknown>, caseId: string) => ({
+  id: row.id,
+  caseId,
+  userId: row.user_id,
+  role: row.role,
+  displayName: row.display_name ?? null,
+  email: row.email ?? null,
+  createdAt: iso(row.created_at),
+  revokedAt: iso(row.revoked_at),
+});
+
+const toInvitation = (row: Record<string, unknown>) => ({
+  id: row.id,
+  caseId: row.case_id,
+  email: row.email,
+  role: row.role,
+  createdAt: iso(row.created_at),
+  expiresAt: iso(row.expires_at),
+  acceptedAt: iso(row.accepted_at),
+  revokedAt: iso(row.revoked_at),
+});
+
+/** Vad den inbjudna får se INNAN accept - bara om adressen matchar. */
+const toInvitationPeek = (row: Record<string, unknown>) => ({
+  id: row.id,
+  companyName: row.company_name ?? null,
+  orgNumber: row.org_number,
+  role: row.role,
+  inviterName: row.inviter_name ?? null,
+  expiresAt: iso(row.expires_at),
+  acceptedAt: iso(row.accepted_at),
+  revokedAt: iso(row.revoked_at),
+});
+
 /* --- Läshjälp -------------------------------------------------------------- */
 
 const str = (body: unknown, field: string, opts: { max?: number; required?: boolean } = {}): string => {
@@ -985,6 +1033,91 @@ router.post("/v1/contact/:id/status", async (req) => {
   // tystnad: en icke-administratör ska inte kunna avläsa att inkorgen finns.
   if (!updated) throw notFound("Meddelandet finns inte, eller är inte ditt att handlägga.");
   return { status: 200, body: { updated: true } };
+});
+
+/* --- Ärendets deltagare och inbjudningar ---------------------------------- */
+
+/*
+ * Deltagarna och inbjudningarna. Behörigheten bor i SECURITY DEFINER-
+ * funktionerna (invite_to_case, accept_case_invitation m.fl.): rutterna
+ * gör ingen egen bedömning, de anropar funktionen och låter has_case_role
+ * avgöra. Inbjudans säkerhetsmodell är att ADRESSEN är nyckeln, inte
+ * länken - peek och accept lyckas bara när den inloggades adress matchar,
+ * och svarar med samma neutrala tystnad som lösenordsåterställningen för
+ * alla andra.
+ */
+
+router.get("/v1/cases/:caseId/members", async (req) => {
+  const caller = await authenticate(req);
+  const caseId = uuidParam(req, "caseId");
+  // list_case_members prövar has_case_access själv och ger noll rader åt den
+  // som inte tillhör ärendet - ingen egen kontroll behövs här.
+  const rows = await withUser(caller.userId, async (tx) => {
+    const { rows } = await tx.query("select * from public.list_case_members($1)", [caseId]);
+    return rows;
+  });
+  return { status: 200, body: { members: rows.map((r) => toMember(r, caseId)) } };
+});
+
+router.get("/v1/cases/:caseId/invitations", async (req) => {
+  const caller = await authenticate(req);
+  const caseId = uuidParam(req, "caseId");
+  const rows = await withUser(caller.userId, async (tx) => {
+    const { rows } = await tx.query(
+      "select * from public.case_invitations where case_id = $1 order by created_at desc",
+      [caseId],
+    );
+    return rows;
+  });
+  return { status: 200, body: { invitations: rows.map(toInvitation) } };
+});
+
+router.post("/v1/cases/:caseId/invitations", async (req) => {
+  const caller = await authenticate(req);
+  const caseId = uuidParam(req, "caseId");
+  const email = str(req.body, "email", { max: 320 }).toLowerCase();
+  const role = str(req.body, "role", { max: 40 });
+  // Prövas här bara för att ett skräpvärde ska ge 400, inte ett enum-kast.
+  // Att 'owner'/'creditor' inte får bjudas in är databasens constraint (400).
+  if (!CASE_ROLES.includes(role)) throw badRequest('Fältet "role" ska vara en giltig ärenderoll.');
+  const invitationId = await withUser(caller.userId, async (tx) => {
+    const { rows } = await tx.query("select public.invite_to_case($1, $2, $3) as id", [caseId, email, role]);
+    return rows[0]?.id ?? null;
+  });
+  return { status: 201, body: { invitationId } };
+});
+
+router.post("/v1/invitations/:invitationId/revoke", async (req) => {
+  const caller = await authenticate(req);
+  const invitationId = uuidParam(req, "invitationId");
+  await withUser(caller.userId, async (tx) => {
+    await tx.query("select public.revoke_case_invitation($1)", [invitationId]);
+  });
+  return { status: 200, body: { revoked: true } };
+});
+
+router.get("/v1/invitations/:invitationId", async (req) => {
+  const caller = await authenticate(req);
+  const invitationId = uuidParam(req, "invitationId");
+  const row = await withUser(caller.userId, async (tx) => {
+    const { rows } = await tx.query("select * from public.peek_case_invitation($1)", [invitationId]);
+    return rows[0] ?? null;
+  });
+  // null = finns inte, är utgången, eller ställd till en annan adress. Ett
+  // giltigt svar, inte ett fel - samma neutrala tystnad för alla andra.
+  return { status: 200, body: { invitation: row ? toInvitationPeek(row) : null } };
+});
+
+router.post("/v1/invitations/:invitationId/accept", async (req) => {
+  const caller = await authenticate(req);
+  const invitationId = uuidParam(req, "invitationId");
+  // Adressen avgör: funktionen kastar om den inloggades adress inte matchar,
+  // om inbjudan är återkallad, använd eller utgången (blir 409).
+  const caseId = await withUser(caller.userId, async (tx) => {
+    const { rows } = await tx.query("select public.accept_case_invitation($1) as case_id", [invitationId]);
+    return rows[0]?.case_id ?? null;
+  });
+  return { status: 200, body: { caseId } };
 });
 
 /* --- Servern --------------------------------------------------------------- */

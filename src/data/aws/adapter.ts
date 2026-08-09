@@ -20,8 +20,11 @@
  */
 
 import type { DataPort } from "../ports";
+import type { CaseRole } from "@/lib/caseRoles";
 import type {
   CaseDecisionRecord,
+  CaseInvitationRecord,
+  CaseMemberRecord,
   CaseMessage,
   CaseRecord,
   CaseShareLinkRecord,
@@ -29,6 +32,7 @@ import type {
   ContactMessageRecord,
   ContactStatus,
   DocumentRecord,
+  InvitationPeek,
   NewContactMessage,
   PaymentRecord,
   SharedCaseView,
@@ -47,6 +51,12 @@ export const MIGRATED_PORTS = [
   "contact.amIAdmin",
   "contact.listAll",
   "contact.updateStatus",
+  "members.listMembers",
+  "members.listInvitations",
+  "members.invite",
+  "members.revokeInvitation",
+  "members.peekInvitation",
+  "members.acceptInvitation",
   "cases.getLatest",
   "cases.close",
   "cases.reopen",
@@ -279,6 +289,36 @@ const documents = {
   // uppladdningsvägen migreras (samma hink, andra riktningen).
 };
 
+const members = {
+  ...supabaseAdapter.members,
+  async listMembers(caseId: string): Promise<CaseMemberRecord[]> {
+    const res = await apiFetch<{ members: CaseMemberRecord[] }>(`/v1/cases/${caseId}/members`);
+    return res.members;
+  },
+  async listInvitations(caseId: string): Promise<CaseInvitationRecord[]> {
+    const res = await apiFetch<{ invitations: CaseInvitationRecord[] }>(`/v1/cases/${caseId}/invitations`);
+    return res.invitations;
+  },
+  async invite(caseId: string, email: string, role: CaseRole): Promise<void> {
+    await apiFetch(`/v1/cases/${caseId}/invitations`, { method: "POST", body: { email, role } });
+  },
+  async revokeInvitation(invitationId: string): Promise<void> {
+    await apiFetch(`/v1/invitations/${invitationId}/revoke`, { method: "POST" });
+  },
+  async peekInvitation(invitationId: string): Promise<InvitationPeek | null> {
+    // Adressen är nyckeln: servern svarar med null (samma neutrala tystnad)
+    // när inbjudan inte finns, är utgången eller ställd till en annan adress.
+    const res = await apiFetch<{ invitation: InvitationPeek | null }>(`/v1/invitations/${invitationId}`);
+    return res.invitation;
+  },
+  async acceptInvitation(invitationId: string): Promise<string> {
+    const res = await apiFetch<{ caseId: string }>(`/v1/invitations/${invitationId}/accept`, {
+      method: "POST",
+    });
+    return res.caseId;
+  },
+};
+
 const contact = {
   ...supabaseAdapter.contact,
   async submit(input: NewContactMessage): Promise<void> {
@@ -364,6 +404,7 @@ const audit = {
 export const awsAdapter: DataPort = {
   ...supabaseAdapter,
   contact: contact as DataPort["contact"],
+  members: members as DataPort["members"],
   cases: cases as DataPort["cases"],
   dialogue: dialogue as DataPort["dialogue"],
   tasks: tasks as DataPort["tasks"],

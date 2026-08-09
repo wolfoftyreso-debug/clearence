@@ -786,6 +786,134 @@ const felStatus = await call("POST", `/v1/contact/${malId}/status`, {
 });
 check("ogiltig status ger 400", felStatus.status === 400, felStatus);
 
+/* --- 8f. Deltagare och inbjudningar: adressen är nyckeln, inte länken ----- */
+
+/*
+ * Ärendets deltagare och inbjudningsflödet. Säkerhetsmodellen är att
+ * ADRESSEN avgör, inte en gissbar länk: peek och accept lyckas bara när
+ * den inloggades adress matchar inbjudan, och för alla andra finns den
+ * inte (null / 409, samma neutrala tystnad). Behörigheten att bjuda in och
+ * återkalla hålls i databasens has_case_role.
+ */
+
+const CECILIA = "33333333-3333-3333-3333-333333333333";
+await withAnon(async (tx) => {
+  // Agnes blir owner-medlem i CASE_A (seedade cases får ingen medlemsrad
+  // automatiskt), och Cecilia får ett konto att bli inbjuden till.
+  await tx.query(
+    "insert into public.case_members (case_id, user_id, role) values ($1, $2, 'owner') on conflict do nothing",
+    [CASE_A, AGNES],
+  );
+  const ceciliaHash = await hashPassword("hemligt-losen-cecilia");
+  await tx.query(
+    "insert into auth.users (id, email, password_hash) values ($1, $2, $3) on conflict (id) do nothing",
+    [CECILIA, "cecilia@radgivare.se", ceciliaHash],
+  );
+  await tx.query(
+    "insert into public.user_profiles (user_id, display_name) values ($1, 'Cecilia') on conflict (user_id) do nothing",
+    [CECILIA],
+  );
+});
+const ceciliaToken: string = (
+  await call("POST", "/v1/auth/login", {
+    body: { email: "cecilia@radgivare.se", password: "hemligt-losen-cecilia" },
+  })
+).body.token as string;
+
+const arr = (v: unknown): Json[] => (Array.isArray(v) ? (v as Json[]) : []);
+
+const medlemmar0 = await call("GET", `/v1/cases/${CASE_A}/members`, { token: adminToken });
+check(
+  "ägaren ser deltagarlistan",
+  medlemmar0.status === 200 && arr(medlemmar0.body.members).some((m) => m.userId === AGNES),
+  medlemmar0.body,
+);
+const medlemmarUtanfor = await call("GET", `/v1/cases/${CASE_A}/members`, { token: bertilToken });
+check(
+  "en utomstående får en TOM deltagarlista (list_case_members prövar access)",
+  medlemmarUtanfor.status === 200 && arr(medlemmarUtanfor.body.members).length === 0,
+  medlemmarUtanfor.body,
+);
+
+const bjudIn = await call("POST", `/v1/cases/${CASE_A}/invitations`, {
+  token: adminToken,
+  body: { email: "cecilia@radgivare.se", role: "legal_advisor" },
+});
+check("ägaren kan bjuda in", bjudIn.status === 201 && typeof bjudIn.body.invitationId === "string", bjudIn.body);
+const invId = bjudIn.body.invitationId as string;
+
+const bjudInNekad = await call("POST", `/v1/cases/${CASE_A}/invitations`, {
+  token: bertilToken,
+  body: { email: "x@example.se", role: "observer" },
+});
+check("en utomstående kan inte bjuda in (has_case_role nekar → 409)", bjudInNekad.status === 409, bjudInNekad);
+const bjudInAgare = await call("POST", `/v1/cases/${CASE_A}/invitations`, {
+  token: adminToken,
+  body: { email: "y@example.se", role: "owner" },
+});
+check("'owner' går inte att bjuda in per mejl (databasens constraint → 400)", bjudInAgare.status === 400, bjudInAgare);
+const bjudInSkrap = await call("POST", `/v1/cases/${CASE_A}/invitations`, {
+  token: adminToken,
+  body: { email: "y@example.se", role: "sabotage" },
+});
+check("ogiltig roll ger 400", bjudInSkrap.status === 400, bjudInSkrap);
+
+const inbjudningar = await call("GET", `/v1/cases/${CASE_A}/invitations`, { token: adminToken });
+check(
+  "inbjudningarna listas",
+  inbjudningar.status === 200 && arr(inbjudningar.body.invitations).some((i) => i.id === invId),
+  inbjudningar.body,
+);
+
+const peekRatt = await call("GET", `/v1/invitations/${invId}`, { token: ceciliaToken });
+check(
+  "den inbjudna får se förhandsvisningen (bolagsnamnet)",
+  peekRatt.status === 200 &&
+    (peekRatt.body.invitation as Json | null)?.companyName === "Bolag A AB",
+  peekRatt.body,
+);
+const peekFel = await call("GET", `/v1/invitations/${invId}`, { token: bertilToken });
+check(
+  "fel adress ser ingen förhandsvisning - null, samma neutrala tystnad",
+  peekFel.status === 200 && peekFel.body.invitation === null,
+  peekFel.body,
+);
+
+const acceptFel = await call("POST", `/v1/invitations/${invId}/accept`, { token: bertilToken });
+check("fel adress kan inte acceptera (409)", acceptFel.status === 409, acceptFel);
+const acceptRatt = await call("POST", `/v1/invitations/${invId}/accept`, { token: ceciliaToken });
+check(
+  "rätt adress accepterar och får ärendets id",
+  acceptRatt.status === 200 && acceptRatt.body.caseId === CASE_A,
+  acceptRatt.body,
+);
+const medlemmarEfter = await call("GET", `/v1/cases/${CASE_A}/members`, { token: adminToken });
+check(
+  "den accepterade syns nu i deltagarlistan med sin roll",
+  arr(medlemmarEfter.body.members).some((m) => m.userId === CECILIA && m.role === "legal_advisor"),
+  medlemmarEfter.body,
+);
+const acceptIgen = await call("POST", `/v1/invitations/${invId}/accept`, { token: ceciliaToken });
+check("en redan använd inbjudan kan inte återanvändas (409)", acceptIgen.status === 409, acceptIgen);
+
+const bjudIn2 = await call("POST", `/v1/cases/${CASE_A}/invitations`, {
+  token: adminToken,
+  body: { email: "cecilia@radgivare.se", role: "auditor" },
+});
+const invId2 = bjudIn2.body.invitationId as string;
+const aterkalla = await call("POST", `/v1/invitations/${invId2}/revoke`, { token: adminToken });
+check("ägaren kan återkalla en inbjudan", aterkalla.status === 200, aterkalla);
+const inbjudningar2 = await call("GET", `/v1/cases/${CASE_A}/invitations`, { token: adminToken });
+const aterkallad = arr(inbjudningar2.body.invitations).find((i) => i.id === invId2);
+check("den återkallade inbjudan bär revokedAt", aterkallad?.revokedAt != null, aterkallad);
+const acceptAterkallad = await call("POST", `/v1/invitations/${invId2}/accept`, { token: ceciliaToken });
+check("en återkallad inbjudan kan inte accepteras (409)", acceptAterkallad.status === 409, acceptAterkallad);
+
+const peekOkant = await call("GET", "/v1/invitations/00000000-0000-0000-0000-000000000000", {
+  token: ceciliaToken,
+});
+check("ett okänt inbjudnings-id ger null, inte ett fel", peekOkant.status === 200 && peekOkant.body.invitation === null, peekOkant.body);
+
 /* --- 9. Hastighetsbegränsningen, mot den delade räknaren ------------------ */
 
 /*

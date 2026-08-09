@@ -1511,6 +1511,222 @@
           }
         }
       }
+    },
+    "/cases/{caseId}/members": {
+      "get": {
+        "operationId": "listCaseMembers",
+        "summary": "Ärendets deltagare. list_case_members prövar has_case_access - den som inte tillhör ärendet får noll rader.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Deltagarna",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "members"
+                  ],
+                  "properties": {
+                    "members": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/cases/{caseId}/invitations": {
+      "get": {
+        "operationId": "listCaseInvitations",
+        "summary": "Ärendets inbjudningar, nyast först. Läsbar för ärendets medlemmar via radskyddet.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Inbjudningarna",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "invitations"
+                  ],
+                  "properties": {
+                    "invitations": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "inviteToCase",
+        "summary": "Bjud in en adress till ärendet. Kräver owner/reconstructor/trustee (prövas i databasen). 'owner'/'creditor' delas inte ut per mejl.",
+        "x-status": "beta",
+        "responses": {
+          "201": {
+            "description": "Inbjudan skapad",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "invitationId"
+                  ],
+                  "properties": {
+                    "invitationId": {
+                      "type": "string",
+                      "format": "uuid"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/invitations/{invitationId}": {
+      "get": {
+        "operationId": "peekCaseInvitation",
+        "summary": "Vad den inbjudna får se innan accept - bolagsnamn, roll och vem som bjöd in. Bara om den inloggades adress matchar; annars null (neutral tystnad).",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Förhandsvisningen (eller null)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "invitation"
+                  ],
+                  "properties": {
+                    "invitation": {
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/invitations/{invitationId}/revoke": {
+      "post": {
+        "operationId": "revokeCaseInvitation",
+        "summary": "Återkalla en öppen inbjudan. Samma behörighet som att bjuda in.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Återkallad"
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/invitations/{invitationId}/accept": {
+      "post": {
+        "operationId": "acceptCaseInvitation",
+        "summary": "Acceptera en inbjudan. Adressen avgör: fel adress, återkallad, använd eller utgången ger 409. Returnerar ärendets id.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Accepterad",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "caseId"
+                  ],
+                  "properties": {
+                    "caseId": {
+                      "type": "string",
+                      "format": "uuid"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "webhooks": {
