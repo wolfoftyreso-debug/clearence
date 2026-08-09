@@ -91,3 +91,39 @@ if [[ $antal -eq 0 ]]; then
 else
   echo "$antal migration(er) $([[ $TORRKOR -eq 1 ]] && echo 'skulle köras' || echo 'körda')."
 fi
+
+# SJÄLVHOSTADE ROLLER. bootstrap.sql skapar app_user/authenticated som NOLOGIN
+# och en migration REVOKE:ar arbetarfunktionerna "för att app_worker äger dem"
+# - men app_worker skapades aldrig. Den här filen skapar den (betrodd batch-
+# roll, bypassrls) med sina grants. Idempotent, körs varje gång.
+if [[ $TORRKOR -eq 0 ]]; then
+  psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -q -f "$ROT/db/roles-selfhosted.sql"
+
+  # Inloggningsrollerna som klustret ANSLUTER med, med lösenord ur miljön.
+  # Sätts bara när lösenorden angetts - annars förblir rollerna NOLOGIN och
+  # ingen kan logga in på dem (rätt för t.ex. CI:s migreringssteg).
+  #   app_worker            arbetaren ansluter som den (bypassrls)
+  #   clearance_api         API:t ansluter som den (medlem i authenticated,
+  #                         ALDRIG bypassrls - den betjänar klientfrågor)
+  # Heredoc (stdin) så psql tolkar :'var' säkert - lösenordet citeras av
+  # psql och kan inte injiceras, oavsett tecken.
+  if [[ -n "${SELFHOST_WORKER_PASSWORD:-}" ]]; then
+    psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -q -v wpw="$SELFHOST_WORKER_PASSWORD" <<'SQL'
+alter role app_worker login password :'wpw';
+SQL
+    echo "  app_worker: inloggning påslagen."
+  fi
+  if [[ -n "${SELFHOST_API_PASSWORD:-}" ]]; then
+    psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -q -v apw="$SELFHOST_API_PASSWORD" <<'SQL'
+do $$
+begin
+  if not exists (select 1 from pg_roles where rolname = 'clearance_api') then
+    create role clearance_api login;
+  end if;
+end $$;
+grant authenticated to clearance_api;
+alter role clearance_api login password :'apw';
+SQL
+    echo "  clearance_api: inloggning påslagen."
+  fi
+fi

@@ -38,6 +38,21 @@ spec:
                 secretKeyRef:
                   name: {{ include "clearance.secretName" . }}
                   key: migrate-database-url
+            # Med dessa satta skapar migrera.sh inloggningsrollerna:
+            # app_worker (bypassrls) och clearance_api (medlem i authenticated).
+            # Lösenorden måste matcha dem i database-url/worker-database-url.
+            - name: SELFHOST_API_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "clearance.secretName" . }}
+                  key: selfhost-api-password
+                  optional: true
+            - name: SELFHOST_WORKER_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "clearance.secretName" . }}
+                  key: selfhost-worker-password
+                  optional: true
           securityContext:
             {{- toYaml .Values.containerSecurityContext | nindent 12 }}
           resources:

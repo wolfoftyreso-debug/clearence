@@ -48,17 +48,23 @@ config:
 # Antingen namnger du en redan skapad Secret (existingSecret) med rätt
 # nycklar, ELLER låter chartet skapa en ur create.* (bara för test - lägg
 # ALDRIG riktiga värden i git). Nycklar som förväntas i secreten:
-#   database-url            app_user (icke-ägare, ingen BYPASSRLS)
-#   worker-database-url     app_worker
-#   migrate-database-url    superanvändare (skapar roller/extensions)
-#   anthropic-api-key       valfri (tom = samtalet ej anslutet)
-#   google-maps-api-key     valfri
+#   database-url               clearance_api (medlem i authenticated, ALDRIG bypassrls)
+#   worker-database-url        app_worker (bypassrls, betrodd batch-roll)
+#   migrate-database-url       superanvändare (skapar roller/extensions)
+#   selfhost-api-password      lösenord som migrera.sh sätter på clearance_api
+#   selfhost-worker-password   lösenord som migrera.sh sätter på app_worker
+#   anthropic-api-key          valfri (tom = samtalet ej anslutet)
+#   google-maps-api-key        valfri
+# selfhost-*-password måste matcha lösenorden i database-url/worker-database-url:
+# migrations-jobbet SKAPAR rollerna med dem, appen ANSLUTER med URL:erna.
 secret:
   existingSecret: ""
   create:
     databaseUrl: ""
     workerDatabaseUrl: ""
     migrateDatabaseUrl: ""
+    selfhostApiPassword: ""
+    selfhostWorkerPassword: ""
     anthropicApiKey: ""
     googleMapsApiKey: ""
     smtpPass: ""

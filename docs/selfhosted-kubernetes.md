@@ -99,7 +99,7 @@ flowchart TB
 | Variabel | Komponent | Obl.? | Källa | Notis |
 |---|---|---|---|---|
 | `PORT` | API | nej | ConfigMap/inline | default 8080 |
-| `DATABASE_URL` | API | **ja** | Secret `database-url` | rollen **app_user** (LOGIN), icke-ägare, ingen BYPASSRLS |
+| `DATABASE_URL` | API | **ja** | Secret `database-url` | rollen **clearance_api** (LOGIN, medlem i authenticated), aldrig BYPASSRLS |
 | `PGPOOL_MAX` | API | nej | ConfigMap | default 10 |
 | `SESSION_TTL_HOURS` | API | nej | ConfigMap | default 12 |
 | `ANTHROPIC_API_KEY` | API | nej | Secret | tom = samtalet ej anslutet (kraschar inte) |
@@ -116,9 +116,14 @@ flowchart TB
 
 **Ingen** signeringsnyckel finns (sessioner är slumpbytes, lagras som SHA-256), och API:t har **ingen CORS** — därför den samma-origin-proxande frontenden. SMS-nyckeln (46elks) bor i `public.integration_secrets` (`elks46` = `user:password`), **inte** i en k8s-Secret.
 
-## Rollerna — det medvetet lämnade steget
+## Rollerna — byggt och prövat mot riktig Postgres
 
-`db/bootstrap.sql` skapar `app_user`/`app_worker` som **NOLOGIN**, och `app_worker` skapas i praktiken inte alls. Egenhostat behöver **LOGIN-roller** (en medlem i `authenticated` för API:t, en i `app_worker` för arbetaren) med lösenord som matchar `database-url`/`worker-database-url`. Det är load-bearing SQL som ska prövas mot en riktig Postgres (CI-jobbet `databas`), inte gissas i YAML — därför är det ett flaggat nästa steg, inte något chartet låtsas lösa.
+`db/bootstrap.sql` skapar `app_user`/`authenticated` som NOLOGIN, och migration `20260819100000` revoke:ar arbetarfunktionerna "för att app_worker äger dem" — men `app_worker` skapades aldrig, så en arbetare hade fallit på 42501 vid första anropet. **`db/roles-selfhosted.sql`** (kör av `migrera.sh` efter migrationerna, idempotent) tätar det:
+
+- **`app_worker`** — betrodd batch-roll med **BYPASSRLS**. Den arbetar per sin natur över alla tenants (skickar allas post, kontrollerar allas krediter); BYPASSRLS är rätt här och **bara** här. Verifierat: den kan röra utkorgen och köra arbetarfunktionerna.
+- **`clearance_api`** — API:ets roll: LOGIN, medlem i `authenticated`, **aldrig** BYPASSRLS. Verifierat: den kan `set role authenticated`, och radskyddet scopar (0 rader för en främmande identitet, inte ett fel).
+
+`migrera.sh` sätter rollernas lösenord ur `SELFHOST_API_PASSWORD` / `SELFHOST_WORKER_PASSWORD` (chartets migrations-Job ur `selfhost-*-password`). Modellen är vaktad i **`db/tests/roles.sql`**, som körs i `test:selfhosted` och CI-jobbet `databas`: `app_worker` får skriva i utkorgen, `authenticated` nekas samma insert av radskyddet. Ingen del av det här gissas — allt är prövat mot en riktig Postgres 16.
 
 ## Öppna beslut för driftägaren
 

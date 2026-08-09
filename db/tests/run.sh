@@ -43,3 +43,10 @@ $PSQL -d "$DB" -f supabase/tests/invoiceNumbering.sql 2>&1 \
 
 $PSQL -d "$DB" -f supabase/tests/notifications.sql 2>&1 \
   | grep -E "^(NOTICE|ERROR|psql:)|ALL NOTIFICATION" | sed 's/^NOTICE:  //'
+
+# Den självhostade rollmodellen: app_worker (betrodd batch-roll) och att
+# API-rollen aldrig går förbi radskyddet. Roles-filen skapar rollerna,
+# roles.sql prövar dem. Körs sist så insert i utkorgen inte stör de andra.
+$PSQL -d "$DB" -f db/roles-selfhosted.sql >/dev/null
+$PSQL -d "$DB" -f db/tests/roles.sql 2>&1 \
+  | grep -E "^(NOTICE|ERROR|psql:)|ALL ROLE" | sed 's/^NOTICE:  //'

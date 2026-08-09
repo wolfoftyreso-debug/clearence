@@ -17,24 +17,33 @@ En Secret (peka ut med `secret.existingSecret`) med nycklarna:
 
 | Nyckel | Roll | Notis |
 |---|---|---|
-| `database-url` | app_user (LOGIN) | icke-ägare, ingen BYPASSRLS |
-| `worker-database-url` | app_worker (LOGIN) | arbetaren |
+| `database-url` | clearance_api (LOGIN) | medlem i `authenticated`, **aldrig** BYPASSRLS |
+| `worker-database-url` | app_worker (LOGIN) | betrodd batch-roll, BYPASSRLS |
 | `migrate-database-url` | superanvändare | skapar roller/extensions |
+| `selfhost-api-password` | — | lösenord migrera.sh sätter på clearance_api |
+| `selfhost-worker-password` | — | lösenord migrera.sh sätter på app_worker |
 | `anthropic-api-key` | — | valfri (tom = samtalet ej anslutet) |
 | `google-maps-api-key` | — | valfri |
 
+`selfhost-*-password` måste matcha lösenorden i `database-url`/`worker-database-url`.
 Håll värdena utanför git (SOPS/age eller Sealed Secrets).
 
-## ⚠️ Roll-wiringen (den enda biten som inte är turnkey)
+## Rollmodellen (byggd och prövad)
 
-`db/bootstrap.sql` skapar `app_user`/`app_worker` som **NOLOGIN** (och
-`app_worker` skapas i själva verket inte alls — se `docs/selfhosted-kubernetes.md`).
-Egenhostat måste därför **LOGIN-roller** finnas — en medlem i `authenticated`
-för API:t och en i `app_worker` för arbetaren — med lösenord som matchar
-`database-url`/`worker-database-url`. Det är load-bearing SQL som ska prövas
-mot en riktig Postgres (CI-jobbet `databas`), inte gissas i YAML. Tills den
-körts loggar API:t anslutningsfel. Chartet reser allt annat; den här raden är
-det medvetet lämnade steget.
+`db/bootstrap.sql` skapar `app_user`/`authenticated` som NOLOGIN, och en
+migration revoke:ar arbetarfunktionerna "för att app_worker äger dem" — men
+`app_worker` skapades aldrig. `db/roles-selfhosted.sql` (kör av `migrera.sh`
+efter migrationerna) tätar det:
+
+- **`app_worker`** — betrodd batch-roll med **BYPASSRLS**. Den arbetar per sin
+  natur över alla tenants (skickar allas post, kontrollerar allas krediter);
+  BYPASSRLS är rätt här och **bara** här.
+- **`clearance_api`** — API:ets roll: LOGIN, medlem i `authenticated`, **aldrig**
+  BYPASSRLS. Radskyddet gäller varje klientfråga.
+
+Migrations-jobbet sätter deras lösenord ur `selfhost-*-password`. Modellen är
+vaktad i `db/tests/roles.sql` (körs i CI-jobbet `databas`): app_worker får röra
+utkorgen, `authenticated` nekas samma insert av radskyddet.
 
 ## Installera
 
