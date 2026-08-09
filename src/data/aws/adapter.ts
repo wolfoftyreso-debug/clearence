@@ -117,6 +117,7 @@ export const MIGRATED_PORTS = [
   "tasks.add",
   "tasks.setDone",
   "tasks.assign",
+  "tasks.seed",
   "payments.listByCase",
   "documents.listByCase",
   "documents.setReview",
@@ -311,6 +312,10 @@ const tasks = {
   },
   async assign(id: string, userId: string | null): Promise<void> {
     await apiFetch(`/v1/tasks/${id}/assign`, { method: "POST", body: { userId } });
+  },
+  async seed(caseId: string, labels: string[]): Promise<void> {
+    if (labels.length === 0) return;
+    await apiFetch(`/v1/cases/${caseId}/tasks/seed`, { method: "POST", body: { labels } });
   },
 };
 

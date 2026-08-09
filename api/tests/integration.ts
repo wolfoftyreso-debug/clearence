@@ -1271,6 +1271,35 @@ const bertilStangt = await withAnon(async (tx) => {
 });
 check("kontot fick closed_at - ingenting raderades", bertilStangt.closed_at !== null, bertilStangt);
 
+/* --- 8l. tasks.seed: idempotent sådd av rekommendationer ----------------- */
+
+/*
+ * Rekommendationernas uppgifter sås med on conflict do nothing mot det
+ * unika indexet (case_id, label): två flikar som sår samtidigt ger EN
+ * lista, inte två dubbletter. Agnes äger CASE_A (owner-medlem sedan 8f).
+ */
+
+const saStart = await call("POST", `/v1/cases/${CASE_A}/tasks/seed`, {
+  token: adminToken,
+  body: { labels: ["Ring revisorn", "Sammanställ likviditetsplan", "Kalla till styrelsemöte"] },
+});
+check("rekommendationerna kan sås", saStart.status === 200 && saStart.body.seeded === 3, saStart.body);
+const saIgen = await call("POST", `/v1/cases/${CASE_A}/tasks/seed`, {
+  token: adminToken,
+  body: { labels: ["Ring revisorn", "Sammanställ likviditetsplan", "Kalla till styrelsemöte"] },
+});
+check("att så samma etiketter igen är ofarligt (idempotent)", saIgen.status === 200, saIgen);
+const antalUppgifter = await withAnon(async (tx) => {
+  const { rows } = await tx.query(
+    "select count(*)::int as n from public.case_tasks where case_id = $1 and label = 'Ring revisorn'",
+    [CASE_A],
+  );
+  return rows[0].n as number;
+});
+check("etiketten finns i EXAKT en kopia trots dubbel sådd", antalUppgifter === 1, antalUppgifter);
+const tomSadd = await call("POST", `/v1/cases/${CASE_A}/tasks/seed`, { token: adminToken, body: { labels: [] } });
+check("tom lista är ett giltigt no-op", tomSadd.status === 200 && tomSadd.body.seeded === 0, tomSadd.body);
+
 /* --- 9. Hastighetsbegränsningen, mot den delade räknaren ------------------ */
 
 /*

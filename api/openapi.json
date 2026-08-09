@@ -2865,6 +2865,40 @@
           }
         }
       }
+    },
+    "/cases/{caseId}/tasks/seed": {
+      "post": {
+        "operationId": "seedCaseTasks",
+        "summary": "Så rekommendationernas uppgifter i ärendet. Idempotent - on conflict do nothing mot (case_id, label), så samtidiga anrop ger en lista.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Antal sådda etiketter",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "seeded": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "webhooks": {

@@ -946,6 +946,27 @@ router.post("/v1/cases/:caseId/tasks", async (req) => {
   return { status: 201, body: toTask(row) };
 });
 
+router.post("/v1/cases/:caseId/tasks/seed", async (req) => {
+  const caller = await authenticate(req);
+  const caseId = uuidParam(req, "caseId");
+  const raw = (req.body ?? {}) as Record<string, unknown>;
+  if (!Array.isArray(raw.labels)) throw badRequest('Fältet "labels" ska vara en lista.');
+  const labels = raw.labels.filter((l): l is string => typeof l === "string" && l.trim().length > 0);
+  if (labels.length > 0) {
+    // on conflict do nothing mot det unika indexet (case_id, label): två
+    // flikar som sår rekommendationerna samtidigt ger EN lista, inte två.
+    await withUser(caller.userId, async (tx) => {
+      await tx.query(
+        `insert into public.case_tasks (case_id, label, source)
+         select $1, unnest($2::text[]), 'recommendation'
+         on conflict (case_id, label) do nothing`,
+        [caseId, labels],
+      );
+    });
+  }
+  return { status: 200, body: { seeded: labels.length } };
+});
+
 router.post("/v1/tasks/:taskId/done", async (req) => {
   const caller = await authenticate(req);
   const taskId = uuidParam(req, "taskId");
