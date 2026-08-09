@@ -358,6 +358,18 @@ const toTimeEntry = (row: Record<string, unknown>) => ({
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
+/** Ett rådgivarsamtal (journal): frågor, svar och bedömning i ordning. */
+const toSession = (row: Record<string, unknown>) => ({
+  id: row.id,
+  caseId: row.case_id,
+  flowId: row.flow_id,
+  flowTitle: row.flow_title,
+  startedAt: iso(row.started_at),
+  closedAt: iso(row.closed_at),
+  // entries är jsonb - pg ger tillbaka en färdig array.
+  entries: Array.isArray(row.entries) ? row.entries : [],
+});
+
 /** En API-nyckel som den får visas: prefix och metadata, ALDRIG hemligheten. */
 const toApiKey = (row: Record<string, unknown>) => ({
   id: row.id,
@@ -1251,6 +1263,58 @@ router.del("/v1/time-entries/:entryId", async (req) => {
     await tx.query("delete from public.time_entries where id = $1", [entryId]);
   });
   return { status: 200, body: { deleted: true } };
+});
+
+/* --- Rådgivarsamtalen (journal) ------------------------------------------- */
+
+/*
+ * Samtalen med krisrådgivaren är ärendets berättelse, inte privat kladd:
+ * de LÄSES av alla med ärendeåtkomst (has_case_access) och SKRIVS av dem
+ * som får arbeta i ärendet (can_write_case) - observatörer läser men
+ * skriver inte. Samma samtal sparas flera gånger medan det pågår, därför
+ * en upsert på klientens session-id.
+ */
+
+router.get("/v1/cases/:caseId/sessions", async (req) => {
+  const caller = await authenticate(req);
+  const caseId = uuidParam(req, "caseId");
+  const rows = await withUser(caller.userId, async (tx) => {
+    const { rows } = await tx.query(
+      "select * from public.advisor_sessions where case_id = $1 order by started_at desc",
+      [caseId],
+    );
+    return rows;
+  });
+  return { status: 200, body: { sessions: rows.map(toSession) } };
+});
+
+router.post("/v1/cases/:caseId/sessions", async (req) => {
+  const caller = await authenticate(req);
+  const caseId = uuidParam(req, "caseId");
+  const raw = (req.body ?? {}) as Record<string, unknown>;
+  const id = typeof raw.id === "string" && UUID.test(raw.id) ? raw.id : null;
+  if (!id) throw badRequest('Fältet "id" ska vara ett giltigt id (samtalet äger sitt eget id).');
+  const flowId = str(req.body, "flowId", { max: 40 });
+  const flowTitle = str(req.body, "flowTitle", { max: 120 });
+  const startedAt = str(req.body, "startedAt", { max: 40 });
+  const closedAt = str(req.body, "closedAt", { max: 40, required: false }) || null;
+  if (!Array.isArray(raw.entries)) throw badRequest('Fältet "entries" ska vara en lista.');
+  // Upsert på samtalets id: RLS kräver can_write_case både för insert och
+  // update, så en observatör (läsrätt utan skrivrätt) blockeras av radskyddet.
+  await withUser(caller.userId, async (tx) => {
+    await tx.query(
+      `insert into public.advisor_sessions (id, case_id, flow_id, flow_title, started_at, closed_at, entries)
+       values ($1, $2, $3, $4, $5, $6, $7::jsonb)
+       on conflict (id) do update set
+         flow_id = excluded.flow_id,
+         flow_title = excluded.flow_title,
+         started_at = excluded.started_at,
+         closed_at = excluded.closed_at,
+         entries = excluded.entries`,
+      [id, caseId, flowId, flowTitle, startedAt, closedAt, JSON.stringify(raw.entries)],
+    );
+  });
+  return { status: 200, body: { saved: true, sessionId: id } };
 });
 
 /* --- API-nycklar för det öppna API:t -------------------------------------- */

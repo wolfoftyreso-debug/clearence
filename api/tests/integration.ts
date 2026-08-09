@@ -1029,6 +1029,83 @@ check("den återkallade nyckeln bär revokedAt", (aterkalladNyckel as Json | und
 const aterkallaIgen = await call("POST", `/v1/api-keys/${nyckelId}/revoke`, { token: adminToken });
 check("dubbel återkallelse är ofarlig (idempotent 200)", aterkallaIgen.status === 200, aterkallaIgen);
 
+/* --- 8i. Rådgivarsamtalen: läses av deltagare, skrivs av skrivare -------- */
+
+/*
+ * Samtalen är ärendets berättelse. Alla med ärendeåtkomst läser dem
+ * (has_case_access); bara de som får arbeta i ärendet skriver
+ * (can_write_case). Samma samtal sparas flera gånger medan det pågår -
+ * en upsert på samtalets id, inte en ny rad varje gång.
+ */
+
+const sessId = "cccccccc-0000-0000-0000-0000000000c1";
+const sparaSamtal = await call("POST", `/v1/cases/${CASE_A}/sessions`, {
+  token: adminToken,
+  body: {
+    id: sessId,
+    flowId: "likviditet",
+    flowTitle: "Likviditetsgenomgång",
+    startedAt: "2026-02-01T09:00:00.000Z",
+    closedAt: null,
+    entries: [{ at: "2026-02-01T09:00:00.000Z", who: "radgivare", text: "Hur ser kassan ut?" }],
+  },
+});
+check("en skrivare kan spara ett samtal", sparaSamtal.status === 200 && sparaSamtal.body.saved === true, sparaSamtal.body);
+
+const listaSamtal = await call("GET", `/v1/cases/${CASE_A}/sessions`, { token: adminToken });
+const samtalet = arr(listaSamtal.body.sessions).find((s) => s.id === sessId) as Json | undefined;
+check(
+  "samtalet listas med sina rader (jsonb bevaras)",
+  !!samtalet && Array.isArray(samtalet.entries) && (samtalet.entries as unknown[]).length === 1,
+  listaSamtal.body,
+);
+
+const sparaIgen = await call("POST", `/v1/cases/${CASE_A}/sessions`, {
+  token: adminToken,
+  body: {
+    id: sessId,
+    flowId: "likviditet",
+    flowTitle: "Likviditetsgenomgång",
+    startedAt: "2026-02-01T09:00:00.000Z",
+    closedAt: "2026-02-01T09:30:00.000Z",
+    entries: [
+      { at: "2026-02-01T09:00:00.000Z", who: "radgivare", text: "Hur ser kassan ut?" },
+      { at: "2026-02-01T09:05:00.000Z", who: "user", text: "Tunn den här månaden." },
+    ],
+  },
+});
+check("samma samtal kan sparas igen (upsert)", sparaIgen.status === 200, sparaIgen);
+const listaSamtal2 = await call("GET", `/v1/cases/${CASE_A}/sessions`, { token: adminToken });
+const uppdaterat = arr(listaSamtal2.body.sessions).find((s) => s.id === sessId) as Json | undefined;
+check(
+  "upserten uppdaterade raderna, skapade ingen dubblett",
+  arr(listaSamtal2.body.sessions).filter((s) => s.id === sessId).length === 1 &&
+    (uppdaterat?.entries as unknown[]).length === 2,
+  listaSamtal2.body,
+);
+check("och stängningstiden sattes", uppdaterat?.closedAt !== null, uppdaterat);
+
+const bertilSpara = await call("POST", `/v1/cases/${CASE_A}/sessions`, {
+  token: bertilToken,
+  body: {
+    id: "cccccccc-0000-0000-0000-0000000000c2",
+    flowId: "x",
+    flowTitle: "Y",
+    startedAt: "2026-02-01T09:00:00.000Z",
+    closedAt: null,
+    entries: [],
+  },
+});
+check("en utomstående kan inte spara ett samtal (can_write_case → 403)", bertilSpara.status === 403, bertilSpara);
+const bertilLista = await call("GET", `/v1/cases/${CASE_A}/sessions`, { token: bertilToken });
+check("och ser inga samtal i ärendet (has_case_access)", arr(bertilLista.body.sessions).length === 0, bertilLista.body);
+
+const utanEntries = await call("POST", `/v1/cases/${CASE_A}/sessions`, {
+  token: adminToken,
+  body: { id: sessId, flowId: "x", flowTitle: "Y", startedAt: "2026-02-01T09:00:00.000Z" },
+});
+check("saknad entries-lista ger 400", utanEntries.status === 400, utanEntries);
+
 /* --- 9. Hastighetsbegränsningen, mot den delade räknaren ------------------ */
 
 /*

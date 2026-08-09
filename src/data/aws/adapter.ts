@@ -22,6 +22,7 @@
 import type { DataPort } from "../ports";
 import type { CaseRole } from "@/lib/caseRoles";
 import type {
+  AdvisorSessionRecord,
   ApiKeyRecord,
   CaseDecisionRecord,
   CaseInvitationRecord,
@@ -69,6 +70,8 @@ export const MIGRATED_PORTS = [
   "apiKeys.listMine",
   "apiKeys.create",
   "apiKeys.revoke",
+  "dialogue.listSessions",
+  "dialogue.saveSession",
   "cases.getLatest",
   "cases.close",
   "cases.reopen",
@@ -221,6 +224,25 @@ const shares = {
 
 const dialogue = {
   ...supabaseAdapter.dialogue,
+  async listSessions(caseId: string): Promise<AdvisorSessionRecord[]> {
+    const res = await apiFetch<{ sessions: AdvisorSessionRecord[] }>(`/v1/cases/${caseId}/sessions`);
+    return res.sessions;
+  },
+  async saveSession(session: AdvisorSessionRecord): Promise<void> {
+    // Upsert på samtalets id - samma samtal skrivs flera gånger medan det
+    // pågår. Servern kräver skrivrätt i ärendet (can_write_case).
+    await apiFetch(`/v1/cases/${session.caseId}/sessions`, {
+      method: "POST",
+      body: {
+        id: session.id,
+        flowId: session.flowId,
+        flowTitle: session.flowTitle,
+        startedAt: session.startedAt,
+        closedAt: session.closedAt,
+        entries: session.entries,
+      },
+    });
+  },
   async listDecisions(caseId: string): Promise<CaseDecisionRecord[]> {
     const res = await apiFetch<{ decisions: CaseDecisionRecord[] }>(
       `/v1/cases/${caseId}/decisions`,

@@ -2069,6 +2069,86 @@
           }
         }
       }
+    },
+    "/cases/{caseId}/sessions": {
+      "get": {
+        "operationId": "listAdvisorSessions",
+        "summary": "Rådgivarsamtalen i ärendet (journal). Läses av alla med ärendeåtkomst; observatörer läser men skriver inte.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Samtalen",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "sessions"
+                  ],
+                  "properties": {
+                    "sessions": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "saveAdvisorSession",
+        "summary": "Spara ett samtal (upsert på samtalets id). Kräver skrivrätt i ärendet (can_write_case).",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Sparat",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "saved",
+                    "sessionId"
+                  ],
+                  "properties": {
+                    "saved": {
+                      "type": "boolean"
+                    },
+                    "sessionId": {
+                      "type": "string",
+                      "format": "uuid"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "webhooks": {
