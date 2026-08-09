@@ -1,0 +1,74 @@
+/**
+ * EGENHOSTAD DRIFT: det som måste hålla för att en avbild ska fungera i alla
+ * miljöer, och för att migreringen ska köras exakt som den bevisade vägen.
+ *
+ *  1. RUNTIME-KONFIGEN vinner över byggvärdet, och tom bas betyder samma
+ *     origin (nginx proxar /v1). Utan det binds varje avbild till en miljö.
+ *  2. FRONTEND-SERVERN proxar /v1 och injicerar konfigen i index.html.
+ *  3. MIGRATIONS-AVBILDEN kör exakt scripts/migrera.sh mot rätt sökvägar.
+ */
+
+import { apiBaseUrl } from "../src/data/aws/client";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
+let passed = 0;
+let failed = 0;
+const check = (name: string, ok: boolean, extra = "") => {
+  if (ok) passed++;
+  else {
+    failed++;
+    console.log(`FAIL ${name} ${extra}`);
+  }
+};
+const read = (p: string) => readFileSync(join(process.cwd(), p), "utf8");
+
+/* --- 1. Runtime-konfigens företräde -------------------------------------- */
+
+const g = globalThis as { __CLEARANCE_CONFIG__?: { apiBaseUrl?: string } };
+
+delete g.__CLEARANCE_CONFIG__;
+// Byggvärdet sätts av esbuild --define (se package.json: test:deploy).
+check("byggvärdet gäller utan runtime-konfig", apiBaseUrl() === "https://byggd.example", apiBaseUrl());
+
+g.__CLEARANCE_CONFIG__ = { apiBaseUrl: "https://runtime.example/" };
+check("runtime-konfigen vinner över bygget", apiBaseUrl() === "https://runtime.example", apiBaseUrl());
+
+g.__CLEARANCE_CONFIG__ = { apiBaseUrl: "" };
+check("tom runtime-bas = samma origin (tom sträng)", apiBaseUrl() === "", apiBaseUrl());
+
+delete g.__CLEARANCE_CONFIG__;
+
+/* --- 2. Frontend-servern (nginx) ----------------------------------------- */
+
+const nginx = read("deploy/frontend/nginx.conf.template");
+check("nginx proxar API:t på samma origin", /location\s+\/v1\//.test(nginx) && /proxy_pass\s+\$\{API_UPSTREAM\}/.test(nginx));
+check("nginx faller tillbaka till SPA:n", /try_files\s+\$uri\s+\/index\.html/.test(nginx));
+check("index.html cachas aldrig", /location = \/index\.html/.test(nginx) && /no-store/.test(nginx));
+check("nginx lyssnar på 8080 (ickeroot)", /listen\s+8080/.test(nginx));
+
+const entry = read("deploy/frontend/40-clearance-runtime-config.sh");
+check("entrypointen injicerar runtime-konfigen", /__CLEARANCE_CONFIG__/.test(entry) && /CLEARANCE_RUNTIME_CONFIG/.test(entry));
+check("entrypointen sparar originalet (idempotent)", /index\.html\.orig/.test(entry));
+
+const indexHtml = read("index.html");
+check("index.html bär platshållaren nginx byter ut", /<!--CLEARANCE_RUNTIME_CONFIG-->/.test(indexHtml));
+
+const feDocker = read("deploy/frontend/Dockerfile");
+check("frontend-avbilden kör ickeroot nginx", /nginx-unprivileged/.test(feDocker) && /USER 101/.test(feDocker));
+check("frontend-avbilden bygger egen adapter, inte demo", /VITE_DATA_ADAPTER=aws/.test(feDocker) && /VITE_DEMO_MODE=false/.test(feDocker));
+
+/* --- 3. Migrations-avbilden ---------------------------------------------- */
+
+const migDocker = read("deploy/migrate/Dockerfile");
+check("migrations-avbilden kör den bevisade migrera.sh", /scripts\/migrera\.sh/.test(migDocker));
+check("och tar med bootstrap + migrationerna", /COPY db /.test(migDocker) && /supabase\/migrations/.test(migDocker));
+check("och kör som ickeroot", /USER postgres/.test(migDocker));
+
+// Klienten skickar Bearer-token, inte cookies - samma origin ändrar inte det.
+const client = read("src/data/aws/client.ts");
+check("klienten väljer runtime-konfig före byggvärde", /__CLEARANCE_CONFIG__/.test(client));
+check("och tillåter tom bas bara när servern satt den", /runtimeBaseConfigured/.test(client));
+
+console.log(`\n${passed} passed, ${failed} failed`);
+if (failed > 0) process.exit(1);

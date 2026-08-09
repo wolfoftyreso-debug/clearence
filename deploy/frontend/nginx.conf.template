@@ -1,0 +1,57 @@
+# CLEARANCE frontend - nginx.
+#
+# Servar SPA:n OCH proxar API:t på samma origin: /v1 går till API-tjänsten.
+# Det löser två saker på en gång - ingen CORS behövs (API:t har ingen), och
+# klienten kan använda en relativ bas oavsett värdnamn.
+#
+# ${API_UPSTREAM} fylls i vid start av nginx-avbildens template-mekanism
+# (envsubst). $host, $uri m.fl. är NGINX-variabler och lämnas i fred.
+
+server {
+    listen 8080;
+    server_name _;
+    root /usr/share/nginx/html;
+    index index.html;
+
+    # Säkerhetsrubriker - det CloudFront gjorde förr. CSP:n sätts medvetet
+    # inte här ännu (appen har inline-stilar från bygget); ingressen eller
+    # ett senare steg äger den, som i infra/frontend.tf.
+    add_header X-Content-Type-Options nosniff always;
+    add_header X-Frame-Options DENY always;
+    add_header Referrer-Policy no-referrer always;
+
+    gzip on;
+    gzip_vary on;
+    gzip_types text/css application/javascript application/json image/svg+xml;
+
+    # API:t på samma origin. Ingen CORS, ingen andra-host.
+    location /v1/ {
+        proxy_pass ${API_UPSTREAM};
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_connect_timeout 5s;
+        proxy_read_timeout 60s;
+    }
+
+    # Hash-namngivna tillgångar cachas hårt; allt annat inte.
+    location /assets/ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+        try_files $uri =404;
+    }
+
+    # index.html ska aldrig cachas - runtime-konfigen skjuts in i den vid
+    # start, och en cachad kopia skulle låsa fel API-bas.
+    location = /index.html {
+        add_header Cache-Control "no-store" always;
+        try_files $uri =404;
+    }
+
+    # SPA-routing: react-router äger vägarna, servern svarar med appen.
+    location / {
+        try_files $uri /index.html;
+    }
+}
