@@ -33,6 +33,11 @@ import { fetchWebsite, websiteConfigured } from "./website";
 import { DOCUMENT_URL_TTL_SECONDS, presignDocument, storageConfigured } from "./storage";
 import { anthropicConfigured, clearanceReply, type AdvisorMessage } from "./anthropic";
 import { deriveAuditDetail } from "../../src/lib/auditDetail";
+import {
+  DEFAULT_RETENTION,
+  mergeRetentionPolicy,
+  type RetentionOverride,
+} from "../../src/lib/retention";
 import { withAnon, withUser, type Tx } from "./db";
 import { hashPassword, issueToken, sessionTtlHours, sha256, verifyPassword } from "./auth";
 
@@ -369,6 +374,35 @@ const toSession = (row: Record<string, unknown>) => ({
   // entries är jsonb - pg ger tillbaka en färdig array.
   entries: Array.isArray(row.entries) ? row.entries : [],
 });
+
+/* --- Drift: nyckelvalv, avgifter, planer, gallring, North Star ------------ */
+
+/** En hemlighet som den FÅR visas: leverantör, fyra sista, bytesdatum. Aldrig värdet. */
+const toSecretInfo = (row: Record<string, unknown>) => ({
+  provider: row.provider,
+  last4: row.last4,
+  updatedAt: iso(row.updated_at),
+});
+
+const toProfessionalTerms = (row: Record<string, unknown>) => ({
+  professionalId: row.professional_id,
+  name: row.name,
+  company: row.company ?? null,
+  billingEmail: row.billing_email ?? null,
+  referralFeeSek: row.referral_fee === null || row.referral_fee === undefined ? null : Number(row.referral_fee),
+  uninvoicedBillable: Number(row.uninvoiced_billable ?? 0),
+});
+
+const toBillingPlan = (row: Record<string, unknown>) => ({
+  professionalId: row.professional_id,
+  planKind: row.plan_kind,
+  unlockFeeSek: row.unlock_fee_sek === null || row.unlock_fee_sek === undefined ? null : Number(row.unlock_fee_sek),
+  monthlyFeeSek: row.monthly_fee_sek === null || row.monthly_fee_sek === undefined ? null : Number(row.monthly_fee_sek),
+  shadow: row.shadow === true,
+});
+
+const PLAN_KINDS = ["per_case", "subscription", "usage", "enterprise"];
+const SECRET_PROVIDER = /^[a-z0-9_-]{1,60}$/;
 
 /** En API-nyckel som den får visas: prefix och metadata, ALDRIG hemligheten. */
 const toApiKey = (row: Record<string, unknown>) => ({
@@ -1379,6 +1413,208 @@ router.post("/v1/api-keys/:keyId/revoke", async (req) => {
     );
   });
   return { status: 200, body: { revoked: true } };
+});
+
+/* --- Drift (/ops): allt admin-gatat i databasen --------------------------- */
+
+/*
+ * Driftpanelens skrivvägar. INGEN av rutterna gör sin egen
+ * administratörskontroll: gränsen bor i databasen - RPC:erna kastar
+ * "Kräver driftbehörighet" om is_platform_admin() är falskt (blir 409), och
+ * app_settings har admin-only skrivpolicyer (blir 403). Nyckelvalvets regel
+ * är hårdast: en sparad hemlighet kan ALDRIG läsas tillbaka, bara de fyra
+ * sista tecknen och bytesdatum.
+ */
+
+// Nyckelvalvet
+router.get("/v1/ops/secrets", async (req) => {
+  const caller = await authenticate(req);
+  const rows = await withUser(caller.userId, async (tx) => {
+    const { rows } = await tx.query("select * from public.list_integration_secrets()");
+    return rows;
+  });
+  return { status: 200, body: { secrets: rows.map(toSecretInfo) } };
+});
+
+router.post("/v1/ops/secrets", async (req) => {
+  const caller = await authenticate(req);
+  const provider = str(req.body, "provider", { max: 60 });
+  if (!SECRET_PROVIDER.test(provider)) throw badRequest('Fältet "provider" ska vara en enkel leverantörsnyckel.');
+  const secret = str(req.body, "secret", { max: 4000 });
+  await withUser(caller.userId, async (tx) => {
+    await tx.query("select public.set_integration_secret($1, $2)", [provider, secret]);
+  });
+  return { status: 200, body: { saved: true } };
+});
+
+router.del("/v1/ops/secrets/:provider", async (req) => {
+  const caller = await authenticate(req);
+  const provider = req.params.provider;
+  if (!SECRET_PROVIDER.test(provider)) throw badRequest("Ogiltig leverantörsnyckel.");
+  await withUser(caller.userId, async (tx) => {
+    await tx.query("select public.delete_integration_secret($1)", [provider]);
+  });
+  return { status: 200, body: { deleted: true } };
+});
+
+// Rådgivarnas avgifter och planer
+router.get("/v1/ops/professional-terms", async (req) => {
+  const caller = await authenticate(req);
+  const rows = await withUser(caller.userId, async (tx) => {
+    const { rows } = await tx.query("select * from public.list_professional_terms()");
+    return rows;
+  });
+  return { status: 200, body: { terms: rows.map(toProfessionalTerms) } };
+});
+
+router.post("/v1/ops/professionals/:professionalId/referral-fee", async (req) => {
+  const caller = await authenticate(req);
+  const professionalId = uuidParam(req, "professionalId");
+  const raw = (req.body ?? {}) as Record<string, unknown>;
+  // null = avgiften nollställs (faktureras ej). Ett tal = avtalad avgift i kr.
+  let feeSek: number | null = null;
+  if (raw.feeSek !== null && raw.feeSek !== undefined) {
+    const n = Number(raw.feeSek);
+    if (!Number.isFinite(n) || n < 0) throw badRequest('Fältet "feeSek" ska vara ett tal ≥ 0 eller null.');
+    feeSek = Math.round(n);
+  }
+  await withUser(caller.userId, async (tx) => {
+    await tx.query("select public.set_referral_fee($1, $2)", [professionalId, feeSek]);
+  });
+  return { status: 200, body: { saved: true } };
+});
+
+router.get("/v1/ops/billing-plans", async (req) => {
+  const caller = await authenticate(req);
+  const rows = await withUser(caller.userId, async (tx) => {
+    const { rows } = await tx.query("select * from public.billing_plans");
+    return rows;
+  });
+  return { status: 200, body: { plans: rows.map(toBillingPlan) } };
+});
+
+router.post("/v1/ops/billing-plans", async (req) => {
+  const caller = await authenticate(req);
+  const raw = (req.body ?? {}) as Record<string, unknown>;
+  const professionalId = typeof raw.professionalId === "string" && UUID.test(raw.professionalId) ? raw.professionalId : null;
+  if (!professionalId) throw badRequest('Fältet "professionalId" ska vara ett giltigt id.');
+  const planKind = str(req.body, "planKind", { max: 20 });
+  if (!PLAN_KINDS.includes(planKind)) throw badRequest(`Fältet "planKind" ska vara en av: ${PLAN_KINDS.join(", ")}.`);
+  const num = (v: unknown): number | null => {
+    if (v === null || v === undefined) return null;
+    const n = Number(v);
+    if (!Number.isFinite(n) || n < 0) throw badRequest("Avgifterna ska vara tal ≥ 0 eller null.");
+    return Math.round(n);
+  };
+  const unlockFeeSek = num(raw.unlockFeeSek);
+  const monthlyFeeSek = num(raw.monthlyFeeSek);
+  await withUser(caller.userId, async (tx) => {
+    await tx.query("select public.set_billing_plan($1, $2, $3, $4)", [
+      professionalId,
+      planKind,
+      unlockFeeSek,
+      monthlyFeeSek,
+    ]);
+  });
+  return { status: 200, body: { saved: true } };
+});
+
+router.post("/v1/ops/professionals/:professionalId/billing-hold", async (req) => {
+  const caller = await authenticate(req);
+  const professionalId = uuidParam(req, "professionalId");
+  const raw = (req.body ?? {}) as Record<string, unknown>;
+  if (typeof raw.hold !== "boolean") throw badRequest('Fältet "hold" ska vara true eller false.');
+  const reason = str(req.body, "reason", { max: 500, required: false }) || null;
+  await withUser(caller.userId, async (tx) => {
+    await tx.query("select public.set_billing_hold($1, $2, $3)", [professionalId, raw.hold, reason]);
+  });
+  return { status: 200, body: { saved: true } };
+});
+
+router.post("/v1/ops/professionals/:professionalId/billing-shadow", async (req) => {
+  const caller = await authenticate(req);
+  const professionalId = uuidParam(req, "professionalId");
+  const raw = (req.body ?? {}) as Record<string, unknown>;
+  if (typeof raw.shadow !== "boolean") throw badRequest('Fältet "shadow" ska vara true eller false.');
+  await withUser(caller.userId, async (tx) => {
+    await tx.query("select public.set_billing_shadow($1, $2)", [professionalId, raw.shadow]);
+  });
+  return { status: 200, body: { saved: true } };
+});
+
+// Företagsplanens pris (driftparameter i app_settings)
+router.post("/v1/ops/company-plan", async (req) => {
+  const caller = await authenticate(req);
+  const raw = (req.body ?? {}) as Record<string, unknown>;
+  const monthly = Number(raw.monthlyExVatSek);
+  if (!Number.isFinite(monthly) || monthly <= 0) throw badRequest('Fältet "monthlyExVatSek" ska vara ett tal > 0.');
+  const opt = (v: unknown): number | null => {
+    if (v === null || v === undefined) return null;
+    const n = Number(v);
+    if (!Number.isFinite(n) || n < 0) throw badRequest("Beloppen ska vara tal ≥ 0 eller null.");
+    return Math.round(n);
+  };
+  const value = {
+    monthly_ex_vat_sek: Math.round(monthly),
+    business_ex_vat_sek: opt(raw.businessExVatSek),
+    enterprise_ex_vat_sek: opt(raw.enterpriseExVatSek),
+  };
+  // app_settings-skrivning kräver is_platform_admin (RLS) → 403 för andra.
+  await withUser(caller.userId, async (tx) => {
+    await tx.query(
+      `insert into public.app_settings (key, value) values ('company_plan', $1::jsonb)
+       on conflict (key) do update set value = excluded.value, updated_at = now()`,
+      [JSON.stringify(value)],
+    );
+  });
+  return { status: 200, body: { saved: true } };
+});
+
+// Gallringspolicyn: standarden i koden, driftens override ovanpå
+router.get("/v1/ops/retention-policy", async (req) => {
+  const caller = await authenticate(req);
+  // Läsbar utan admin - policyn är transparens, inte en hemlighet. app_settings
+  // är publikt läsbar; standarden bor i koden och overriden läggs ovanpå.
+  const overrides = await withUser(caller.userId, async (tx) => {
+    const { rows } = await tx.query("select value from public.app_settings where key = 'retention_policy'");
+    const raw = rows[0]?.value as { overrides?: RetentionOverride[] } | undefined;
+    return Array.isArray(raw?.overrides) ? raw!.overrides : [];
+  });
+  return { status: 200, body: { policy: mergeRetentionPolicy(DEFAULT_RETENTION, overrides) } };
+});
+
+router.post("/v1/ops/retention-policy", async (req) => {
+  const caller = await authenticate(req);
+  const raw = (req.body ?? {}) as Record<string, unknown>;
+  if (!Array.isArray(raw.overrides)) throw badRequest('Fältet "overrides" ska vara en lista.');
+  // Skrivningen kräver is_platform_admin (app_settings RLS). Att slå på skarp
+  // gallring är ett medvetet beslut - därför en admin-gatad skrivväg.
+  await withUser(caller.userId, async (tx) => {
+    await tx.query(
+      `insert into public.app_settings (key, value) values ('retention_policy', $1::jsonb)
+       on conflict (key) do update set value = excluded.value, updated_at = now()`,
+      [JSON.stringify({ overrides: raw.overrides })],
+    );
+  });
+  return { status: 200, body: { saved: true } };
+});
+
+// North Star och churn
+router.get("/v1/ops/north-star", async (req) => {
+  const caller = await authenticate(req);
+  const row = await withUser(caller.userId, async (tx) => {
+    const { rows } = await tx.query("select * from public.north_star_counts()");
+    return rows[0] ?? {};
+  });
+  return {
+    status: 200,
+    body: {
+      recovered: Number(row.recovered ?? 0),
+      inHealth: Number(row.in_health ?? 0),
+      badChurn: Number(row.bad_churn ?? 0),
+      openCases: Number(row.open_cases ?? 0),
+    },
+  };
 });
 
 /* --- Servern --------------------------------------------------------------- */

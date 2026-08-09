@@ -1106,6 +1106,91 @@ const utanEntries = await call("POST", `/v1/cases/${CASE_A}/sessions`, {
 });
 check("saknad entries-lista ger 400", utanEntries.status === 400, utanEntries);
 
+/* --- 8j. Driften (/ops): allt admin-gatat i databasen -------------------- */
+
+/*
+ * Driftpanelens skrivvägar. Agnes är driftadministratör (avsnitt 8e),
+ * Bertil är det inte. Gränsen bor i databasen: RPC:erna kastar "Kräver
+ * driftbehörighet" (409) och app_settings har admin-only skrivpolicyer
+ * (403). Nyckelvalvets regel är hårdast: en sparad hemlighet kan aldrig
+ * läsas tillbaka - bara de fyra sista tecknen.
+ */
+
+const sparaHemlighet = await call("POST", "/v1/ops/secrets", {
+  token: adminToken,
+  body: { provider: "creditsafe", secret: "hemlig-nyckel-1234" },
+});
+check("drift kan spara en hemlighet i valvet", sparaHemlighet.status === 200, sparaHemlighet.body);
+const valvet = await call("GET", "/v1/ops/secrets", { token: adminToken });
+const csHemlighet = arr(valvet.body.secrets).find((s) => s.provider === "creditsafe") as Json | undefined;
+check("hemligheten listas med bara de fyra sista tecknen", csHemlighet?.last4 === "1234", valvet.body);
+check("valvet lämnar ALDRIG ut själva hemligheten", !JSON.stringify(valvet.body).includes("hemlig-nyckel-1234"));
+const bertilValv = await call("GET", "/v1/ops/secrets", { token: bertilToken });
+check("en icke-admin kan inte läsa valvet (409)", bertilValv.status === 409, bertilValv);
+const bertilValvSpara = await call("POST", "/v1/ops/secrets", { token: bertilToken, body: { provider: "x", secret: "y" } });
+check("en icke-admin kan inte skriva i valvet (409)", bertilValvSpara.status === 409, bertilValvSpara);
+const taBortHemlighet = await call("DELETE", "/v1/ops/secrets/creditsafe", { token: adminToken });
+check("drift kan ta bort en hemlighet", taBortHemlighet.status === 200, taBortHemlighet);
+
+const foretagsplan = await call("POST", "/v1/ops/company-plan", {
+  token: adminToken,
+  body: { monthlyExVatSek: 985, businessExVatSek: 2400, enterpriseExVatSek: null },
+});
+check("drift kan sätta företagsplanens pris (driftparameter)", foretagsplan.status === 200, foretagsplan.body);
+const daligtPris = await call("POST", "/v1/ops/company-plan", { token: adminToken, body: { monthlyExVatSek: 0 } });
+check("ogiltigt pris ger 400", daligtPris.status === 400, daligtPris);
+const bertilPris = await call("POST", "/v1/ops/company-plan", { token: bertilToken, body: { monthlyExVatSek: 1 } });
+check("en icke-admin kan inte skriva driftparametern (403 via RLS)", bertilPris.status === 403, bertilPris);
+const lagratPris = await withAnon(async (tx) => {
+  const { rows } = await tx.query("select value from public.app_settings where key = 'company_plan'");
+  return rows[0]?.value as { monthly_ex_vat_sek?: number } | undefined;
+});
+check("priset lagrades som driftparameter, inte hårdkodat", lagratPris?.monthly_ex_vat_sek === 985, lagratPris);
+
+const policy0 = await call("GET", "/v1/ops/retention-policy", { token: adminToken });
+check("gallringspolicyn läses (standard + override)", policy0.status === 200 && arr(policy0.body.policy).length > 0, policy0.body);
+const forstaKat = (arr(policy0.body.policy)[0] as Json).id as string;
+const sattPolicy = await call("POST", "/v1/ops/retention-policy", {
+  token: adminToken,
+  body: { overrides: [{ id: forstaKat, months: 99, aktiv: true }] },
+});
+check("drift kan sätta gallringens override", sattPolicy.status === 200, sattPolicy.body);
+const policy1 = await call("GET", "/v1/ops/retention-policy", { token: adminToken });
+const ovKat = arr(policy1.body.policy).find((c) => c.id === forstaKat) as Json | undefined;
+check("overriden lades ovanpå standarden", ovKat?.months === 99 && ovKat?.aktiv === true, ovKat);
+const bertilPolicy = await call("POST", "/v1/ops/retention-policy", { token: bertilToken, body: { overrides: [] } });
+check("en icke-admin kan inte skriva gallringspolicyn (403)", bertilPolicy.status === 403, bertilPolicy);
+
+const northStar = await call("GET", "/v1/ops/north-star", { token: adminToken });
+check(
+  "North Star-måtten svarar med de fyra talen",
+  northStar.status === 200 &&
+    ["recovered", "inHealth", "badChurn", "openCases"].every((k) => typeof northStar.body[k] === "number"),
+  northStar.body,
+);
+
+const proffsVillkor = await call("GET", "/v1/ops/professional-terms", { token: adminToken });
+check("rådgivarnas villkor kan listas av drift", proffsVillkor.status === 200 && Array.isArray(proffsVillkor.body.terms), proffsVillkor.body);
+const bertilVillkor = await call("GET", "/v1/ops/professional-terms", { token: bertilToken });
+check("en icke-admin kan inte lista rådgivarvillkoren (409)", bertilVillkor.status === 409, bertilVillkor);
+const bertilPlan = await call("POST", "/v1/ops/billing-plans", {
+  token: bertilToken,
+  body: { professionalId: "00000000-0000-0000-0000-000000000000", planKind: "per_case", unlockFeeSek: 1000, monthlyFeeSek: null },
+});
+check("en icke-admin kan inte sätta prisplan (409 innan någon rad rörs)", bertilPlan.status === 409, bertilPlan);
+const daligPlanKind = await call("POST", "/v1/ops/billing-plans", {
+  token: adminToken,
+  body: { professionalId: "00000000-0000-0000-0000-000000000000", planKind: "gratis", unlockFeeSek: 0, monthlyFeeSek: null },
+});
+check("ogiltig planKind ger 400", daligPlanKind.status === 400, daligPlanKind);
+const bertilFee = await call("POST", "/v1/ops/professionals/00000000-0000-0000-0000-000000000000/referral-fee", {
+  token: bertilToken,
+  body: { feeSek: 500 },
+});
+check("en icke-admin kan inte sätta förmedlingsavgift (409)", bertilFee.status === 409, bertilFee);
+const planer = await call("GET", "/v1/ops/billing-plans", { token: adminToken });
+check("prisplanerna kan listas av drift", planer.status === 200 && Array.isArray(planer.body.plans), planer.body);
+
 /* --- 9. Hastighetsbegränsningen, mot den delade räknaren ------------------ */
 
 /*

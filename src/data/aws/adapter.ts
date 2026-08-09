@@ -38,6 +38,8 @@ import type {
   InvitationPeek,
   NewContactMessage,
   PaymentRecord,
+  ProfessionalTerms,
+  SecretInfo,
   SharedCaseView,
   TimeEntryRecord,
   UserProfile,
@@ -72,6 +74,19 @@ export const MIGRATED_PORTS = [
   "apiKeys.revoke",
   "dialogue.listSessions",
   "dialogue.saveSession",
+  "ops.listSecrets",
+  "ops.setSecret",
+  "ops.deleteSecret",
+  "ops.listProfessionalTerms",
+  "ops.setReferralFee",
+  "ops.listBillingPlans",
+  "ops.setBillingPlan",
+  "ops.setBillingHold",
+  "ops.setBillingShadow",
+  "ops.setCompanyPlan",
+  "ops.getRetentionPolicy",
+  "ops.setRetentionPolicy",
+  "ops.northStarCounts",
   "cases.getLatest",
   "cases.close",
   "cases.reopen",
@@ -323,6 +338,74 @@ const documents = {
   // uppladdningsvägen migreras (samma hink, andra riktningen).
 };
 
+const ops = {
+  ...supabaseAdapter.ops,
+  async listSecrets(): Promise<SecretInfo[]> {
+    const res = await apiFetch<{ secrets: SecretInfo[] }>("/v1/ops/secrets");
+    return res.secrets;
+  },
+  async setSecret(provider: string, secret: string): Promise<void> {
+    await apiFetch("/v1/ops/secrets", { method: "POST", body: { provider, secret } });
+  },
+  async deleteSecret(provider: string): Promise<void> {
+    await apiFetch(`/v1/ops/secrets/${encodeURIComponent(provider)}`, { method: "DELETE" });
+  },
+  async listProfessionalTerms(): Promise<ProfessionalTerms[]> {
+    const res = await apiFetch<{ terms: ProfessionalTerms[] }>("/v1/ops/professional-terms");
+    return res.terms;
+  },
+  async setReferralFee(professionalId: string, feeSek: number | null): Promise<void> {
+    await apiFetch(`/v1/ops/professionals/${professionalId}/referral-fee`, {
+      method: "POST",
+      body: { feeSek },
+    });
+  },
+  async listBillingPlans(): Promise<Awaited<ReturnType<DataPort["ops"]["listBillingPlans"]>>> {
+    const res = await apiFetch<{ plans: Awaited<ReturnType<DataPort["ops"]["listBillingPlans"]>> }>(
+      "/v1/ops/billing-plans",
+    );
+    return res.plans;
+  },
+  async setBillingPlan(input: Parameters<DataPort["ops"]["setBillingPlan"]>[0]): Promise<void> {
+    await apiFetch("/v1/ops/billing-plans", {
+      method: "POST",
+      body: {
+        professionalId: input.professionalId,
+        planKind: input.planKind,
+        unlockFeeSek: input.unlockFeeSek,
+        monthlyFeeSek: input.monthlyFeeSek,
+      },
+    });
+  },
+  async setBillingHold(professionalId: string, hold: boolean, reason?: string): Promise<void> {
+    await apiFetch(`/v1/ops/professionals/${professionalId}/billing-hold`, {
+      method: "POST",
+      body: { hold, reason: reason ?? null },
+    });
+  },
+  async setBillingShadow(professionalId: string, shadow: boolean): Promise<void> {
+    await apiFetch(`/v1/ops/professionals/${professionalId}/billing-shadow`, {
+      method: "POST",
+      body: { shadow },
+    });
+  },
+  async setCompanyPlan(input: Parameters<DataPort["ops"]["setCompanyPlan"]>[0]): Promise<void> {
+    await apiFetch("/v1/ops/company-plan", { method: "POST", body: input });
+  },
+  async getRetentionPolicy(): Promise<Awaited<ReturnType<DataPort["ops"]["getRetentionPolicy"]>>> {
+    const res = await apiFetch<{
+      policy: Awaited<ReturnType<DataPort["ops"]["getRetentionPolicy"]>>;
+    }>("/v1/ops/retention-policy");
+    return res.policy;
+  },
+  async setRetentionPolicy(overrides: Parameters<DataPort["ops"]["setRetentionPolicy"]>[0]): Promise<void> {
+    await apiFetch("/v1/ops/retention-policy", { method: "POST", body: { overrides } });
+  },
+  async northStarCounts(): Promise<Awaited<ReturnType<DataPort["ops"]["northStarCounts"]>>> {
+    return apiFetch<Awaited<ReturnType<DataPort["ops"]["northStarCounts"]>>>("/v1/ops/north-star");
+  },
+};
+
 const apiKeys = {
   ...supabaseAdapter.apiKeys,
   async listMine(): Promise<ApiKeyRecord[]> {
@@ -489,6 +572,7 @@ const audit = {
 export const awsAdapter: DataPort = {
   ...supabaseAdapter,
   contact: contact as DataPort["contact"],
+  ops: ops as DataPort["ops"],
   apiKeys: apiKeys as DataPort["apiKeys"],
   advisorTools: advisorTools as DataPort["advisorTools"],
   members: members as DataPort["members"],

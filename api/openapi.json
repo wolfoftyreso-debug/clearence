@@ -2149,6 +2149,463 @@
           }
         }
       }
+    },
+    "/ops/secrets": {
+      "get": {
+        "operationId": "listOpsSecrets",
+        "summary": "Nyckelvalvet: leverantör, fyra sista tecken och bytesdatum. ALDRIG hemligheten. Endast drift.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Hemligheterna",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "secrets": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "setOpsSecret",
+        "summary": "Spara en integrationshemlighet i valvet. Endast drift; värdet kan aldrig läsas tillbaka.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Sparat",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "saved": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ops/secrets/{provider}": {
+      "delete": {
+        "operationId": "deleteOpsSecret",
+        "summary": "Ta bort en integrationshemlighet. Endast drift.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Borttaget",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "deleted": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ops/professional-terms": {
+      "get": {
+        "operationId": "listProfessionalTerms",
+        "summary": "Rådgivarnas avtalsvillkor och avgifter. Endast drift.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Villkoren",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "terms": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ops/professionals/{professionalId}/referral-fee": {
+      "post": {
+        "operationId": "setReferralFee",
+        "summary": "Sätt en rådgivares förmedlingsavgift (kr, eller null = faktureras ej). Gäller framåt. Endast drift.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Sparat",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "saved": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ops/billing-plans": {
+      "get": {
+        "operationId": "listBillingPlans",
+        "summary": "Prisplanerna per byrå (per-ärende/abonnemang/användning/licens). Endast drift.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Planerna",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "plans": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "setBillingPlan",
+        "summary": "Sätt en byrås prisplan. Parametrar, inga hårdkodade belopp. Endast drift.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Sparat",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "saved": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ops/professionals/{professionalId}/billing-hold": {
+      "post": {
+        "operationId": "setBillingHold",
+        "summary": "Kreditspärren: prövas vid nästa avgiftsbelagda köp, rör aldrig pågående arbete. Endast drift.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Sparat",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "saved": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ops/professionals/{professionalId}/billing-shadow": {
+      "post": {
+        "operationId": "setBillingShadow",
+        "summary": "Skuggläget per byrå: avgifter registreras och visas men faktureras aldrig. Gäller framåt. Endast drift.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Sparat",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "saved": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ops/company-plan": {
+      "post": {
+        "operationId": "setCompanyPlan",
+        "summary": "Företagsabonnemangets månadsavgift (exkl. moms) som driftparameter. Endast drift.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Sparat",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "saved": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ops/retention-policy": {
+      "get": {
+        "operationId": "getRetentionPolicy",
+        "summary": "Gallringspolicyn: standarden i koden med driftens override ovanpå. Läsbar utan admin - transparens.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Policyn",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "policy": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "setRetentionPolicy",
+        "summary": "Sätt gallringens override per kategori. Att slå på skarp gallring är ett medvetet beslut. Endast drift.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Sparat",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "saved": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ops/north-star": {
+      "get": {
+        "operationId": "getNorthStarCounts",
+        "summary": "North Star och churn: återhämtade, i hälsoläge, dålig churn, öppna ärenden. Endast drift.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Måtten",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "recovered": {
+                      "type": "integer"
+                    },
+                    "inHealth": {
+                      "type": "integer"
+                    },
+                    "badChurn": {
+                      "type": "integer"
+                    },
+                    "openCases": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "webhooks": {
