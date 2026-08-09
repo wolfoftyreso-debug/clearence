@@ -1191,6 +1191,86 @@ check("en icke-admin kan inte sätta förmedlingsavgift (409)", bertilFee.status
 const planer = await call("GET", "/v1/ops/billing-plans", { token: adminToken });
 check("prisplanerna kan listas av drift", planer.status === 200 && Array.isArray(planer.body.plans), planer.body);
 
+/* --- 8k. Fakturering: kunden ser sitt, drift ser allt -------------------- */
+
+/*
+ * Kontostatus, fakturor, kundöversikt och utkorg. Radskyddet bär gränsen:
+ * en kund ser BARA sina egna rader (user_id = auth.uid()), administratören
+ * ser alla (is_platform_admin). Priset är en driftparameter, inte en kodrad.
+ * (issueInvoice/registerPayment ligger kvar hos gamla adaptern - de köar
+ * mejl och kräver att mallarna flyttas till servern; nästa steg.)
+ */
+
+const OUTBOX_ID = "dddddddd-0000-0000-0000-0000000000d1";
+
+const bertilKonto = await call("GET", "/v1/billing/mine", { token: bertilToken });
+check(
+  "kontostatus skapas lat vid första anropet",
+  bertilKonto.status === 200 && (bertilKonto.body.billing as Json).userId === BERTIL,
+  bertilKonto.body,
+);
+const bertilKonto2 = await call("GET", "/v1/billing/mine", { token: bertilToken });
+check("andra anropet ger samma konto", (bertilKonto2.body.billing as Json).userId === BERTIL, bertilKonto2.body);
+const antalKonton = await withAnon(async (tx) => {
+  const { rows } = await tx.query("select count(*)::int as n from public.account_billing where user_id = $1", [BERTIL]);
+  return rows[0].n as number;
+});
+check("bara EN kontorad skapades (ingen dubblett)", antalKonton === 1, antalKonton);
+
+const plan = await call("GET", "/v1/billing/company-plan", { token: bertilToken });
+check(
+  "företagsplanens pris läses ur driftparametern (satt i 8j)",
+  plan.status === 200 && plan.body.monthlyExVatSek === 985 && plan.body.businessExVatSek === 2400,
+  plan.body,
+);
+
+const bertilFakturor = await call("GET", "/v1/billing/invoices", { token: bertilToken });
+check("kunden kan lista sina fakturor", bertilFakturor.status === 200 && Array.isArray(bertilFakturor.body.invoices), bertilFakturor.body);
+
+const driftKunder = await call("GET", "/v1/billing/customers", { token: adminToken });
+check(
+  "drift ser hela kundöversikten",
+  driftKunder.status === 200 &&
+    arr(driftKunder.body.customers).some((c) => c.userId === AGNES) &&
+    arr(driftKunder.body.customers).some((c) => c.userId === BERTIL),
+  driftKunder.body,
+);
+check("och e-post läcker aldrig ut i översikten", arr(driftKunder.body.customers).every((c) => c.email === null));
+const bertilKunder = await call("GET", "/v1/billing/customers", { token: bertilToken });
+check(
+  "en icke-admin ser BARA sin egen rad (radskyddet)",
+  arr(bertilKunder.body.customers).length > 0 && arr(bertilKunder.body.customers).every((c) => c.userId === BERTIL),
+  bertilKunder.body,
+);
+
+await withAnon(async (tx) => {
+  await tx.query(
+    `insert into public.outbound_emails (id, recipient, subject, body_text, body_html, kind, status, attempts, last_error)
+     values ($1, 'kund@example.se', 'Faktura', 'text', '<p>text</p>', 'invoice', 'failed', 5, 'studsade')
+     on conflict (id) do nothing`,
+    [OUTBOX_ID],
+  );
+});
+const utkorg = await call("GET", "/v1/billing/outbox", { token: adminToken });
+check("utkorgen kan läsas av drift", utkorg.status === 200 && arr(utkorg.body.emails).some((e) => e.id === OUTBOX_ID), utkorg.body);
+const bertilRetry = await call("POST", `/v1/billing/outbox/${OUTBOX_ID}/retry`, { token: bertilToken });
+check("en icke-admin kan inte köa om ett utskick (409)", bertilRetry.status === 409, bertilRetry);
+const driftRetry = await call("POST", `/v1/billing/outbox/${OUTBOX_ID}/retry`, { token: adminToken });
+check("drift kan köa om ett misslyckat utskick", driftRetry.status === 200, driftRetry);
+const utskickStatus = await withAnon(async (tx) => {
+  const { rows } = await tx.query("select status, attempts from public.outbound_emails where id = $1", [OUTBOX_ID]);
+  return rows[0];
+});
+check("omköandet satte raden till pending och nollställde räknaren", utskickStatus.status === "pending" && Number(utskickStatus.attempts) === 0, utskickStatus);
+
+const stang = await call("POST", `/v1/billing/accounts/${BERTIL}/close`, { token: adminToken });
+check("drift kan stänga ett konto", stang.status === 200, stang);
+const bertilStangt = await withAnon(async (tx) => {
+  const { rows } = await tx.query("select closed_at from public.account_billing where user_id = $1", [BERTIL]);
+  return rows[0];
+});
+check("kontot fick closed_at - ingenting raderades", bertilStangt.closed_at !== null, bertilStangt);
+
 /* --- 9. Hastighetsbegränsningen, mot den delade räknaren ------------------ */
 
 /*

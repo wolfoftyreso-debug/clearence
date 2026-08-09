@@ -2606,6 +2606,265 @@
           }
         }
       }
+    },
+    "/billing/mine": {
+      "get": {
+        "operationId": "getMyBilling",
+        "summary": "Den inloggades kontostatus. Skapas lat vid första anropet - gratisveckan börjar när kontot används.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Kontostatus",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "billing": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/billing/invoices": {
+      "get": {
+        "operationId": "listMyInvoices",
+        "summary": "Kundens egna fakturor och kvitton, nyast först (radskyddet ger bara de egna).",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Fakturorna",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "invoices": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/billing/company-plan": {
+      "get": {
+        "operationId": "getCompanyPlan",
+        "summary": "Företagsplanens pris (exkl. moms). Driftparameter, publikt läsbar. Skrivs via /ops/company-plan.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Priset",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "monthlyExVatSek": {
+                      "type": "integer"
+                    },
+                    "businessExVatSek": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    },
+                    "enterpriseExVatSek": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/billing/customers": {
+      "get": {
+        "operationId": "listBillingCustomers",
+        "summary": "Driftens kundöversikt (profil, kontostatus, fakturor). Radskyddet ger en icke-admin bara de egna raderna.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Kunderna",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "customers": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/billing/accounts/{userId}/close": {
+      "post": {
+        "operationId": "closeBillingAccount",
+        "summary": "Stäng ett konto vars faktura förfallit. Raderar ingenting - sätter closed_at. Behörighet i radskyddet.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Stängt",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "closed": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/billing/outbox": {
+      "get": {
+        "operationId": "listBillingOutbox",
+        "summary": "Utkorgen (senaste 100), för drift: ett mejl som inte gått fram ska synas för en människa.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Utkorgen",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "emails": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/billing/outbox/{emailId}/retry": {
+      "post": {
+        "operationId": "retryOutboundEmail",
+        "summary": "Köa om ett misslyckat utskick. Endast drift; skickade rader rörs aldrig.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Köat",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "queued": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "webhooks": {

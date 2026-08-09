@@ -404,6 +404,55 @@ const toBillingPlan = (row: Record<string, unknown>) => ({
 const PLAN_KINDS = ["per_case", "subscription", "usage", "enterprise"];
 const SECRET_PROVIDER = /^[a-z0-9_-]{1,60}$/;
 
+/** Kontots faktureringsstatus. Ett okänt planId faller NEDÅT till standard. */
+const toBilling = (row: Record<string, unknown>) => ({
+  userId: row.user_id,
+  planId:
+    row.plan_id === "start" || row.plan_id === "business" || row.plan_id === "enterprise"
+      ? row.plan_id
+      : "standard",
+  startedAt: iso(row.started_at),
+  dueAt: iso(row.due_at),
+  paidAt: iso(row.paid_at),
+  closedAt: iso(row.closed_at),
+  note: row.note ?? null,
+});
+
+/** En kundfaktura. bigint-öre kommer som sträng ur pg - Number() en gång här. */
+const toCustomerInvoice = (row: Record<string, unknown>) => ({
+  id: row.id,
+  userId: row.user_id,
+  invoiceNumber: row.invoice_number,
+  issuedAt: iso(row.issued_at),
+  dueAt: iso(row.due_at),
+  customerName: row.customer_name ?? null,
+  customerOrgNumber: row.customer_org_number ?? null,
+  customerAddress: row.customer_address ?? null,
+  periodStart: row.period_start === null || row.period_start === undefined ? null : String(row.period_start),
+  periodEnd: row.period_end === null || row.period_end === undefined ? null : String(row.period_end),
+  netOre: Number(row.net_ore),
+  vatOre: Number(row.vat_ore),
+  grossOre: Number(row.gross_ore),
+  vatRate: Number(row.vat_rate),
+  description: row.description,
+  status: row.status,
+  paidAt: iso(row.paid_at),
+  paymentReference: row.payment_reference ?? null,
+  receiptNumber: row.receipt_number ?? null,
+});
+
+const toOutbox = (row: Record<string, unknown>) => ({
+  id: row.id,
+  recipient: row.recipient,
+  subject: row.subject,
+  kind: row.kind,
+  status: row.status,
+  attempts: Number(row.attempts ?? 0),
+  lastError: row.last_error ?? null,
+  createdAt: iso(row.created_at),
+  sentAt: iso(row.sent_at),
+});
+
 /** En API-nyckel som den får visas: prefix och metadata, ALDRIG hemligheten. */
 const toApiKey = (row: Record<string, unknown>) => ({
   id: row.id,
@@ -1615,6 +1664,123 @@ router.get("/v1/ops/north-star", async (req) => {
       openCases: Number(row.open_cases ?? 0),
     },
   };
+});
+
+/* --- Fakturering och kontostatus ------------------------------------------ */
+
+/*
+ * Kundens egen kontostatus och fakturor, plus driftens kundöversikt och
+ * utkorg. Radskyddet bär gränsen: en kund ser BARA sina egna rader,
+ * administratören ser alla. Företagsplanens pris är en driftparameter
+ * (app_settings), aldrig en kodrad - reserven är betabeslutet.
+ *
+ * OBS: issueInvoice och registerPayment ligger ännu kvar hos den gamla
+ * adaptern - de köar dessutom en momsfaktura/kvitto i utkorgen, vilket
+ * kräver att e-postmallarna flyttas till serversidan. Det är nästa steg
+ * för den här porten (MIGRATED_PORTS listar exakt vad som är flyttat).
+ */
+
+router.get("/v1/billing/mine", async (req) => {
+  const caller = await authenticate(req);
+  // Gratisveckan börjar när kontot först ANVÄNDS, inte när ett skript körs -
+  // därför skapas raden lat, av kunden själv, vid första anropet.
+  const row = await withUser(caller.userId, async (tx) => {
+    const got = await tx.query("select * from public.account_billing where user_id = $1", [caller.userId]);
+    if (got.rows[0]) return got.rows[0];
+    const ins = await tx.query("insert into public.account_billing (user_id) values ($1) returning *", [caller.userId]);
+    return ins.rows[0];
+  });
+  return { status: 200, body: { billing: toBilling(row) } };
+});
+
+router.get("/v1/billing/invoices", async (req) => {
+  const caller = await authenticate(req);
+  const rows = await withUser(caller.userId, async (tx) => {
+    const { rows } = await tx.query(
+      "select * from public.customer_invoices order by issued_at desc",
+    );
+    return rows;
+  });
+  return { status: 200, body: { invoices: rows.map(toCustomerInvoice) } };
+});
+
+router.get("/v1/billing/company-plan", async (req) => {
+  const caller = await authenticate(req);
+  const raw = await withUser(caller.userId, async (tx) => {
+    const { rows } = await tx.query("select value from public.app_settings where key = 'company_plan'");
+    return rows[0]?.value as
+      | { monthly_ex_vat_sek?: number; business_ex_vat_sek?: number | null; enterprise_ex_vat_sek?: number | null }
+      | undefined;
+  });
+  // Reserven är betabeslutet - samma som klientens gamla default.
+  return {
+    status: 200,
+    body: {
+      monthlyExVatSek: raw?.monthly_ex_vat_sek ?? 985,
+      businessExVatSek: raw?.business_ex_vat_sek ?? 2780,
+      enterpriseExVatSek: raw?.enterprise_ex_vat_sek ?? 4500,
+    },
+  };
+});
+
+router.get("/v1/billing/customers", async (req) => {
+  const caller = await authenticate(req);
+  // Radskyddet filtrerar: en icke-admin får sina egna rader, vilket är rätt
+  // svar och inte ett fel. E-post ligger i auth.users som klienten aldrig
+  // läser - drift ser den i utkorgen och på fakturan i stället.
+  const { profiles, billing, invoices } = await withUser(caller.userId, async (tx) => {
+    const profiles = (await tx.query("select user_id, display_name, role from public.user_profiles")).rows;
+    const billing = (await tx.query("select * from public.account_billing")).rows;
+    const invoices = (await tx.query("select * from public.customer_invoices order by issued_at desc")).rows;
+    return { profiles, billing, invoices };
+  });
+  const billingByUser = new Map(billing.map((b) => [String(b.user_id), toBilling(b)]));
+  const invoicesByUser = new Map<string, ReturnType<typeof toCustomerInvoice>[]>();
+  for (const row of invoices) {
+    const list = invoicesByUser.get(String(row.user_id)) ?? [];
+    list.push(toCustomerInvoice(row));
+    invoicesByUser.set(String(row.user_id), list);
+  }
+  const customers = profiles.map((p) => ({
+    userId: p.user_id,
+    email: null,
+    displayName: p.display_name ?? null,
+    role: p.role,
+    billing: billingByUser.get(String(p.user_id)) ?? null,
+    invoices: invoicesByUser.get(String(p.user_id)) ?? [],
+  }));
+  return { status: 200, body: { customers } };
+});
+
+router.post("/v1/billing/accounts/:userId/close", async (req) => {
+  const caller = await authenticate(req);
+  const userId = uuidParam(req, "userId");
+  // Behörigheten bor i radskyddet på account_billing; en icke-admin träffar
+  // ingen rad. Raderar ingenting - sätter bara closed_at.
+  await withUser(caller.userId, async (tx) => {
+    await tx.query("update public.account_billing set closed_at = now() where user_id = $1", [userId]);
+  });
+  return { status: 200, body: { closed: true } };
+});
+
+router.get("/v1/billing/outbox", async (req) => {
+  const caller = await authenticate(req);
+  const rows = await withUser(caller.userId, async (tx) => {
+    const { rows } = await tx.query(
+      "select * from public.outbound_emails order by created_at desc limit 100",
+    );
+    return rows;
+  });
+  return { status: 200, body: { emails: rows.map(toOutbox) } };
+});
+
+router.post("/v1/billing/outbox/:emailId/retry", async (req) => {
+  const caller = await authenticate(req);
+  const emailId = uuidParam(req, "emailId");
+  await withUser(caller.userId, async (tx) => {
+    await tx.query("select public.retry_outbound_email($1)", [emailId]);
+  });
+  return { status: 200, body: { queued: true } };
 });
 
 /* --- Servern --------------------------------------------------------------- */

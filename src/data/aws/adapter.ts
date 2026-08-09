@@ -22,6 +22,7 @@
 import type { DataPort } from "../ports";
 import type { CaseRole } from "@/lib/caseRoles";
 import type {
+  AccountBillingRecord,
   AdvisorSessionRecord,
   ApiKeyRecord,
   CaseDecisionRecord,
@@ -34,9 +35,12 @@ import type {
   CaseTask,
   ContactMessageRecord,
   ContactStatus,
+  CustomerInvoiceRecord,
+  CustomerOverview,
   DocumentRecord,
   InvitationPeek,
   NewContactMessage,
+  OutboundEmailRecord,
   PaymentRecord,
   ProfessionalTerms,
   SecretInfo,
@@ -87,6 +91,13 @@ export const MIGRATED_PORTS = [
   "ops.getRetentionPolicy",
   "ops.setRetentionPolicy",
   "ops.northStarCounts",
+  "billing.getMine",
+  "billing.listMyInvoices",
+  "billing.getCompanyPlan",
+  "billing.listCustomers",
+  "billing.closeAccount",
+  "billing.listOutbox",
+  "billing.retryEmail",
   "cases.getLatest",
   "cases.close",
   "cases.reopen",
@@ -338,6 +349,38 @@ const documents = {
   // uppladdningsvägen migreras (samma hink, andra riktningen).
 };
 
+const billing = {
+  ...supabaseAdapter.billing,
+  async getMine(): Promise<AccountBillingRecord> {
+    const res = await apiFetch<{ billing: AccountBillingRecord }>("/v1/billing/mine");
+    return res.billing;
+  },
+  async listMyInvoices(): Promise<CustomerInvoiceRecord[]> {
+    const res = await apiFetch<{ invoices: CustomerInvoiceRecord[] }>("/v1/billing/invoices");
+    return res.invoices;
+  },
+  async getCompanyPlan(): Promise<Awaited<ReturnType<DataPort["billing"]["getCompanyPlan"]>>> {
+    return apiFetch<Awaited<ReturnType<DataPort["billing"]["getCompanyPlan"]>>>("/v1/billing/company-plan");
+  },
+  async listCustomers(): Promise<CustomerOverview[]> {
+    const res = await apiFetch<{ customers: CustomerOverview[] }>("/v1/billing/customers");
+    return res.customers;
+  },
+  async closeAccount(userId: string): Promise<void> {
+    await apiFetch(`/v1/billing/accounts/${userId}/close`, { method: "POST" });
+  },
+  async listOutbox(): Promise<OutboundEmailRecord[]> {
+    const res = await apiFetch<{ emails: OutboundEmailRecord[] }>("/v1/billing/outbox");
+    return res.emails;
+  },
+  async retryEmail(id: string): Promise<void> {
+    await apiFetch(`/v1/billing/outbox/${id}/retry`, { method: "POST" });
+  },
+  // issueInvoice och registerPayment ligger kvar hos supabase-adaptern: de
+  // köar en momsfaktura/kvitto i utkorgen, vilket kräver att e-postmallarna
+  // flyttas till serversidan. Nästa steg för porten.
+};
+
 const ops = {
   ...supabaseAdapter.ops,
   async listSecrets(): Promise<SecretInfo[]> {
@@ -572,6 +615,7 @@ const audit = {
 export const awsAdapter: DataPort = {
   ...supabaseAdapter,
   contact: contact as DataPort["contact"],
+  billing: billing as DataPort["billing"],
   ops: ops as DataPort["ops"],
   apiKeys: apiKeys as DataPort["apiKeys"],
   advisorTools: advisorTools as DataPort["advisorTools"],
