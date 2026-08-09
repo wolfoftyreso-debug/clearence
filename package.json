@@ -25,7 +25,7 @@
     "test:external": "node tests/browser/no-external-requests.mjs",
     "test:billing": "esbuild tests/billing.ts --bundle --platform=node --format=cjs --outfile=node_modules/.cache/test-billing.cjs --log-level=error && node node_modules/.cache/test-billing.cjs",
     "test:email": "esbuild tests/email.ts --bundle --platform=node --format=cjs --outfile=node_modules/.cache/test-email.cjs --log-level=error && node node_modules/.cache/test-email.cjs",
-    "build:worker": "esbuild db/worker/email-worker.ts --bundle --platform=node --format=cjs --external:pg --external:@aws-sdk/client-ses --outfile=db/dist/email-worker.cjs --log-level=error",
+    "build:worker": "esbuild db/worker/email-worker.ts --bundle --platform=node --format=cjs --external:pg --external:@aws-sdk/client-ses --external:nodemailer --outfile=db/dist/email-worker.cjs --log-level=error",
     "test:integrations": "esbuild tests/integrations.ts --bundle --platform=node --format=cjs --outfile=node_modules/.cache/test-integrations.cjs --log-level=error && node node_modules/.cache/test-integrations.cjs",
     "test:sie": "esbuild tests/sie.ts --bundle --platform=node --format=cjs --outfile=node_modules/.cache/test-sie.cjs --log-level=error && node node_modules/.cache/test-sie.cjs",
     "test:actionplan": "esbuild tests/actionPlan.ts --bundle --platform=node --format=cjs --outfile=node_modules/.cache/test-actionplan.cjs --log-level=error && node node_modules/.cache/test-actionplan.cjs",
@@ -64,7 +64,7 @@
     "test:anthropic": "esbuild tests/anthropic.ts --bundle --platform=node --format=esm --outfile=node_modules/.cache/test-anthropic.mjs --log-level=error && node node_modules/.cache/test-anthropic.mjs",
     "test:webbplats": "esbuild tests/website.ts --bundle --platform=node --format=esm --outfile=node_modules/.cache/test-webbplats.mjs --log-level=error && node node_modules/.cache/test-webbplats.mjs",
     "test:dataskydd": "esbuild tests/dataskydd.ts --bundle --platform=node --format=cjs --outfile=node_modules/.cache/test-dataskydd.cjs --log-level=error && node node_modules/.cache/test-dataskydd.cjs",
-    "test:deploy": "esbuild tests/deploy.ts --bundle --platform=node --format=cjs --define:import.meta.env='{\"VITE_API_BASE_URL\":\"https://byggd.example\"}' --outfile=node_modules/.cache/test-deploy.cjs --log-level=error && node node_modules/.cache/test-deploy.cjs"
+    "test:deploy": "esbuild tests/deploy.ts --bundle --platform=node --format=cjs --external:pg --external:@aws-sdk/client-ses --external:nodemailer --define:import.meta.env='{\"VITE_API_BASE_URL\":\"https://byggd.example\"}' --outfile=node_modules/.cache/test-deploy.cjs --log-level=error && node node_modules/.cache/test-deploy.cjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
@@ -135,5 +135,8 @@
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.38.0",
     "vite": "^5.4.19"
+  },
+  "optionalDependencies": {
+    "nodemailer": "^9.0.5"
   }
 }

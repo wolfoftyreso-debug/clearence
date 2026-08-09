@@ -16,7 +16,7 @@ COPY src ./src
 COPY tsconfig*.json ./
 RUN npx esbuild db/worker/email-worker.ts \
       --bundle --platform=node --format=cjs --target=node20 \
-      --external:pg --external:@aws-sdk/client-ses \
+      --external:pg --external:@aws-sdk/client-ses --external:nodemailer \
       --outfile=dist/worker.cjs --log-level=error
 
 FROM node:20-alpine AS drift

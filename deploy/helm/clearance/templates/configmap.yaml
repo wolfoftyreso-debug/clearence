@@ -14,3 +14,7 @@ data:
   APP_BASE_URL: {{ .Values.config.appBaseUrl | quote }}
   MAIL_TRANSPORT: {{ .Values.config.mailTransport | quote }}
   SES_REGION: {{ .Values.config.sesRegion | quote }}
+  SMTP_HOST: {{ .Values.config.smtpHost | quote }}
+  SMTP_PORT: {{ .Values.config.smtpPort | quote }}
+  SMTP_SECURE: {{ .Values.config.smtpSecure | quote }}
+  SMTP_USER: {{ .Values.config.smtpUser | quote }}

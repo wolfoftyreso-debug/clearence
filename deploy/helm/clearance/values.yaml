@@ -37,6 +37,12 @@ config:
   mailTransport: "smtp"
   # SES-region används bara när mailTransport=ses.
   sesRegion: "eu-north-1"
+  # SMTP-inställningar (används bara när mailTransport=smtp). Lösenordet är
+  # hemligt och bor i Secreten (nyckeln smtp-pass), inte här.
+  smtpHost: ""
+  smtpPort: "587"
+  smtpSecure: "false"
+  smtpUser: ""
 
 # --- Hemligheter --------------------------------------------------------
 # Antingen namnger du en redan skapad Secret (existingSecret) med rätt
@@ -55,6 +61,7 @@ secret:
     migrateDatabaseUrl: ""
     anthropicApiKey: ""
     googleMapsApiKey: ""
+    smtpPass: ""
 
 # --- Självhostad Postgres via CloudNativePG -----------------------------
 # Kräver att CNPG-operatorn är installerad i klustret. Sätt enabled=false

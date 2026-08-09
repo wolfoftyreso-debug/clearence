@@ -52,6 +52,13 @@ spec:
                     secretKeyRef:
                       name: {{ include "clearance.secretName" $ }}
                       key: worker-database-url
+                # SMTP-lösenordet (används bara när MAIL_TRANSPORT=smtp).
+                - name: SMTP_PASS
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ include "clearance.secretName" $ }}
+                      key: smtp-pass
+                      optional: true
               envFrom:
                 - configMapRef:
                     name: {{ include "clearance.fullname" $ }}-config
@@ -101,6 +108,12 @@ spec:
                 secretKeyRef:
                   name: {{ include "clearance.secretName" . }}
                   key: worker-database-url
+            - name: SMTP_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "clearance.secretName" . }}
+                  key: smtp-pass
+                  optional: true
           envFrom:
             - configMapRef:
                 name: {{ include "clearance.fullname" . }}-config

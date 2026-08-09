@@ -9,6 +9,7 @@
  */
 
 import { apiBaseUrl } from "../src/data/aws/client";
+import { resolveMailConfig } from "../db/worker/mail";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -69,6 +70,33 @@ check("och kör som ickeroot", /USER postgres/.test(migDocker));
 const client = read("src/data/aws/client.ts");
 check("klienten väljer runtime-konfig före byggvärde", /__CLEARANCE_CONFIG__/.test(client));
 check("och tillåter tom bas bara när servern satt den", /runtimeBaseConfigured/.test(client));
+
+/* --- 4. Mejltransporten: SES eller SMTP, valt av miljön ------------------ */
+
+const ses = resolveMailConfig({ MAIL_FROM: "a@b.se" } as NodeJS.ProcessEnv);
+check("standard är SES", ses.kind === "ses");
+check("SES bär avsändare och region", ses.kind === "ses" && ses.from === "a@b.se" && ses.region === "eu-north-1");
+
+const smtp = resolveMailConfig({ MAIL_FROM: "a@b.se", MAIL_TRANSPORT: "smtp", SMTP_HOST: "mail.internt", SMTP_USER: "u", SMTP_PASS: "p" } as NodeJS.ProcessEnv);
+check("smtp väljs av MAIL_TRANSPORT", smtp.kind === "smtp");
+check("smtp default-port 587, STARTTLS", smtp.kind === "smtp" && smtp.port === 587 && smtp.secure === false);
+check("smtp bär auth när user satts", smtp.kind === "smtp" && smtp.user === "u" && smtp.pass === "p");
+
+const smtp465 = resolveMailConfig({ MAIL_FROM: "a@b.se", MAIL_TRANSPORT: "smtp", SMTP_HOST: "m", SMTP_PORT: "465" } as NodeJS.ProcessEnv);
+check("port 465 ger implicit TLS", smtp465.kind === "smtp" && smtp465.secure === true);
+
+let threw = false;
+try {
+  resolveMailConfig({ MAIL_FROM: "a@b.se", MAIL_TRANSPORT: "smtp" } as NodeJS.ProcessEnv);
+} catch {
+  threw = true;
+}
+check("smtp utan SMTP_HOST är ett fel, inte en tyst SES-fallback", threw);
+
+// Arbetaren använder transporten, inte en hårdkodad SES-klient.
+const worker = read("db/worker/email-worker.ts");
+check("arbetaren väljer transport ur miljön", /makeMailSender/.test(worker) && /resolveMailConfig/.test(worker));
+check("arbetaren har ingen hårdkodad SES-klient kvar", !/new SESClient/.test(worker));
 
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

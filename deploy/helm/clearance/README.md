@@ -52,9 +52,9 @@ före API:t rullas. Det är idempotent (`schema_migrations`).
 
 - **Dokumentens presignering** i API:t (MinIO reses, men S3-signeringskoden
   saknas — se `db/README.md`).
-- **SMTP-transporten** i e-postarbetaren (`mailTransport: smtp`) — kopplas in
-  i nästa steg; tills dess är SES-vägen den byggda.
 - **Aviseringsarbetarens avbild** (`worker.notification.enabled`) — behöver en
-  egen build (`db/Dockerfile` bygger bara e-postarbetaren).
+  egen build (`db/Dockerfile` bygger bara e-postarbetaren), och dess mejl går
+  ännu via SES; e-postarbetaren har fått SMTP-transporten (`MAIL_TRANSPORT=smtp`),
+  aviseringsarbetaren swappas i samma veva.
 - Delar av `DataPort` går ännu mot Supabase (halvmigrerat) — en ren
   självhostad körning kräver att migreringen slutförs.

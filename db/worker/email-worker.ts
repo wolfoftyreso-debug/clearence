@@ -30,7 +30,7 @@
  */
 
 import { Client } from "pg";
-import { SESClient, SendEmailCommand } from "@aws-sdk/client-ses";
+import { makeMailSender, resolveMailConfig } from "./mail";
 import {
   accountClosedEmail,
   caseInvitationEmail,
@@ -52,7 +52,6 @@ import {
 } from "../../src/lib/caseRoles";
 
 const DATABASE_URL = process.env.DATABASE_URL;
-const SES_REGION = process.env.SES_REGION ?? "eu-north-1";
 const MAIL_FROM = process.env.MAIL_FROM;
 /** Bas för länkar i mejl, t.ex. inbjudans acceptlänk. */
 const APP_BASE_URL = (process.env.APP_BASE_URL ?? "https://clearance.se").replace(/\/$/, "");
@@ -63,7 +62,8 @@ if (!DATABASE_URL || !MAIL_FROM) {
 }
 
 const db = new Client({ connectionString: DATABASE_URL });
-const ses = new SESClient({ region: SES_REGION });
+// Transporten (SES eller SMTP) väljs av MAIL_TRANSPORT. Se db/worker/mail.ts.
+const mailConfig = resolveMailConfig(process.env);
 
 const enqueue = async (
   message: EmailMessage,
@@ -423,21 +423,17 @@ const main = async () => {
   let sent = 0;
   let failed = 0;
 
+  // Sändaren byggs en gång per körning (öppnar SMTP-transporten / SES-klienten).
+  const sender = await makeMailSender(mailConfig);
+
   for (const row of batch) {
     try {
-      await ses.send(
-        new SendEmailCommand({
-          Source: MAIL_FROM,
-          Destination: { ToAddresses: [row.recipient] },
-          Message: {
-            Subject: { Data: row.subject, Charset: "UTF-8" },
-            Body: {
-              Text: { Data: row.body_text, Charset: "UTF-8" },
-              Html: { Data: row.body_html, Charset: "UTF-8" },
-            },
-          },
-        }),
-      );
+      await sender({
+        recipient: row.recipient,
+        subject: row.subject,
+        bodyText: row.body_text,
+        bodyHtml: row.body_html,
+      });
       await db.query("select public.mark_email_sent($1)", [row.id]);
       sent += 1;
     } catch (error) {
