@@ -70,3 +70,87 @@ export const presignDocument = async (
   fileName: string,
   presign: Presigner = defaultPresign,
 ): Promise<string> => presign(BUCKET, storagePath, fileName);
+
+/* --- Uppladdningen: signera in, och LÄS TILLBAKA för att pröva ---------- */
+
+/** Så länge en uppladdnings-URL lever. Kort: den skriver, till skillnad från GET. */
+export const UPLOAD_URL_TTL_SECONDS = 120;
+
+/** Injicerbara, så rutten går att pröva utan nät och utan riktig lagring. */
+export type UploadPresigner = (
+  bucket: string,
+  storagePath: string,
+  contentType: string,
+) => Promise<string>;
+export type HeadReader = (bucket: string, storagePath: string) => Promise<{ storlek: number } | null>;
+export type ByteReader = (
+  bucket: string,
+  storagePath: string,
+  antalBytes: number,
+) => Promise<Uint8Array | null>;
+export type ObjectRemover = (bucket: string, storagePath: string) => Promise<void>;
+
+const defaultUploadPresign: UploadPresigner = async (bucket, storagePath, contentType) => {
+  const { PutObjectCommand } = await import("@aws-sdk/client-s3");
+  const cmd = new PutObjectCommand({ Bucket: bucket, Key: storagePath, ContentType: contentType });
+  return getSignedUrl(s3(), cmd, { expiresIn: UPLOAD_URL_TTL_SECONDS });
+};
+
+const defaultHead: HeadReader = async (bucket, storagePath) => {
+  const { HeadObjectCommand } = await import("@aws-sdk/client-s3");
+  try {
+    const svar = await s3().send(new HeadObjectCommand({ Bucket: bucket, Key: storagePath }));
+    return { storlek: Number(svar.ContentLength ?? 0) };
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * Läser filens FÖRSTA bytes ur lagringen.
+ *
+ * Det är den här läsningen som gör kontrollen till en kontroll: signaturen
+ * sitter i det som faktiskt lagrades, inte i det klienten påstod. Ett
+ * intervall räcker - vi laddar aldrig ned hela filen för att titta på dess
+ * fem första tecken.
+ */
+const defaultFirstBytes: ByteReader = async (bucket, storagePath, antalBytes) => {
+  const { GetObjectCommand } = await import("@aws-sdk/client-s3");
+  try {
+    const svar = await s3().send(
+      new GetObjectCommand({ Bucket: bucket, Key: storagePath, Range: `bytes=0-${antalBytes - 1}` }),
+    );
+    const kropp = svar.Body as { transformToByteArray?: () => Promise<Uint8Array> } | undefined;
+    if (!kropp?.transformToByteArray) return null;
+    return await kropp.transformToByteArray();
+  } catch {
+    return null;
+  }
+};
+
+const defaultRemove: ObjectRemover = async (bucket, storagePath) => {
+  const { DeleteObjectCommand } = await import("@aws-sdk/client-s3");
+  await s3().send(new DeleteObjectCommand({ Bucket: bucket, Key: storagePath }));
+};
+
+export const presignUpload = async (
+  storagePath: string,
+  contentType: string,
+  presign: UploadPresigner = defaultUploadPresign,
+): Promise<string> => presign(BUCKET, storagePath, contentType);
+
+export const laesHuvud = async (
+  storagePath: string,
+  las: HeadReader = defaultHead,
+): Promise<{ storlek: number } | null> => las(BUCKET, storagePath);
+
+export const laesForstaBytes = async (
+  storagePath: string,
+  antalBytes = 1024,
+  las: ByteReader = defaultFirstBytes,
+): Promise<Uint8Array | null> => las(BUCKET, storagePath, antalBytes);
+
+export const taBortObjekt = async (
+  storagePath: string,
+  taBort: ObjectRemover = defaultRemove,
+): Promise<void> => taBort(BUCKET, storagePath);

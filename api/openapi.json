@@ -207,12 +207,31 @@
         }
       },
       "post": {
-        "operationId": "uploadDocument",
-        "summary": "Ladda upp dokument till akten",
+        "operationId": "startDocumentUpload",
+        "summary": "Steg 1: servern väljer lagringssökvägen och signerar en kortlivad PUT-URL. Klienten kan bara skriva till det egna ärendets prefix. Raden skapas obekräftad och syns inte förrän steg 2 godkänt innehållet.",
         "x-status": "beta",
         "responses": {
-          "200": {
-            "description": "OK"
+          "201": {
+            "description": "Uppladdningen påbörjad",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "documentId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "uploadUrl": {
+                      "type": "string"
+                    },
+                    "expiresInSeconds": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
           },
           "default": {
             "description": "Fel",
@@ -2918,6 +2937,46 @@
                       "items": {
                         "type": "object"
                       }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/documents/{documentId}/confirm": {
+      "post": {
+        "operationId": "confirmDocumentUpload",
+        "summary": "Steg 2: servern läser tillbaka filens första bytes ur lagringen och prövar signaturen mot utlovad typ och storlek. Godkänns den inte tas filen bort och raden raderas. Filnamn, ändelse och Content-Type är påståenden från klienten - bytesen är det inte.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Bekräftad",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "confirmed": {
+                      "type": "boolean"
+                    },
+                    "typ": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     }
                   }
                 }

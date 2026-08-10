@@ -16,6 +16,7 @@
  */
 
 import { createServer } from "node:http";
+import { randomUUID } from "node:crypto";
 import {
   ApiError,
   Router,
@@ -30,7 +31,17 @@ import {
 import { ALLMAN, klientNyckel, LOGIN, provaGrans, type Utfall } from "./rateLimit";
 import { googleConfigured, lookupCompany } from "./google";
 import { fetchWebsite, websiteConfigured } from "./website";
-import { DOCUMENT_URL_TTL_SECONDS, presignDocument, storageConfigured } from "./storage";
+import {
+  DOCUMENT_URL_TTL_SECONDS,
+  UPLOAD_URL_TTL_SECONDS,
+  laesForstaBytes,
+  laesHuvud,
+  presignDocument,
+  presignUpload,
+  storageConfigured,
+  taBortObjekt,
+} from "./storage";
+import { MAX_FILSTORLEK, provaFil, provaMetadata, sakerLagringsvag } from "./filtyper";
 import { anthropicConfigured, clearanceReply, type AdvisorMessage } from "./anthropic";
 import { deriveAuditDetail } from "../../src/lib/auditDetail";
 import {
@@ -879,7 +890,9 @@ caseScoped(
 caseScoped(
   "/v1/cases/:caseId/documents",
   `select id, case_id, kind, file_name, file_size, mime_type, source, review_status, created_at
-     from public.case_documents where case_id = $1 order by created_at desc`,
+     from public.case_documents
+    where case_id = $1 and confirmed_at is not null
+    order by created_at desc`,
   toDocument,
   "documents",
 );
@@ -1053,6 +1066,121 @@ router.get("/v1/documents/:documentId/url", async (req) => {
   if (!row) throw notFound("Dokumentet finns inte, eller är inte ditt.");
   const url = await presignDocument(String(row.storage_path), String(row.file_name ?? "dokument"));
   return { status: 200, body: { url, fileName: row.file_name, expiresInSeconds: DOCUMENT_URL_TTL_SECONDS } };
+});
+
+
+/* --- Uppladdning: servern prövar vad som FAKTISKT lagrades ------------- */
+
+/*
+ * Uppladdningen sker i två steg, och det andra är hela poängen.
+ *
+ * STEG 1 ger en kortlivad, signerad PUT-URL för en sökväg SERVERN valt.
+ * Klienten kan alltså bara skriva till sitt eget ärendes prefix - aldrig
+ * till någon annans, och aldrig till en sökväg den hittat på själv.
+ *
+ * STEG 2 läser tillbaka filens första bytes ur lagringen och prövar dem.
+ * Det är skillnaden mellan en kontroll och en artighet: filnamnet,
+ * ändelsen och Content-Type är allt sådant avsändaren själv skriver, och
+ * en .pdf som egentligen är en Linux-binär ser likadan ut i alla tre. Bara
+ * bytesen avslöjar den, och bara de bytes som verkligen hamnade i hinken.
+ *
+ * Godkänns den inte TAS DEN BORT, och dokumentraden blir aldrig synlig.
+ * En avvisad fil ska inte ligga kvar och vänta på någon som glömmer varför.
+ */
+
+router.post("/v1/cases/:caseId/documents", async (req) => {
+  const caller = await authenticate(req);
+  const caseId = uuidParam(req, "caseId");
+  if (!storageConfigured()) throw notFound("Dokumentlagringen är inte ansluten i den här driften.");
+
+  const fileName = str(req.body, "fileName", { max: 300 });
+  const mimeType = str(req.body, "mimeType", { max: 200, required: false }) || "application/octet-stream";
+  const raw = (req.body ?? {}) as Record<string, unknown>;
+  const uppgivenStorlek = Number(raw.fileSize);
+  if (!Number.isFinite(uppgivenStorlek) || uppgivenStorlek <= 0 || uppgivenStorlek > MAX_FILSTORLEK) {
+    throw badRequest(`Filen måste vara mellan 1 byte och ${Math.floor(MAX_FILSTORLEK / 1024 / 1024)} MB.`);
+  }
+  // Ändelsen och den utlovade typen prövas REDAN HÄR - inte för att det är
+  // ett skydd (det är det inte), utan för att slippa be om en uppladdning
+  // vi ändå kommer att avvisa. Den riktiga prövningen sker i steg 2.
+  const forhandsbesked = provaMetadata({
+    filnamn: fileName,
+    mimetyp: mimeType,
+    storlek: uppgivenStorlek,
+  });
+  if (!forhandsbesked.ok) throw badRequest(forhandsbesked.skal);
+
+  const storagePath = sakerLagringsvag(caseId, fileName, randomUUID());
+  // Raden skapas som EJ BEKRÄFTAD. Radskyddet avgör om den får skapas alls
+  // (can_write_case via case_documents-policyn) - ingen egen bedömning här.
+  const row = await withUser(caller.userId, async (tx) => {
+    const { rows } = await tx.query(
+      `insert into public.case_documents
+         (case_id, user_id, kind, file_name, file_size, mime_type, storage_path, source, confirmed_at)
+       values ($1, $2, 'other', $3, $4, $5, $6, 'manual', null)
+       returning id, storage_path`,
+      [caseId, caller.userId, fileName, uppgivenStorlek, mimeType, storagePath],
+    );
+    return rows[0] ?? null;
+  });
+  if (!row) throw forbidden("Dokumentet kunde inte läggas till i det här ärendet.");
+
+  const url = await presignUpload(storagePath, mimeType);
+  return {
+    status: 201,
+    body: { documentId: row.id, uploadUrl: url, expiresInSeconds: UPLOAD_URL_TTL_SECONDS },
+  };
+});
+
+router.post("/v1/documents/:documentId/confirm", async (req) => {
+  const caller = await authenticate(req);
+  const documentId = uuidParam(req, "documentId");
+  if (!storageConfigured()) throw notFound("Dokumentlagringen är inte ansluten i den här driften.");
+
+  // Samma fråga som nedladdningen ställer: får den här läsaren röra
+  // dokumentet? Utan den kunde vem som helst bekräfta någon annans rad.
+  const dok = await withUser(caller.userId, async (tx) => {
+    // true = även obekräftade: det är precis den raden som ska prövas här.
+    const may = await tx.query("select app.may_read_document($1, true) as ok", [documentId]);
+    if (may.rows[0]?.ok !== true) return null;
+    const r = await tx.query(
+      "select id, storage_path, file_name, mime_type, confirmed_at from public.case_documents where id = $1",
+      [documentId],
+    );
+    return r.rows[0] ?? null;
+  });
+  if (!dok) throw notFound("Dokumentet finns inte, eller är inte ditt.");
+  if (dok.confirmed_at) return { status: 200, body: { confirmed: true, typ: null } };
+
+  const huvud = await laesHuvud(String(dok.storage_path));
+  if (!huvud) throw badRequest("Filen har inte laddats upp.");
+  const bytes = await laesForstaBytes(String(dok.storage_path));
+  if (!bytes) throw badRequest("Filen gick inte att läsa.");
+
+  const besked = provaFil({
+    filnamn: String(dok.file_name),
+    mimetyp: String(dok.mime_type ?? ""),
+    // DEN LAGRADE storleken, inte den uppgivna.
+    storlek: huvud.storlek,
+    bytes,
+  });
+
+  if (!besked.ok) {
+    // Bort ur hinken OCH ur tabellen. En avvisad fil får inte ligga kvar.
+    await taBortObjekt(String(dok.storage_path)).catch(() => undefined);
+    await withUser(caller.userId, async (tx) => {
+      await tx.query("delete from public.case_documents where id = $1", [documentId]);
+    });
+    throw badRequest(besked.skal);
+  }
+
+  await withUser(caller.userId, async (tx) => {
+    await tx.query(
+      "update public.case_documents set confirmed_at = now(), file_size = $2 where id = $1",
+      [documentId, huvud.storlek],
+    );
+  });
+  return { status: 200, body: { confirmed: true, typ: besked.typ } };
 });
 
 router.post("/v1/documents/:documentId/review", async (req) => {

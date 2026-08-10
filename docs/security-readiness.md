@@ -122,6 +122,19 @@ och 34 nya adversariella API-kontroller, alla gröna.
 | **Åtgärd** | `app.logga_driftatgard()` (SECURITY DEFINER, kräver `is_platform_admin`) skriver till `audit_events` med `case_id null` i **samma transaktion** som åtgärden — en åtgärd utan spår, och ett spår utan åtgärd, är båda omöjliga. Nio åtgärder kopplade. Namnrymden `drift.*` skiljer dem från trigger-händelser som råkar sakna ärende. Ny läsrutt `GET /v1/ops/audit`. Spåret bär **aldrig** hemligheten — bara leverantörsnamnet och vad som ändrades. |
 | **Regressionstest** | `api/tests/integration.ts` mot riktig Postgres: åtgärden syns, **hemligheten finns inte i spåret**, vem och när står där, en icke-administratör ser ett tomt spår och kan inte skriva i det, och en skriven rad går inte att ändra eller radera — inte ens av drift. |
 
+
+### H-4 · Filuppladdningen litade på klientens påstående — **HIGH** — ÅTGÄRDAD (rond 4)
+
+| | |
+|---|---|
+| **Attackvektor** | En uppladdning bär tre påståenden från avsändaren: filnamnet, ändelsen och Content-Type. Alla tre är fritext hen väljer. En Linux-binär (`ELF`) eller Windows-exe (`MZ`) som heter `arsredovisning.pdf` och skickas som `application/pdf` såg i alla tre likadan ut som en årsredovisning. Även SVG med `<script>`, polyglotter och dubbla ändelser (`rapport.pdf.exe`) passerade. |
+| **Root cause** | Ingen innehållskontroll fanns någonstans. Saneringen av filnamnet skedde dessutom i **webbläsaren** — alltså hos den som angriper. Den enda server-side-gränsen var storage-policyns sökvägsprefix, som säger *var* filen får ligga men ingenting om *vad* den är. |
+| **Åtgärd** | `api/server/filtyper.ts`: **tillåtelselista** med magiska bytes (PDF, PNG, JPEG, XLSX, DOCX + textformat som prövas tvärtom — inga styrbytes, ingen märkspråksinledning). SVG, arkiv, körbara filer och okända ändelser avvisas. Uppladdningen sker i **två steg**: servern väljer sökvägen och signerar en kortlivad PUT (klienten kan bara skriva till sitt eget ärendes prefix), och i steg 2 **läser servern tillbaka filens första bytes ur lagringen** och prövar signaturen mot utlovad typ samt den **lagrade** storleken. Godkänns den inte tas filen bort och raden raderas. Ny kolumn `confirmed_at`: en obekräftad fil syns inte i listan och `app.may_read_document()` säger nej till den — annars hade steg 2 varit valfritt. |
+| **Regressionstest** | `tests/filtyper.ts` (45 kontroller): ELF/PE med `.pdf`, SVG i tre förklädnader, polyglott, dubbla ändelser, csv som är HTML eller binärt, zip/tar.gz, storleksgränsen, samt att de **sex riktiga formaten fortfarande går igenom**. Sökvägsbyggaren prövas mot `../`, absoluta sökvägar och backslash. `api/tests/integration.ts`: obekräftad fil ger ingen signerad URL och syns inte i listan, en utomstående kan varken påbörja eller bekräfta, och SVG/skalskript/orimlig storlek nekas redan i steg 1. |
+| **Kvar** | Själva S3-anropen (PUT, ranged GET, DELETE) är **NOT VERIFIED** — de kräver en körande MinIO. Klientadaptern går fortfarande den gamla vägen; cutover sker när MinIO är verifierad. Kontrollen finns och är prövad; det som återstår är att koppla om trafiken. |
+
+**Tre buggar i mitt eget arbete, hittade av sviten och rättade:** `create or replace` med ny signatur **ersatte inte** den gamla `may_read_document(uuid)` utan skapade en andra — anropet blev tvetydigt (42725) och fyra rutter slutade fungera. Förhandskontrollen i steg 1 körde `provaFil()` med tom byteslista, vilket gav "Filen är tom" på allt och gjorde sållet verkningslöst (nu `provaMetadata()`). Och två testfixturer skapade dokument utan `confirmed_at` och blev därmed osynliga — vilket var filtret som fungerade, inte ett fel i det.
+
 ---
 
 ## 2. Revisioner per område
@@ -192,7 +205,9 @@ och 34 nya adversariella API-kontroller, alla gröna.
 | `test:dataskydd` | **40 / 40** |
 | RLS, båda miljöerna | **253 / 253** |
 | `test:sakerhet` efter rond 2 | **84 / 84** |
-| `test:api` efter rond 2 | **294 / 294** |
+| `test:api` efter rond 4 | **306 / 306** |
+| `test:filtyper` (ny, rond 4) | **45 / 45** |
+| RLS mot ren självhostad Postgres | **alla sviter PASSED** med de nya migrationerna |
 | Uppstartsspärren, end-to-end | **verifierad** (osäker roll → exit 1; säker roll → 200) |
 | Övriga sviter | gröna (se nedan) |
 
@@ -207,7 +222,7 @@ föll likadant före ändringarna.
 | # | Risk | Severity | Status |
 |---|---|---|---|
 | R-1 | **Ingen körande miljö har prövats.** All verifiering är gjord mot källkod, mallar och en lokal Postgres. Ingress-TLS, faktiska svarsrubriker, HSTS-leverans och nätverkspolicyer är **NOT VERIFIED** mot ett riktigt kluster. | HIGH | Blockerande |
-| R-2 | **Filuppladdningens innehållskontroll saknas** (magic bytes, storlek, arkiv) server-side. Uppladdning går ännu mot Supabase Storage. | MEDIUM | Blockerande |
+| R-2 | ~~Filuppladdningens innehållskontroll saknas.~~ **BYGGD OCH PRÖVAD (H-4).** Kvar: S3-anropen kräver en körande MinIO, och klientadaptern går ännu den gamla vägen. | MEDIUM | Byggd, cutover kvarstår |
 | R-3 | **`TRUSTED_PROXY_HOPS` måste matcha den faktiska kedjan.** Sätts fel (t.ex. 1 när det finns två mellanled) blir hastighetsgränsen antingen kringgåbar eller för trubbig. Default 1 stämmer med chartet; en extra ingress-hop kräver 2. | MEDIUM | Kräver driftbeslut |
 | R-4 | **Halvmigrerad datamodell.** 70 av 139 `DataPort`-metoder går fortfarande mot Supabase med anon-nyckel i frontend. Säkerheten vilar där helt på RLS (253 gröna kontroller), men två backends innebär två uppsättningar policyer att hålla i synk. | MEDIUM | Arkitekturskuld |
 | R-5 | **Ingen MFA och ingen omautentisering** för känsliga driftåtgärder (nyckelvalv, prisplaner, kontostängning). Punkt 21 i uppdraget kräver det "där lämpligt". | MEDIUM | Ej byggt |

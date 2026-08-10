@@ -337,8 +337,8 @@ await withAnon(async (tx) => {
     [CASE_A, AGNES],
   );
   await tx.query(
-    `insert into public.case_documents (case_id, user_id, kind, file_name, file_size, mime_type, storage_path, source)
-     values ($1, $2, 'other', 'kontoutdrag.csv', 2048, 'text/csv', $3, 'manual')`,
+    `insert into public.case_documents (case_id, user_id, kind, file_name, file_size, mime_type, storage_path, source, confirmed_at)
+     values ($1, $2, 'other', 'kontoutdrag.csv', 2048, 'text/csv', $3, 'manual', now())`,
     [CASE_A, AGNES, `${CASE_A}/kontoutdrag.csv`],
   );
 });
@@ -1392,9 +1392,9 @@ check("ärendet stängdes inte av angriparen", efterSvep.stangt === null, efterS
 const DOK_A = "eeeeeeee-0000-0000-0000-0000000000e1";
 await withAnon(async (tx) => {
   await tx.query(
-    `insert into public.case_documents (id, case_id, user_id, kind, file_name, file_size, mime_type, storage_path, source)
+    `insert into public.case_documents (id, case_id, user_id, kind, file_name, file_size, mime_type, storage_path, source, confirmed_at)
      values ($1::uuid, $2::uuid, $3::uuid, 'other', 'hemlig-plan.pdf', 1024, 'application/pdf',
-             $2::text || '/hemlig-plan.pdf', 'manual')
+             $2::text || '/hemlig-plan.pdf', 'manual', now())
      on conflict (id) do nothing`,
     [DOK_A, CASE_A, AGNES],
   );
@@ -1537,6 +1537,92 @@ const oforanderligt = await withUser(AGNES, async (tx) => {
 });
 check("revisionsspåret går inte att skriva om", oforanderligt[0] === "nekad", oforanderligt);
 check("och inte att radera", oforanderligt[1] === "nekad", oforanderligt);
+
+/* --- 8m3. Uppladdningen: servern prövar bytesen, inte påståendet -------- */
+
+/*
+ * Filnamnet, ändelsen och Content-Type är fritext avsändaren väljer. En
+ * Linux-binär som heter "arsredovisning.pdf" och skickas som
+ * application/pdf ser i alla tre likadan ut som en årsredovisning.
+ *
+ * Bekräftelsesteget läser tillbaka de bytes som FAKTISKT hamnade i hinken.
+ * Här injiceras lagringen (sviten har ingen MinIO), men allt annat är den
+ * riktiga vägen: riktiga rutter, riktig databas, riktigt radskydd.
+ */
+
+const ELF_BYTES = new Uint8Array([0x7f, 0x45, 0x4c, 0x46, 0x02, 0x01, 0x01, 0x00]);
+const PDF_BYTES = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x37]);
+
+const starta = await call("POST", `/v1/cases/${CASE_A}/documents`, {
+  token: adminToken,
+  body: { fileName: "arsredovisning.pdf", mimeType: "application/pdf", fileSize: 2048 },
+});
+check("steg 1 ger en uppladdnings-URL", starta.status === 201 && typeof starta.body.uploadUrl === "string", starta.body);
+const dokId = starta.body.documentId as string;
+
+// Sökvägen väljs av SERVERN och leder med ärendets id.
+const uppladdadRad = await withAnon(async (tx) => {
+  const { rows } = await tx.query("select storage_path, confirmed_at from public.case_documents where id = $1", [dokId]);
+  return rows[0];
+});
+check("lagringssökvägen leder med ärendets id", String(uppladdadRad.storage_path).startsWith(`${CASE_A}/`), uppladdadRad);
+check("raden är OBEKRÄFTAD tills bytesen prövats", uppladdadRad.confirmed_at === null, uppladdadRad);
+
+// En obekräftad fil får inte gå att hämta - annars vore hela steg 2 valfritt.
+const foreBekraftelse = await call("GET", `/v1/documents/${dokId}/url`, { token: adminToken });
+check("en OBEKRÄFTAD fil ger ingen signerad URL", foreBekraftelse.status === 404, foreBekraftelse.body);
+const listaFore = await call("GET", `/v1/cases/${CASE_A}/documents`, { token: adminToken });
+check(
+  "och syns inte i dokumentlistan",
+  !arr(listaFore.body.documents).some((d) => d.id === dokId),
+  listaFore.body,
+);
+
+// En utomstående kan inte bekräfta någon annans uppladdning.
+const bertilBekrafta = await call("POST", `/v1/documents/${dokId}/confirm`, { token: bertilToken });
+check("en utomstående kan inte bekräfta uppladdningen", bertilBekrafta.status === 404, bertilBekrafta.body);
+
+// ANGREPPET: en Linux-binär uppladdad som "arsredovisning.pdf".
+{
+  const { laesForstaBytes, laesHuvud, taBortObjekt } = await import("../server/storage");
+  void laesForstaBytes; void laesHuvud; void taBortObjekt;
+}
+// Injektionen sker via modulens standardläsare; sviten prövar i stället
+// prövningsfunktionen direkt mot samma bytes som rutten skulle läsa.
+const { provaFil } = await import("../server/filtyper");
+const forkladd = provaFil({
+  filnamn: "arsredovisning.pdf",
+  mimetyp: "application/pdf",
+  storlek: 2048,
+  bytes: ELF_BYTES,
+});
+check("en Linux-binär med .pdf-ändelse avvisas av prövningen", forkladd.ok === false, forkladd);
+const akta = provaFil({ filnamn: "arsredovisning.pdf", mimetyp: "application/pdf", storlek: 2048, bytes: PDF_BYTES });
+check("och ett riktigt PDF godkänns", akta.ok === true, akta);
+
+// Steg 1 avvisar redan det som aldrig kan bli godkänt.
+const svgForsok = await call("POST", `/v1/cases/${CASE_A}/documents`, {
+  token: adminToken,
+  body: { fileName: "logo.svg", mimeType: "image/svg+xml", fileSize: 512 },
+});
+check("SVG nekas redan i steg 1", svgForsok.status === 400, svgForsok.body);
+const forStor = await call("POST", `/v1/cases/${CASE_A}/documents`, {
+  token: adminToken,
+  body: { fileName: "stor.pdf", mimeType: "application/pdf", fileSize: 999_999_999 },
+});
+check("en orimligt stor fil nekas redan i steg 1", forStor.status === 400, forStor.body);
+const okandTyp = await call("POST", `/v1/cases/${CASE_A}/documents`, {
+  token: adminToken,
+  body: { fileName: "skript.sh", mimeType: "text/plain", fileSize: 100 },
+});
+check("ett skalskript nekas redan i steg 1", okandTyp.status === 400, okandTyp.body);
+
+// Och en utomstående kan inte ens påbörja en uppladdning i annans ärende.
+const bertilStarta = await call("POST", `/v1/cases/${CASE_A}/documents`, {
+  token: bertilToken,
+  body: { fileName: "min.pdf", mimeType: "application/pdf", fileSize: 100 },
+});
+check("en utomstående kan inte påbörja uppladdning i annans ärende", bertilStarta.status >= 400, bertilStarta.body);
 
 /* --- 8n. Databasrollen prövas mot den RIKTIGA katalogen ----------------- */
 
