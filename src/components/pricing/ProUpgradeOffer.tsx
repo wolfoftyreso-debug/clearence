@@ -66,10 +66,10 @@ export const ProUpgradeOffer = ({
       aria-modal="true"
       aria-label="Erbjudande"
     >
-      <div className="w-full max-w-md overflow-hidden rounded-xl bg-card shadow-2xl">
+      <div className="w-full max-w-md overflow-hidden rounded-md bg-card shadow-2xl">
         {/* BANDET: det som gör ögat stanna. Stark färg, stora versaler. */}
         <div className="relative bg-accent px-5 py-3 text-center">
-          <p className="text-[11px] font-black uppercase tracking-[0.2em] text-accent-foreground">
+          <p className="text-[11px] font-bold uppercase tracking-wide text-accent-foreground">
             Endast nu · en enda gång
           </p>
           <button
@@ -87,7 +87,7 @@ export const ProUpgradeOffer = ({
               mot ett ärligt "har gått ut" - gratisveckan är då borta. */}
           {!expired ? (
             <>
-              <p className="flex items-center justify-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              <p className="flex items-center justify-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 <Clock className="h-3.5 w-3.5" aria-hidden="true" />
                 Erbjudandet gäller i
               </p>
@@ -100,7 +100,7 @@ export const ProUpgradeOffer = ({
               </div>
             </>
           ) : (
-            <div className="rounded-lg border border-dashed border-border bg-secondary/40 px-4 py-4">
+            <div className="rounded-md border border-dashed border-border bg-secondary/40 px-4 py-4">
               <p className="text-lg font-bold text-foreground">Erbjudandet har gått ut</p>
               <p className="mt-1 text-sm text-muted-foreground">
                 Gratisveckan gällde bara den här gången. Du kan fortfarande uppgradera när du vill –
