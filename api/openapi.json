@@ -275,7 +275,32 @@
             }
           }
         },
-        "security": []
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "email",
+                  "password"
+                ],
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "format": "email",
+                    "maxLength": 320
+                  },
+                  "password": {
+                    "type": "string",
+                    "maxLength": 400
+                  }
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/auth/logout": {
@@ -697,6 +722,154 @@
               }
             }
           }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "reason"
+                ],
+                "properties": {
+                  "reason": {
+                    "type": "string",
+                    "maxLength": 40,
+                    "description": "Exitorsaken. Ett avslut utan orsak är ett avslut ingen kan lära sig av."
+                  },
+                  "note": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "maxLength": 2000
+                  },
+                  "enterHealth": {
+                    "type": "boolean",
+                    "default": false
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/cases/{caseId}/conversations": {
+      "get": {
+        "operationId": "listConversations",
+        "summary": "Trådarna i ärendet med sina deltagare. Radskyddet avgör vilka som syns.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Trådarna",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "conversations"
+                  ],
+                  "properties": {
+                    "conversations": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "createConversation",
+        "summary": "Skapa en direkt- eller grupptråd. Skaparen läggs alltid till som deltagare - en tråd man inte själv deltar i går inte att läsa efteråt.",
+        "x-status": "beta",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "kind"
+                ],
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "direct",
+                      "group"
+                    ]
+                  },
+                  "otherUserId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Krävs för kind=direct."
+                  },
+                  "title": {
+                    "type": "string",
+                    "minLength": 2,
+                    "maxLength": 120,
+                    "description": "Krävs för kind=group."
+                  },
+                  "participantUserIds": {
+                    "type": "array",
+                    "maxItems": 50,
+                    "items": {
+                      "type": "string",
+                      "format": "uuid"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Tråden skapad",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "id"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
         }
       }
     },
@@ -991,6 +1164,75 @@
         "responses": {
           "200": {
             "description": "OK"
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "sendMessage",
+        "summary": "Skicka ett meddelande. Författaren sätts av servern ur den prövade sessionen, aldrig ur kroppen.",
+        "x-status": "beta",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "body"
+                ],
+                "properties": {
+                  "body": {
+                    "type": "string",
+                    "maxLength": 8000
+                  },
+                  "conversationId": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "format": "uuid",
+                    "description": "null = grundtråden som alla medlemmar ser."
+                  },
+                  "attachmentDocumentId": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "format": "uuid"
+                  },
+                  "expectsReplyFrom": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "format": "uuid",
+                    "description": "Den som förväntas svara. Notisen släcks av personens kvittens."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Skickat",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
           },
           "default": {
             "description": "Fel",
@@ -1387,6 +1629,59 @@
             }
           }
         }
+      },
+      "post": {
+        "operationId": "addTask",
+        "summary": "Lägg till en uppgift i handlingsplanen. Avbockningens tidpunkt sätts av servern, inte av klienten.",
+        "x-status": "beta",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "label"
+                ],
+                "properties": {
+                  "label": {
+                    "type": "string",
+                    "maxLength": 300
+                  },
+                  "dueDate": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "format": "date"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Uppgiften skapad",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/cases/{caseId}/tasks/seed": {
@@ -1416,6 +1711,28 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "labels"
+                ],
+                "properties": {
+                  "labels": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Etiketterna som sås. Dubbletter mot (case_id, label) hoppas över: två flikar som sår samtidigt ger EN lista, inte två."
+                  }
                 }
               }
             }
@@ -1533,6 +1850,55 @@
               }
             }
           }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "name",
+                  "email",
+                  "message"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "maxLength": 200
+                  },
+                  "email": {
+                    "type": "string",
+                    "format": "email",
+                    "maxLength": 320
+                  },
+                  "message": {
+                    "type": "string",
+                    "maxLength": 5000
+                  },
+                  "phone": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "maxLength": 40
+                  },
+                  "company": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "maxLength": 200
+                  },
+                  "topic": {
+                    "type": "string",
+                    "maxLength": 40,
+                    "default": "question"
+                  }
+                }
+              }
+            }
+          }
         }
       },
       "get": {
@@ -1645,6 +2011,129 @@
               }
             }
           }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "status"
+                ],
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "maxLength": 20
+                  },
+                  "internalNote": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "maxLength": 5000,
+                    "description": "Utelämnas fältet lämnas anteckningen orörd. Skickas det - även som null - skrivs det över."
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/conversations/{conversationId}/merge": {
+      "post": {
+        "operationId": "mergeConversations",
+        "summary": "Slå ihop två grupptrådar: meddelanden och deltagare flyttas till målet. merge_conversations prövar själv att båda är grupper i samma ärende.",
+        "x-status": "beta",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "into"
+                ],
+                "properties": {
+                  "into": {
+                    "type": "string",
+                    "format": "uuid"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Sammanslaget",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "merged"
+                  ],
+                  "properties": {
+                    "merged": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/conversations/{conversationId}/messages": {
+      "get": {
+        "operationId": "listConversationMessages",
+        "summary": "Meddelandena i en tråd. En tråd du inte deltar i ger TOMT, inte 403 - skillnaden mellan \"finns inte\" och \"får inte se\" är i sig en uppgift.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Meddelandena",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "messages"
+                  ],
+                  "properties": {
+                    "messages": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
         }
       }
     },
@@ -1668,6 +2157,26 @@
               }
             }
           }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "observation"
+                ],
+                "properties": {
+                  "observation": {
+                    "type": "string",
+                    "maxLength": 500,
+                    "description": "Vad som faktiskt observerades när premissen bevakades."
+                  }
+                }
+              }
+            }
+          }
         }
       }
     },
@@ -1686,6 +2195,26 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "note"
+                ],
+                "properties": {
+                  "note": {
+                    "type": "string",
+                    "maxLength": 2000,
+                    "description": "Skälet till omprövningen. Beslutet raderas aldrig - det omprövas, och skälet blir en del av journalen."
+                  }
                 }
               }
             }
@@ -1748,6 +2277,30 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "action"
+                ],
+                "properties": {
+                  "action": {
+                    "type": "string",
+                    "enum": [
+                      "request",
+                      "approve",
+                      "reset"
+                    ],
+                    "maxLength": 20
+                  }
                 }
               }
             }
@@ -1909,6 +2462,120 @@
         "responses": {
           "200": {
             "description": "Återkallad"
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/mentions": {
+      "get": {
+        "operationId": "listMyOpenMentions",
+        "summary": "Notiscentret: meddelanden som väntar på DITT svar. Släcks av din egen kvittens.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Raderna",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "mentions"
+                  ],
+                  "properties": {
+                    "mentions": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/messages/{messageId}/ack": {
+      "post": {
+        "operationId": "ackMessage",
+        "summary": "Kvittera \"uppfattat\". Idempotent, och kan ALDRIG tas tillbaka - det finns med flit ingen motsvarande borttagning.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Kvitterat",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "acked"
+                  ],
+                  "properties": {
+                    "acked": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/messages/{messageId}/read": {
+      "post": {
+        "operationId": "markMessageRead",
+        "summary": "Markera som läst. Tidpunkten sätts av servern; ett läskvitto klienten daterar själv är inget kvitto.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Markerat",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "read"
+                  ],
+                  "properties": {
+                    "read": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
           },
           "default": {
             "description": "Fel",
@@ -2436,6 +3103,39 @@
               }
             }
           }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "monthlyExVatSek"
+                ],
+                "properties": {
+                  "monthlyExVatSek": {
+                    "type": "number",
+                    "exclusiveMinimum": 0
+                  },
+                  "businessExVatSek": {
+                    "type": [
+                      "number",
+                      "null"
+                    ],
+                    "minimum": 0
+                  },
+                  "enterpriseExVatSek": {
+                    "type": [
+                      "number",
+                      "null"
+                    ],
+                    "minimum": 0
+                  }
+                }
+              }
+            }
+          }
         }
       }
     },
@@ -2550,6 +3250,31 @@
               }
             }
           }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "hold"
+                ],
+                "properties": {
+                  "hold": {
+                    "type": "boolean"
+                  },
+                  "reason": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "maxLength": 500
+                  }
+                }
+              }
+            }
+          }
         }
       }
     },
@@ -2584,6 +3309,25 @@
               }
             }
           }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "shadow"
+                ],
+                "properties": {
+                  "shadow": {
+                    "type": "boolean",
+                    "description": "Skuggdebitering: registreras och visas, faktureras aldrig."
+                  }
+                }
+              }
+            }
+          }
         }
       }
     },
@@ -2614,6 +3358,27 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [],
+                "properties": {
+                  "feeSek": {
+                    "type": [
+                      "number",
+                      "null"
+                    ],
+                    "minimum": 0,
+                    "description": "Avtalad förmedlingsavgift i kronor. null nollställer den (faktureras ej)."
+                  }
                 }
               }
             }

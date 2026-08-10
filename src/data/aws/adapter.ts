@@ -35,12 +35,14 @@ import type {
   CaseTask,
   ContactMessageRecord,
   ContactStatus,
+  ConversationRecord,
   CustomerInvoiceRecord,
   CustomerOverview,
   DocumentRecord,
   InvitationPeek,
   NewContactMessage,
   NotificationDeliveryRecord,
+  OpenMention,
   NotificationPrefsInput,
   NotificationPrefsRecord,
   OutboundEmailRecord,
@@ -134,7 +136,15 @@ export const MIGRATED_PORTS = [
   "documents.setReview",
   "documents.getDownloadUrl",
   "messages.listByCase",
+  "messages.listByConversation",
   "messages.send",
+  "messages.markRead",
+  "messages.listConversations",
+  "messages.createDirect",
+  "messages.createGroup",
+  "messages.merge",
+  "messages.ack",
+  "messages.myOpenMentions",
   "kbr.getLatestByCase",
   "audit.listByCase",
 ] as const;
@@ -594,14 +604,85 @@ const contact = {
   },
 };
 
+/**
+ * Meddelandena och trådarna.
+ *
+ * `listByCase` bar tidigare bara halva CaseMessage - servern skickade sex
+ * fält av tio, och `acks` (som gränssnittet räknar på) kom aldrig med.
+ * Serialiseraren är rättad; det här är resten av porten.
+ */
 const messages = {
   ...supabaseAdapter.messages,
   async listByCase(caseId: string): Promise<CaseMessage[]> {
     const res = await apiFetch<{ messages: CaseMessage[] }>(`/v1/cases/${caseId}/messages`);
     return res.messages;
   },
-  async send(caseId: string, body: string): Promise<void> {
-    await apiFetch(`/v1/cases/${caseId}/messages`, { method: "POST", body: { body } });
+  async listByConversation(conversationId: string): Promise<CaseMessage[]> {
+    const res = await apiFetch<{ messages: CaseMessage[] }>(
+      `/v1/conversations/${conversationId}/messages`,
+    );
+    return res.messages;
+  },
+  async send(
+    caseId: string,
+    body: string,
+    opts?: {
+      conversationId?: string | null;
+      attachmentDocumentId?: string | null;
+      expectsReplyFrom?: string | null;
+    },
+  ): Promise<void> {
+    await apiFetch(`/v1/cases/${caseId}/messages`, {
+      method: "POST",
+      body: {
+        body,
+        conversationId: opts?.conversationId ?? null,
+        attachmentDocumentId: opts?.attachmentDocumentId ?? null,
+        expectsReplyFrom: opts?.expectsReplyFrom ?? null,
+      },
+    });
+  },
+  async markRead(id: string): Promise<void> {
+    await apiFetch(`/v1/messages/${id}/read`, { method: "POST" });
+  },
+  async listConversations(caseId: string): Promise<ConversationRecord[]> {
+    const res = await apiFetch<{ conversations: ConversationRecord[] }>(
+      `/v1/cases/${caseId}/conversations`,
+    );
+    return res.conversations;
+  },
+  async createDirect(caseId: string, otherUserId: string): Promise<string> {
+    const res = await apiFetch<{ id: string }>(`/v1/cases/${caseId}/conversations`, {
+      method: "POST",
+      body: { kind: "direct", otherUserId },
+    });
+    return res.id;
+  },
+  async createGroup(
+    caseId: string,
+    title: string,
+    participantUserIds: string[],
+  ): Promise<string> {
+    const res = await apiFetch<{ id: string }>(`/v1/cases/${caseId}/conversations`, {
+      method: "POST",
+      body: { kind: "group", title, participantUserIds },
+    });
+    return res.id;
+  },
+  async merge(fromConversationId: string, toConversationId: string): Promise<void> {
+    await apiFetch(`/v1/conversations/${fromConversationId}/merge`, {
+      method: "POST",
+      body: { into: toConversationId },
+    });
+  },
+  async ack(messageId: string): Promise<void> {
+    // Kvittensen kan aldrig tas tillbaka; det finns med flit ingen
+    // motsvarande borttagning här.
+    await apiFetch(`/v1/messages/${messageId}/ack`, { method: "POST" });
+  },
+  async myOpenMentions(): Promise<OpenMention[]> {
+    const res = await apiFetch<{ mentions: OpenMention[] }>("/v1/mentions");
+    return res.mentions;
   },
 };
 

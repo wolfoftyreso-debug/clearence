@@ -171,6 +171,74 @@ for (const rutt of rutter) {
 }
 
 /*
+ * OCH METODEN MÅSTE VARA DEKLARERAD, INTE BARA SÖKVÄGEN.
+ *
+ * Kontrollen ovan hade samma sorts lucka som den ersatte. Den prövade att
+ * sökvägen fanns i kontraktet - så när POST /v1/cases/{caseId}/messages
+ * lades till på en sökväg som redan hade en GET, förblev allt grönt medan
+ * kontraktet inte sa ett ord om skrivvägen. Det upptäcktes först när
+ * någon läste JSON:en för hand.
+ *
+ * En odeklarerad skrivväg är värre än en odeklarerad läsväg: kontraktet
+ * är det enda stället där kroppens fält står skrivna, och de fälten är
+ * gränsen för vad servern tar emot.
+ */
+const VERB: Record<string, string> = { get: "get", post: "post", put: "put", patch: "patch", del: "delete" };
+const metodPar = [
+  // router.get("/v1/...", ...) - även när sökvägen står på egen rad.
+  ...[...serverKod.matchAll(/router\.(get|post|put|patch|del)\(\s*"(\/v1\/[^"]*)"/g)].map(
+    (m) => [VERB[m[1]], m[2]] as const,
+  ),
+  // caseScoped(...) registrerar en GET; sökvägen är första argumentet och
+  // står ofta efter en kommentarsrad.
+  ...[...serverKod.matchAll(/caseScoped\(\s*(?:\/\/[^\n]*\n\s*)*"(\/v1\/[^"]*)"/g)].map(
+    (m) => ["get", m[1]] as const,
+  ),
+];
+
+check("metoderna gick att läsa ur servern", metodPar.length > 30, metodPar.length);
+
+for (const [metod, rutt] of metodPar) {
+  const i = somKontraktet(rutt);
+  const post = (spec.paths as Record<string, Record<string, unknown>>)[i];
+  check(
+    `${metod.toUpperCase()} ${rutt} är deklarerad i kontraktet`,
+    post !== undefined && Object.hasOwn(post, metod),
+    { sokvag: i, deklarerade: post ? Object.keys(post) : null },
+  );
+}
+
+/*
+ * En skrivväg utan requestBody i kontraktet är ett kontrakt som inte
+ * säger vad den tar emot. Rutter utan kropp finns (kvittenser,
+ * återkallelser), så kravet gäller de som FAKTISKT läser fält.
+ */
+for (const [metod, rutt] of metodPar) {
+  if (metod === "get" || metod === "delete") continue;
+  const i = somKontraktet(rutt);
+  const spec_ = (spec.paths as Record<string, Record<string, Record<string, unknown>>>)[i]?.[metod];
+  if (!spec_) continue;
+  /*
+   * Läser handlern något ur req.body? Då ska kontraktet beskriva det.
+   *
+   * Fönstret slutar vid NÄSTA rutt och inte efter ett antal tecken: en
+   * fast längd svämmar över i grannhandlern, och då anklagas en rutt utan
+   * kropp (en kvittens, en återkallelse) för att sakna en beskrivning av
+   * något den aldrig läser.
+   */
+  const start = serverKod.indexOf(`"${rutt}"`);
+  const nasta = serverKod.slice(start + 1).search(/\n(?:router\.[a-z]+\(|caseScoped\()/);
+  const handler = serverKod.slice(start, nasta === -1 ? undefined : start + 1 + nasta);
+  const laserKropp = /req\.body/.test(handler);
+  if (!laserKropp) continue;
+  check(
+    `${metod.toUpperCase()} ${rutt} beskriver sin kropp i kontraktet`,
+    Object.hasOwn(spec_, "requestBody"),
+    i,
+  );
+}
+
+/*
  * Åt andra hållet är läget ett annat, och det ska inte påstås vara ett fel.
  *
  * Kontraktet beskriver HELA v1. Den egna servern är första lodräta skivan

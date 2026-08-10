@@ -272,12 +272,77 @@ const toPayment = (row: Record<string, unknown>) => ({
   recurring: row.recurring,
 });
 
+/**
+ * Ett meddelande, HELT.
+ *
+ * Den här bar tidigare sex fält av tio. Adaptern castar rakt till
+ * CaseMessage, så de fyra som saknades blev `undefined` i klienten -
+ * och `acks` är en lista som gränssnittet räknar på. Ett halvt löfte i
+ * en serialiserare är ett fel som inte syns förrän i vyn.
+ *
+ * `acks` kommer med som aggregat ur frågan (json_agg), inte som en extra
+ * rundtur per meddelande: en tråd med hundra rader hade annars blivit
+ * hundra frågor.
+ */
 const toMessage = (row: Record<string, unknown>) => ({
   id: row.id,
   caseId: row.case_id,
-  conversationId: row.conversation_id,
+  conversationId: row.conversation_id ?? null,
   body: row.body,
-  authorUserId: row.author_user_id,
+  authorUserId: row.author_user_id ?? null,
+  attachmentDocumentId: row.attachment_document_id ?? null,
+  expectsReplyFrom: row.expects_reply_from ?? null,
+  acks: Array.isArray(row.acks)
+    ? (row.acks as Record<string, unknown>[]).map((a) => ({
+        userId: a.user_id,
+        ackedAt: iso(a.acked_at),
+      }))
+    : [],
+  createdAt: iso(row.created_at),
+  readAt: iso(row.read_at),
+});
+
+/**
+ * Meddelandets kolumner plus kvittenserna.
+ *
+ * Radskyddet på message_acks säger "ser man meddelandet ser man vilka som
+ * kvitterat det" (can_see_message), så den vänstra kopplingen behöver
+ * ingen egen behörighetsfråga - den kan inte returnera mer än raden får
+ * visa.
+ */
+const MEDDELANDE_KOLUMNER = `
+  m.id, m.case_id, m.conversation_id, m.body, m.author_user_id,
+  m.attachment_document_id, m.expects_reply_from, m.created_at, m.read_at,
+  coalesce(
+    (select json_agg(json_build_object('user_id', a.user_id, 'acked_at', a.acked_at)
+                     order by a.acked_at)
+       from public.message_acks a where a.message_id = m.id),
+    '[]'::json
+  ) as acks`;
+
+const toConversation = (row: Record<string, unknown>) => ({
+  id: row.id,
+  caseId: row.case_id,
+  kind: row.kind,
+  title: row.title ?? null,
+  createdBy: row.created_by ?? null,
+  createdAt: iso(row.created_at),
+  mergedInto: row.merged_into ?? null,
+  participants: Array.isArray(row.participants)
+    ? (row.participants as Record<string, unknown>[]).map((p) => ({
+        userId: p.user_id,
+        displayName: (p.display_name as string | null) ?? null,
+      }))
+    : [],
+});
+
+const toMention = (row: Record<string, unknown>) => ({
+  messageId: row.message_id,
+  caseId: row.case_id,
+  conversationId: row.conversation_id ?? null,
+  conversationTitle: row.conversation_title ?? null,
+  authorName: row.author_name ?? null,
+  body: row.body,
   createdAt: iso(row.created_at),
 });
 
@@ -492,6 +557,23 @@ const str = (body: unknown, field: string, opts: { max?: number; required?: bool
 };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Ett id i kroppen som får utebli.
+ *
+ * Skillnaden mot att skicka värdet vidare orört: ett id som inte är ett id
+ * ska ge 400 med ett begripligt besked, inte ett kastat typfel ur
+ * drivrutinen mitt i en insert. Utelämnat och null blir båda null - i de
+ * fält som använder den betyder "inte satt" och "ingen" samma sak.
+ */
+const valfrittId = (body: unknown, field: string): string | null => {
+  const value = (body as Record<string, unknown> | undefined)?.[field];
+  if (value === undefined || value === null || value === "") return null;
+  if (typeof value !== "string" || !UUID.test(value)) {
+    throw badRequest(`Fältet "${field}" är inte ett giltigt id.`);
+  }
+  return value;
+};
 const uuidParam = (req: ApiRequest, name: string): string => {
   const value = req.params[name];
   // Prövas här och inte i databasen: ett trasigt id ska ge 400 med ett
@@ -906,9 +988,9 @@ caseScoped(
   // Grundtråden: meddelanden utan tråd-id. Trådade hämtas per tråd, och
   // synligheten avgörs av radskyddet - inte av filtret här.
   "/v1/cases/:caseId/messages",
-  `select id, case_id, conversation_id, body, author_user_id, created_at
-     from public.case_messages where case_id = $1 and conversation_id is null
-    order by created_at asc`,
+  `select ${MEDDELANDE_KOLUMNER}
+     from public.case_messages m where m.case_id = $1 and m.conversation_id is null
+    order by m.created_at asc`,
   toMessage,
   "messages",
 );
@@ -1026,17 +1108,190 @@ router.post("/v1/cases/:caseId/messages", async (req) => {
   const caller = await authenticate(req);
   const caseId = uuidParam(req, "caseId");
   const body = str(req.body, "body", { max: 8000 });
+  // De tre valfria: tråden, bilagan och den som förväntas svara.
+  // author_user_id sätts av servern ur den prövade sessionen - att låta
+  // klienten skriva det fältet vore att låta vem som helst signera i
+  // någon annans namn i ett ärende de redan har tillträde till.
+  const conversationId = valfrittId(req.body, "conversationId");
+  const attachmentDocumentId = valfrittId(req.body, "attachmentDocumentId");
+  const expectsReplyFrom = valfrittId(req.body, "expectsReplyFrom");
   const row = await withUser(caller.userId, async (tx) => {
     const { rows } = await tx.query(
-      `insert into public.case_messages (case_id, author_user_id, body)
-       values ($1, $2, $3)
-       returning id, case_id, conversation_id, body, author_user_id, created_at`,
-      [caseId, caller.userId, body],
+      `with ny as (
+         insert into public.case_messages
+           (case_id, author_user_id, body, conversation_id, attachment_document_id, expects_reply_from)
+         values ($1::uuid, $2::uuid, $3::text, $4::uuid, $5::uuid, $6::uuid)
+         returning *
+       )
+       select ${MEDDELANDE_KOLUMNER} from ny m`,
+      [caseId, caller.userId, body, conversationId, attachmentDocumentId, expectsReplyFrom],
     );
     return rows[0] ?? null;
   });
   if (!row) throw forbidden("Meddelandet kunde inte skickas i det här ärendet.");
   return { status: 201, body: toMessage(row) };
+});
+
+/* --- Trådarna: direkt, grupp, kvittens och notiscentret ------------------- */
+
+/*
+ * INGEN AV RUTTERNA HÄR GÖR SIN EGEN BEHÖRIGHETSKONTROLL, och det är
+ * avsiktligt. Gränsen bor i databasen: conversations och
+ * conversation_participants har policyer byggda på
+ * is_conversation_participant() och has_case_access(), merge_conversations
+ * är SECURITY DEFINER och självgrindad, och message_acks styrs av
+ * can_see_message(). En skrivning som inte får ske träffar noll rader, och
+ * det är utfallet som prövas - inte vilket lager som sa nej.
+ */
+
+router.get("/v1/conversations/:conversationId/messages", async (req) => {
+  const caller = await authenticate(req);
+  const conversationId = uuidParam(req, "conversationId");
+  const rows = await withUser(caller.userId, async (tx) => {
+    const { rows } = await tx.query(
+      `select ${MEDDELANDE_KOLUMNER}
+         from public.case_messages m where m.conversation_id = $1::uuid
+        order by m.created_at asc`,
+      [conversationId],
+    );
+    return rows;
+  });
+  // En tråd man inte deltar i ger TOMT, inte 403: skillnaden mellan
+  // "finns inte" och "får inte se" är i sig en uppgift.
+  return { status: 200, body: { messages: rows.map(toMessage) } };
+});
+
+router.post("/v1/messages/:messageId/read", async (req) => {
+  const caller = await authenticate(req);
+  const messageId = uuidParam(req, "messageId");
+  // Tidpunkten sätts av servern. Ett läskvitto klienten daterar själv är
+  // inget kvitto.
+  await withUser(caller.userId, async (tx) => {
+    await tx.query(
+      "update public.case_messages set read_at = now() where id = $1::uuid and read_at is null",
+      [messageId],
+    );
+  });
+  return { status: 200, body: { read: true } };
+});
+
+router.post("/v1/messages/:messageId/ack", async (req) => {
+  const caller = await authenticate(req);
+  const messageId = uuidParam(req, "messageId");
+  await withUser(caller.userId, async (tx) => {
+    // on conflict do nothing: ett dubbelklick är ingen nyhet att
+    // rapportera. Kvittensen kan ALDRIG tas tillbaka - det finns med flit
+    // ingen väg att radera raden här.
+    await tx.query(
+      `insert into public.message_acks (message_id, user_id)
+       values ($1::uuid, $2::uuid) on conflict do nothing`,
+      [messageId, caller.userId],
+    );
+  });
+  return { status: 200, body: { acked: true } };
+});
+
+router.get("/v1/cases/:caseId/conversations", async (req) => {
+  const caller = await authenticate(req);
+  const caseId = uuidParam(req, "caseId");
+  const rows = await withUser(caller.userId, async (tx) => {
+    // Namnen hämtas i samma fråga. Supabase-adaptern gör tre rundturer
+    // (trådar, deltagare, medlemslista) och sätter ihop dem i klienten;
+    // här räcker en, och den kan inte visa mer än radskyddet släpper fram.
+    const { rows } = await tx.query(
+      `select c.id, c.case_id, c.kind, c.title, c.created_by, c.created_at, c.merged_into,
+              coalesce(
+                (select json_agg(json_build_object(
+                          'user_id', p.user_id,
+                          'display_name', up.display_name)
+                        order by p.created_at)
+                   from public.conversation_participants p
+                   left join public.user_profiles up on up.user_id = p.user_id
+                  where p.conversation_id = c.id),
+                '[]'::json
+              ) as participants
+         from public.conversations c
+        where c.case_id = $1::uuid
+        order by c.created_at asc`,
+      [caseId],
+    );
+    return rows;
+  });
+  return { status: 200, body: { conversations: rows.map(toConversation) } };
+});
+
+router.post("/v1/cases/:caseId/conversations", async (req) => {
+  const caller = await authenticate(req);
+  const caseId = uuidParam(req, "caseId");
+  const kind = str(req.body, "kind");
+  if (kind !== "direct" && kind !== "group") {
+    throw badRequest('Fältet "kind" ska vara "direct" eller "group".');
+  }
+
+  const deltagare: string[] = [];
+  let title: string | null = null;
+  if (kind === "direct") {
+    const otherUserId = valfrittId(req.body, "otherUserId");
+    if (!otherUserId) throw badRequest('Fältet "otherUserId" saknas.');
+    if (otherUserId === caller.userId) throw badRequest("En direkt tråd behöver en motpart.");
+    deltagare.push(otherUserId);
+  } else {
+    title = str(req.body, "title", { max: 120 });
+    if (title.length < 2) throw badRequest('Fältet "title" ska vara minst 2 tecken.');
+    const raw = (req.body as Record<string, unknown> | undefined)?.participantUserIds;
+    if (!Array.isArray(raw)) throw badRequest('Fältet "participantUserIds" ska vara en lista.');
+    if (raw.length > 50) throw badRequest("En grupptråd tar högst 50 deltagare.");
+    for (const value of raw) {
+      if (typeof value !== "string" || !UUID.test(value)) {
+        throw badRequest('"participantUserIds" ska innehålla id:n.');
+      }
+      deltagare.push(value);
+    }
+  }
+
+  const id = await withUser(caller.userId, async (tx) => {
+    const { rows } = await tx.query(
+      `insert into public.conversations (case_id, kind, title, created_by)
+       values ($1::uuid, $2::text, $3::text, $4::uuid) returning id`,
+      [caseId, kind, title, caller.userId],
+    );
+    const nyId = rows[0]?.id as string | undefined;
+    if (!nyId) return null;
+    // Skaparen är alltid med. En tråd man inte själv deltar i går inte att
+    // läsa efteråt - och då hade skrivningen varit ett tyst tapp.
+    const unika = Array.from(new Set([caller.userId, ...deltagare]));
+    await tx.query(
+      `insert into public.conversation_participants (conversation_id, user_id, added_by)
+       select $1::uuid, x, $2::uuid from unnest($3::uuid[]) as x
+       on conflict do nothing`,
+      [nyId, caller.userId, unika],
+    );
+    return nyId;
+  });
+  if (!id) throw forbidden("Tråden kunde inte skapas i det här ärendet.");
+  return { status: 201, body: { id } };
+});
+
+router.post("/v1/conversations/:conversationId/merge", async (req) => {
+  const caller = await authenticate(req);
+  const from = uuidParam(req, "conversationId");
+  const to = valfrittId(req.body, "into");
+  if (!to) throw badRequest('Fältet "into" saknas.');
+  // merge_conversations prövar själv att båda är grupptrådar i samma
+  // ärende och att anroparen deltar. Den kastar; felmappningen gör 409.
+  await withUser(caller.userId, async (tx) => {
+    await tx.query("select public.merge_conversations($1::uuid, $2::uuid)", [from, to]);
+  });
+  return { status: 200, body: { merged: true } };
+});
+
+router.get("/v1/mentions", async (req) => {
+  const caller = await authenticate(req);
+  const rows = await withUser(caller.userId, async (tx) => {
+    const { rows } = await tx.query("select * from public.my_open_mentions()");
+    return rows;
+  });
+  return { status: 200, body: { mentions: rows.map(toMention) } };
 });
 
 /**

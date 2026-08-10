@@ -1624,6 +1624,198 @@ const bertilStarta = await call("POST", `/v1/cases/${CASE_A}/documents`, {
 });
 check("en utomstående kan inte påbörja uppladdning i annans ärende", bertilStarta.status >= 400, bertilStarta.body);
 
+/* --- 8m6. Trådarna, kvittensen och notiscentret ------------------------- */
+
+/*
+ * Meddelandeporten var HALVT flyttad, och serialiseraren var halv på ett
+ * sätt som inte syntes: den skickade sex av CaseMessage tio fält. `acks`
+ * är en LISTA som gränssnittet räknar på, och den kom aldrig med - i
+ * klienten blev den `undefined`. Ett halvt löfte i en serialiserare är ett
+ * fel som inte visar sig förrän i vyn.
+ *
+ * Kontrollerna nedan prövar därför både formen (att hela meddelandet kommer
+ * med) och gränsen (att en tråd man inte deltar i inte går att läsa).
+ */
+{
+  const agnesM = await call("POST", "/v1/auth/login", {
+    body: { email: "agnes@bolag-a.se", password: "hemligt-losen-agnes" },
+  });
+  const agnesTok: string = agnesM.body.token as string;
+
+  const skickat = await call("POST", `/v1/cases/${CASE_A}/messages`, {
+    token: agnesTok,
+    body: { body: "Har du sett bankens svar?" },
+  });
+  check("meddelandet går att skicka", skickat.status === 201, skickat.body);
+  const meddelandeId = skickat.body.id as string;
+
+  // HELA CaseMessage, inte halva. Fälten som saknades förut står först.
+  for (const falt of [
+    "id", "caseId", "conversationId", "authorUserId", "body",
+    "attachmentDocumentId", "expectsReplyFrom", "acks", "createdAt", "readAt",
+  ]) {
+    check(`svaret bär fältet ${falt}`, falt in (skickat.body as Record<string, unknown>), Object.keys(skickat.body));
+  }
+  check("acks är en lista, inte undefined", Array.isArray(skickat.body.acks), skickat.body.acks);
+  check("författaren sätts av servern", skickat.body.authorUserId === AGNES, skickat.body.authorUserId);
+
+  // Författaren tas ur sessionen. Ett authorUserId i kroppen ska inte
+  // kunna signera i någon annans namn.
+  const falskt = await call("POST", `/v1/cases/${CASE_A}/messages`, {
+    token: agnesTok,
+    body: { body: "Skrivet av Bertil?", authorUserId: BERTIL, author_user_id: BERTIL },
+  });
+  check("authorUserId i kroppen skriver inte om avsändaren", falskt.body.authorUserId === AGNES, falskt.body);
+
+  // Ett id som inte är ett id ger 400, inte ett kastat typfel ur drivrutinen.
+  const trasigt = await call("POST", `/v1/cases/${CASE_A}/messages`, {
+    token: agnesTok,
+    body: { body: "Hej", conversationId: "inte-ett-id" },
+  });
+  check("ett trasigt conversationId ger 400", trasigt.status === 400, trasigt.body);
+
+  // Kvittensen: idempotent, och den kan inte tas tillbaka.
+  const kvitt = await call("POST", `/v1/messages/${meddelandeId}/ack`, { token: agnesTok });
+  check("kvittensen går igenom", kvitt.status === 200, kvitt.body);
+  await call("POST", `/v1/messages/${meddelandeId}/ack`, { token: agnesTok });
+  const medKvittens = await call("GET", `/v1/cases/${CASE_A}/messages`, { token: agnesTok });
+  const raden = (medKvittens.body.messages as Record<string, unknown>[]).find((m) => m.id === meddelandeId);
+  const acks = (raden?.acks ?? []) as Record<string, unknown>[];
+  check("kvittensen kommer med i listan", acks.length === 1, acks);
+  check("och ett dubbelklick ger inte två kvittenser", acks.length === 1, acks);
+  check("kvittensen bär vem och när", acks[0]?.userId === AGNES && typeof acks[0]?.ackedAt === "string", acks[0]);
+
+  // Läsmarkeringen dateras av servern.
+  const last = await call("POST", `/v1/messages/${meddelandeId}/read`, { token: agnesTok });
+  check("läsmarkeringen svarar", last.status === 200, last.body);
+  const efterLast = await call("GET", `/v1/cases/${CASE_A}/messages`, { token: agnesTok });
+  const raden2 = (efterLast.body.messages as Record<string, unknown>[]).find((m) => m.id === meddelandeId);
+  check("readAt är satt av servern", typeof raden2?.readAt === "string", raden2?.readAt);
+
+  // Trådarna.
+  const grupp = await call("POST", `/v1/cases/${CASE_A}/conversations`, {
+    token: agnesTok,
+    body: { kind: "group", title: "Bankfrågor", participantUserIds: [] },
+  });
+  check("en grupptråd går att skapa", grupp.status === 201, grupp.body);
+  const gruppId = grupp.body.id as string;
+
+  const tradar = await call("GET", `/v1/cases/${CASE_A}/conversations`, { token: agnesTok });
+  const tradEtt = (tradar.body.conversations as Record<string, unknown>[]).find((c) => c.id === gruppId);
+  check("tråden syns i listan", tradEtt !== undefined, tradar.body);
+  check("tråden bär sitt namn", tradEtt?.title === "Bankfrågor", tradEtt);
+  // Skaparen läggs alltid till. En tråd man inte själv deltar i går inte
+  // att läsa efteråt, och skrivningen hade varit ett tyst tapp.
+  const deltagare = (tradEtt?.participants ?? []) as Record<string, unknown>[];
+  check("skaparen är deltagare", deltagare.some((p) => p.userId === AGNES), deltagare);
+
+  const iTraden = await call("POST", `/v1/cases/${CASE_A}/messages`, {
+    token: agnesTok,
+    body: { body: "Bankens handläggare heter Nilsson.", conversationId: gruppId },
+  });
+  check("ett meddelande går att lägga i tråden", iTraden.status === 201, iTraden.body);
+  check("och det bär trådens id", iTraden.body.conversationId === gruppId, iTraden.body);
+
+  const tradensRader = await call("GET", `/v1/conversations/${gruppId}/messages`, { token: agnesTok });
+  check("tråden går att läsa", (tradensRader.body.messages as unknown[]).length === 1, tradensRader.body);
+
+  // Grundtråden ska INTE innehålla det trådade meddelandet.
+  const grund = await call("GET", `/v1/cases/${CASE_A}/messages`, { token: agnesTok });
+  check(
+    "grundtråden blandar inte in trådade meddelanden",
+    (grund.body.messages as Record<string, unknown>[]).every((m) => m.conversationId === null),
+    grund.body,
+  );
+
+  // GRÄNSEN: Bertil deltar inte, och har inte ens tillträde till ärendet.
+  const bertilTrad = await call("GET", `/v1/conversations/${gruppId}/messages`, { token: bertilToken });
+  check("en utomstående får TOMT ur tråden", (bertilTrad.body.messages as unknown[]).length === 0, bertilTrad.body);
+  const bertilTradar = await call("GET", `/v1/cases/${CASE_A}/conversations`, { token: bertilToken });
+  check("och ser inga trådar alls i ärendet", (bertilTradar.body.conversations as unknown[]).length === 0, bertilTradar.body);
+  const bertilKvitt = await call("POST", `/v1/messages/${meddelandeId}/ack`, { token: bertilToken });
+  const efterFrammande = await call("GET", `/v1/cases/${CASE_A}/messages`, { token: agnesTok });
+  const raden3 = (efterFrammande.body.messages as Record<string, unknown>[]).find((m) => m.id === meddelandeId);
+  check(
+    "en utomstående kan inte kvittera någon annans meddelande",
+    ((raden3?.acks ?? []) as Record<string, unknown>[]).length === 1,
+    { status: bertilKvitt.status, acks: raden3?.acks },
+  );
+
+  // Sammanslagningen: bara grupper, och funktionen prövar det själv.
+  const grupp2 = await call("POST", `/v1/cases/${CASE_A}/conversations`, {
+    token: agnesTok,
+    body: { kind: "group", title: "Bank och kredit", participantUserIds: [] },
+  });
+  const slaIhop = await call("POST", `/v1/conversations/${gruppId}/merge`, {
+    token: agnesTok,
+    body: { into: grupp2.body.id },
+  });
+  check("två grupptrådar går att slå ihop", slaIhop.status === 200, slaIhop.body);
+  const efterMerge = await call("GET", `/v1/conversations/${grupp2.body.id}/messages`, { token: agnesTok });
+  check("meddelandena följde med till målet", (efterMerge.body.messages as unknown[]).length === 1, efterMerge.body);
+  const sjalv = await call("POST", `/v1/conversations/${gruppId}/merge`, {
+    token: agnesTok,
+    body: { into: gruppId },
+  });
+  check("en tråd kan inte slås ihop med sig själv", sjalv.status >= 400, sjalv.body);
+
+  // Formen prövas i servern.
+  for (const trasigKropp of [
+    { kind: "hemlig" },
+    { kind: "group", title: "A", participantUserIds: [] },
+    { kind: "group", title: "Giltigt namn", participantUserIds: ["inte-ett-id"] },
+    { kind: "direct" },
+    { kind: "direct", otherUserId: AGNES },
+  ]) {
+    const svar = await call("POST", `/v1/cases/${CASE_A}/conversations`, {
+      token: agnesTok,
+      body: trasigKropp,
+    });
+    check(`trasig tråd nekas: ${JSON.stringify(trasigKropp)}`, svar.status === 400, svar.body);
+  }
+
+  // Notiscentret.
+  const taggat = await call("POST", `/v1/cases/${CASE_A}/messages`, {
+    token: agnesTok,
+    body: { body: "Kan du bekräfta det här?", expectsReplyFrom: AGNES },
+  });
+  check("ett taggat meddelande går att skicka", taggat.status === 201, taggat.body);
+  const notiser = await call("GET", "/v1/mentions", { token: agnesTok });
+  check(
+    "notiscentret visar det som väntar på mitt svar",
+    (notiser.body.mentions as Record<string, unknown>[]).some((m) => m.messageId === taggat.body.id),
+    notiser.body,
+  );
+  // Kvittensen släcker notisen. Det är hela poängen med den.
+  await call("POST", `/v1/messages/${taggat.body.id}/ack`, { token: agnesTok });
+  const efterKvittens = await call("GET", "/v1/mentions", { token: agnesTok });
+  check(
+    "kvittensen släcker notisen",
+    !(efterKvittens.body.mentions as Record<string, unknown>[]).some((m) => m.messageId === taggat.body.id),
+    efterKvittens.body,
+  );
+  const bertilNotiser = await call("GET", "/v1/mentions", { token: bertilToken });
+  check(
+    "notiscentret är den inloggades ensak",
+    !(bertilNotiser.body.mentions as Record<string, unknown>[]).some((m) => m.caseId === CASE_A),
+    bertilNotiser.body,
+  );
+
+  // Utan inloggning finns ingen av vägarna.
+  for (const [metod, vag] of [
+    ["GET", `/v1/conversations/${gruppId}/messages`],
+    ["POST", `/v1/messages/${meddelandeId}/read`],
+    ["POST", `/v1/messages/${meddelandeId}/ack`],
+    ["GET", `/v1/cases/${CASE_A}/conversations`],
+    ["POST", `/v1/cases/${CASE_A}/conversations`],
+    ["POST", `/v1/conversations/${gruppId}/merge`],
+    ["GET", "/v1/mentions"],
+  ] as const) {
+    const svar = await call(metod, vag, { body: {} });
+    check(`${metod} ${vag.replace(/[0-9a-f-]{36}/g, "{id}")} kräver inloggning`, svar.status === 401, svar.status);
+  }
+}
+
 /* --- 8m4. Telefonverifieringen bevisar innehav av telefonen -------------- */
 
 /*

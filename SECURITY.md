@@ -30,6 +30,15 @@ medan verifieringen inte verifierade något. Båda är omskrivna: gränsen läse
 numera från höger, och koden läses ur `outbound_sms` — alltså ur det som
 faktiskt går till telefonen.
 
+**Och en tredje gång, i kontraktsvakten:** `tests/apiSpec.ts` prövade att
+varje rutt i servern fanns som **sökväg** i OpenAPI-kontraktet - men aldrig
+att METODEN fanns. `POST /v1/cases/{caseId}/messages` låg därför odeklarerad
+bakom en sökväg som redan hade sin GET, och tolv skrivvägar till saknade
+`requestBody`. En odeklarerad skrivväg är värre än en odeklarerad läsväg:
+kontraktet är det enda stället där kroppens fält står skrivna, och de fälten
+är gränsen för vad servern tar emot. Vakten läser numera verbet också, och
+kräver att en handler som rör `req.body` har en kropp beskriven.
+
 **Och samma sak kan hända en vakt:** två av de nya kontrollerna i
 `tests/sakerhet.ts` hade `\b` som blivit ett backsteg (0x08) i regexen och
 matchade därför aldrig. `npm run lint` fångade tecknet; efter rättningen blev
