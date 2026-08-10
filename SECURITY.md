@@ -16,11 +16,24 @@
 | F-5 | `::ffff:169.254.169.254` och CGNAT passerade SSRF-listan | MEDIUM | Avbildad IPv4 normaliseras; listan utökad | `tests/sakerhet.ts` |
 | F-6 | Oanvänd `dangerouslySetInnerHTML` i `ui/chart.tsx` | LOW | Filen borttagen | `tests/sakerhet.ts` |
 | F-7 | Presigneringens behörighetskontroll kördes aldrig i test (lagringen "ej ansluten") | MEDIUM | `DOCUMENTS_BUCKET` sätts i sviten | `api/tests/integration.ts` |
+| H-1 | API:t kunde starta som en roll med `BYPASSRLS` eller tabellägarskap — radskyddet slås då av **tyst** | HIGH | `kravSakerDatabasroll()` vägrar starta | `api/tests/integration.ts` |
+| H-2 | Loggen skrev frågans parametervärden (lösenordshashar, poletter, personuppgifter) | MEDIUM | `api/server/logg.ts` maskerar fält och mönster | `tests/sakerhet.ts` |
+| H-3 | Driftåtgärder lämnade inga spår | MEDIUM | `app.logga_driftatgard()` + revisionspolicy | `api/tests/integration.ts` |
+| H-4 | Uppladdningen litade på filnamn, ändelse och Content-Type — allt tre skriver avsändaren | HIGH | Magic-byte-tillåtelselista, tvåstegsuppladdning, `confirmed_at` | `tests/filtyper.ts`, `tests/lagring.ts` |
+| H-5 | **Telefonverifieringen bevisade ingenting:** koden slumpades i webbläsaren, så den som anropade API:t kunde välja den själv och bekräfta utan att någonsin läsa SMS:et | HIGH | Koden föds i databasen, hashen lagras, klienten får `void`; gamla signaturen och `queue_verification_sms` droppade | `supabase/tests/notifications.sql`, `api/tests/integration.ts`, `tests/sakerhet.ts` |
 
-**Lärdomen ur F-2:** `tests/rateLimit.ts` **beskrev buggen som förväntat
-beteende** och var därför grön medan spärren inte fanns. Ett test som
-kodifierar en sårbarhet är sämre än inget test alls. Assertionerna är
-omskrivna.
+**Lärdomen ur F-2 och H-5, samma lärdom två gånger:** ett test som kodifierar
+en sårbarhet är sämre än inget test alls. `tests/rateLimit.ts` **beskrev buggen
+som förväntat beteende** och var därför grön medan spärren inte fanns.
+Telefonverifieringens SQL-svit **matade in koden den skulle pröva** och var grön
+medan verifieringen inte verifierade något. Båda är omskrivna: gränsen läses
+numera från höger, och koden läses ur `outbound_sms` — alltså ur det som
+faktiskt går till telefonen.
+
+**Och samma sak kan hända en vakt:** två av de nya kontrollerna i
+`tests/sakerhet.ts` hade `\b` som blivit ett backsteg (0x08) i regexen och
+matchade därför aldrig. `npm run lint` fångade tecknet; efter rättningen blev
+båda röda och fick skrivas om. Grönt är inte samma sak som prövat.
 
 ## Åtgärdade rådgivningar
 

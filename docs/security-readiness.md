@@ -14,10 +14,20 @@ regressionstest per fynd.
 > användas när **alla** blockerande krav är verifierade med faktiska tester.
 > Det är de inte.
 
-Det som ÄR gjort: sex sårbarheter hittade och åtgärdade, varav två allvarliga
-(SSRF-bypass och en verkningslös spärr mot lösenordsforcering), alla med
-regressionstest som bevisar att angreppet blockeras. 59 nya säkerhetskontroller
-och 34 nya adversariella API-kontroller, alla gröna.
+Det som ÄR gjort: **elva** sårbarheter hittade och åtgärdade, varav fyra
+allvarliga (SSRF-bypass, en verkningslös spärr mot lösenordsforcering, en
+databasroll som kunde stänga av radskyddet tyst, en filuppladdning som litade
+på klientens påstående) och en till som var värre än den såg ut: **en
+telefonverifiering som inte verifierade något** (H-5). Var och en har ett
+regressionstest som bevisar att angreppet blockeras. Sammanlagt 100
+säkerhetskontroller och 349 API-kontroller mot riktig Postgres, alla gröna.
+
+Ett mönster går igen i tre av fynden, och det är värt att skriva ut: **ett test
+som kodifierar en sårbarhet är sämre än inget test alls.** Spärren mot
+lösenordsforcering hade tre gröna kontroller som krävde exakt det beteende som
+gjorde den kringgåbar. Telefonverifieringen hade en grön SQL-svit som matade in
+svaret den skulle pröva. Och två av mina egna nya vakter var avstängda av ett
+felaktigt escape-tecken. Grönt är inte samma sak som prövat.
 
 ---
 
@@ -138,6 +148,19 @@ och 34 nya adversariella API-kontroller, alla gröna.
 
 ---
 
+### H-5 · Telefonverifieringen bevisade ingenting — **HIGH** — ÅTGÄRDAD (rond 6)
+
+| | |
+|---|---|
+| **Attackvektor** | Ett vanligt konto, DevTools öppna. Verifieringskoden **slumpades i webbläsaren**, hashades i webbläsaren, och både hashen och den färdiga SMS-texten skickades in som argument (`start_phone_verification(nummer, HASH)` + `queue_verification_sms(TEXT)`). Angriparen kunde alltså välja koden själv, aldrig läsa något SMS, och bekräfta direkt. Utfallet: ett "verifierat" nummer som tillhör **någon annan** — och som därefter får SMS om att någon har ett ärende hos CLEARANCE. Det är precis den uppgift produkten finns för att skydda. |
+| **Root cause** | En rimligt klingande regel drev fram fel protokoll: *"databasen ska aldrig se klartexten"*. Den höll inte ens i den gamla koden — SMS-texten, med koden i sig, gick in som argument och landade i `outbound_sms.body`. Databasen såg alltså redan klartexten, bara på ett ställe där ingen letade. Och när koden föds hos den som ska bevisa något med den, bevisar den ingenting. Detta är exakt "frontend-säkerhet är inte en säkerhetsmekanism", i sin renaste form. |
+| **Åtgärd** | Migration `20260822100000`: `start_phone_verification(p_e164, p_ttl_minutes)` **föder koden i databasen** (`gen_random_bytes`, inte `random()`), lagrar bara SHA-256-hashen, komponerar SMS-texten och köar den — allt i **en** transaktion. Anroparen får `void`. Gamla treargumentsformen **droppas** (inte `create or replace` — en ny signatur hade lämnat den gamla vägen öppen bredvid den nya), och `queue_verification_sms(p_body)` tas bort helt: en "skicka den här texten till mitt nummer"-funktion är en text angriparen skriver. `confirm_phone_verification` tar numera klartexten och jämför mot hashen inne i funktionen. Taket (fem koder per nummer och timme) flyttade med. **Rättningen ligger i databasen, inte i API:t** — den gäller därför varje väg in: eget API, PostgREST och psql. `generateCode()`/`hashCode()` är borta ur det delade klientbiblioteket. |
+| **Regressionstest** | `supabase/tests/notifications.sql`: koden läses **ur `outbound_sms`** — testet får inte veta den i förväg (det gamla testet matade in svaret och prövade därför ingenting). Bevisar att SMS:ets kod och radens hash hör ihop, att fel kod nekas, att rätt kod verifierar och bränns, att två begäranden ger **olika** koder, att fem fel bränner koden, och att den gamla signaturen samt `queue_verification_sms` **inte finns kvar i katalogen**. `api/tests/integration.ts` kör hela flödet genom API:t: koden finns ingenstans i svaret, numret kommer tillbaka maskerat, fast nummer/felformat nekas server-side, alla sju rutter kräver inloggning. `tests/sakerhet.ts`: källvakter mot återfall (inget `getRandomValues`/`subtle.digest` i telefonbiblioteket, ingen `p_code_sha256` i någon adapter, svarskropparna ordagrant `{ sent: true }` och `{ verified }`). |
+
+**En bugg i mitt eget arbete, hittad av sviten:** `lpad()` tar text, inte `bigint` — funktionen föll på 42883 vid första riktiga anropet. Och två vakter i `tests/sakerhet.ts` var i praktiken avstängda: `\b` hade blivit ett backsteg (0x08) i regexen, så de matchade aldrig. `npm run lint` fångade kontrolltecknet; efter rättningen blev båda **röda** och fick skrivas om — den ena läste prosan i en kommentar, den andra förbjöd ordet `code` även där rutten med rätta *tar emot* en kod.
+
+---
+
 ## 2. Revisioner per område
 
 ### Secrets
@@ -209,13 +232,18 @@ och 34 nya adversariella API-kontroller, alla gröna.
 | `test:api` efter rond 4 | **306 / 306** |
 | `test:filtyper` (ny, rond 4) | **45 / 45** |
 | `test:lagring` (ny, rond 5) | **28 / 28** — S3-vägen mot riktig SDK över riktig HTTP |
+| `test:sakerhet` efter rond 6 | **100 / 100** |
+| `test:api` efter rond 6 | **349 / 349** (mot riktig Postgres) |
+| `test:apispec` efter rond 6 | **293 / 293** |
+| `test:aviseringar` efter rond 6 | **191 / 191** |
 | RLS mot ren självhostad Postgres | **alla sviter PASSED** med de nya migrationerna |
 | Uppstartsspärren, end-to-end | **verifierad** (osäker roll → exit 1; säker roll → 200) |
 | Övriga sviter | gröna (se nedan) |
 
-**Två pre-existerande fel, orörda av det här arbetet och utan säkerhetsbetydelse:**
-`test:spacing` — 2 designtoken-kontroller (hörnradie, versaler). Verifierat att de
-föll likadant före ändringarna.
+**De två pre-existerande designtoken-felen i `test:spacing` är rättade** (rond 6):
+`ProUpgradeOffer.tsx` bröt mot projektets egna regler om hörnradie och versaler.
+Hela batteriet är grönt: rena sviterna, `test:api`, RLS i **båda** miljöerna,
+alla fyra byggen, `typecheck` och `lint`.
 
 ---
 
@@ -226,10 +254,11 @@ föll likadant före ändringarna.
 | R-1 | **Ingen körande miljö har prövats.** All verifiering är gjord mot källkod, mallar och en lokal Postgres. Ingress-TLS, faktiska svarsrubriker, HSTS-leverans och nätverkspolicyer är **NOT VERIFIED** mot ett riktigt kluster. | HIGH | Blockerande |
 | R-2 | ~~Filuppladdningens innehållskontroll saknas.~~ **BYGGD OCH PRÖVAD (H-4), S3-vägen verifierad mot riktig SDK (rond 5).** Kvar: MinIO:s egenheter, och att koppla om klientadaptern. | LOW | Byggd och prövad; cutover kvarstår |
 | R-3 | **`TRUSTED_PROXY_HOPS` måste matcha den faktiska kedjan.** Sätts fel (t.ex. 1 när det finns två mellanled) blir hastighetsgränsen antingen kringgåbar eller för trubbig. Default 1 stämmer med chartet; en extra ingress-hop kräver 2. | MEDIUM | Kräver driftbeslut |
-| R-4 | **Halvmigrerad datamodell.** 70 av 139 `DataPort`-metoder går fortfarande mot Supabase med anon-nyckel i frontend. Säkerheten vilar där helt på RLS (253 gröna kontroller), men två backends innebär två uppsättningar policyer att hålla i synk. | MEDIUM | Arkitekturskuld |
+| R-4 | **Halvmigrerad datamodell.** 63 av 139 `DataPort`-metoder går fortfarande mot Supabase med anon-nyckel i frontend. Säkerheten vilar där helt på RLS (253 gröna kontroller), men två backends innebär två uppsättningar policyer att hålla i synk. | MEDIUM | Arkitekturskuld |
 | R-5 | **Ingen MFA och ingen omautentisering** för känsliga driftåtgärder (nyckelvalv, prisplaner, kontostängning). Punkt 21 i uppdraget kräver det "där lämpligt". | MEDIUM | Ej byggt |
 | R-6 | ~~Ingen loggredaktion.~~ **ÅTGÄRDAD (H-2).** Kvar: loggarna bör läsas i skarp drift en gång för att bekräfta att inget oväntat fält dyker upp. | LOW | Åtgärdad, drift-granskning kvarstår |
 | R-7 | Claude-API-nyckeln från den här sessionen **ska roteras**. | MEDIUM | Organisatoriskt |
+| R-9 | **SMS-kostnaden är taket, inte identiteten.** Verifieringen bevisar numera innehav av telefonen, men taket (fem koder per nummer och timme) är fortfarande det enda som står mellan ett konto och en räkning. Ett globalt tak per konto och per dygn bör sättas innan SMS aktiveras skarpt. | LOW | Ej byggt |
 | R-8 | `vite`/`esbuild`-råden kvarstår i byggkedjan. Utvärderade som ej produktionsnära, men bygg-CI:n kör `vite build` — en komprometterad byggmiljö är en annan sak än en komprometterad produkt. | LOW | Accepterad, dokumenterad |
 
 ---

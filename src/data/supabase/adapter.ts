@@ -4,12 +4,9 @@ import { parsePremiseWatch } from "../premise";
 import type { NotificationDeliveryRecord, NotificationPrefsRecord } from "../types";
 import {
   VERIFICATION_TTL_MINUTES,
-  generateCode,
-  hashCode,
   isVerificationCode,
   maskPhone,
   normalisePhone,
-  verificationSms,
 } from "@/lib/notifications/phone";
 import { invoiceEmail, receiptEmail } from "@/lib/email/messages";
 import { COMPANY } from "@/lib/company";
@@ -704,26 +701,23 @@ export const supabaseAdapter: DataPort = {
     async startPhoneVerification(rawPhone: string) {
       const e164 = normalisePhone(rawPhone);
       if (!e164) throw new Error("Skriv ett svenskt mobilnummer, till exempel 070-123 45 67.");
-      // Koden genereras och hashas HÄR. Databasen får hashen, telefonen
-      // får klartexten, och ingen lagring ser båda.
-      const code = generateCode();
+      // Koden föds i databasen, inte här. Klienten skickar numret och får
+      // ingenting tillbaka - det är hela poängen: den som ska bevisa att
+      // numret är hens får veta koden av telefonen, inte av oss.
       const { error } = await supabase.rpc("start_phone_verification", {
         p_e164: e164,
-        p_code_sha256: await hashCode(code),
         p_ttl_minutes: VERIFICATION_TTL_MINUTES,
       });
       if (error) throw error;
-      // Numret skickas INTE med: funktionen läser anroparens egen rad,
-      // annars vore den en SMS-bombare med inloggning.
-      const { error: queueError } = await supabase.rpc("queue_verification_sms", {
-        p_body: verificationSms(code),
-      });
-      if (queueError) throw queueError;
     },
     async confirmPhoneVerification(code: string) {
       if (!isVerificationCode(code)) return false;
+      // Koden går in som klartext och jämförs mot hashen inne i
+      // funktionen. Att hasha i klienten hade inte skyddat någonting:
+      // hashen ÄR beviset när den är det som prövas, och den som kan
+      // skicka en hash behöver aldrig ha sett koden.
       const { data, error } = await supabase.rpc("confirm_phone_verification", {
-        p_code_sha256: await hashCode(code),
+        p_code: code.trim(),
       });
       if (error) throw error;
       return data === true;

@@ -82,7 +82,7 @@ export class ApiRequestError extends Error {
 }
 
 interface RequestOptions {
-  method?: "GET" | "POST" | "PATCH" | "DELETE";
+  method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   body?: unknown;
   /** Sant för anrop som får ske utan inloggning (inloggningen själv). */
   anonymous?: boolean;

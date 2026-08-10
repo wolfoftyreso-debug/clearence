@@ -77,6 +77,7 @@ export class Router {
    * resurs, och det är precis den glidning tests/apiSpec.ts numera vaktar.
    */
   patch = (p: string, h: Handler) => this.add("PATCH", p, h);
+  put = (p: string, h: Handler) => this.add("PUT", p, h);
   del = (p: string, h: Handler) => this.add("DELETE", p, h);
 
   match(method: string, path: string): { handler: Handler; params: Record<string, string> } | null {

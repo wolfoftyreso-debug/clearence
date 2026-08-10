@@ -28,6 +28,561 @@
     }
   ],
   "paths": {
+    "/advisor/reply": {
+      "post": {
+        "operationId": "clearanceReply",
+        "summary": "CLEARANCE:s svar i samtalet",
+        "description": "Driver rådgivarsamtalet med en språkmodell. Kräver inloggning: varje anrop debiteras per token, och en öppen rutt vore någon annans körning på vår faktura. Klienten skickar det synliga samtalet (user/assistant) – aldrig en systemprompt. CLEARANCE:s konstitution (ton, gränser, en fråga i taget, högst tre rekommendationer, inga påhittade fakta) bor på servern och kan inte skrivas om från en klient. Svarets status skiljer på svar, ingen-kalla (ingen modellnyckel i driften) och fel (modellen svarade inte). Det här är vägledning i samtalet, inte de strukturerade objekt som resten av API:t levererar.",
+        "x-status": "beta",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "messages"
+                ],
+                "properties": {
+                  "messages": {
+                    "type": "array",
+                    "description": "Hela det synliga samtalet, i tur och ordning. Måste sluta med ett meddelande från användaren.",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "role",
+                        "content"
+                      ],
+                      "properties": {
+                        "role": {
+                          "type": "string",
+                          "enum": [
+                            "user",
+                            "assistant"
+                          ]
+                        },
+                        "content": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "CLEARANCE:s svar, eller varför det uteblev",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "required": [
+                        "status",
+                        "reply",
+                        "model"
+                      ],
+                      "properties": {
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "svar"
+                          ]
+                        },
+                        "reply": {
+                          "type": "string"
+                        },
+                        "model": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    {
+                      "type": "object",
+                      "required": [
+                        "status",
+                        "reason"
+                      ],
+                      "properties": {
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "ingen-kalla",
+                            "fel"
+                          ]
+                        },
+                        "reason": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api-keys": {
+      "get": {
+        "operationId": "listApiKeys",
+        "summary": "Dina API-nycklar: prefix och metadata, aldrig hemligheten. Bara den egna ägarens (radskyddet).",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Nycklarna",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "keys"
+                  ],
+                  "properties": {
+                    "keys": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "createApiKey",
+        "summary": "Skapa en API-nyckel (create_api_key: genereras och hashas i databasen). Hemligheten returneras EN gång och lagras aldrig.",
+        "x-status": "beta",
+        "responses": {
+          "201": {
+            "description": "Nyckeln skapad",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "record",
+                    "secret"
+                  ],
+                  "properties": {
+                    "record": {
+                      "type": "object"
+                    },
+                    "secret": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api-keys/{keyId}/revoke": {
+      "post": {
+        "operationId": "revokeApiKey",
+        "summary": "Återkalla en nyckel. Idempotent; en återkallad nyckel förblir återkallad. Bara den egna nyckeln.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Återkallad",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "revoked"
+                  ],
+                  "properties": {
+                    "revoked": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "operationId": "login",
+        "summary": "Logga in och få en sessionstoken",
+        "description": "Sessionstoken i utbyte mot e-post och lösenord. Token visas EN gång och lagras aldrig i klartext - databasen har bara SHA-256 av den. Fel lösenord och okänd adress ger samma svar och kostar samma tid; skillnaden vore en kontolista. Kräver ingen autentisering.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
+    "/auth/logout": {
+      "post": {
+        "operationId": "logout",
+        "summary": "Återkalla den egna sessionen",
+        "description": "Återkallar sessionen bakom den token som skickas med. Återkallningen är slutgiltig - en token som en gång är död blir aldrig levande igen.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/me": {
+      "get": {
+        "operationId": "me",
+        "summary": "Vem den aktuella sessionen tillhör",
+        "description": "Kontot bakom token, med namn och roll ur profilen. Läses genom radskyddet som allt annat.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/billing/accounts/{userId}/close": {
+      "post": {
+        "operationId": "closeBillingAccount",
+        "summary": "Stäng ett konto vars faktura förfallit. Raderar ingenting - sätter closed_at. Behörighet i radskyddet.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Stängt",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "closed": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/billing/company-plan": {
+      "get": {
+        "operationId": "getCompanyPlan",
+        "summary": "Företagsplanens pris (exkl. moms). Driftparameter, publikt läsbar. Skrivs via /ops/company-plan.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Priset",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "monthlyExVatSek": {
+                      "type": "integer"
+                    },
+                    "businessExVatSek": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    },
+                    "enterpriseExVatSek": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/billing/customers": {
+      "get": {
+        "operationId": "listBillingCustomers",
+        "summary": "Driftens kundöversikt (profil, kontostatus, fakturor). Radskyddet ger en icke-admin bara de egna raderna.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Kunderna",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "customers": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/billing/invoices": {
+      "get": {
+        "operationId": "listMyInvoices",
+        "summary": "Kundens egna fakturor och kvitton, nyast först (radskyddet ger bara de egna).",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Fakturorna",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "invoices": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/billing/mine": {
+      "get": {
+        "operationId": "getMyBilling",
+        "summary": "Den inloggades kontostatus. Skapas lat vid första anropet - gratisveckan börjar när kontot används.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Kontostatus",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "billing": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/billing/outbox": {
+      "get": {
+        "operationId": "listBillingOutbox",
+        "summary": "Utkorgen (senaste 100), för drift: ett mejl som inte gått fram ska synas för en människa.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Utkorgen",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "emails": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/billing/outbox/{emailId}/retry": {
+      "post": {
+        "operationId": "retryOutboundEmail",
+        "summary": "Köa om ett misslyckat utskick. Endast drift; skickade rader rörs aldrig.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Köat",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "queued": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/cases": {
       "get": {
         "operationId": "listCases",
@@ -145,11 +700,11 @@
         }
       }
     },
-    "/cases/{caseId}/journal": {
+    "/cases/{caseId}/decisions": {
       "get": {
-        "operationId": "listJournal",
-        "summary": "Arbetsloggen: append-only-journalen, filtrerbar på objekttyp och tidsintervall, exporterbar",
-        "x-status": "live",
+        "operationId": "listDecisions",
+        "summary": "Beslutsminnet: protokollförda beslut med premiss",
+        "x-status": "beta",
         "responses": {
           "200": {
             "description": "OK"
@@ -164,25 +719,27 @@
               }
             }
           }
-        },
-        "parameters": [
-          {
-            "name": "objectType",
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
+        }
+      },
+      "post": {
+        "operationId": "recordDecision",
+        "summary": "Protokollför beslut med premiss och mätbart villkor",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "OK"
           },
-          {
-            "name": "since",
-            "in": "query",
-            "schema": {
-              "type": "string",
-              "format": "date-time"
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
             }
           }
-        ],
-        "description": "LIVE: autentiseras med API-nyckel (Authorization: Bearer clr_...). Nyckeln ser exakt det ägarens konto ser. Okänd eller återkallad nyckel och ärenden utan åtkomst får samma tystnad. Journalen levereras som händelserader - utan before/after-ögonblicksbilder och aldrig automatiska bedömningar."
+        }
       }
     },
     "/cases/{caseId}/documents": {
@@ -246,31 +803,63 @@
         }
       }
     },
-    "/documents/{documentId}/url": {
+    "/cases/{caseId}/invitations": {
       "get": {
-        "operationId": "getDocumentDownloadUrl",
-        "summary": "En kortlivad, signerad nedladdnings-URL. Signeras bara efter app.may_read_document(); storage_path lämnar aldrig servern. Okänt och obehörigt dokument ger samma 404.",
+        "operationId": "listCaseInvitations",
+        "summary": "Ärendets inbjudningar, nyast först. Läsbar för ärendets medlemmar via radskyddet.",
         "x-status": "beta",
         "responses": {
           "200": {
-            "description": "Den signerade URL:en",
+            "description": "Inbjudningarna",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
                   "required": [
-                    "url",
-                    "expiresInSeconds"
+                    "invitations"
                   ],
                   "properties": {
-                    "url": {
-                      "type": "string"
-                    },
-                    "fileName": {
-                      "type": "string"
-                    },
-                    "expiresInSeconds": {
-                      "type": "integer"
+                    "invitations": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "inviteToCase",
+        "summary": "Bjud in en adress till ärendet. Kräver owner/reconstructor/trustee (prövas i databasen). 'owner'/'creditor' delas inte ut per mejl.",
+        "x-status": "beta",
+        "responses": {
+          "201": {
+            "description": "Inbjudan skapad",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "invitationId"
+                  ],
+                  "properties": {
+                    "invitationId": {
+                      "type": "string",
+                      "format": "uuid"
                     }
                   }
                 }
@@ -290,10 +879,51 @@
         }
       }
     },
-    "/documents/{documentId}/review": {
-      "post": {
-        "operationId": "setDocumentReview",
-        "summary": "Granskningsövergång: request/approve/reset. Godkännande kräver rådgivarroll - prövas i backend.",
+    "/cases/{caseId}/journal": {
+      "get": {
+        "operationId": "listJournal",
+        "summary": "Arbetsloggen: append-only-journalen, filtrerbar på objekttyp och tidsintervall, exporterbar",
+        "x-status": "live",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "objectType",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "since",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        ],
+        "description": "LIVE: autentiseras med API-nyckel (Authorization: Bearer clr_...). Nyckeln ser exakt det ägarens konto ser. Okänd eller återkallad nyckel och ärenden utan åtkomst får samma tystnad. Journalen levereras som händelserader - utan before/after-ögonblicksbilder och aldrig automatiska bedömningar."
+      }
+    },
+    "/cases/{caseId}/kbr": {
+      "get": {
+        "operationId": "getKbr",
+        "summary": "Senaste kontrollbalansbedömningen",
+        "description": "Svarar med null när ingen bedömning är gjord - det är ett giltigt svar om ärendet och inte ett fel, så 404 vore fel signal.",
         "x-status": "beta",
         "responses": {
           "200": {
@@ -312,10 +942,373 @@
         }
       }
     },
-    "/cases/{caseId}/decisions": {
+    "/cases/{caseId}/members": {
       "get": {
-        "operationId": "listDecisions",
-        "summary": "Beslutsminnet: protokollförda beslut med premiss",
+        "operationId": "listCaseMembers",
+        "summary": "Ärendets deltagare. list_case_members prövar has_case_access - den som inte tillhör ärendet får noll rader.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Deltagarna",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "members"
+                  ],
+                  "properties": {
+                    "members": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/cases/{caseId}/messages": {
+      "get": {
+        "operationId": "listMessages",
+        "summary": "Grundtrådens meddelanden i ärendet",
+        "description": "Bara grundtråden (meddelanden utan tråd-id). Trådade meddelanden hämtas per tråd, och synligheten avgörs av radskyddet - inte av ett filter i API:t.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/cases/{caseId}/notes": {
+      "get": {
+        "operationId": "listCaseNotes",
+        "summary": "Interna anteckningar i ärendet. Synliga endast för författaren (radskyddet) - inte för bolaget eller andra deltagare.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Anteckningarna",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "notes"
+                  ],
+                  "properties": {
+                    "notes": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "addCaseNote",
+        "summary": "Lägg en intern anteckning. Författaren sätts av servern; kräver aktivt deltagande i ärendet.",
+        "x-status": "beta",
+        "responses": {
+          "201": {
+            "description": "Anteckning skapad",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "noteId"
+                  ],
+                  "properties": {
+                    "noteId": {
+                      "type": "string",
+                      "format": "uuid"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/cases/{caseId}/payments": {
+      "get": {
+        "operationId": "listPayments",
+        "summary": "Betalningarna i ärendet, med förfallodag",
+        "description": "Sorterade på förfallodag. Ett ärende utan åtkomst ger en TOM lista, inte ett fel - samma tystnad som resten av API:t, så svaret inte går att använda för att kartlägga vilka ärenden som finns.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/cases/{caseId}/plan-approval": {
+      "post": {
+        "operationId": "setPlanApproval",
+        "summary": "Rådgivarens stämpel på handlingsplanen",
+        "description": "Endast en rådgivarroll i ärendet kan sätta eller återta den. Regeln prövas i databasfunktionen, aldrig i anroparen - ett API som gör sin egen bedömning vid sidan om blir en andra sanning som glider isär från den första.",
+        "x-status": "beta",
+        "parameters": [
+          {
+            "name": "caseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "approved"
+                ],
+                "properties": {
+                  "approved": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Stämpeln satt eller återtagen"
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/cases/{caseId}/reopen": {
+      "post": {
+        "operationId": "reopenCase",
+        "summary": "Tillbaka till krisläget",
+        "description": "Från avslut eller hälsoläge. Ingenting raderades vid avslutet - akten består - så återöppningen återställer läget utan att återskapa något.",
+        "x-status": "beta",
+        "parameters": [
+          {
+            "name": "caseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Återöppnat"
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/cases/{caseId}/report": {
+      "get": {
+        "operationId": "getReport",
+        "summary": "Rapporten ur samma datamodell, som JSON eller PDF",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "format",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "json",
+                "pdf"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "/cases/{caseId}/sessions": {
+      "get": {
+        "operationId": "listAdvisorSessions",
+        "summary": "Rådgivarsamtalen i ärendet (journal). Läses av alla med ärendeåtkomst; observatörer läser men skriver inte.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Samtalen",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "sessions"
+                  ],
+                  "properties": {
+                    "sessions": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "saveAdvisorSession",
+        "summary": "Spara ett samtal (upsert på samtalets id). Kräver skrivrätt i ärendet (can_write_case).",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Sparat",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "saved",
+                    "sessionId"
+                  ],
+                  "properties": {
+                    "saved": {
+                      "type": "boolean"
+                    },
+                    "sessionId": {
+                      "type": "string",
+                      "format": "uuid"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/cases/{caseId}/share-links": {
+      "get": {
+        "operationId": "listShareLinks",
+        "summary": "Ärendets live-länkar med åtkomsträkning",
         "x-status": "beta",
         "responses": {
           "200": {
@@ -334,30 +1327,8 @@
         }
       },
       "post": {
-        "operationId": "recordDecision",
-        "summary": "Protokollför beslut med premiss och mätbart villkor",
-        "x-status": "beta",
-        "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "default": {
-            "description": "Fel",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/decisions/{decisionId}/reconsider": {
-      "post": {
-        "operationId": "reconsiderDecision",
-        "summary": "Ompröva - aldrig ändra: en stämplad markering ovanpå, originalet står kvar",
+        "operationId": "createShareLink",
+        "summary": "Skapa live-länk (nivå overview/full, tidsbegränsad, återkallbar)",
         "x-status": "beta",
         "responses": {
           "200": {
@@ -418,14 +1389,26 @@
         }
       }
     },
-    "/cases/{caseId}/report": {
-      "get": {
-        "operationId": "getReport",
-        "summary": "Rapporten ur samma datamodell, som JSON eller PDF",
+    "/cases/{caseId}/tasks/seed": {
+      "post": {
+        "operationId": "seedCaseTasks",
+        "summary": "Så rekommendationernas uppgifter i ärendet. Idempotent - on conflict do nothing mot (case_id, label), så samtidiga anrop ger en lista.",
         "x-status": "beta",
         "responses": {
           "200": {
-            "description": "OK"
+            "description": "Antal sådda etiketter",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "seeded": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
           },
           "default": {
             "description": "Fel",
@@ -437,26 +1420,239 @@
               }
             }
           }
-        },
-        "parameters": [
-          {
-            "name": "format",
-            "in": "query",
-            "schema": {
-              "type": "string",
-              "enum": [
-                "json",
-                "pdf"
-              ]
-            }
-          }
-        ]
+        }
       }
     },
-    "/cases/{caseId}/share-links": {
+    "/cases/{caseId}/time-entries": {
       "get": {
-        "operationId": "listShareLinks",
-        "summary": "Ärendets live-länkar med åtkomsträkning",
+        "operationId": "listTimeEntries",
+        "summary": "Nedlagd tid i ärendet. Var och en ser bara sina egna poster (radskyddet).",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Tidsposterna",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "entries"
+                  ],
+                  "properties": {
+                    "entries": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "logTimeEntry",
+        "summary": "Registrera nedlagd tid (minuter 1-1440, valfri anteckning och datum). Personen sätts av servern; kräver aktivt deltagande.",
+        "x-status": "beta",
+        "responses": {
+          "201": {
+            "description": "Tidspost skapad",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "entryId"
+                  ],
+                  "properties": {
+                    "entryId": {
+                      "type": "string",
+                      "format": "uuid"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/contact": {
+      "post": {
+        "operationId": "submitContactMessage",
+        "summary": "Skicka ett meddelande från kontaktformuläret. Får ske utan inloggning; status, avsändarens konto och handläggare sätts av servern, aldrig av klienten.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Mottaget",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "submitted"
+                  ],
+                  "properties": {
+                    "submitted": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "listContactMessages",
+        "summary": "Hela inkorgen, nyast först. Läsbar bara för driftadministratörer – radskyddet ger andra noll rader.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Inkorgen",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "messages"
+                  ],
+                  "properties": {
+                    "messages": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/contact/admin-status": {
+      "get": {
+        "operationId": "getContactAdminStatus",
+        "summary": "Säger om den inloggade är driftadministratör. Gränssnittsbeslut, inte behörighetsgräns – den håller i databasen.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Administratörsstatus",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "isAdmin"
+                  ],
+                  "properties": {
+                    "isAdmin": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/contact/{id}/status": {
+      "post": {
+        "operationId": "setContactStatus",
+        "summary": "Handläggning: sätter status och valfri intern anteckning. Handläggaren sätts av servern. Endast driftadministratörer.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Uppdaterat",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "updated"
+                  ],
+                  "properties": {
+                    "updated": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/decisions/{decisionId}/acknowledge-premise": {
+      "post": {
+        "operationId": "acknowledgePremise",
+        "summary": "Beslutet står fast trots motsagt villkor - kvitteras mot observationen och journalförs",
+        "description": "Tystar inte bevakningen för gott: kvitteringen gäller den observation som angavs, så frågan kommer tillbaka när läget ändras igen. Själva utvärderingen av villkoret görs av mottagaren - API:t levererar villkoret och siffrorna, aldrig en färdig bedömning.",
         "x-status": "beta",
         "responses": {
           "200": {
@@ -473,14 +1669,1260 @@
             }
           }
         }
-      },
+      }
+    },
+    "/decisions/{decisionId}/reconsider": {
       "post": {
-        "operationId": "createShareLink",
-        "summary": "Skapa live-länk (nivå overview/full, tidsbegränsad, återkallbar)",
+        "operationId": "reconsiderDecision",
+        "summary": "Ompröva - aldrig ändra: en stämplad markering ovanpå, originalet står kvar",
         "x-status": "beta",
         "responses": {
           "200": {
             "description": "OK"
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/documents/{documentId}/confirm": {
+      "post": {
+        "operationId": "confirmDocumentUpload",
+        "summary": "Steg 2: servern läser tillbaka filens första bytes ur lagringen och prövar signaturen mot utlovad typ och storlek. Godkänns den inte tas filen bort och raden raderas. Filnamn, ändelse och Content-Type är påståenden från klienten - bytesen är det inte.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Bekräftad",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "confirmed": {
+                      "type": "boolean"
+                    },
+                    "typ": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/documents/{documentId}/review": {
+      "post": {
+        "operationId": "setDocumentReview",
+        "summary": "Granskningsövergång: request/approve/reset. Godkännande kräver rådgivarroll - prövas i backend.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/documents/{documentId}/url": {
+      "get": {
+        "operationId": "getDocumentDownloadUrl",
+        "summary": "En kortlivad, signerad nedladdnings-URL. Signeras bara efter app.may_read_document(); storage_path lämnar aldrig servern. Okänt och obehörigt dokument ger samma 404.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Den signerade URL:en",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "url",
+                    "expiresInSeconds"
+                  ],
+                  "properties": {
+                    "url": {
+                      "type": "string"
+                    },
+                    "fileName": {
+                      "type": "string"
+                    },
+                    "expiresInSeconds": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "operationId": "health",
+        "summary": "Tjänstens status",
+        "description": "Svarar utan att röra databasen. Finns för lastbalanserarens hälsokontroll, inte för integrationer. Kräver ingen autentisering.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
+    "/invitations/{invitationId}": {
+      "get": {
+        "operationId": "peekCaseInvitation",
+        "summary": "Vad den inbjudna får se innan accept - bolagsnamn, roll och vem som bjöd in. Bara om den inloggades adress matchar; annars null (neutral tystnad).",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Förhandsvisningen (eller null)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "invitation"
+                  ],
+                  "properties": {
+                    "invitation": {
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/invitations/{invitationId}/accept": {
+      "post": {
+        "operationId": "acceptCaseInvitation",
+        "summary": "Acceptera en inbjudan. Adressen avgör: fel adress, återkallad, använd eller utgången ger 409. Returnerar ärendets id.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Accepterad",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "caseId"
+                  ],
+                  "properties": {
+                    "caseId": {
+                      "type": "string",
+                      "format": "uuid"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/invitations/{invitationId}/revoke": {
+      "post": {
+        "operationId": "revokeCaseInvitation",
+        "summary": "Återkalla en öppen inbjudan. Samma behörighet som att bjuda in.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Återkallad"
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/notes/{noteId}": {
+      "delete": {
+        "operationId": "removeCaseNote",
+        "summary": "Ta bort en egen anteckning. Idempotent; radskyddet släpper bara författarens egen rad.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Borttagen",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "deleted"
+                  ],
+                  "properties": {
+                    "deleted": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/notifications/deliveries": {
+      "get": {
+        "operationId": "listNotificationDeliveries",
+        "summary": "Kvittona: vad som gick ut, på vilken kanal, och skälet när det inte gjorde det. Taket är serverns (100).",
+        "x-status": "beta",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Kvittona",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "deliveries"
+                  ],
+                  "properties": {
+                    "deliveries": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/notifications/phone": {
+      "get": {
+        "operationId": "getVerifiedPhone",
+        "summary": "Ditt nummer MASKERAT, aldrig i sin helhet. Maskningen görs på servern; en klient kan inte få ut hela numret.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Numret maskerat, eller null",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": [
+                    "object",
+                    "null"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "startPhoneVerification",
+        "summary": "Begär en verifieringskod. Koden föds i databasen och går ut som SMS - svaret bär den aldrig, inte ens maskerad.",
+        "x-status": "beta",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "phone"
+                ],
+                "properties": {
+                  "phone": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Koden är köad",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "sent"
+                  ],
+                  "properties": {
+                    "sent": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "removeVerifiedPhone",
+        "summary": "Ta bort numret. Raderas helt - ett avstängt SMS ska inte lämna numret kvar.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Borttaget",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "removed"
+                  ],
+                  "properties": {
+                    "removed": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/notifications/phone/confirm": {
+      "post": {
+        "operationId": "confirmPhoneVerification",
+        "summary": "Pröva koden du skrev av från SMS:et. Fem försök, sedan bränns den. Fel kod ger 200 med verified=false, inte ett fel.",
+        "x-status": "beta",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "code"
+                ],
+                "properties": {
+                  "code": {
+                    "type": "string",
+                    "pattern": "^\\d{6}$"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Utfallet",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "verified"
+                  ],
+                  "properties": {
+                    "verified": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/notifications/prefs": {
+      "get": {
+        "operationId": "getNotificationPrefs",
+        "summary": "Dina aviseringsinställningar, eller null när du inte valt ännu. Skillnaden är avsiktlig: \"har inte valt\" är inte samma sak som \"valde standard\".",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Inställningarna, eller null",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": [
+                    "object",
+                    "null"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "operationId": "saveNotificationPrefs",
+        "summary": "Spara aviseringsinställningarna. user_id sätts av servern ur sessionen, aldrig ur kroppen.",
+        "x-status": "beta",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "level",
+                  "emailEnabled",
+                  "smsEnabled",
+                  "quietStartHour",
+                  "quietEndHour"
+                ],
+                "properties": {
+                  "level": {
+                    "type": "string",
+                    "enum": [
+                      "alla",
+                      "atgard",
+                      "tidskritiska"
+                    ]
+                  },
+                  "emailEnabled": {
+                    "type": "boolean"
+                  },
+                  "smsEnabled": {
+                    "type": "boolean"
+                  },
+                  "quietStartHour": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 23
+                  },
+                  "quietEndHour": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 23
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Sparat",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "saved"
+                  ],
+                  "properties": {
+                    "saved": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ops/audit": {
+      "get": {
+        "operationId": "listOpsAuditTrail",
+        "summary": "Driftens revisionsspår: vem gjorde vad på plattformsnivå (nyckelvalv, prisplaner, kreditspärr, gallring, kontostängning). Spåret bär aldrig hemligheten som ändrades. Endast drift.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Spåret",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "events": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ops/billing-plans": {
+      "get": {
+        "operationId": "listBillingPlans",
+        "summary": "Prisplanerna per byrå (per-ärende/abonnemang/användning/licens). Endast drift.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Planerna",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "plans": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "setBillingPlan",
+        "summary": "Sätt en byrås prisplan. Parametrar, inga hårdkodade belopp. Endast drift.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Sparat",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "saved": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ops/company-plan": {
+      "post": {
+        "operationId": "setCompanyPlan",
+        "summary": "Företagsabonnemangets månadsavgift (exkl. moms) som driftparameter. Endast drift.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Sparat",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "saved": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ops/north-star": {
+      "get": {
+        "operationId": "getNorthStarCounts",
+        "summary": "North Star och churn: återhämtade, i hälsoläge, dålig churn, öppna ärenden. Endast drift.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Måtten",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "recovered": {
+                      "type": "integer"
+                    },
+                    "inHealth": {
+                      "type": "integer"
+                    },
+                    "badChurn": {
+                      "type": "integer"
+                    },
+                    "openCases": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ops/professional-terms": {
+      "get": {
+        "operationId": "listProfessionalTerms",
+        "summary": "Rådgivarnas avtalsvillkor och avgifter. Endast drift.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Villkoren",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "terms": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ops/professionals/{professionalId}/billing-hold": {
+      "post": {
+        "operationId": "setBillingHold",
+        "summary": "Kreditspärren: prövas vid nästa avgiftsbelagda köp, rör aldrig pågående arbete. Endast drift.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Sparat",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "saved": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ops/professionals/{professionalId}/billing-shadow": {
+      "post": {
+        "operationId": "setBillingShadow",
+        "summary": "Skuggläget per byrå: avgifter registreras och visas men faktureras aldrig. Gäller framåt. Endast drift.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Sparat",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "saved": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ops/professionals/{professionalId}/referral-fee": {
+      "post": {
+        "operationId": "setReferralFee",
+        "summary": "Sätt en rådgivares förmedlingsavgift (kr, eller null = faktureras ej). Gäller framåt. Endast drift.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Sparat",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "saved": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ops/retention-policy": {
+      "get": {
+        "operationId": "getRetentionPolicy",
+        "summary": "Gallringspolicyn: standarden i koden med driftens override ovanpå. Läsbar utan admin - transparens.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Policyn",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "policy": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "setRetentionPolicy",
+        "summary": "Sätt gallringens override per kategori. Att slå på skarp gallring är ett medvetet beslut. Endast drift.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Sparat",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "saved": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ops/secrets": {
+      "get": {
+        "operationId": "listOpsSecrets",
+        "summary": "Nyckelvalvet: leverantör, fyra sista tecken och bytesdatum. ALDRIG hemligheten. Endast drift.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Hemligheterna",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "secrets": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "setOpsSecret",
+        "summary": "Spara en integrationshemlighet i valvet. Endast drift; värdet kan aldrig läsas tillbaka.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Sparat",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "saved": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ops/secrets/{provider}": {
+      "delete": {
+        "operationId": "deleteOpsSecret",
+        "summary": "Ta bort en integrationshemlighet. Endast drift.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Borttaget",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "deleted": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/profile": {
+      "get": {
+        "operationId": "getMyProfile",
+        "summary": "Den inloggades profil",
+        "description": "Svarar 200 med profile: null när profilen inte skapats ännu. Det är ett giltigt läge - profilen skapas vid första inloggningen - och ett 404 hade fått klienten att tro att något gått sönder.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Profilen, eller null",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "profile": {
+                      "oneOf": [
+                        {
+                          "$ref": "#/components/schemas/UserProfile"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "createMyProfile",
+        "summary": "Skapar profilen vid första inloggningen",
+        "description": "Rollen väljs EN gång. En företagare som vill bli rådgivare går genom ansökan, inte genom att posta om sin profil - därför sätter bara den här operationen role, och PATCH rör den aldrig. Anropet är idempotent: en profil som redan finns returneras oförändrad.",
+        "x-status": "beta",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "role"
+                ],
+                "properties": {
+                  "role": {
+                    "type": "string",
+                    "enum": [
+                      "company",
+                      "advisor",
+                      "admin"
+                    ]
+                  },
+                  "displayName": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Profilen",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserProfile"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "operationId": "updateMyProfile",
+        "summary": "Uppdaterar namn och telefon",
+        "description": "Rollen går inte att ändra här; se createMyProfile.",
+        "x-status": "beta",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "displayName": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "phone": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Uppdaterad"
           },
           "default": {
             "description": "Fel",
@@ -549,192 +2991,6 @@
             }
           }
         ]
-      }
-    },
-    "/decisions/{decisionId}/acknowledge-premise": {
-      "post": {
-        "operationId": "acknowledgePremise",
-        "summary": "Beslutet står fast trots motsagt villkor - kvitteras mot observationen och journalförs",
-        "description": "Tystar inte bevakningen för gott: kvitteringen gäller den observation som angavs, så frågan kommer tillbaka när läget ändras igen. Själva utvärderingen av villkoret görs av mottagaren - API:t levererar villkoret och siffrorna, aldrig en färdig bedömning.",
-        "x-status": "beta",
-        "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "default": {
-            "description": "Fel",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/auth/login": {
-      "post": {
-        "operationId": "login",
-        "summary": "Logga in och få en sessionstoken",
-        "description": "Sessionstoken i utbyte mot e-post och lösenord. Token visas EN gång och lagras aldrig i klartext - databasen har bara SHA-256 av den. Fel lösenord och okänd adress ger samma svar och kostar samma tid; skillnaden vore en kontolista. Kräver ingen autentisering.",
-        "x-status": "beta",
-        "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "default": {
-            "description": "Fel",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        },
-        "security": []
-      }
-    },
-    "/auth/logout": {
-      "post": {
-        "operationId": "logout",
-        "summary": "Återkalla den egna sessionen",
-        "description": "Återkallar sessionen bakom den token som skickas med. Återkallningen är slutgiltig - en token som en gång är död blir aldrig levande igen.",
-        "x-status": "beta",
-        "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "default": {
-            "description": "Fel",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/auth/me": {
-      "get": {
-        "operationId": "me",
-        "summary": "Vem den aktuella sessionen tillhör",
-        "description": "Kontot bakom token, med namn och roll ur profilen. Läses genom radskyddet som allt annat.",
-        "x-status": "beta",
-        "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "default": {
-            "description": "Fel",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/health": {
-      "get": {
-        "operationId": "health",
-        "summary": "Tjänstens status",
-        "description": "Svarar utan att röra databasen. Finns för lastbalanserarens hälsokontroll, inte för integrationer. Kräver ingen autentisering.",
-        "x-status": "beta",
-        "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "default": {
-            "description": "Fel",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        },
-        "security": []
-      }
-    },
-    "/cases/{caseId}/payments": {
-      "get": {
-        "operationId": "listPayments",
-        "summary": "Betalningarna i ärendet, med förfallodag",
-        "description": "Sorterade på förfallodag. Ett ärende utan åtkomst ger en TOM lista, inte ett fel - samma tystnad som resten av API:t, så svaret inte går att använda för att kartlägga vilka ärenden som finns.",
-        "x-status": "beta",
-        "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "default": {
-            "description": "Fel",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/cases/{caseId}/messages": {
-      "get": {
-        "operationId": "listMessages",
-        "summary": "Grundtrådens meddelanden i ärendet",
-        "description": "Bara grundtråden (meddelanden utan tråd-id). Trådade meddelanden hämtas per tråd, och synligheten avgörs av radskyddet - inte av ett filter i API:t.",
-        "x-status": "beta",
-        "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "default": {
-            "description": "Fel",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/cases/{caseId}/kbr": {
-      "get": {
-        "operationId": "getKbr",
-        "summary": "Senaste kontrollbalansbedömningen",
-        "description": "Svarar med null när ingen bedömning är gjord - det är ett giltigt svar om ärendet och inte ett fel, så 404 vore fel signal.",
-        "x-status": "beta",
-        "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "default": {
-            "description": "Fel",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
       }
     },
     "/sources/google": {
@@ -922,12 +3178,23 @@
         }
       }
     },
-    "/advisor/reply": {
+    "/tasks/{taskId}/assign": {
       "post": {
-        "operationId": "clearanceReply",
-        "summary": "CLEARANCE:s svar i samtalet",
-        "description": "Driver rådgivarsamtalet med en språkmodell. Kräver inloggning: varje anrop debiteras per token, och en öppen rutt vore någon annans körning på vår faktura. Klienten skickar det synliga samtalet (user/assistant) – aldrig en systemprompt. CLEARANCE:s konstitution (ton, gränser, en fråga i taget, högst tre rekommendationer, inga påhittade fakta) bor på servern och kan inte skrivas om från en klient. Svarets status skiljer på svar, ingen-kalla (ingen modellnyckel i driften) och fel (modellen svarade inte). Det här är vägledning i samtalet, inte de strukturerade objekt som resten av API:t levererar.",
+        "operationId": "assignTask",
+        "summary": "Tilldelar en uppgift, eller tar bort tilldelningen",
+        "description": "userId satt till null tar bort tilldelningen. Uppgiften måste tillhöra ett ärende anroparen har tillgång till; radskyddet avgör det, inte handlern.",
         "x-status": "beta",
+        "parameters": [
+          {
+            "name": "taskId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -935,31 +3202,13 @@
               "schema": {
                 "type": "object",
                 "required": [
-                  "messages"
+                  "userId"
                 ],
                 "properties": {
-                  "messages": {
-                    "type": "array",
-                    "description": "Hela det synliga samtalet, i tur och ordning. Måste sluta med ett meddelande från användaren.",
-                    "items": {
-                      "type": "object",
-                      "required": [
-                        "role",
-                        "content"
-                      ],
-                      "properties": {
-                        "role": {
-                          "type": "string",
-                          "enum": [
-                            "user",
-                            "assistant"
-                          ]
-                        },
-                        "content": {
-                          "type": "string"
-                        }
-                      }
-                    }
+                  "userId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "nullable": true
                   }
                 }
               }
@@ -968,53 +3217,11 @@
         },
         "responses": {
           "200": {
-            "description": "CLEARANCE:s svar, eller varför det uteblev",
+            "description": "Uppgiften efter ändringen",
             "content": {
               "application/json": {
                 "schema": {
-                  "oneOf": [
-                    {
-                      "type": "object",
-                      "required": [
-                        "status",
-                        "reply",
-                        "model"
-                      ],
-                      "properties": {
-                        "status": {
-                          "type": "string",
-                          "enum": [
-                            "svar"
-                          ]
-                        },
-                        "reply": {
-                          "type": "string"
-                        },
-                        "model": {
-                          "type": "string"
-                        }
-                      }
-                    },
-                    {
-                      "type": "object",
-                      "required": [
-                        "status",
-                        "reason"
-                      ],
-                      "properties": {
-                        "status": {
-                          "type": "string",
-                          "enum": [
-                            "ingen-kalla",
-                            "fel"
-                          ]
-                        },
-                        "reason": {
-                          "type": "string"
-                        }
-                      }
-                    }
-                  ]
+                  "$ref": "#/components/schemas/Task"
                 }
               }
             }
@@ -1091,851 +3298,6 @@
         }
       }
     },
-    "/tasks/{taskId}/assign": {
-      "post": {
-        "operationId": "assignTask",
-        "summary": "Tilldelar en uppgift, eller tar bort tilldelningen",
-        "description": "userId satt till null tar bort tilldelningen. Uppgiften måste tillhöra ett ärende anroparen har tillgång till; radskyddet avgör det, inte handlern.",
-        "x-status": "beta",
-        "parameters": [
-          {
-            "name": "taskId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": [
-                  "userId"
-                ],
-                "properties": {
-                  "userId": {
-                    "type": "string",
-                    "format": "uuid",
-                    "nullable": true
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Uppgiften efter ändringen",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Task"
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Fel",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/profile": {
-      "get": {
-        "operationId": "getMyProfile",
-        "summary": "Den inloggades profil",
-        "description": "Svarar 200 med profile: null när profilen inte skapats ännu. Det är ett giltigt läge - profilen skapas vid första inloggningen - och ett 404 hade fått klienten att tro att något gått sönder.",
-        "x-status": "beta",
-        "responses": {
-          "200": {
-            "description": "Profilen, eller null",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "profile": {
-                      "oneOf": [
-                        {
-                          "$ref": "#/components/schemas/UserProfile"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Fel",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "operationId": "createMyProfile",
-        "summary": "Skapar profilen vid första inloggningen",
-        "description": "Rollen väljs EN gång. En företagare som vill bli rådgivare går genom ansökan, inte genom att posta om sin profil - därför sätter bara den här operationen role, och PATCH rör den aldrig. Anropet är idempotent: en profil som redan finns returneras oförändrad.",
-        "x-status": "beta",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": [
-                  "role"
-                ],
-                "properties": {
-                  "role": {
-                    "type": "string",
-                    "enum": [
-                      "company",
-                      "advisor",
-                      "admin"
-                    ]
-                  },
-                  "displayName": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Profilen",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UserProfile"
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Fel",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      },
-      "patch": {
-        "operationId": "updateMyProfile",
-        "summary": "Uppdaterar namn och telefon",
-        "description": "Rollen går inte att ändra här; se createMyProfile.",
-        "x-status": "beta",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "displayName": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  },
-                  "phone": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Uppdaterad"
-          },
-          "default": {
-            "description": "Fel",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/cases/{caseId}/reopen": {
-      "post": {
-        "operationId": "reopenCase",
-        "summary": "Tillbaka till krisläget",
-        "description": "Från avslut eller hälsoläge. Ingenting raderades vid avslutet - akten består - så återöppningen återställer läget utan att återskapa något.",
-        "x-status": "beta",
-        "parameters": [
-          {
-            "name": "caseId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Återöppnat"
-          },
-          "default": {
-            "description": "Fel",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/cases/{caseId}/plan-approval": {
-      "post": {
-        "operationId": "setPlanApproval",
-        "summary": "Rådgivarens stämpel på handlingsplanen",
-        "description": "Endast en rådgivarroll i ärendet kan sätta eller återta den. Regeln prövas i databasfunktionen, aldrig i anroparen - ett API som gör sin egen bedömning vid sidan om blir en andra sanning som glider isär från den första.",
-        "x-status": "beta",
-        "parameters": [
-          {
-            "name": "caseId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": [
-                  "approved"
-                ],
-                "properties": {
-                  "approved": {
-                    "type": "boolean"
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Stämpeln satt eller återtagen"
-          },
-          "default": {
-            "description": "Fel",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/contact": {
-      "post": {
-        "operationId": "submitContactMessage",
-        "summary": "Skicka ett meddelande från kontaktformuläret. Får ske utan inloggning; status, avsändarens konto och handläggare sätts av servern, aldrig av klienten.",
-        "x-status": "beta",
-        "responses": {
-          "200": {
-            "description": "Mottaget",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "required": [
-                    "submitted"
-                  ],
-                  "properties": {
-                    "submitted": {
-                      "type": "boolean"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Fel",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      },
-      "get": {
-        "operationId": "listContactMessages",
-        "summary": "Hela inkorgen, nyast först. Läsbar bara för driftadministratörer – radskyddet ger andra noll rader.",
-        "x-status": "beta",
-        "responses": {
-          "200": {
-            "description": "Inkorgen",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "required": [
-                    "messages"
-                  ],
-                  "properties": {
-                    "messages": {
-                      "type": "array",
-                      "items": {
-                        "type": "object"
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Fel",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/contact/admin-status": {
-      "get": {
-        "operationId": "getContactAdminStatus",
-        "summary": "Säger om den inloggade är driftadministratör. Gränssnittsbeslut, inte behörighetsgräns – den håller i databasen.",
-        "x-status": "beta",
-        "responses": {
-          "200": {
-            "description": "Administratörsstatus",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "required": [
-                    "isAdmin"
-                  ],
-                  "properties": {
-                    "isAdmin": {
-                      "type": "boolean"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Fel",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/contact/{id}/status": {
-      "post": {
-        "operationId": "setContactStatus",
-        "summary": "Handläggning: sätter status och valfri intern anteckning. Handläggaren sätts av servern. Endast driftadministratörer.",
-        "x-status": "beta",
-        "responses": {
-          "200": {
-            "description": "Uppdaterat",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "required": [
-                    "updated"
-                  ],
-                  "properties": {
-                    "updated": {
-                      "type": "boolean"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Fel",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/cases/{caseId}/members": {
-      "get": {
-        "operationId": "listCaseMembers",
-        "summary": "Ärendets deltagare. list_case_members prövar has_case_access - den som inte tillhör ärendet får noll rader.",
-        "x-status": "beta",
-        "responses": {
-          "200": {
-            "description": "Deltagarna",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "required": [
-                    "members"
-                  ],
-                  "properties": {
-                    "members": {
-                      "type": "array",
-                      "items": {
-                        "type": "object"
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Fel",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/cases/{caseId}/invitations": {
-      "get": {
-        "operationId": "listCaseInvitations",
-        "summary": "Ärendets inbjudningar, nyast först. Läsbar för ärendets medlemmar via radskyddet.",
-        "x-status": "beta",
-        "responses": {
-          "200": {
-            "description": "Inbjudningarna",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "required": [
-                    "invitations"
-                  ],
-                  "properties": {
-                    "invitations": {
-                      "type": "array",
-                      "items": {
-                        "type": "object"
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Fel",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "operationId": "inviteToCase",
-        "summary": "Bjud in en adress till ärendet. Kräver owner/reconstructor/trustee (prövas i databasen). 'owner'/'creditor' delas inte ut per mejl.",
-        "x-status": "beta",
-        "responses": {
-          "201": {
-            "description": "Inbjudan skapad",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "required": [
-                    "invitationId"
-                  ],
-                  "properties": {
-                    "invitationId": {
-                      "type": "string",
-                      "format": "uuid"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Fel",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/invitations/{invitationId}": {
-      "get": {
-        "operationId": "peekCaseInvitation",
-        "summary": "Vad den inbjudna får se innan accept - bolagsnamn, roll och vem som bjöd in. Bara om den inloggades adress matchar; annars null (neutral tystnad).",
-        "x-status": "beta",
-        "responses": {
-          "200": {
-            "description": "Förhandsvisningen (eller null)",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "required": [
-                    "invitation"
-                  ],
-                  "properties": {
-                    "invitation": {
-                      "type": [
-                        "object",
-                        "null"
-                      ]
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Fel",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/invitations/{invitationId}/revoke": {
-      "post": {
-        "operationId": "revokeCaseInvitation",
-        "summary": "Återkalla en öppen inbjudan. Samma behörighet som att bjuda in.",
-        "x-status": "beta",
-        "responses": {
-          "200": {
-            "description": "Återkallad"
-          },
-          "default": {
-            "description": "Fel",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/invitations/{invitationId}/accept": {
-      "post": {
-        "operationId": "acceptCaseInvitation",
-        "summary": "Acceptera en inbjudan. Adressen avgör: fel adress, återkallad, använd eller utgången ger 409. Returnerar ärendets id.",
-        "x-status": "beta",
-        "responses": {
-          "200": {
-            "description": "Accepterad",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "required": [
-                    "caseId"
-                  ],
-                  "properties": {
-                    "caseId": {
-                      "type": "string",
-                      "format": "uuid"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Fel",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/cases/{caseId}/notes": {
-      "get": {
-        "operationId": "listCaseNotes",
-        "summary": "Interna anteckningar i ärendet. Synliga endast för författaren (radskyddet) - inte för bolaget eller andra deltagare.",
-        "x-status": "beta",
-        "responses": {
-          "200": {
-            "description": "Anteckningarna",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "required": [
-                    "notes"
-                  ],
-                  "properties": {
-                    "notes": {
-                      "type": "array",
-                      "items": {
-                        "type": "object"
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Fel",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "operationId": "addCaseNote",
-        "summary": "Lägg en intern anteckning. Författaren sätts av servern; kräver aktivt deltagande i ärendet.",
-        "x-status": "beta",
-        "responses": {
-          "201": {
-            "description": "Anteckning skapad",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "required": [
-                    "noteId"
-                  ],
-                  "properties": {
-                    "noteId": {
-                      "type": "string",
-                      "format": "uuid"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Fel",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/notes/{noteId}": {
-      "delete": {
-        "operationId": "removeCaseNote",
-        "summary": "Ta bort en egen anteckning. Idempotent; radskyddet släpper bara författarens egen rad.",
-        "x-status": "beta",
-        "responses": {
-          "200": {
-            "description": "Borttagen",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "required": [
-                    "deleted"
-                  ],
-                  "properties": {
-                    "deleted": {
-                      "type": "boolean"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Fel",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/cases/{caseId}/time-entries": {
-      "get": {
-        "operationId": "listTimeEntries",
-        "summary": "Nedlagd tid i ärendet. Var och en ser bara sina egna poster (radskyddet).",
-        "x-status": "beta",
-        "responses": {
-          "200": {
-            "description": "Tidsposterna",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "required": [
-                    "entries"
-                  ],
-                  "properties": {
-                    "entries": {
-                      "type": "array",
-                      "items": {
-                        "type": "object"
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Fel",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "operationId": "logTimeEntry",
-        "summary": "Registrera nedlagd tid (minuter 1-1440, valfri anteckning och datum). Personen sätts av servern; kräver aktivt deltagande.",
-        "x-status": "beta",
-        "responses": {
-          "201": {
-            "description": "Tidspost skapad",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "required": [
-                    "entryId"
-                  ],
-                  "properties": {
-                    "entryId": {
-                      "type": "string",
-                      "format": "uuid"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Fel",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/time-entries/{entryId}": {
       "delete": {
         "operationId": "removeTimeEntry",
@@ -1954,1029 +3316,6 @@
                   "properties": {
                     "deleted": {
                       "type": "boolean"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Fel",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api-keys": {
-      "get": {
-        "operationId": "listApiKeys",
-        "summary": "Dina API-nycklar: prefix och metadata, aldrig hemligheten. Bara den egna ägarens (radskyddet).",
-        "x-status": "beta",
-        "responses": {
-          "200": {
-            "description": "Nycklarna",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "required": [
-                    "keys"
-                  ],
-                  "properties": {
-                    "keys": {
-                      "type": "array",
-                      "items": {
-                        "type": "object"
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Fel",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "operationId": "createApiKey",
-        "summary": "Skapa en API-nyckel (create_api_key: genereras och hashas i databasen). Hemligheten returneras EN gång och lagras aldrig.",
-        "x-status": "beta",
-        "responses": {
-          "201": {
-            "description": "Nyckeln skapad",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "required": [
-                    "record",
-                    "secret"
-                  ],
-                  "properties": {
-                    "record": {
-                      "type": "object"
-                    },
-                    "secret": {
-                      "type": "string"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Fel",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api-keys/{keyId}/revoke": {
-      "post": {
-        "operationId": "revokeApiKey",
-        "summary": "Återkalla en nyckel. Idempotent; en återkallad nyckel förblir återkallad. Bara den egna nyckeln.",
-        "x-status": "beta",
-        "responses": {
-          "200": {
-            "description": "Återkallad",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "required": [
-                    "revoked"
-                  ],
-                  "properties": {
-                    "revoked": {
-                      "type": "boolean"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Fel",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/cases/{caseId}/sessions": {
-      "get": {
-        "operationId": "listAdvisorSessions",
-        "summary": "Rådgivarsamtalen i ärendet (journal). Läses av alla med ärendeåtkomst; observatörer läser men skriver inte.",
-        "x-status": "beta",
-        "responses": {
-          "200": {
-            "description": "Samtalen",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "required": [
-                    "sessions"
-                  ],
-                  "properties": {
-                    "sessions": {
-                      "type": "array",
-                      "items": {
-                        "type": "object"
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Fel",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "operationId": "saveAdvisorSession",
-        "summary": "Spara ett samtal (upsert på samtalets id). Kräver skrivrätt i ärendet (can_write_case).",
-        "x-status": "beta",
-        "responses": {
-          "200": {
-            "description": "Sparat",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "required": [
-                    "saved",
-                    "sessionId"
-                  ],
-                  "properties": {
-                    "saved": {
-                      "type": "boolean"
-                    },
-                    "sessionId": {
-                      "type": "string",
-                      "format": "uuid"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Fel",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/ops/secrets": {
-      "get": {
-        "operationId": "listOpsSecrets",
-        "summary": "Nyckelvalvet: leverantör, fyra sista tecken och bytesdatum. ALDRIG hemligheten. Endast drift.",
-        "x-status": "beta",
-        "responses": {
-          "200": {
-            "description": "Hemligheterna",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "secrets": {
-                      "type": "array",
-                      "items": {
-                        "type": "object"
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Fel",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "operationId": "setOpsSecret",
-        "summary": "Spara en integrationshemlighet i valvet. Endast drift; värdet kan aldrig läsas tillbaka.",
-        "x-status": "beta",
-        "responses": {
-          "200": {
-            "description": "Sparat",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "saved": {
-                      "type": "boolean"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Fel",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/ops/secrets/{provider}": {
-      "delete": {
-        "operationId": "deleteOpsSecret",
-        "summary": "Ta bort en integrationshemlighet. Endast drift.",
-        "x-status": "beta",
-        "responses": {
-          "200": {
-            "description": "Borttaget",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "deleted": {
-                      "type": "boolean"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Fel",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/ops/professional-terms": {
-      "get": {
-        "operationId": "listProfessionalTerms",
-        "summary": "Rådgivarnas avtalsvillkor och avgifter. Endast drift.",
-        "x-status": "beta",
-        "responses": {
-          "200": {
-            "description": "Villkoren",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "terms": {
-                      "type": "array",
-                      "items": {
-                        "type": "object"
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Fel",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/ops/professionals/{professionalId}/referral-fee": {
-      "post": {
-        "operationId": "setReferralFee",
-        "summary": "Sätt en rådgivares förmedlingsavgift (kr, eller null = faktureras ej). Gäller framåt. Endast drift.",
-        "x-status": "beta",
-        "responses": {
-          "200": {
-            "description": "Sparat",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "saved": {
-                      "type": "boolean"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Fel",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/ops/billing-plans": {
-      "get": {
-        "operationId": "listBillingPlans",
-        "summary": "Prisplanerna per byrå (per-ärende/abonnemang/användning/licens). Endast drift.",
-        "x-status": "beta",
-        "responses": {
-          "200": {
-            "description": "Planerna",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "plans": {
-                      "type": "array",
-                      "items": {
-                        "type": "object"
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Fel",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "operationId": "setBillingPlan",
-        "summary": "Sätt en byrås prisplan. Parametrar, inga hårdkodade belopp. Endast drift.",
-        "x-status": "beta",
-        "responses": {
-          "200": {
-            "description": "Sparat",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "saved": {
-                      "type": "boolean"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Fel",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/ops/professionals/{professionalId}/billing-hold": {
-      "post": {
-        "operationId": "setBillingHold",
-        "summary": "Kreditspärren: prövas vid nästa avgiftsbelagda köp, rör aldrig pågående arbete. Endast drift.",
-        "x-status": "beta",
-        "responses": {
-          "200": {
-            "description": "Sparat",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "saved": {
-                      "type": "boolean"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Fel",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/ops/professionals/{professionalId}/billing-shadow": {
-      "post": {
-        "operationId": "setBillingShadow",
-        "summary": "Skuggläget per byrå: avgifter registreras och visas men faktureras aldrig. Gäller framåt. Endast drift.",
-        "x-status": "beta",
-        "responses": {
-          "200": {
-            "description": "Sparat",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "saved": {
-                      "type": "boolean"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Fel",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/ops/company-plan": {
-      "post": {
-        "operationId": "setCompanyPlan",
-        "summary": "Företagsabonnemangets månadsavgift (exkl. moms) som driftparameter. Endast drift.",
-        "x-status": "beta",
-        "responses": {
-          "200": {
-            "description": "Sparat",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "saved": {
-                      "type": "boolean"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Fel",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/ops/retention-policy": {
-      "get": {
-        "operationId": "getRetentionPolicy",
-        "summary": "Gallringspolicyn: standarden i koden med driftens override ovanpå. Läsbar utan admin - transparens.",
-        "x-status": "beta",
-        "responses": {
-          "200": {
-            "description": "Policyn",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "policy": {
-                      "type": "array",
-                      "items": {
-                        "type": "object"
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Fel",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "operationId": "setRetentionPolicy",
-        "summary": "Sätt gallringens override per kategori. Att slå på skarp gallring är ett medvetet beslut. Endast drift.",
-        "x-status": "beta",
-        "responses": {
-          "200": {
-            "description": "Sparat",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "saved": {
-                      "type": "boolean"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Fel",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/ops/north-star": {
-      "get": {
-        "operationId": "getNorthStarCounts",
-        "summary": "North Star och churn: återhämtade, i hälsoläge, dålig churn, öppna ärenden. Endast drift.",
-        "x-status": "beta",
-        "responses": {
-          "200": {
-            "description": "Måtten",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "recovered": {
-                      "type": "integer"
-                    },
-                    "inHealth": {
-                      "type": "integer"
-                    },
-                    "badChurn": {
-                      "type": "integer"
-                    },
-                    "openCases": {
-                      "type": "integer"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Fel",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/billing/mine": {
-      "get": {
-        "operationId": "getMyBilling",
-        "summary": "Den inloggades kontostatus. Skapas lat vid första anropet - gratisveckan börjar när kontot används.",
-        "x-status": "beta",
-        "responses": {
-          "200": {
-            "description": "Kontostatus",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "billing": {
-                      "type": "object"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Fel",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/billing/invoices": {
-      "get": {
-        "operationId": "listMyInvoices",
-        "summary": "Kundens egna fakturor och kvitton, nyast först (radskyddet ger bara de egna).",
-        "x-status": "beta",
-        "responses": {
-          "200": {
-            "description": "Fakturorna",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "invoices": {
-                      "type": "array",
-                      "items": {
-                        "type": "object"
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Fel",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/billing/company-plan": {
-      "get": {
-        "operationId": "getCompanyPlan",
-        "summary": "Företagsplanens pris (exkl. moms). Driftparameter, publikt läsbar. Skrivs via /ops/company-plan.",
-        "x-status": "beta",
-        "responses": {
-          "200": {
-            "description": "Priset",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "monthlyExVatSek": {
-                      "type": "integer"
-                    },
-                    "businessExVatSek": {
-                      "type": [
-                        "integer",
-                        "null"
-                      ]
-                    },
-                    "enterpriseExVatSek": {
-                      "type": [
-                        "integer",
-                        "null"
-                      ]
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Fel",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/billing/customers": {
-      "get": {
-        "operationId": "listBillingCustomers",
-        "summary": "Driftens kundöversikt (profil, kontostatus, fakturor). Radskyddet ger en icke-admin bara de egna raderna.",
-        "x-status": "beta",
-        "responses": {
-          "200": {
-            "description": "Kunderna",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "customers": {
-                      "type": "array",
-                      "items": {
-                        "type": "object"
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Fel",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/billing/accounts/{userId}/close": {
-      "post": {
-        "operationId": "closeBillingAccount",
-        "summary": "Stäng ett konto vars faktura förfallit. Raderar ingenting - sätter closed_at. Behörighet i radskyddet.",
-        "x-status": "beta",
-        "responses": {
-          "200": {
-            "description": "Stängt",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "closed": {
-                      "type": "boolean"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Fel",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/billing/outbox": {
-      "get": {
-        "operationId": "listBillingOutbox",
-        "summary": "Utkorgen (senaste 100), för drift: ett mejl som inte gått fram ska synas för en människa.",
-        "x-status": "beta",
-        "responses": {
-          "200": {
-            "description": "Utkorgen",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "emails": {
-                      "type": "array",
-                      "items": {
-                        "type": "object"
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Fel",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/billing/outbox/{emailId}/retry": {
-      "post": {
-        "operationId": "retryOutboundEmail",
-        "summary": "Köa om ett misslyckat utskick. Endast drift; skickade rader rörs aldrig.",
-        "x-status": "beta",
-        "responses": {
-          "200": {
-            "description": "Köat",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "queued": {
-                      "type": "boolean"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Fel",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/cases/{caseId}/tasks/seed": {
-      "post": {
-        "operationId": "seedCaseTasks",
-        "summary": "Så rekommendationernas uppgifter i ärendet. Idempotent - on conflict do nothing mot (case_id, label), så samtidiga anrop ger en lista.",
-        "x-status": "beta",
-        "responses": {
-          "200": {
-            "description": "Antal sådda etiketter",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "seeded": {
-                      "type": "integer"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Fel",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/ops/audit": {
-      "get": {
-        "operationId": "listOpsAuditTrail",
-        "summary": "Driftens revisionsspår: vem gjorde vad på plattformsnivå (nyckelvalv, prisplaner, kreditspärr, gallring, kontostängning). Spåret bär aldrig hemligheten som ändrades. Endast drift.",
-        "x-status": "beta",
-        "responses": {
-          "200": {
-            "description": "Spåret",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "events": {
-                      "type": "array",
-                      "items": {
-                        "type": "object"
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Fel",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/documents/{documentId}/confirm": {
-      "post": {
-        "operationId": "confirmDocumentUpload",
-        "summary": "Steg 2: servern läser tillbaka filens första bytes ur lagringen och prövar signaturen mot utlovad typ och storlek. Godkänns den inte tas filen bort och raden raderas. Filnamn, ändelse och Content-Type är påståenden från klienten - bytesen är det inte.",
-        "x-status": "beta",
-        "responses": {
-          "200": {
-            "description": "Bekräftad",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "confirmed": {
-                      "type": "boolean"
-                    },
-                    "typ": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
                     }
                   }
                 }

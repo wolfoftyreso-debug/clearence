@@ -1624,6 +1624,207 @@ const bertilStarta = await call("POST", `/v1/cases/${CASE_A}/documents`, {
 });
 check("en utomstående kan inte påbörja uppladdning i annans ärende", bertilStarta.status >= 400, bertilStarta.body);
 
+/* --- 8m4. Telefonverifieringen bevisar innehav av telefonen -------------- */
+
+/*
+ * ANGREPPET som gick fram innan migration 20260822100000: koden slumpades
+ * i webbläsaren, så den som anropade API:t kunde välja den själv, aldrig
+ * läsa något SMS och ändå bekräfta. Ett "verifierat" nummer kunde alltså
+ * vara vem som helsts - och det numret får sedan SMS om att någon har ett
+ * ärende hos CLEARANCE.
+ *
+ * Prövningen nedan går genom API:t, inte genom en attrapp, och läser
+ * verkligen ut vad databasen har lagt i kön. Det är enda sättet att se att
+ * koden i SMS:et och hashen på raden hör ihop - och att API:et aldrig
+ * skickar tillbaka den.
+ */
+/*
+ * Agnes sessionspolett återkallades i avsnitt 7 (utloggningen prövas där).
+ * Den här sviten behöver TVÅ levande sessioner - en som äger raden och en
+ * som ska nekas den - så Agnes loggar in på nytt.
+ */
+const agnesOmLogin = await call("POST", "/v1/auth/login", {
+  body: { email: "agnes@bolag-a.se", password: "hemligt-losen-agnes" },
+});
+const agnesSession: string = agnesOmLogin.body.token as string;
+check("Agnes kan logga in igen inför aviseringsproven", typeof agnesSession === "string", agnesOmLogin.body);
+
+{
+  const start = await call("POST", "/v1/notifications/phone", {
+    token: agnesSession,
+    body: { phone: "070-123 45 67" },
+  });
+  check("verifieringen går att påbörja", start.status === 200, start.body);
+  check("svaret säger bara att koden är skickad", JSON.stringify(start.body) === '{"sent":true}', start.body);
+
+  // Koden i klartext finns BARA i SMS-kön, som ingen klientroll kan läsa.
+  const kon = await withAnon(async (tx) => {
+    const { rows } = await tx.query(
+      "select recipient, body from public.outbound_sms where recipient = $1::text order by created_at desc limit 1",
+      ["+46701234567"],
+    );
+    return rows[0] ?? null;
+  });
+  check("SMS:et är köat till det normaliserade numret", kon !== null, kon);
+  const koden = /(\d{6})/.exec(String(kon?.body ?? ""))?.[1] ?? "";
+  check("SMS:et bär en sexsiffrig kod", /^\d{6}$/.test(koden), kon?.body);
+  check(
+    "och koden finns ingenstans i API:ets svar",
+    koden.length === 6 && !JSON.stringify(start.body).includes(koden),
+    start.body,
+  );
+
+  // Numret läses tillbaka MASKERAT. Hela numret ska inte gå att få ut.
+  const nummer = await call("GET", "/v1/notifications/phone", { token: agnesSession });
+  const nummerKropp = (nummer.body ?? {}) as Record<string, unknown>;
+  check("numret är maskerat i svaret", nummerKropp.masked === "+46 701 •• •• 67", nummer.body);
+  check("hela numret finns inte i svaret", !JSON.stringify(nummer.body).includes("+46701234567"), nummer.body);
+  check("och det är ännu inte verifierat", nummerKropp.verified === false, nummer.body);
+  check("men det väntar på en kod", nummerKropp.awaitingCode === true, nummer.body);
+
+  // En gissad kod ger falskt - och bränner ett av fem försök.
+  const fel = koden === "000000" ? "111111" : "000000";
+  const gissa = await call("POST", "/v1/notifications/phone/confirm", {
+    token: agnesSession,
+    body: { code: fel },
+  });
+  check("en gissad kod verifierar ingenting", gissa.status === 200 && gissa.body.verified === false, gissa.body);
+
+  // Rätt kod - den som bara den som HÅLLER TELEFONEN kan känna till.
+  const ratt = await call("POST", "/v1/notifications/phone/confirm", {
+    token: agnesSession,
+    body: { code: koden },
+  });
+  check("koden ur SMS:et verifierar numret", ratt.status === 200 && ratt.body.verified === true, ratt.body);
+
+  const efter = await call("GET", "/v1/notifications/phone", { token: agnesSession });
+  const efterKropp = (efter.body ?? {}) as Record<string, unknown>;
+  check("numret står som verifierat efteråt", efterKropp.verified === true, efter.body);
+  check("och väntar inte längre på någon kod", efterKropp.awaitingCode === false, efter.body);
+
+  // Koden är förbrukad: samma kod en gång till ska inte gå igenom.
+  const igen = await call("POST", "/v1/notifications/phone/confirm", {
+    token: agnesSession,
+    body: { code: koden },
+  });
+  check("en förbrukad kod går inte att återanvända", igen.body.verified === false, igen.body);
+
+  // Fem fel bränner koden. Räknaren höjs FÖRE jämförelsen, så ett avbrutet
+  // anrop ger inget gratisförsök.
+  await call("POST", "/v1/notifications/phone", { token: agnesSession, body: { phone: "0701234567" } });
+  for (let i = 0; i < 5; i++) {
+    await call("POST", "/v1/notifications/phone/confirm", { token: agnesSession, body: { code: "000001" } });
+  }
+  const brand = await withAnon(async (tx) => {
+    const { rows } = await tx.query(
+      "select body from public.outbound_sms where recipient = $1::text order by created_at desc limit 1",
+      ["+46701234567"],
+    );
+    return /(\d{6})/.exec(String(rows[0]?.body ?? ""))?.[1] ?? "";
+  });
+  const efterBrand = await call("POST", "/v1/notifications/phone/confirm", {
+    token: agnesSession,
+    body: { code: brand },
+  });
+  check("efter fem fel går inte ens rätt kod igenom", efterBrand.body.verified === false, efterBrand.body);
+
+  // Ett fast nummer, en bokstav och ett tomt fält ska alla nekas HÄR - i
+  // servern - och inte bara i inmatningsfältet.
+  for (const daligt of ["08-123 45 67", "070-12345", "abcdefghij", "+1 555 0100"]) {
+    const svar = await call("POST", "/v1/notifications/phone", {
+      token: agnesSession,
+      body: { phone: daligt },
+    });
+    check(`servern nekar "${daligt}"`, svar.status === 400, svar.body);
+  }
+
+  // Utan inloggning finns ingen av vägarna.
+  for (const [metod, vag] of [
+    ["GET", "/v1/notifications/phone"],
+    ["POST", "/v1/notifications/phone"],
+    ["POST", "/v1/notifications/phone/confirm"],
+    ["DELETE", "/v1/notifications/phone"],
+    ["GET", "/v1/notifications/prefs"],
+    ["PUT", "/v1/notifications/prefs"],
+    ["GET", "/v1/notifications/deliveries"],
+  ] as const) {
+    const svar = await call(metod, vag, { body: {} });
+    check(`${metod} ${vag} kräver inloggning`, svar.status === 401, svar.status);
+  }
+
+  // Numret går att ta bort, och då är det borta - inte bara dolt.
+  const bort = await call("DELETE", "/v1/notifications/phone", { token: agnesSession });
+  check("numret går att ta bort", bort.status === 200, bort.body);
+  const efterBort = await call("GET", "/v1/notifications/phone", { token: agnesSession });
+  check("och är då borta helt", efterBort.body === null, efterBort.body);
+}
+
+/* --- 8m5. Aviseringsinställningarna ------------------------------------- */
+
+{
+  const tomt = await call("GET", "/v1/notifications/prefs", { token: bertilToken });
+  check("utan val svarar prefs null, inte ett påhittat standardvärde", tomt.body === null, tomt.body);
+
+  const spara = await call("PUT", "/v1/notifications/prefs", {
+    token: agnesSession,
+    body: {
+      level: "atgard",
+      emailEnabled: true,
+      smsEnabled: false,
+      quietStartHour: 22,
+      quietEndHour: 7,
+    },
+  });
+  check("inställningarna går att spara", spara.status === 200, spara.body);
+
+  const lasta = await call("GET", "/v1/notifications/prefs", { token: agnesSession });
+  const lastaKropp = (lasta.body ?? {}) as Record<string, unknown>;
+  check("nivån läses tillbaka", lastaKropp.level === "atgard", lasta.body);
+  check("tysta timmarna läses tillbaka", lastaKropp.quietStartHour === 22 && lastaKropp.quietEndHour === 7, lasta.body);
+  check("och sms är av", lastaKropp.smsEnabled === false, lasta.body);
+
+  // Raden är knuten till den prövade sessionen. Bertil ska inte se Agnes val
+  // - och framför allt inte kunna stänga av hennes aviseringar.
+  const bertilSer = await call("GET", "/v1/notifications/prefs", { token: bertilToken });
+  check("en annan användare ser inte inställningen", bertilSer.body === null, bertilSer.body);
+
+  // user_id i kroppen ska inte kunna peka om skrivningen.
+  await call("PUT", "/v1/notifications/prefs", {
+    token: bertilToken,
+    body: {
+      level: "tidskritiska",
+      emailEnabled: false,
+      smsEnabled: false,
+      quietStartHour: 0,
+      quietEndHour: 0,
+      userId: AGNES,
+      user_id: AGNES,
+    },
+  });
+  const agnesEfter = await call("GET", "/v1/notifications/prefs", { token: agnesSession });
+  check(
+    "userId i kroppen skriver inte över någon annans rad",
+    (agnesEfter.body ?? {}).level === "atgard" && (agnesEfter.body ?? {}).emailEnabled === true,
+    agnesEfter.body,
+  );
+
+  // Formen prövas i servern, inte i formuläret.
+  for (const trasigt of [
+    { level: "allt", emailEnabled: true, smsEnabled: true, quietStartHour: 0, quietEndHour: 0 },
+    { level: "alla", emailEnabled: "ja", smsEnabled: true, quietStartHour: 0, quietEndHour: 0 },
+    { level: "alla", emailEnabled: true, smsEnabled: true, quietStartHour: 24, quietEndHour: 0 },
+    { level: "alla", emailEnabled: true, smsEnabled: true, quietStartHour: -1, quietEndHour: 0 },
+    { level: "alla", emailEnabled: true, smsEnabled: true, quietStartHour: 1.5, quietEndHour: 0 },
+  ]) {
+    const svar = await call("PUT", "/v1/notifications/prefs", { token: agnesSession, body: trasigt });
+    check(`trasiga inställningar nekas: ${JSON.stringify(trasigt)}`, svar.status === 400, svar.body);
+  }
+
+  // Kvittolistan: taket är serverns.
+  const kvitton = await call("GET", "/v1/notifications/deliveries", { token: agnesSession });
+  check("kvittolistan svarar", kvitton.status === 200 && Array.isArray(kvitton.body.deliveries), kvitton.body);
+}
+
 /* --- 8n. Databasrollen prövas mot den RIKTIGA katalogen ----------------- */
 
 /*

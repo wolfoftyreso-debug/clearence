@@ -1614,6 +1614,221 @@ router.post("/v1/api-keys/:keyId/revoke", async (req) => {
   return { status: 200, body: { revoked: true } };
 });
 
+/* --- Aviseringsinställningarna -------------------------------------------- */
+
+/*
+ * TVÅ SAKER SOM INTE LÄMNAR SERVERN.
+ *
+ * 1. HELA MOBILNUMRET. GET /v1/notifications/phone svarar med `masked`,
+ *    aldrig med e164. En skärmdump av inställningarna ska inte lämna ut
+ *    numret, och maskningen görs här - inte i webbläsaren, där den bara
+ *    hade varit en kosmetika ovanpå ett svar som redan bar hela numret.
+ *
+ * 2. VERIFIERINGSKODEN. POST /v1/notifications/phone svarar `{ sent: true }`
+ *    och ingenting mer. Koden föds i start_phone_verification, hashas där,
+ *    och går ut som SMS. Klienten kan varken välja den eller läsa den -
+ *    vilket är hela skälet till att ett verifierat nummer betyder något.
+ *    Se migration 20260822100000.
+ */
+
+const AVISERINGSNIVAER = ["alla", "atgard", "tidskritiska"] as const;
+
+const toNotificationPrefs = (row: Record<string, unknown>) => ({
+  level: row.level,
+  emailEnabled: row.email_enabled === true,
+  smsEnabled: row.sms_enabled === true,
+  quietStartHour: Number(row.quiet_start_hour ?? 0),
+  quietEndHour: Number(row.quiet_end_hour ?? 0),
+});
+
+const toDelivery = (row: Record<string, unknown>) => ({
+  id: row.id,
+  channel: row.channel,
+  status: row.status,
+  title: (row.title as string | null) ?? "Avisering",
+  createdAt: iso(row.created_at),
+  sentAt: iso(row.sent_at),
+  // Ett kvitto utan skäl är ett kvitto som ljuger genom att tiga: den
+  // undertryckta raden ska säga varför den inte gick ut.
+  reason: (row.suppressed_reason as string | null) ?? (row.last_error as string | null) ?? null,
+});
+
+/**
+ * Numret till E.164, eller null.
+ *
+ * Samma regel som normalisePhone() i klienten, med avsikt skriven en gång
+ * till här i stället för delad: klientens version finns för att kunna säga
+ * till i inmatningsfältet medan någon skriver, serverns för att avgöra vad
+ * som faktiskt sparas. Den som tar bort den här och litar på klientens har
+ * flyttat en regel till en plats där angriparen skriver koden.
+ *
+ * Fasta nummer godtas inte: ett SMS till en fast telefon kommer aldrig
+ * fram, och ett tyst misslyckande är värre än ett nej.
+ */
+const normaliseraSvensktMobilnummer = (raw: string): string | null => {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  if (!/^[+\d\s()-]+$/.test(trimmed)) return null;
+  let siffror = trimmed.replace(/[^\d+]/g, "");
+  if (siffror.startsWith("+46")) siffror = siffror.slice(3);
+  else if (siffror.startsWith("0046")) siffror = siffror.slice(4);
+  else if (siffror.startsWith("46") && !siffror.startsWith("460")) siffror = siffror.slice(2);
+  else if (siffror.startsWith("0")) siffror = siffror.slice(1);
+  else return null;
+  if (siffror.includes("+")) return null;
+  if (!/^7\d{8}$/.test(siffror)) return null;
+  return `+46${siffror}`;
+};
+
+/** Maskerat nummer. Samma form som maskPhone() i klienten, men här är det bindande. */
+const maskeraNummer = (e164: string): string => {
+  const m = /^\+46(\d{3})\d{4}(\d{2})$/.exec(e164);
+  if (!m) return "•••";
+  return `+46 ${m[1]} •• •• ${m[2]}`;
+};
+
+const timme = (body: unknown, field: string): number => {
+  const value = (body as Record<string, unknown> | undefined)?.[field];
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 0 || value > 23) {
+    throw badRequest(`Fältet "${field}" ska vara ett heltal 0-23.`);
+  }
+  return value;
+};
+
+const flagga = (body: unknown, field: string): boolean => {
+  const value = (body as Record<string, unknown> | undefined)?.[field];
+  if (typeof value !== "boolean") throw badRequest(`Fältet "${field}" ska vara sant eller falskt.`);
+  return value;
+};
+
+router.get("/v1/notifications/prefs", async (req) => {
+  const caller = await authenticate(req);
+  const row = await withUser(caller.userId, async (tx) => {
+    const { rows } = await tx.query(
+      `select level, email_enabled, sms_enabled, quiet_start_hour, quiet_end_hour
+         from public.notification_prefs limit 1`,
+    );
+    return rows[0] ?? null;
+  });
+  // null och inte ett påhittat standardvärde: gränssnittet skiljer på
+  // "har inte valt" och "har valt precis det som råkar vara standard".
+  return { status: 200, body: row ? toNotificationPrefs(row) : null };
+});
+
+router.put("/v1/notifications/prefs", async (req) => {
+  const caller = await authenticate(req);
+  const level = str(req.body, "level");
+  if (!(AVISERINGSNIVAER as readonly string[]).includes(level)) {
+    throw badRequest(`"level" ska vara en av: ${AVISERINGSNIVAER.join(", ")}.`);
+  }
+  const emailEnabled = flagga(req.body, "emailEnabled");
+  const smsEnabled = flagga(req.body, "smsEnabled");
+  const quietStartHour = timme(req.body, "quietStartHour");
+  const quietEndHour = timme(req.body, "quietEndHour");
+
+  await withUser(caller.userId, async (tx) => {
+    // user_id sätts av servern ur den prövade sessionen, aldrig ur kroppen.
+    // Den som fick skriva raden åt någon annan hade kunnat stänga av deras
+    // aviseringar - och en avisering som inte kommer är den tystnad hela
+    // produkten finns för att förhindra.
+    await tx.query(
+      `insert into public.notification_prefs
+         (user_id, level, email_enabled, sms_enabled, quiet_start_hour, quiet_end_hour, updated_at)
+       values ($1::uuid, $2, $3, $4, $5, $6, now())
+       on conflict (user_id) do update
+         set level = excluded.level,
+             email_enabled = excluded.email_enabled,
+             sms_enabled = excluded.sms_enabled,
+             quiet_start_hour = excluded.quiet_start_hour,
+             quiet_end_hour = excluded.quiet_end_hour,
+             updated_at = now()`,
+      [caller.userId, level, emailEnabled, smsEnabled, quietStartHour, quietEndHour],
+    );
+  });
+  return { status: 200, body: { saved: true } };
+});
+
+router.get("/v1/notifications/phone", async (req) => {
+  const caller = await authenticate(req);
+  const row = await withUser(caller.userId, async (tx) => {
+    const { rows } = await tx.query(
+      "select e164, verified_at, code_expires_at from public.verified_phones limit 1",
+    );
+    return rows[0] ?? null;
+  });
+  if (!row) return { status: 200, body: null };
+  return {
+    status: 200,
+    body: {
+      masked: maskeraNummer(String(row.e164)),
+      verified: row.verified_at !== null,
+      awaitingCode:
+        row.verified_at === null &&
+        row.code_expires_at !== null &&
+        new Date(String(row.code_expires_at)) > new Date(),
+    },
+  };
+});
+
+router.post("/v1/notifications/phone", async (req) => {
+  const caller = await authenticate(req);
+  const phone = str(req.body, "phone", { max: 32 });
+  // Normaliseringen görs här också. Klienten gör den för att kunna säga
+  // till i fältet; servern gör den för att den är det som faktiskt gäller.
+  const e164 = normaliseraSvensktMobilnummer(phone);
+  if (!e164) throw badRequest("Skriv ett svenskt mobilnummer, till exempel 070-123 45 67.");
+  await withUser(caller.userId, async (tx) => {
+    await tx.query("select public.start_phone_verification($1::text, $2::integer)", [e164, 10]);
+  });
+  // Ingen kod i svaret. Inte ens maskerad, inte ens dess längd.
+  return { status: 200, body: { sent: true } };
+});
+
+router.post("/v1/notifications/phone/confirm", async (req) => {
+  const caller = await authenticate(req);
+  const code = str(req.body, "code", { max: 12 });
+  // En kod som inte kan vara rätt kostar inget försök - varken här eller
+  // i funktionen. Att bränna ett av fem försök på en felskrivning hade
+  // gjort spärren till ett hinder för användaren i stället för för gissaren.
+  if (!/^\d{6}$/.test(code)) return { status: 200, body: { verified: false } };
+  const ok = await withUser(caller.userId, async (tx) => {
+    const { rows } = await tx.query("select public.confirm_phone_verification($1::text) as ok", [
+      code,
+    ]);
+    return rows[0]?.ok === true;
+  });
+  return { status: 200, body: { verified: ok } };
+});
+
+router.del("/v1/notifications/phone", async (req) => {
+  const caller = await authenticate(req);
+  await withUser(caller.userId, async (tx) => {
+    await tx.query("select public.remove_phone()");
+  });
+  return { status: 200, body: { removed: true } };
+});
+
+router.get("/v1/notifications/deliveries", async (req) => {
+  const caller = await authenticate(req);
+  const raw = Number(req.query.get("limit") ?? 20);
+  // Taket är serverns, inte klientens. `limit=100000` är annars en väg att
+  // dra hela tabellen genom en enda request.
+  const limit = Number.isInteger(raw) && raw > 0 ? Math.min(raw, 100) : 20;
+  const rows = await withUser(caller.userId, async (tx) => {
+    const { rows } = await tx.query(
+      `select d.id, d.channel, d.status, d.suppressed_reason, d.last_error,
+              d.created_at, d.sent_at, e.title
+         from public.notification_deliveries d
+         left join public.notification_events e on e.id = d.event_id
+        order by d.created_at desc
+        limit $1`,
+      [limit],
+    );
+    return rows;
+  });
+  return { status: 200, body: { deliveries: rows.map(toDelivery) } };
+});
+
 /* --- Drift (/ops): allt admin-gatat i databasen --------------------------- */
 
 /*

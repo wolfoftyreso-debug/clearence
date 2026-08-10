@@ -40,6 +40,9 @@ import type {
   DocumentRecord,
   InvitationPeek,
   NewContactMessage,
+  NotificationDeliveryRecord,
+  NotificationPrefsInput,
+  NotificationPrefsRecord,
   OutboundEmailRecord,
   PaymentRecord,
   ProfessionalTerms,
@@ -48,6 +51,7 @@ import type {
   TimeEntryRecord,
   UserProfile,
   UserRole,
+  VerifiedPhoneRecord,
 } from "../types";
 import { supabaseAdapter } from "../supabase/adapter";
 import { ApiRequestError, apiFetch, clearToken, setToken } from "./client";
@@ -76,6 +80,13 @@ export const MIGRATED_PORTS = [
   "apiKeys.listMine",
   "apiKeys.create",
   "apiKeys.revoke",
+  "notificationSettings.getPrefs",
+  "notificationSettings.savePrefs",
+  "notificationSettings.getPhone",
+  "notificationSettings.startPhoneVerification",
+  "notificationSettings.confirmPhoneVerification",
+  "notificationSettings.removePhone",
+  "notificationSettings.listRecentDeliveries",
   "dialogue.listSessions",
   "dialogue.saveSession",
   "ops.listSecrets",
@@ -594,6 +605,50 @@ const messages = {
   },
 };
 
+/*
+ * AVISERINGSINSTÄLLNINGARNA.
+ *
+ * Två saker som INTE finns i den här filen, och det är hela poängen:
+ * verifieringskoden och hela mobilnumret. Koden föds i databasen och går
+ * ut som SMS; servern svarar `{ sent: true }`. Numret kommer tillbaka
+ * maskerat, maskat av servern. Den gamla vägen - där klienten slumpade
+ * koden, hashade den och skickade in båda - gjorde verifieringen till ett
+ * bevis den som skrev klienten kunde skriva själv.
+ */
+const notificationSettings = {
+  ...supabaseAdapter.notificationSettings,
+  async getPrefs(): Promise<NotificationPrefsRecord | null> {
+    return apiFetch<NotificationPrefsRecord | null>("/v1/notifications/prefs");
+  },
+  async savePrefs(input: NotificationPrefsInput): Promise<void> {
+    await apiFetch("/v1/notifications/prefs", { method: "PUT", body: input });
+  },
+  async getPhone(): Promise<VerifiedPhoneRecord | null> {
+    return apiFetch<VerifiedPhoneRecord | null>("/v1/notifications/phone");
+  },
+  async startPhoneVerification(rawPhone: string): Promise<void> {
+    // Numret skickas som användaren skrev det. Servern normaliserar och
+    // avgör; klientens egen kontroll finns för fältet, inte för beslutet.
+    await apiFetch("/v1/notifications/phone", { method: "POST", body: { phone: rawPhone } });
+  },
+  async confirmPhoneVerification(code: string): Promise<boolean> {
+    const res = await apiFetch<{ verified: boolean }>("/v1/notifications/phone/confirm", {
+      method: "POST",
+      body: { code },
+    });
+    return res.verified === true;
+  },
+  async removePhone(): Promise<void> {
+    await apiFetch("/v1/notifications/phone", { method: "DELETE" });
+  },
+  async listRecentDeliveries(limit = 20): Promise<NotificationDeliveryRecord[]> {
+    const res = await apiFetch<{ deliveries: NotificationDeliveryRecord[] }>(
+      `/v1/notifications/deliveries?limit=${encodeURIComponent(String(limit))}`,
+    );
+    return res.deliveries;
+  },
+};
+
 const kbr = {
   ...supabaseAdapter.kbr,
   async getLatestByCase(caseId: string) {
@@ -631,6 +686,7 @@ export const awsAdapter: DataPort = {
   payments: payments as DataPort["payments"],
   documents: documents as DataPort["documents"],
   messages: messages as DataPort["messages"],
+  notificationSettings: notificationSettings as DataPort["notificationSettings"],
   kbr: kbr as DataPort["kbr"],
   audit: audit as DataPort["audit"],
   profile: profile as DataPort["profile"],

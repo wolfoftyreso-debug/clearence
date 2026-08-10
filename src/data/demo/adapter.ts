@@ -17,11 +17,32 @@
 
 import type { DataPort } from "../ports";
 import {
-  hashCode,
   isVerificationCode,
   maskPhone,
   normalisePhone,
 } from "@/lib/notifications/phone";
+
+/**
+ * Demons egen hashning av verifieringskoden.
+ *
+ * Den bodde förut i @/lib/notifications/phone, delad med supabase-adaptern.
+ * Där hörde den inte hemma: så länge en KLIENT kunde hasha en kod den själv
+ * valt var telefonverifieringen ett bevis utan innehåll (se migration
+ * 20260822100000). Nu föds koden i databasen, och det delade biblioteket
+ * ska inte längre kunna mynta något.
+ *
+ * Demon har ingen databas att föda koden i - den är en webbläsare med ett
+ * påhittat bolag - så funktionen finns kvar HÄR, som demons ensak. Att den
+ * ändå lagrar en hash i stället för klartext är för att den som kopierar
+ * demoadaptern som mall ska kopiera rätt vana.
+ */
+const demoKodhash = async (code: string): Promise<string> => {
+  const bytes = new TextEncoder().encode(code.trim());
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+};
 
 /**
  * Demons verifieringskod. Fast och utskriven i gränssnittet - demon har
@@ -1644,12 +1665,12 @@ export const demoAdapter: DataPort = {
       // Demon har ingen telefon att skicka till, så koden är fast och
       // står i gränssnittet. Den lagras ändå som hash: skulle någon en
       // dag kopiera demoadaptern som mall ska mallen vara rätt.
-      state.phone = { e164, codeSha256: await hashCode(DEMO_VERIFICATION_CODE), verified: false };
+      state.phone = { e164, codeSha256: await demoKodhash(DEMO_VERIFICATION_CODE), verified: false };
     },
     async confirmPhoneVerification(code: string) {
       if (!state.phone || state.phone.codeSha256 === null) return false;
       if (!isVerificationCode(code)) return false;
-      if ((await hashCode(code)) !== state.phone.codeSha256) return false;
+      if ((await demoKodhash(code)) !== state.phone.codeSha256) return false;
       state.phone = { ...state.phone, codeSha256: null, verified: true };
       return true;
     },

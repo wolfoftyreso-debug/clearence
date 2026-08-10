@@ -50,6 +50,7 @@ import {
 } from "../src/lib/notifications/messages";
 import {
   VERIFICATION_CODE_LENGTH,
+  VERIFICATION_TTL_MINUTES,
   formatPhone,
   isMobileNumber,
   isVerificationCode,
@@ -319,6 +320,35 @@ check(
   codeSms,
 );
 check("verifierings-SMS:et ryms i ett segment", codeSms.length <= SMS_SEGMENT_LIMIT, codeSms.length);
+
+/*
+ * TEXTEN OVAN SKICKAS INTE HÄRIFRÅN.
+ *
+ * Sedan verifieringskoden flyttade in i databasen (migration
+ * 20260822100000) sätts SMS:et ihop inne i start_phone_verification, i
+ * samma transaktion som koden föds. verificationSms() finns kvar för att
+ * texten ska gå att läsa, prova och granska som språk - kontrollerna
+ * ovanför prövar just det.
+ *
+ * Två källor som säger samma sak glider isär om ingen tvingar dem. Den
+ * som skriver om texten i den ena ska få rött tills den andra följer med.
+ */
+{
+  const sql = readFileSync(
+    "supabase/migrations/20260822100000_verifieringskoden_fods_i_databasen.sql",
+    "utf8",
+  );
+  const rad = /v_kod \|\| '([^']*)'\s*\|\| p_ttl_minutes \|\| '([^']*)'/.exec(sql);
+  const franSql = rad ? `123456${rad[1]}10${rad[2]}` : "";
+  const franKod = verificationSms("123456").replace(
+    String(VERIFICATION_TTL_MINUTES),
+    "10",
+  );
+  check("SMS-texten i databasen är likalydande med den i koden", franSql === franKod, {
+    sql: franSql,
+    kod: franKod,
+  });
+}
 
 /* --- 9. Kanalregistret ----------------------------------------------------- */
 

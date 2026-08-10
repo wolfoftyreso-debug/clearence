@@ -1788,19 +1788,15 @@ export type Database = {
         Returns: undefined
       }
       start_phone_verification: {
-        Args: { p_e164: string; p_code_sha256: string; p_ttl_minutes?: number }
+        Args: { p_e164: string; p_ttl_minutes?: number }
         Returns: undefined
       }
       confirm_phone_verification: {
-        Args: { p_code_sha256: string }
+        Args: { p_code: string }
         Returns: boolean
       }
       remove_phone: {
         Args: Record<string, never>
-        Returns: undefined
-      }
-      queue_verification_sms: {
-        Args: { p_body: string }
         Returns: undefined
       }
       issue_customer_invoice: {

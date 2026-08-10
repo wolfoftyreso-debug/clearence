@@ -81,29 +81,34 @@ export const isVerificationCode = (code: string): boolean =>
   new RegExp(`^\\d{${VERIFICATION_CODE_LENGTH}}$`).test(code.trim());
 
 /**
- * SMS:et som bär koden. Det enda utskick som får gå till ett
- * OVERIFIERAT nummer - och därför det enda som inte får avslöja
- * någonting alls om vem som begärt det eller varför.
+ * SMS:et som bär koden.
+ *
+ * Texten formuleras HÄR bara för att den ska gå att läsa, prova och
+ * granska som språk. Den skickas inte härifrån: strängen sätts ihop av
+ * start_phone_verification i databasen, i samma transaktion som koden
+ * föds. tests/notificationService.ts läser båda källorna och kräver att
+ * de säger exakt samma sak - annars hade den lästa texten och den
+ * skickade kunnat glida isär utan att någon märkte det.
+ *
+ * Det enda utskick som får gå till ett OVERIFIERAT nummer, och därför
+ * det enda som inte får avslöja någonting alls om vem som begärt det
+ * eller varför.
  */
 export const verificationSms = (code: string): string =>
   `${code} är din kod för att slå på SMS-aviseringar. Koden gäller i ${VERIFICATION_TTL_MINUTES} minuter.`;
 
-/**
- * Koden som hash. Klartexten lämnar aldrig klienten - den går till
- * mottagarens telefon, inte till vår databas. Samma regel som för
- * API-nycklar och sessionspoletter.
+/*
+ * HÄR LÅG generateCode() OCH hashCode(), OCH DE VAR HELA BRISTEN.
+ *
+ * Koden slumpades i webbläsaren, hashades i webbläsaren, och både hashen
+ * och SMS-texten skickades in till databasen som argument. Den som kunde
+ * anropa API:t kunde alltså välja koden själv, aldrig läsa något SMS och
+ * ändå bekräfta. Verifieringen bevisade inte att någon hade telefonen -
+ * den bevisade att någon kan räkna till sex.
+ *
+ * Frontend-säkerhet är inte en säkerhetsmekanism. Koden föds numera i
+ * start_phone_verification (migration 20260822100000), lämnar databasen
+ * bara som SMS, och klienten får `void` tillbaka. Lägg inte tillbaka
+ * funktionerna: tests/sakerhet.ts läser den här filen och blir röd om
+ * någon gör det.
  */
-export const hashCode = async (code: string): Promise<string> => {
-  const bytes = new TextEncoder().encode(code.trim());
-  const digest = await crypto.subtle.digest("SHA-256", bytes);
-  return Array.from(new Uint8Array(digest))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-};
-
-/** Sex slumpsiffror ur kryptografiskt slumptal, inte ur Math.random. */
-export const generateCode = (): string => {
-  const bytes = new Uint8Array(VERIFICATION_CODE_LENGTH);
-  crypto.getRandomValues(bytes);
-  return Array.from(bytes, (b) => String(b % 10)).join("");
-};

@@ -404,5 +404,121 @@ for (const f of chartFiler) {
   check(`${f} sätter aldrig ALLOW_UNSAFE_DB_ROLE`, !/ALLOW_UNSAFE_DB_ROLE/.test(kod));
 }
 
+/* --- 5. Telefonverifieringen: koden får inte födas hos den som ska bevisa - */
+
+/*
+ * ANGREPPET: skaffa ett konto, läs frontendens kod (den är läsbar för alla
+ * som kan öppna DevTools), och se att verifieringskoden slumpas i
+ * webbläsaren. Välj då koden själv, skicka in dess hash, hoppa över SMS:et
+ * och bekräfta direkt. Resultatet: ett "verifierat" nummer som tillhör
+ * någon annan - och som därefter får SMS om att någon har ett ärende hos
+ * CLEARANCE, vilket är precis den uppgift produkten finns för att skydda.
+ *
+ * ÅTGÄRDEN: koden föds i start_phone_verification (migration
+ * 20260822100000), i samma transaktion som SMS:et köas, och returneras
+ * aldrig. Rättningen ligger i DATABASEN och inte i API:t, så att den
+ * gäller varje väg in - eget API, PostgREST och psql.
+ *
+ * Kontrollerna nedan läser källorna, för det är där återfallet skulle ske.
+ */
+
+const telefonKod = utanKommentarer(
+  readFileSync(join(process.cwd(), "src/lib/notifications/phone.ts"), "utf8"),
+);
+check(
+  "det delade telefonbiblioteket myntar ingen verifieringskod",
+  !/getRandomValues|generateCode/.test(telefonKod),
+  telefonKod.match(/getRandomValues|generateCode/g),
+);
+check(
+  "och hashar ingen heller - en hash klienten kan räkna fram ÄR beviset",
+  !/subtle\.digest|hashCode/.test(telefonKod),
+  telefonKod.match(/subtle\.digest|hashCode/g),
+);
+
+const supabaseKod = utanKommentarer(
+  readFileSync(join(process.cwd(), "src/data/supabase/adapter.ts"), "utf8"),
+);
+const awsKod = utanKommentarer(
+  readFileSync(join(process.cwd(), "src/data/aws/adapter.ts"), "utf8"),
+);
+for (const [namn, kod] of [["supabase", supabaseKod], ["aws", awsKod]] as const) {
+  check(
+    `${namn}-adaptern skickar aldrig in en kodhash till verifieringen`,
+    !/p_code_sha256/.test(kod),
+    kod.match(/p_code_sha256/g),
+  );
+  check(
+    `${namn}-adaptern köar aldrig SMS-texten själv`,
+    !/queue_verification_sms/.test(kod),
+  );
+}
+
+const verifieringSql = readFileSync(
+  join(process.cwd(), "supabase/migrations/20260822100000_verifieringskoden_fods_i_databasen.sql"),
+  "utf8",
+);
+check(
+  "migrationen DROPPAR den gamla signaturen i stället för att lämna den kvar",
+  /drop function if exists public\.start_phone_verification\(text, text, integer\)/.test(
+    verifieringSql,
+  ),
+);
+check(
+  "queue_verification_sms finns inte kvar som egen yta",
+  /drop function if exists public\.queue_verification_sms\(text\)/.test(verifieringSql),
+);
+check(
+  "koden slumpas med gen_random_bytes, inte med random()",
+  // Kommentarerna nämner random() just för att förklara varför den INTE
+  // används; vakten ska läsa koden, inte prosan runt den.
+  /gen_random_bytes\(5\)/.test(verifieringSql) &&
+    !/\brandom\(\)/.test(utanKommentarer(verifieringSql)),
+);
+check(
+  "den nya funktionen tar bara nummer och giltighetstid - ingen hash",
+  /create or replace function public\.start_phone_verification\(\s*p_e164 text,\s*p_ttl_minutes integer default 10\s*\)/.test(
+    verifieringSql,
+  ),
+);
+check(
+  "och returnerar void: koden lämnar aldrig databasen åt klientens håll",
+  /p_ttl_minutes integer default 10\s*\)\s*returns void/.test(verifieringSql),
+);
+
+const aviseringsRutter = indexKod.slice(
+  indexKod.indexOf("/v1/notifications/prefs"),
+  indexKod.indexOf("Drift (/ops)"),
+);
+/*
+ * Svarskropparna, ordagrant.
+ *
+ * En bredare vakt ("ordet code får inte förekomma") gick inte att skriva
+ * ärligt: bekräftelserutten TAR EMOT en kod, och den ska den göra. Det som
+ * betyder något är vad som går UT, så det är returraderna som prövas.
+ */
+check(
+  "begäran om kod svarar exakt { sent: true } - inget mer",
+  /return \{ status: 200, body: \{ sent: true \} \};/.test(aviseringsRutter),
+);
+check(
+  "bekräftelsen svarar exakt { verified } - aldrig koden tillbaka",
+  /return \{ status: 200, body: \{ verified: ok \} \};/.test(aviseringsRutter),
+);
+check(
+  "API:t normaliserar numret själv i stället för att lita på klienten",
+  /normaliseraSvensktMobilnummer\(phone\)/.test(indexKod),
+);
+check(
+  "GET /v1/notifications/phone lämnar aldrig ut hela numret",
+  /masked: maskeraNummer\(String\(row\.e164\)\)/.test(indexKod) &&
+    !/e164: row\.e164/.test(indexKod),
+);
+check(
+  "kvittolistans tak sätts av servern, inte av frågesträngen",
+  /Math\.min\(raw, 100\)/.test(indexKod),
+);
+
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

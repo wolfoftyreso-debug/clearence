@@ -124,33 +124,58 @@ end $$;
 
 /* --- 3. Numret och koden -------------------------------------------------- */
 
+/*
+ * KODEN FÖDS I DATABASEN, OCH TESTET FÅR INTE VETA DEN I FÖRVÄG.
+ *
+ * Den här sektionen prövade förut ett flöde där testet självt valde koden
+ * och skickade in dess hash - precis som klienten gjorde, och precis
+ * därför bevisade verifieringen ingenting (se migration 20260822100000).
+ * Ett test som matar in svaret prövar inte något.
+ *
+ * Nu läses koden ur outbound_sms, alltså ur det som faktiskt skickas till
+ * telefonen. Det bevisar två saker på en gång: att SMS:et bär en riktig
+ * kod, och att hashen på raden hör ihop med just den koden.
+ */
+
 do $$
 declare
   v_ok boolean;
   v_row public.verified_phones;
-  -- sha256('123456') - klartexten når aldrig databasen.
-  v_hash text := encode(digest('123456', 'sha256'), 'hex');
-  v_wrong text := encode(digest('999999', 'sha256'), 'hex');
+  v_kod text;
+  v_annan text;
 begin
   -- Båda nycklarna: Supabase-harnessen läser request.jwt.claim.sub, den
   -- självhostade bootstrappen läser app.user_id. Samma grepp som rls.sql.
   perform set_config('request.jwt.claim.sub', 'a0000000-0000-0000-0000-000000000001', true);
   perform set_config('app.user_id', 'a0000000-0000-0000-0000-000000000001', true);
 
-  perform public.start_phone_verification('+46701234567', v_hash, 10);
+  perform public.start_phone_verification('+46701234567', 10);
   select * into v_row from public.verified_phones where user_id = auth.uid();
   if v_row.verified_at is not null then
     raise exception 'FAIL  numret var verifierat direkt';
   end if;
   raise notice 'ok 9: numret läggs in overifierat';
 
-  v_ok := public.confirm_phone_verification(v_wrong);
+  -- Koden hämtas ur kön, för det är enda stället den finns i klartext.
+  select substring(body from '(\d{6})') into v_kod
+  from public.outbound_sms
+  where recipient = '+46701234567'
+  order by created_at desc limit 1;
+  if v_kod is null then
+    raise exception 'FAIL  inget SMS köades med en kod';
+  end if;
+  if v_row.code_sha256 <> encode(digest(v_kod, 'sha256'), 'hex') then
+    raise exception 'FAIL  hashen på raden hör inte ihop med koden i SMS:et';
+  end if;
+  raise notice 'ok 10: SMS:ets kod och radens hash hör ihop';
+
+  v_ok := public.confirm_phone_verification(case when v_kod = '999999' then '111111' else '999999' end);
   if v_ok then
     raise exception 'FAIL  fel kod godtogs';
   end if;
-  raise notice 'ok 10: fel kod ger nej';
+  raise notice 'ok 11: fel kod ger nej';
 
-  v_ok := public.confirm_phone_verification(v_hash);
+  v_ok := public.confirm_phone_verification(v_kod);
   if not v_ok then
     raise exception 'FAIL  rätt kod godtogs inte';
   end if;
@@ -158,72 +183,94 @@ begin
   if v_row.verified_at is null or v_row.code_sha256 is not null then
     raise exception 'FAIL  verifieringen städade inte upp efter sig';
   end if;
-  raise notice 'ok 11: rätt kod verifierar, och koden brinner upp';
+  raise notice 'ok 12: rätt kod verifierar, och koden brinner upp';
 
   -- Ett verifierat nummer har ingen kod kvar att gissa på.
-  v_ok := public.confirm_phone_verification(v_hash);
+  v_ok := public.confirm_phone_verification(v_kod);
   if v_ok then
     raise exception 'FAIL  koden gick att använda igen';
   end if;
-  raise notice 'ok 12: en förbrukad kod går inte att återanvända';
+  raise notice 'ok 13: en förbrukad kod går inte att återanvända';
+
+  -- Två begäranden ska inte ge samma kod. En fast kod hade varit exakt
+  -- lika värdelös som en kod klienten själv väljer.
+  perform public.start_phone_verification('+46702222222', 10);
+  select substring(body from '(\d{6})') into v_kod
+  from public.outbound_sms where recipient = '+46702222222' order by created_at desc limit 1;
+  perform public.start_phone_verification('+46703333333', 10);
+  select substring(body from '(\d{6})') into v_annan
+  from public.outbound_sms where recipient = '+46703333333' order by created_at desc limit 1;
+  if v_kod = v_annan then
+    raise exception 'FAIL  två begäranden gav samma kod (%)', v_kod;
+  end if;
+  raise notice 'ok 14: koden är inte densamma två gånger';
 end $$;
 
 do $$
 declare
   v_ok boolean;
   v_row public.verified_phones;
-  v_hash text := encode(digest('111111', 'sha256'), 'hex');
-  v_wrong text := encode(digest('000000', 'sha256'), 'hex');
+  v_kod text;
 begin
-  -- Båda nycklarna: Supabase-harnessen läser request.jwt.claim.sub, den
-  -- självhostade bootstrappen läser app.user_id. Samma grepp som rls.sql.
   perform set_config('request.jwt.claim.sub', 'a0000000-0000-0000-0000-000000000001', true);
   perform set_config('app.user_id', 'a0000000-0000-0000-0000-000000000001', true);
 
   -- Byte av nummer nollställer verifieringen. Annars kunde man verifiera
   -- sitt eget nummer och sedan byta till någon annans.
-  perform public.start_phone_verification('+46709999999', v_hash, 10);
+  perform public.start_phone_verification('+46709999999', 10);
   select * into v_row from public.verified_phones where user_id = auth.uid();
   if v_row.verified_at is not null then
     raise exception 'FAIL  det nya numret ärvde verifieringen';
   end if;
-  raise notice 'ok 13: ett nytt nummer måste verifieras på nytt';
+  raise notice 'ok 15: ett nytt nummer måste verifieras på nytt';
+
+  select substring(body from '(\d{6})') into v_kod
+  from public.outbound_sms where recipient = '+46709999999' order by created_at desc limit 1;
 
   -- Fem fel bränner koden.
   for i in 1..5 loop
-    v_ok := public.confirm_phone_verification(v_wrong);
+    v_ok := public.confirm_phone_verification(
+      lpad(((v_kod::int + i) % 1000000)::text, 6, '0'));
   end loop;
-  v_ok := public.confirm_phone_verification(v_hash);
+  v_ok := public.confirm_phone_verification(v_kod);
   if v_ok then
     raise exception 'FAIL  rätt kod godtogs efter fem felförsök';
   end if;
-  raise notice 'ok 14: fem gissningar bränner koden';
+  raise notice 'ok 16: fem gissningar bränner koden';
 end $$;
 
 do $$
-declare
-  v_hash text := encode(digest('222222', 'sha256'), 'hex');
 begin
-  -- Båda nycklarna: Supabase-harnessen läser request.jwt.claim.sub, den
-  -- självhostade bootstrappen läser app.user_id. Samma grepp som rls.sql.
   perform set_config('request.jwt.claim.sub', 'a0000000-0000-0000-0000-000000000001', true);
   perform set_config('app.user_id', 'a0000000-0000-0000-0000-000000000001', true);
+
   -- Ett fast nummer kan inte ta emot SMS. Ett tyst misslyckande vore
   -- värre än ett nej.
   begin
-    perform public.start_phone_verification('+46812345678', v_hash, 10);
+    perform public.start_phone_verification('+46812345678', 10);
     raise exception 'FAIL  ett fast nummer godtogs';
-  exception when check_violation then
-    raise notice 'ok 15: bara mobilnummer godtas';
+  exception when raise_exception then
+    if sqlerrm like 'FAIL%' then raise; end if;
+    raise notice 'ok 17: bara mobilnummer godtas';
   end;
 
-  -- Koden ska lagras som hash, inget annat.
-  begin
-    perform public.start_phone_verification('+46701234567', '123456', 10);
-    raise exception 'FAIL  en okrypterad kod godtogs';
-  exception when check_violation then
-    raise notice 'ok 16: koden måste vara en sha256-summa';
-  end;
+  -- DEN GAMLA VÄGEN SKA VARA STÄNGD. Så länge treargumentsformen finns
+  -- kvar kan en klient fortsätta välja koden själv, hur bra den nya
+  -- funktionen än är.
+  if exists (
+    select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public' and p.proname = 'start_phone_verification'
+      and pg_get_function_identity_arguments(p.oid) = 'text, text, integer'
+  ) then
+    raise exception 'FAIL  den gamla signaturen med klientvald kodhash finns kvar';
+  end if;
+  if exists (
+    select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public' and p.proname = 'queue_verification_sms'
+  ) then
+    raise exception 'FAIL  queue_verification_sms finns kvar som egen yta';
+  end if;
+  raise notice 'ok 18: den gamla vägen där klienten valde koden är borta';
 end $$;
 
 /* --- 4. Kön, uppskjutningen och taket ------------------------------------- */
@@ -356,7 +403,7 @@ begin
   join pg_namespace n on n.oid = p.pronamespace
   where n.nspname = 'public'
     and p.proname in ('start_phone_verification', 'confirm_phone_verification',
-                      'remove_phone', 'queue_verification_sms')
+                      'remove_phone')
     and not has_function_privilege('authenticated', p.oid, 'execute');
 
   if v_missing is not null then
@@ -365,43 +412,43 @@ begin
   raise notice 'ok 25: användarens egna funktioner är öppna';
 end $$;
 
+/*
+ * SMS:ET KÖAS AV FUNKTIONEN SJÄLV, INTE AV ANROPAREN.
+ *
+ * queue_verification_sms(p_body) fanns förut som egen yta: klienten
+ * skickade in TEXTEN, alltså den sträng som skulle nå telefonen. En
+ * "skicka det här till mitt nummer"-funktion är en text angriparen
+ * skriver, och kostar dessutom pengar per anrop. Den är borta; kön fylls
+ * nu i samma transaktion som koden föds.
+ *
+ * Taket - fem per nummer och timme - följde med hit, och prövas här mot
+ * den enda väg som finns kvar.
+ */
 do $$
 declare
-  v_hash text := encode(digest('333333', 'sha256'), 'hex');
   v_count int;
 begin
   perform set_config('request.jwt.claim.sub', 'a0000000-0000-0000-0000-000000000002', true);
   perform set_config('app.user_id', 'a0000000-0000-0000-0000-000000000002', true);
 
-  -- Utan påbörjad verifiering finns inget nummer att skicka till, och
-  -- funktionen tar inte emot ett heller.
-  begin
-    perform public.queue_verification_sms('kod 333333');
-    raise exception 'FAIL  ett SMS köades utan påbörjad verifiering';
-  exception when others then
-    if sqlerrm like 'FAIL%' then raise; end if;
-    raise notice 'ok 26: inget SMS utan en påbörjad verifiering';
-  end;
-
-  perform public.start_phone_verification('+46705555555', v_hash, 10);
-  perform public.queue_verification_sms('kod 333333');
+  perform public.start_phone_verification('+46705555555', 10);
   select count(*) into v_count from public.outbound_sms where recipient = '+46705555555';
   if v_count <> 1 then
     raise exception 'FAIL  % SMS köade, förväntat 1', v_count;
   end if;
-  raise notice 'ok 27: koden går till numret användaren just angav';
+  raise notice 'ok 26: koden går till numret användaren just angav, i ett enda SMS';
 
   -- Taket: fem per nummer och timme. Utan det kan samma nummer begäras
   -- om och om, och varje begäran kostar.
   for i in 1..4 loop
-    perform public.queue_verification_sms('kod 333333');
+    perform public.start_phone_verification('+46705555555', 10);
   end loop;
   begin
-    perform public.queue_verification_sms('kod 333333');
+    perform public.start_phone_verification('+46705555555', 10);
     raise exception 'FAIL  taket höll inte';
   exception when others then
     if sqlerrm like 'FAIL%' then raise; end if;
-    raise notice 'ok 28: fem koder per timme och nummer, inte fler';
+    raise notice 'ok 27: fem koder per timme och nummer, inte fler';
   end;
 end $$;
 
