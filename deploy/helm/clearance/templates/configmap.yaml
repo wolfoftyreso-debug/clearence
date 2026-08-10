@@ -9,6 +9,7 @@ data:
   # Secreten och injiceras separat.
   ANTHROPIC_MODEL: {{ .Values.config.anthropicModel | quote }}
   PGPOOL_MAX: {{ .Values.config.pgPoolMax | quote }}
+  TRUSTED_PROXY_HOPS: {{ .Values.config.trustedProxyHops | quote }}
   SESSION_TTL_HOURS: {{ .Values.config.sessionTtlHours | quote }}
   MAIL_FROM: {{ .Values.config.mailFrom | quote }}
   APP_BASE_URL: {{ .Values.config.appBaseUrl | quote }}

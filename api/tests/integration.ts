@@ -1300,6 +1300,156 @@ check("etiketten finns i EXAKT en kopia trots dubbel sådd", antalUppgifter === 
 const tomSadd = await call("POST", `/v1/cases/${CASE_A}/tasks/seed`, { token: adminToken, body: { labels: [] } });
 check("tom lista är ett giltigt no-op", tomSadd.status === 200 && tomSadd.body.seeded === 0, tomSadd.body);
 
+/* --- 8m. Adversariell svep: angriparen med ett giltigt konto ------------- */
+
+/*
+ * Slutgiltiga frågan ur säkerhetsgenomgången: "en angripare har ett vanligt
+ * konto, känner hela frontendens implementation och kan gissa vilket id som
+ * helst - vad kommer den åt?"
+ *
+ * Bertil ÄR en sådan angripare i förhållande till CASE_A: giltig session,
+ * noll behörighet, och han känner id:t. Svepet nedan går igenom VARJE
+ * ärendebunden resurs och kräver att svaret antingen nekas eller är tomt -
+ * aldrig någon av Agnes data. Ett id är inte en hemlighet, och sviten ska
+ * inte låtsas att det är det.
+ */
+
+const lackerData = (kropp: Json): boolean => {
+  const text = JSON.stringify(kropp ?? {});
+  // Något av Agnes ärende som aldrig får dyka upp hos Bertil.
+  return /Bolag A AB|556000-0001|Ring revisorn|Cecilias interna|Likviditetsgenomgång/.test(text);
+};
+
+const svepta: { rutt: string; status: number }[] = [];
+for (const rutt of [
+  `/v1/cases/${CASE_A}`,
+  `/v1/cases/${CASE_A}/journal`,
+  `/v1/cases/${CASE_A}/decisions`,
+  `/v1/cases/${CASE_A}/tasks`,
+  `/v1/cases/${CASE_A}/messages`,
+  `/v1/cases/${CASE_A}/documents`,
+  `/v1/cases/${CASE_A}/payments`,
+  `/v1/cases/${CASE_A}/kbr`,
+  `/v1/cases/${CASE_A}/members`,
+  `/v1/cases/${CASE_A}/invitations`,
+  `/v1/cases/${CASE_A}/notes`,
+  `/v1/cases/${CASE_A}/time-entries`,
+  `/v1/cases/${CASE_A}/sessions`,
+  `/v1/cases/${CASE_A}/share-links`,
+]) {
+  const svar = await call("GET", rutt, { token: bertilToken });
+  svepta.push({ rutt, status: svar.status });
+  check(
+    `SVEP: ${rutt} läcker inget till en utomstående med giltigt konto`,
+    !lackerData(svar.body),
+    { rutt, status: svar.status, body: svar.body },
+  );
+}
+check("svepet täckte alla ärendebundna läsvägar", svepta.length === 14, svepta.length);
+
+// Skrivvägarna: samma angripare, samma ärende.
+for (const [metod, rutt, kropp] of [
+  ["POST", `/v1/cases/${CASE_A}/tasks`, { label: "Angriparens uppgift" }],
+  ["POST", `/v1/cases/${CASE_A}/notes`, { body: "Angriparens anteckning i annans ärende" }],
+  ["POST", `/v1/cases/${CASE_A}/time-entries`, { minutes: 60 }],
+  ["POST", `/v1/cases/${CASE_A}/messages`, { body: "Hej" }],
+  ["POST", `/v1/cases/${CASE_A}/invitations`, { email: "angripare@example.se", role: "observer" }],
+  ["POST", `/v1/cases/${CASE_A}/close`, { reason: "annat" }],
+  ["POST", `/v1/cases/${CASE_A}/plan-approval`, { approved: true }],
+  ["POST", `/v1/cases/${CASE_A}/share-links`, { scope: "full", validDays: 7 }],
+] as const) {
+  const svar = await call(metod, rutt, { token: bertilToken, body: kropp });
+  check(`SVEP: ${metod} ${rutt} nekas för en utomstående`, svar.status >= 400, {
+    status: svar.status,
+    body: svar.body,
+  });
+}
+
+// Ärendet ska vara ORÖRT efter hela svepet.
+const efterSvep = await withAnon(async (tx) => {
+  const { rows } = await tx.query(
+    `select (select count(*)::int from public.case_tasks where case_id = $1 and label = 'Angriparens uppgift') as uppgifter,
+            (select count(*)::int from public.case_notes where case_id = $1) as anteckningar,
+            (select closed_at from public.cases where id = $1) as stangt`,
+    [CASE_A],
+  );
+  return rows[0];
+});
+check("angriparen lade ingen uppgift i ärendet", efterSvep.uppgifter === 0, efterSvep);
+check("ärendet stängdes inte av angriparen", efterSvep.stangt === null, efterSvep);
+
+/* --- IDOR mot den signerade dokument-URL:en ------------------------------ */
+
+/*
+ * Den farligaste enskilda rutten i hela API:t: en signerad URL kringgår ALL
+ * databasbehörighet - det är hela poängen med den. Går den att få ut för ett
+ * dokument man inte äger är radskyddet omkörbart med en HTTP-förfrågan.
+ *
+ * Sviten körs med DOCUMENTS_BUCKET satt (se api/tests/run.sh), annars hade
+ * rutten kortslutit på "lagringen är inte ansluten" och prövningen aldrig
+ * skett - grön av fel skäl.
+ */
+const DOK_A = "eeeeeeee-0000-0000-0000-0000000000e1";
+await withAnon(async (tx) => {
+  await tx.query(
+    `insert into public.case_documents (id, case_id, user_id, kind, file_name, file_size, mime_type, storage_path, source)
+     values ($1::uuid, $2::uuid, $3::uuid, 'other', 'hemlig-plan.pdf', 1024, 'application/pdf',
+             $2::text || '/hemlig-plan.pdf', 'manual')
+     on conflict (id) do nothing`,
+    [DOK_A, CASE_A, AGNES],
+  );
+});
+
+const health = await call("GET", "/v1/health");
+check("lagringen ÄR ansluten i sviten (annars prövas inget)", health.body.storage === true, health.body);
+
+const bertilDok = await call("GET", `/v1/documents/${DOK_A}/url`, { token: bertilToken });
+check("IDOR: en utomstående får INGEN signerad URL", bertilDok.status === 404, bertilDok.body);
+check(
+  "och svaret bär varken URL eller storage_path",
+  !/storage_path|hemlig-plan|http/i.test(JSON.stringify(bertilDok.body ?? {})),
+  bertilDok.body,
+);
+const anonDok = await call("GET", `/v1/documents/${DOK_A}/url`);
+check("utan token nekas dokument-URL:en", anonDok.status === 401, anonDok.body);
+
+/* --- Masstilldelning: fält servern äger får inte sättas av klienten ------ */
+
+const massProfil = await call("PATCH", "/v1/profile", {
+  token: bertilToken,
+  body: { displayName: "Bertil", phone: null, role: "admin", userId: AGNES },
+});
+check("masstilldelning: role/userId i kroppen ignoreras", massProfil.status === 200, massProfil.body);
+const efterMass = await withAnon(async (tx) => {
+  const { rows } = await tx.query("select role from public.user_profiles where user_id = $1", [BERTIL]);
+  return rows[0];
+});
+check("rollen gick inte att höja via profiluppdateringen", efterMass.role !== "admin", efterMass);
+
+// Kontaktformuläret: status/handläggare/konto sätts av servern, aldrig av kroppen.
+await call("POST", "/v1/contact", {
+  body: {
+    name: "Angripare",
+    email: "angripare@example.se",
+    topic: "other",
+    message: "Ett meddelande som försöker sätta egna serverfält.",
+    status: "closed",
+    userId: AGNES,
+    handledBy: AGNES,
+    internalNote: "injicerad",
+  },
+});
+const massKontakt = await withAnon(async (tx) => {
+  const { rows } = await tx.query(
+    "select status, user_id, handled_by, internal_note from public.contact_messages where email = $1",
+    ["angripare@example.se"],
+  );
+  return rows[0];
+});
+check("masstilldelning: status sattes av servern, inte av kroppen", massKontakt.status === "new", massKontakt);
+check("masstilldelning: kontot kunde inte tillskrivas någon annan", massKontakt.user_id === null, massKontakt);
+check("masstilldelning: handläggare och intern anteckning ignorerades", massKontakt.handled_by === null && massKontakt.internal_note === null, massKontakt);
+
 /* --- 9. Hastighetsbegränsningen, mot den delade räknaren ------------------ */
 
 /*

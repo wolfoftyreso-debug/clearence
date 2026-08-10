@@ -241,6 +241,11 @@ const KANDA_UNDANTAG = new Set([
   "clearance-demo-state",
   // Efemärt UI-fokus, bär ingen uppgift om vare sig bolag eller person.
   "clearance-focus-search",
+  // INTE en lagringsnyckel. Det här är formatstämpeln inne i GDPR-utdragets
+  // JSON (src/lib/dataExport.ts) - sökningen ovan matchar på "clearance-"
+  // och kan inte se skillnad på en nyckel och en formatidentifierare.
+  // Ingenting skrivs någonsin till localStorage under det här namnet.
+  "clearance-personuppgifter-v1",
 ]);
 
 {

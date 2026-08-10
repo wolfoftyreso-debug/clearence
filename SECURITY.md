@@ -1,5 +1,27 @@
 # Säkerhetsnoteringar
 
+> **Full genomgång:** `docs/security-readiness.md` bär hela revisionen —
+> fynd, severity, orsak, åtgärd, regressionstest och kvarvarande risker.
+> Slutstatus där är **SECURITY NOT READY**, och skälet är att fyra krav inte
+> går att verifiera utan en körande miljö — inte att ett känt hål står öppet.
+
+## Åtgärdade sårbarheter (2026-08-10)
+
+| # | Sårbarhet | Severity | Åtgärd | Test |
+|---|---|---|---|---|
+| F-1 | SSRF: `redirect: "follow"` följde omdirigeringar förbi SSRF-kontrollen — en 302 mot `169.254.169.254` räckte | HIGH | Manuell hoppkedja, varje `Location` omprövas | `tests/sakerhet.ts` |
+| F-2 | Hastighetsgränsen läste FÖRSTA posten i `x-forwarded-for` (den klienten skriver) → fri lösenordsforcering | HIGH | Räknas från höger, `TRUSTED_PROXY_HOPS` | `tests/sakerhet.ts`, `tests/rateLimit.ts` |
+| F-3 | nginx tappade säkerhetsrubrikerna på `index.html` och `/assets/` (add_header ärvs inte) → klickkapning på appdokumentet | MEDIUM | Rubrikerna upprepade per block | `tests/sakerhet.ts` |
+| F-4 | CSP, HSTS och Permissions-Policy saknades helt | MEDIUM | Satta i nginx-mallen | `tests/sakerhet.ts` |
+| F-5 | `::ffff:169.254.169.254` och CGNAT passerade SSRF-listan | MEDIUM | Avbildad IPv4 normaliseras; listan utökad | `tests/sakerhet.ts` |
+| F-6 | Oanvänd `dangerouslySetInnerHTML` i `ui/chart.tsx` | LOW | Filen borttagen | `tests/sakerhet.ts` |
+| F-7 | Presigneringens behörighetskontroll kördes aldrig i test (lagringen "ej ansluten") | MEDIUM | `DOCUMENTS_BUCKET` sätts i sviten | `api/tests/integration.ts` |
+
+**Lärdomen ur F-2:** `tests/rateLimit.ts` **beskrev buggen som förväntat
+beteende** och var därför grön medan spärren inte fanns. Ett test som
+kodifierar en sårbarhet är sämre än inget test alls. Assertionerna är
+omskrivna.
+
 ## Åtgärdade rådgivningar
 
 ### react-router GHSA-qwww-vcr4-c8h2 (high) — **ÅTGÄRDAD**

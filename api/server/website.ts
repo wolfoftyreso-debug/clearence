@@ -46,13 +46,28 @@ export type WebsiteResult =
 
 /** Privata, loopback-, länklokala och metadata-adresser - hämtas ALDRIG. */
 export const isPrivateAddress = (ip: string): boolean => {
-  if (/^127\./.test(ip) || ip === "0.0.0.0") return true; // loopback / any
-  if (/^10\./.test(ip) || /^192\.168\./.test(ip)) return true; // privat
-  if (/^172\.(1[6-9]|2\d|3[01])\./.test(ip)) return true; // privat 172.16–31
-  if (/^169\.254\./.test(ip)) return true; // länklokal, inkl. molnmetadata
-  if (ip === "::1") return true; // ipv6 loopback
-  const low = ip.toLowerCase();
-  if (low.startsWith("fe80:") || low.startsWith("fc") || low.startsWith("fd")) return true; // ipv6 länklokal/ULA
+  let adress = ip.trim().toLowerCase();
+  // IPv4 avbildad i IPv6 (::ffff:169.254.169.254) är samma adress som den
+  // IPv4 den bär. Utan den här raden gick metadata-endpointen att nå genom
+  // att be om den i IPv6-form.
+  const avbildad = /^(?:::ffff:)(\d+\.\d+\.\d+\.\d+)$/.exec(adress);
+  if (avbildad) adress = avbildad[1];
+
+  if (/^127\./.test(adress)) return true; // loopback 127/8
+  if (/^0\./.test(adress)) return true; // "detta nät" 0/8, inkl. 0.0.0.0
+  if (/^10\./.test(adress) || /^192\.168\./.test(adress)) return true; // privat
+  if (/^172\.(1[6-9]|2\d|3[01])\./.test(adress)) return true; // privat 172.16-31
+  if (/^169\.254\./.test(adress)) return true; // länklokal, inkl. molnmetadata
+  if (/^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./.test(adress)) return true; // CGNAT 100.64/10
+  if (/^192\.0\.0\./.test(adress) || /^192\.0\.2\./.test(adress)) return true; // IETF-reserverat
+  if (/^198\.(1[89])\./.test(adress)) return true; // benchmark 198.18/15
+  if (/^(22[4-9]|2[3-5]\d)\./.test(adress)) return true; // multicast + reserverat 224+
+
+  if (adress === "::1" || adress === "::") return true; // ipv6 loopback / any
+  if (adress.startsWith("fe80:")) return true; // ipv6 länklokal
+  // Unika lokala adresser fc00::/7 - alltså fc och fd som FÖRSTA oktett-par,
+  // inte vilket värdnamn som helst som råkar börja på de bokstäverna.
+  if (/^f[cd][0-9a-f]{2}:/.test(adress)) return true;
   return false;
 };
 
@@ -79,17 +94,64 @@ const hostArSaker = async (
   }
 };
 
+/** Så många omdirigeringar följer vi - fler är alltid en slinga eller en fälla. */
+const MAX_HOPP = 5;
+
+/**
+ * Hämtar med tidsgräns och FÖLJER OMDIRIGERINGAR SJÄLV.
+ *
+ * `redirect: "follow"` var hålet i SSRF-skyddet: vi prövade värdnamnet i
+ * adressen användaren angav, och lät sedan fetch följa vart som helst. En
+ * angripare behövde bara peka på sin EGEN publika server och svara
+ * "302 Location: http://169.254.169.254/latest/meta-data/" - kontrollen var
+ * redan avklarad och gällde fel adress. Molnets metadata, databasen på 10.x
+ * och allt annat internt låg öppet bakom en enda omdirigering.
+ *
+ * Därför "manual": varje hopp prövas mot hostArSaker() innan det följs, med
+ * samma regel som första adressen. En omdirigering är en ny begäran, och en
+ * ny begäran ska prövas som en ny begäran.
+ */
 const medTidsgrans = async (
   hamta: typeof fetch,
   url: string,
+  slaUpp: (host: string) => Promise<string[]>,
 ): Promise<Response> => {
-  const avbryt = new AbortController();
-  const klocka = setTimeout(() => avbryt.abort(), TIMEOUT_MS);
-  try {
-    return await hamta(url, { headers: { "user-agent": USER_AGENT }, signal: avbryt.signal, redirect: "follow" });
-  } finally {
-    clearTimeout(klocka);
+  let aktuell = url;
+  for (let hopp = 0; hopp <= MAX_HOPP; hopp++) {
+    const avbryt = new AbortController();
+    const klocka = setTimeout(() => avbryt.abort(), TIMEOUT_MS);
+    let svar: Response;
+    try {
+      svar = await hamta(aktuell, {
+        headers: { "user-agent": USER_AGENT },
+        signal: avbryt.signal,
+        redirect: "manual",
+      });
+    } finally {
+      clearTimeout(klocka);
+    }
+
+    if (svar.status < 300 || svar.status > 399) return svar;
+
+    const plats = svar.headers.get("location");
+    if (!plats) return svar; // 3xx utan mål: inget att följa.
+
+    let nasta: URL;
+    try {
+      nasta = new URL(plats, aktuell); // relativa mål tillåts, som standarden säger
+    } catch {
+      throw new Error("ssrf: omdirigeringen pekade på en ogiltig adress");
+    }
+    if (nasta.protocol !== "https:" && nasta.protocol !== "http:") {
+      throw new Error("ssrf: omdirigeringen bytte till ett protokoll vi inte hämtar");
+    }
+    if (!(await hostArSaker(nasta.hostname, slaUpp))) {
+      // Samma tystnad som första prövningen - vi röjer inte vad som finns.
+      throw new Error("ssrf: omdirigeringen pekade på en adress som inte får hämtas");
+    }
+    aktuell = nasta.href;
   }
+  throw new Error("ssrf: för många omdirigeringar");
 };
 
 /**
@@ -128,7 +190,7 @@ export const fetchWebsite = async (
   const robotsUrl = `${url.protocol}//${url.host}/robots.txt`;
   let regler;
   try {
-    const rSvar = await medTidsgrans(hamta, robotsUrl);
+    const rSvar = await medTidsgrans(hamta, robotsUrl, slaUpp);
     regler = rSvar.ok ? parseRobots(await rSvar.text(), AGENT_TOKEN) : parseRobots("", AGENT_TOKEN);
   } catch {
     return { status: "fel", reason: "Kunde inte läsa robots.txt." };
@@ -140,8 +202,10 @@ export const fetchWebsite = async (
   // 2. Själva sidan.
   let svar: Response;
   try {
-    svar = await medTidsgrans(hamta, url.href);
+    svar = await medTidsgrans(hamta, url.href, slaUpp);
   } catch (error) {
+    // En blockerad omdirigering får samma svar som "gick inte att nå": att
+    // säga "den pekade på en intern adress" vore att bekräfta att den finns.
     return {
       status: "fel",
       reason:

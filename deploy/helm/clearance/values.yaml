@@ -27,6 +27,11 @@ config:
   anthropicModel: "claude-sonnet-5"
   # pg-poolens tak i API:t.
   pgPoolMax: "10"
+  # Antal BETRODDA mellanled framför API:t. Avgör vilken post i
+  # x-forwarded-for som hastighetsgränsen räknar på - fel värde här gör
+  # spärren mot lösenordsforcering verkningslös. 1 = nginx-sidovagnen.
+  # Sätt 0 om API:t tar emot direkt (då ignoreras rubriken helt).
+  trustedProxyHops: "1"
   # Sessionens livslängd i timmar.
   sessionTtlHours: "12"
   # Avsändaradress för utkorgen. Måste ligga under din domän.

@@ -25,6 +25,16 @@ done
 # det är precis den mekanismen sviten prövar.
 export DATABASE_URL="postgres://${PGUSER:-postgres}@localhost:${PGPORT:-55432}/${DB}?host=${PGHOST:-/tmp}"
 
+# Dokumentlagringen MÅSTE se ansluten ut här, annars kortsluter
+# /v1/documents/{id}/url på "lagringen är inte ansluten" och
+# behörighetsprövningen (app.may_read_document) körs aldrig i sviten - den
+# skulle vara oprövad och se grön ut. Ingen nyckel behövs: den som nekas
+# får 404 långt innan något signeras.
+export DOCUMENTS_BUCKET="clearance-test-bucket"
+
+# Hastighetsgränsens nyckel prövas mot ETT betrott mellanled, som i driften.
+export TRUSTED_PROXY_HOPS="1"
+
 # AWS SDK:n lämnas extern: den lastas bara när dokumentlagringen faktiskt
 # används, och dess CJS-interna dynamic require("node:https") går inte att
 # bunta till ESM. Node löser den ur node_modules vid körning.

@@ -83,25 +83,57 @@ export const provaGrans = async (
 };
 
 /**
+ * Antal BETRODDA mellanled framför API:et. Driftparameter, inte gissning.
+ *
+ * 1 = en proxy (nginx-sidovagnen i deploy/frontend, eller ALB:n).
+ * 0 = API:et tar emot direkt; då ignoreras x-forwarded-for HELT.
+ */
+const betroddaHopp = (): number => {
+  const n = Number(process.env.TRUSTED_PROXY_HOPS ?? 1);
+  return Number.isInteger(n) && n >= 0 ? n : 1;
+};
+
+/**
  * Vem anropet kommer ifrån.
  *
  * Bakom lastbalanseraren är socketens adress ALLTID balanserarens, så
  * utan x-forwarded-for delar hela världen en enda räknare - och första
- * klienten som slår i taket stänger ute alla andra. Den FÖRSTA adressen
- * i listan är klientens; resten är mellanled.
+ * klienten som slår i taket stänger ute alla andra.
  *
- * Rubriken går att förfalska av den som når API:et direkt. Just därför
- * ska ALB:n vara enda vägen in - vilket den är i infra/network.tf, där
- * uppgifterna bara tar emot från lastbalanserarens säkerhetsgrupp.
+ * DEN FÖRSTA ADRESSEN I LISTAN ÄR INTE KLIENTENS. Den här funktionen tog
+ * tidigare `[0]`, och det var en hastighetsgräns som inte gick att lita
+ * på: nginx sätter `$proxy_add_x_forwarded_for`, alltså
+ * "<det klienten skickade>, <den adress nginx såg>". En angripare som går
+ * in genom rätt ytterdörr kan därför skriva vad som helst först och få en
+ * FÄRSK räknare för varje anrop - vilket tar bort hela spärren mot
+ * lösenordsforcering. Nätverksisolering hjälper inte mot det, eftersom
+ * anropet kommer via den betrodda proxyn.
+ *
+ * Rätt adress är den som det SISTA betrodda mellanledet självt observerade:
+ * räkna hopp FRÅN HÖGER. Allt till vänster om den punkten är skrivet av
+ * någon vi inte litar på och får aldrig avgöra vilken räknare som används.
  */
 export const klientNyckel = (
   headers: Record<string, string | string[] | undefined>,
   fallback: string,
 ): string => {
+  const hopp = betroddaHopp();
+  // Inga betrodda mellanled: rubriken är helt klientstyrd. Använd socketen.
+  if (hopp === 0) return fallback;
+
   const xff = headers["x-forwarded-for"];
-  const rad = Array.isArray(xff) ? xff[0] : xff;
-  const forsta = rad?.split(",")[0]?.trim();
-  return forsta && forsta.length > 0 ? forsta : fallback;
+  const rad = Array.isArray(xff) ? xff.join(",") : xff;
+  const delar = (rad ?? "")
+    .split(",")
+    .map((d) => d.trim())
+    .filter((d) => d.length > 0);
+  if (delar.length === 0) return fallback;
+
+  // Kortare lista än antalet hopp betyder att kedjan inte ser ut som vi
+  // tror. Falla tillbaka på socketen i stället för att gissa - att gissa
+  // fel här är att dela ut en gratis räknare.
+  if (delar.length < hopp) return fallback;
+  return delar[delar.length - hopp];
 };
 
 /**

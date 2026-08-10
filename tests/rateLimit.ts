@@ -47,10 +47,22 @@ check("och fönstret mäts i minuter, inte sekunder", LOGIN.fonsterSek >= 60, St
  * Bakom lastbalanseraren är socketadressen alltid balanserarens. Utan
  * x-forwarded-for delar hela världen en räknare, och första klienten som
  * slår i taket stänger ute alla andra.
+ *
+ * DE TRE KONTROLLERNA HÄR SA TIDIGARE FEL SAK. De krävde att adressen togs
+ * ur rubrikens FÖRSTA post - alltså precis den del angriparen själv skriver.
+ * nginx sätter "$proxy_add_x_forwarded_for", som lägger den observerade
+ * adressen SIST; den som roterade det första värdet fick därför en färsk
+ * räknare per anrop och kunde forcera inloggningen fritt. Kontrollerna
+ * beskrev buggen, så de var gröna medan spärren inte fanns.
+ *
+ * Rätt post är den som det sista BETRODDA mellanledet självt såg: räknat
+ * från höger, TRUSTED_PROXY_HOPS steg in. Angreppsfallen prövas i
+ * tests/sakerhet.ts; här prövas formen på uppslaget.
  */
+process.env.TRUSTED_PROXY_HOPS = "1";
 check(
-  "klienten läses ur x-forwarded-for",
-  klientNyckel({ "x-forwarded-for": "203.0.113.7, 10.0.0.1" }, "10.0.0.1") === "203.0.113.7",
+  "klienten läses ur x-forwarded-for, från det betrodda mellanledet",
+  klientNyckel({ "x-forwarded-for": "203.0.113.7, 10.0.0.1" }, "192.0.2.1") === "10.0.0.1",
 );
 check(
   "utan rubriken används socketadressen",
@@ -60,16 +72,17 @@ check(
   "en tom rubrik faller tillbaka i stället för att ge tom nyckel",
   klientNyckel({ "x-forwarded-for": "" }, "198.51.100.4") === "198.51.100.4",
 );
-// Rubriken kan komma som en lista när flera mellanled satt sin egen.
+// Rubriken kan komma som en lista när flera mellanled satt sin egen. Hela
+// kedjan läses ihop, och det sista steget är det som räknas.
 check(
-  "en upprepad rubrik läses från den första raden",
-  klientNyckel({ "x-forwarded-for": ["198.51.100.9, 10.0.0.1", "10.0.0.2"] }, "10.0.0.1") ===
-    "198.51.100.9",
+  "en upprepad rubrik läses som EN kedja, och sista steget gäller",
+  klientNyckel({ "x-forwarded-for": ["198.51.100.9, 10.0.0.1", "10.0.0.2"] }, "192.0.2.1") ===
+    "10.0.0.2",
 );
 // Mellanslag runt adressen är vanligt och får inte bli en egen nyckel.
 check(
   "blanktecken trimmas bort",
-  klientNyckel({ "x-forwarded-for": "  203.0.113.9 , 10.0.0.1" }, "10.0.0.1") === "203.0.113.9",
+  klientNyckel({ "x-forwarded-for": "  203.0.113.9 , 10.0.0.1  " }, "192.0.2.1") === "10.0.0.1",
 );
 
 console.log(`\n${passed} passed, ${failed} failed`);
