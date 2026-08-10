@@ -21,7 +21,7 @@
  */
 
 import { createApiServer, handle } from "../server/index";
-import { closePool, withAnon, withUser } from "../server/db";
+import { closePool, provaDatabasroll, withAnon, withUser } from "../server/db";
 import { hashPassword, sha256, verifyPassword } from "../server/auth";
 import { nollstallGranser, provaGrans } from "../server/rateLimit";
 
@@ -1449,6 +1449,71 @@ const massKontakt = await withAnon(async (tx) => {
 check("masstilldelning: status sattes av servern, inte av kroppen", massKontakt.status === "new", massKontakt);
 check("masstilldelning: kontot kunde inte tillskrivas någon annan", massKontakt.user_id === null, massKontakt);
 check("masstilldelning: handläggare och intern anteckning ignorerades", massKontakt.handled_by === null && massKontakt.internal_note === null, massKontakt);
+
+/* --- 8n. Databasrollen prövas mot den RIKTIGA katalogen ----------------- */
+
+/*
+ * Kontrollen som vägrar starta servern. Att den finns i källkoden bevisar
+ * ingenting - den ska ge rätt svar mot pg_roles och pg_class. Båda utfallen
+ * prövas här: sviten själv ansluter som superanvändaren (med flit, så
+ * fixturerna inte beror på policyerna under test), och en roll byggd som
+ * driftens ska godkännas.
+ *
+ * `set local role` byter current_user inne i transaktionen, så samma fråga
+ * kan prövas för båda rollerna utan en ny anslutning.
+ */
+
+const somSuper = await withAnon((tx) => provaDatabasroll(tx));
+check("sviten kör som en OSÄKER roll (superanvändaren)", somSuper.saker === false, somSuper);
+check(
+  "och skälet är utskrivet, inte bara ett nej",
+  somSuper.skal.some((s) => /superanvändare|BYPASSRLS|äger/.test(s)),
+  somSuper.skal,
+);
+
+// En roll byggd som driftens: login, medlem i authenticated, äger ingenting,
+// ingen BYPASSRLS.
+await withAnon(async (tx) => {
+  await tx.query(`
+    do $$
+    begin
+      if not exists (select 1 from pg_roles where rolname = 'clearance_api_prov') then
+        create role clearance_api_prov login password 'prov';
+      end if;
+      grant authenticated to clearance_api_prov;
+    end
+    $$;
+  `);
+});
+const somDrift = await withAnon(async (tx) => {
+  await tx.query("set local role clearance_api_prov");
+  const svar = await provaDatabasroll(tx);
+  await tx.query("reset role");
+  return svar;
+});
+check("en driftlik roll GODKÄNNS", somDrift.saker === true, somDrift);
+check("och det är rätt roll som prövades", somDrift.roll === "clearance_api_prov", somDrift);
+
+// app_worker har BYPASSRLS med flit (betrodd batchroll) - och ska därför
+// aldrig duga som API-roll. Det är precis den förväxlingen kontrollen finns för.
+const somWorker = await withAnon(async (tx) => {
+  const finns = await tx.query("select 1 from pg_roles where rolname = 'app_worker'");
+  if (finns.rowCount === 0) return null;
+  await tx.query("set local role app_worker");
+  const svar = await provaDatabasroll(tx);
+  await tx.query("reset role");
+  return svar;
+});
+if (somWorker) {
+  check("arbetarrollen (BYPASSRLS) duger INTE som API-roll", somWorker.saker === false, somWorker);
+  check(
+    "och skälet pekar ut BYPASSRLS",
+    somWorker.skal.some((s) => /BYPASSRLS/.test(s)),
+    somWorker.skal,
+  );
+} else {
+  check("arbetarrollen finns inte i den här databasen (hoppas över)", true);
+}
 
 /* --- 9. Hastighetsbegränsningen, mot den delade räknaren ------------------ */
 

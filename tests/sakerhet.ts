@@ -19,6 +19,7 @@
 
 import { isPrivateAddress, fetchWebsite } from "../api/server/website";
 import { klientNyckel } from "../api/server/rateLimit";
+import { loggaFel, maskera, maskeraText } from "../api/server/logg";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -304,6 +305,104 @@ try {
   harChart = false;
 }
 check("den oanvända dangerouslySetInnerHTML-komponenten är borttagen", harChart === false);
+
+/* --- 5. Loggen: tillräckligt för att felsöka, aldrig nog för att stjäla -- */
+
+/*
+ * `console.error("api error", error)` skrev hela felobjektet rakt ut. Ett
+ * pg-fel bär `query` OCH `parameters` - alltså den SQL som kördes och de
+ * VÄRDEN som skickades in. Ett fel i inloggningen kunde därmed skriva ett
+ * lösenordsförsök till loggen.
+ */
+
+// Ett pg-liknande fel med allt det farliga i sig.
+const pgFel = Object.assign(new Error('duplicate key value violates unique constraint'), {
+  code: "23505",
+  constraint: "auth_users_email_key",
+  table: "users",
+  query: "insert into auth.users (email, password_hash) values ($1, $2)",
+  parameters: ["agnes@bolag-a.se", "scrypt$32768$8$1$aGVq$c2Vjcg"],
+});
+
+{
+  const rader: unknown[] = [];
+  loggaFel("api_fel", pgFel, { rutt: "/v1/auth/login" }, (...a) => rader.push(...a));
+  const text = rader.join(" ");
+  check("loggen bär felkoden (annars är den värdelös)", /23505/.test(text), text.slice(0, 200));
+  check("loggen bär villkoret som brast", /auth_users_email_key/.test(text));
+  check("men INTE frågans parametervärden", !/scrypt\$32768/.test(text), text.slice(0, 300));
+  check("och inte lösenordshashen", !/c2Vjcg/.test(text));
+  check("e-postadressen maskeras (personuppgift, inte felsökningsdata)", !/agnes@bolag-a\.se/.test(text), text.slice(0, 300));
+  check("loggraden är en giltig JSON-rad", (() => { try { JSON.parse(String(rader[0])); return true; } catch { return false; } })());
+}
+
+// Mönster som är hemliga var de än står.
+check("en API-nyckel maskeras i fritext", !maskeraText("nyckeln clr_abcdef123456 användes").includes("clr_abcdef123456"));
+check("en Anthropic-nyckel maskeras", !maskeraText("sk-ant-api03-AbCdEf_123456").includes("sk-ant-api03-AbCdEf"));
+check("en sha256-hash (token/nyckel) maskeras", !maskeraText(`hash ${"a".repeat(64)}`).includes("a".repeat(64)));
+check("en anslutningssträng maskeras", !maskeraText("postgres://user:hemligt@db:5432/x").includes("hemligt"));
+check("ett JWT maskeras", !maskeraText("eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.abcdef").includes("eyJhbGciOiJIUzI1NiJ9"));
+
+// Fältnamn vars värde aldrig får skrivas.
+{
+  const ut = JSON.stringify(maskera({
+    password: "hemligt",
+    token: "abc123",
+    authorization: "Bearer xyz",
+    api_key: "clr_x",
+    nested: { password_hash: "h", ofarligt: "syns" },
+  }));
+  check("hemliga fältnamn maskeras oavsett djup", !/hemligt|abc123|Bearer xyz/.test(ut), ut);
+  check("och ofarliga fält står kvar", /syns/.test(ut), ut);
+}
+
+check("maskeringen hänger sig inte på cykliska objekt", (() => {
+  const a: Record<string, unknown> = {}; a.sig = a;
+  try { JSON.stringify(maskera(a)); return true; } catch { return false; }
+})());
+
+const loggKod = utanKommentarer(readFileSync(join(process.cwd(), "api/server/index.ts"), "utf8"));
+check(
+  "index.ts loggar aldrig ett rått felobjekt igen",
+  !/console\.error\(\s*["'][^"']*["']\s*,\s*error\s*\)/.test(loggKod),
+  loggKod.match(/console\.error\([^)]*\)/g),
+);
+
+/* --- 6. Databasrollen: uppstarten vägrar om radskyddet är avstängt ------ */
+
+/*
+ * Produktens farligaste felkonfiguration failar ÖPPET: pekas DATABASE_URL
+ * på superanvändaren, på ägaren eller på en roll med BYPASSRLS fortsätter
+ * varje fråga att fungera - den börjar bara returnera andra bolags data.
+ * Kontrollen körs före första requesten och stoppar uppstarten.
+ */
+
+const dbKod = utanKommentarer(readFileSync(join(process.cwd(), "api/server/db.ts"), "utf8"));
+check("db.ts prövar superanvändare", /rolsuper/.test(dbKod));
+check("db.ts prövar BYPASSRLS", /rolbypassrls/.test(dbKod));
+check("db.ts prövar tabellägarskap", /relowner/.test(dbKod));
+check("och en osäker roll KASTAR (vägrar starta)", /throw new Error\("osäker databasroll/.test(dbKod));
+
+const mainKod = utanKommentarer(readFileSync(join(process.cwd(), "api/server/main.ts"), "utf8"));
+check("uppstarten prövar rollen FÖRE listen()", (() => {
+  const i = mainKod.indexOf("kravSakerDatabasroll");
+  const j = mainKod.indexOf(".listen(");
+  return i > 0 && j > 0 && i < j;
+})(), { krav: mainKod.indexOf("kravSakerDatabasroll"), listen: mainKod.indexOf(".listen(") });
+check("och avslutar processen om den inte går att starta", /process\.exit\(1\)/.test(mainKod));
+
+// Undantaget får finnas för sviterna - men ALDRIG i chartet.
+const chartFiler = [
+  "deploy/helm/clearance/values.yaml",
+  "deploy/helm/clearance/values-prod.example.yaml",
+  "deploy/helm/clearance/templates/configmap.yaml",
+  "deploy/helm/clearance/templates/api.yaml",
+];
+for (const f of chartFiler) {
+  let kod = "";
+  try { kod = readFileSync(join(process.cwd(), f), "utf8"); } catch { continue; }
+  check(`${f} sätter aldrig ALLOW_UNSAFE_DB_ROLE`, !/ALLOW_UNSAFE_DB_ROLE/.test(kod));
+}
 
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

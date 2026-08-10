@@ -56,6 +56,99 @@ export const closePool = async (): Promise<void> => {
   }
 };
 
+/* --- Rollen API:t faktiskt ansluter med ---------------------------------- */
+
+export interface RollBesked {
+  roll: string;
+  saker: boolean;
+  skal: string[];
+}
+
+/**
+ * PRÖVAR ATT ANSLUTNINGENS ROLL INTE STÄNGER AV RADSKYDDET.
+ *
+ * Det här är produktens farligaste felkonfiguration, och den enda som
+ * FAILAR ÖPPET: pekas DATABASE_URL på superanvändaren, på tabellernas ägare
+ * eller på en roll med BYPASSRLS, så fortsätter varje fråga att fungera -
+ * den börjar bara returnera andra bolags insolvensdata. Ingenting kraschar,
+ * ingen logg blir röd, och felet syns först när någon läser fel akt.
+ *
+ * Tre skäl att vägra starta:
+ *
+ *  1. SUPERANVÄNDARE. Kringgår allt, alltid.
+ *  2. BYPASSRLS. Rollens hela syfte är att gå förbi radskyddet.
+ *  3. ÄGARSKAP. En tabells ägare är undantagen sin egen RLS om inte
+ *     FORCE ROW LEVEL SECURITY är satt - och det är det inte här.
+ *
+ * withUser() byter visserligen till `authenticated` i varje transaktion,
+ * men withAnon() gör det inte: den kör som anslutningens EGEN roll (för att
+ * de funktionerna är SECURITY DEFINER och prövar behörighet själva). Är den
+ * rollen ägaren, så skriver kontaktformuläret förbi kolumnrättigheterna.
+ * Kontrollen gäller alltså på riktigt, inte bara i teorin.
+ */
+export const provaDatabasroll = async (tx?: Tx): Promise<RollBesked> => {
+  const fraga = async (t: Tx): Promise<RollBesked> => {
+    const { rows } = await t.query(
+      `select current_user as roll,
+              r.rolsuper,
+              r.rolbypassrls,
+              (select count(*)::int
+                 from pg_class c
+                 join pg_namespace n on n.oid = c.relnamespace
+                where n.nspname in ('public', 'auth', 'app')
+                  and c.relkind in ('r', 'p')
+                  and c.relowner = r.oid) as agda_tabeller
+         from pg_roles r
+        where r.rolname = current_user`,
+    );
+    const rad = rows[0];
+    if (!rad) return { roll: "okänd", saker: false, skal: ["rollen gick inte att slå upp"] };
+    const skal: string[] = [];
+    if (rad.rolsuper === true) skal.push("rollen är superanvändare");
+    if (rad.rolbypassrls === true) skal.push("rollen har BYPASSRLS");
+    if (Number(rad.agda_tabeller) > 0) {
+      skal.push(`rollen äger ${rad.agda_tabeller} tabeller och är undantagen deras radskydd`);
+    }
+    return { roll: String(rad.roll), saker: skal.length === 0, skal };
+  };
+  return tx ? fraga(tx) : withAnon(fraga);
+};
+
+/**
+ * Samma prövning, men den STOPPAR uppstarten.
+ *
+ * Undantaget finns för sviterna, som ansluter som superanvändaren med flit
+ * (fixturerna ska inte bero på de policyer som är under test). Det måste
+ * sättas UTTRYCKLIGEN - en tyst standard hade gjort hela kontrollen till en
+ * artighet. tests/sakerhet.ts vaktar att chartet aldrig sätter flaggan.
+ */
+export const kravSakerDatabasroll = async (): Promise<RollBesked> => {
+  const besked = await provaDatabasroll();
+  if (besked.saker) return besked;
+
+  const tillaten = process.env.ALLOW_UNSAFE_DB_ROLE === "1";
+  const rader = [
+    "",
+    "  DATABASROLLEN STÄNGER AV RADSKYDDET",
+    "",
+    `  Rollen "${besked.roll}" duger inte som API-roll:`,
+    ...besked.skal.map((s) => `    - ${s}`),
+    "",
+    "  Radskyddet är produktens säkerhetsmodell. Med den här rollen",
+    "  fortsätter alla frågor att fungera - de börjar bara returnera",
+    "  andra bolags data. Peka DATABASE_URL på en egen login-roll som är",
+    "  medlem i authenticated och varken äger tabeller eller har BYPASSRLS.",
+    "",
+  ];
+  if (!tillaten) {
+    console.error(rader.join("\n"));
+    throw new Error("osäker databasroll: API:t vägrar starta");
+  }
+  console.warn(rader.join("\n"));
+  console.warn("  ALLOW_UNSAFE_DB_ROLE=1 är satt - fortsätter ändå (endast för test).\n");
+  return besked;
+};
+
 export type Tx = Pick<PoolClient, "query">;
 
 /**

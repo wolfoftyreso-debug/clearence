@@ -39,6 +39,7 @@ import {
   type RetentionOverride,
 } from "../../src/lib/retention";
 import { withAnon, withUser, type Tx } from "./db";
+import { loggaFel } from "./logg";
 import { hashPassword, issueToken, sessionTtlHours, sha256, verifyPassword } from "./auth";
 
 /* --- Identiteten bakom en request ----------------------------------------- */
@@ -2092,7 +2093,10 @@ export const handle = async (
     return await matched.handler({ method, path, params: matched.params, query, headers, body });
   } catch (error) {
     const api = asHttpError(error);
-    if (api.status >= 500) console.error("api error", error);
+    // Maskerat: ett pg-fel bär query OCH parameters - alltså de värden
+    // som skickades in. Ett fel i inloggningen hade annars skrivit ett
+    // lösenordsförsök till loggen.
+    if (api.status >= 500) loggaFel("api_fel", error, { rutt: path, metod: method });
     return { status: api.status, body: { error: { code: api.code, message: api.message } } };
   }
 };
@@ -2133,7 +2137,7 @@ export const createApiServer = () =>
          * API:et kan inte svara på någonting utan databasen. 503 och inte
          * 500, eftersom det är ett läge som går över.
          */
-        console.error("hastighetsgränsen kunde inte prövas", error);
+        loggaFel("hastighetsgransen_kunde_inte_provas", error);
         res.setHeader("retry-after", "5");
         sendJson(res, 503, {
           error: {

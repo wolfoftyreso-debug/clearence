@@ -92,6 +92,26 @@ och 34 nya adversariella API-kontroller, alla gröna.
 | **Åtgärd** | `DOCUMENTS_BUCKET` sätts i testkörningen; hälsokontrollen i sviten kräver `storage: true` så att gapet inte kan återuppstå tyst. |
 | **Regressionstest** | `api/tests/integration.ts`: utomstående får 404 utan URL och utan `storage_path`; oinloggad får 401. |
 
+
+### H-1 · Databasrollen kunde stänga av radskyddet tyst — **HIGH** — ÅTGÄRDAD (rond 2)
+
+| | |
+|---|---|
+| **Attackvektor** | Ingen angripare behövs — en felpekad `DATABASE_URL` räcker. Pekas den på superanvändaren, på tabellernas ägare eller på en roll med `BYPASSRLS` **fortsätter varje fråga att fungera** och börjar returnera andra bolags insolvensdata. Ingenting kraschar, ingen logg blir röd. |
+| **Root cause** | Ingenting prövade rollen. `withUser()` byter till `authenticated` per transaktion, men `withAnon()` gör det **inte** — den kör som anslutningens egen roll (funktionerna där är SECURITY DEFINER). Är den rollen ägaren skriver t.ex. kontaktformuläret förbi kolumnrättigheterna. |
+| **Åtgärd** | `provaDatabasroll()` frågar `pg_roles`/`pg_class`: superanvändare, `BYPASSRLS`, ägda tabeller i `public`/`auth`/`app`. `kravSakerDatabasroll()` körs i `main.ts` **före `listen()`** och avslutar processen med kod 1 och ett besked om vad som ska ändras. Undantag endast via uttrycklig `ALLOW_UNSAFE_DB_ROLE=1` (sviterna) — chartet får aldrig sätta den. |
+| **Regressionstest** | `api/tests/integration.ts` mot **riktig Postgres**, båda utfallen: superanvändaren nekas med skäl, en driftlik roll (login, medlem i `authenticated`, äger inget) godkänns, `app_worker` (BYPASSRLS) nekas. `tests/sakerhet.ts` vaktar ordningen i `main.ts` och att chartet aldrig sätter undantaget. |
+| **Verifierat i drift** | Ja, end-to-end mot byggd `server.cjs`: superanvändare → vägrar starta, exit 1, tre skäl utskrivna. Driftlik roll → startar, loggar rollnamnet, `/v1/health` svarar 200. |
+
+### H-2 · Loggen skrev frågans parametervärden — **MEDIUM** — ÅTGÄRDAD (rond 2)
+
+| | |
+|---|---|
+| **Attackvektor** | Ingen direkt — men loggen är en kopia av produktionen som hamnar på ställen produktionen inte gör (filer, insamlare, supportbilagor) och bevakas sällan lika hårt. |
+| **Root cause** | `console.error("api error", error)` skrev hela felobjektet. Ett `pg`-fel bär `query` **och** `parameters` — alltså den SQL som kördes och de **värden** som skickades in. Ett fel i inloggningen kunde därmed skriva ett lösenordsförsök till loggen; ett fel i sessionsuppslaget en token-hash. |
+| **Åtgärd** | `api/server/logg.ts`: strukturen behålls (felkod, villkor, tabell — det som faktiskt hjälper vid felsökning), värdena maskeras. Fältnamn (`password`, `token`, `parameters`, …) maskeras på alla djup; mönster (våra `clr_`-nycklar, Anthropic-nycklar, AWS-id, JWT, sha256, anslutningssträngar, e-postadresser) maskeras även mitt i fritext. Djupgräns så en cyklisk struktur inte kan hänga loggningen. |
+| **Regressionstest** | `tests/sakerhet.ts`: felkod och villkor finns kvar, medan parametervärden, lösenordshash och e-postadress är borta; cykliska objekt hanteras; källkodsvakt mot att ett rått felobjekt loggas igen. |
+
 ---
 
 ## 2. Revisioner per område
@@ -159,6 +179,9 @@ och 34 nya adversariella API-kontroller, alla gröna.
 | `test:webbplats` | **34 / 34** |
 | `test:dataskydd` | **40 / 40** |
 | RLS, båda miljöerna | **253 / 253** |
+| `test:sakerhet` efter rond 2 | **84 / 84** |
+| `test:api` efter rond 2 | **283 / 283** |
+| Uppstartsspärren, end-to-end | **verifierad** (osäker roll → exit 1; säker roll → 200) |
 | Övriga sviter | gröna (se nedan) |
 
 **Två pre-existerande fel, orörda av det här arbetet och utan säkerhetsbetydelse:**
@@ -176,7 +199,7 @@ föll likadant före ändringarna.
 | R-3 | **`TRUSTED_PROXY_HOPS` måste matcha den faktiska kedjan.** Sätts fel (t.ex. 1 när det finns två mellanled) blir hastighetsgränsen antingen kringgåbar eller för trubbig. Default 1 stämmer med chartet; en extra ingress-hop kräver 2. | MEDIUM | Kräver driftbeslut |
 | R-4 | **Halvmigrerad datamodell.** 70 av 139 `DataPort`-metoder går fortfarande mot Supabase med anon-nyckel i frontend. Säkerheten vilar där helt på RLS (253 gröna kontroller), men två backends innebär två uppsättningar policyer att hålla i synk. | MEDIUM | Arkitekturskuld |
 | R-5 | **Ingen MFA och ingen omautentisering** för känsliga driftåtgärder (nyckelvalv, prisplaner, kontostängning). Punkt 21 i uppdraget kräver det "där lämpligt". | MEDIUM | Ej byggt |
-| R-6 | **Ingen loggredaktion är verifierad.** `console.error("api error", error)` skriver hela databasfelet till loggen. Databasfel bär normalt inte lösenord, men parametervärden kan förekomma. | LOW | Ej granskat i drift |
+| R-6 | ~~Ingen loggredaktion.~~ **ÅTGÄRDAD (H-2).** Kvar: loggarna bör läsas i skarp drift en gång för att bekräfta att inget oväntat fält dyker upp. | LOW | Åtgärdad, drift-granskning kvarstår |
 | R-7 | Claude-API-nyckeln från den här sessionen **ska roteras**. | MEDIUM | Organisatoriskt |
 | R-8 | `vite`/`esbuild`-råden kvarstår i byggkedjan. Utvärderade som ej produktionsnära, men bygg-CI:n kör `vite build` — en komprometterad byggmiljö är en annan sak än en komprometterad produkt. | LOW | Accepterad, dokumenterad |
 
