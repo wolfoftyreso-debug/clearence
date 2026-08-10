@@ -1514,6 +1514,11 @@ router.post("/v1/ops/secrets", async (req) => {
   const secret = str(req.body, "secret", { max: 4000 });
   await withUser(caller.userId, async (tx) => {
     await tx.query("select public.set_integration_secret($1, $2)", [provider, secret]);
+    // Spåret bär leverantören, aldrig hemligheten - annars flyttas valvet
+    // till loggen.
+    await tx.query("select app.logga_driftatgard($1, $2, $3, $4::jsonb)", [
+      "drift.secret.set", "integration_secret", provider, JSON.stringify({ provider }),
+    ]);
   });
   return { status: 200, body: { saved: true } };
 });
@@ -1524,6 +1529,9 @@ router.del("/v1/ops/secrets/:provider", async (req) => {
   if (!SECRET_PROVIDER.test(provider)) throw badRequest("Ogiltig leverantörsnyckel.");
   await withUser(caller.userId, async (tx) => {
     await tx.query("select public.delete_integration_secret($1)", [provider]);
+    await tx.query("select app.logga_driftatgard($1, $2, $3, $4::jsonb)", [
+      "drift.secret.delete", "integration_secret", provider, JSON.stringify({ provider }),
+    ]);
   });
   return { status: 200, body: { deleted: true } };
 });
@@ -1551,6 +1559,9 @@ router.post("/v1/ops/professionals/:professionalId/referral-fee", async (req) =>
   }
   await withUser(caller.userId, async (tx) => {
     await tx.query("select public.set_referral_fee($1, $2)", [professionalId, feeSek]);
+    await tx.query("select app.logga_driftatgard($1, $2, $3, $4::jsonb)", [
+      "drift.referral_fee.set", "professional", professionalId, JSON.stringify({ feeSek }),
+    ]);
   });
   return { status: 200, body: { saved: true } };
 });
@@ -1586,6 +1597,10 @@ router.post("/v1/ops/billing-plans", async (req) => {
       unlockFeeSek,
       monthlyFeeSek,
     ]);
+    await tx.query("select app.logga_driftatgard($1, $2, $3, $4::jsonb)", [
+      "drift.billing_plan.set", "professional", professionalId,
+      JSON.stringify({ planKind, unlockFeeSek, monthlyFeeSek }),
+    ]);
   });
   return { status: 200, body: { saved: true } };
 });
@@ -1598,6 +1613,10 @@ router.post("/v1/ops/professionals/:professionalId/billing-hold", async (req) =>
   const reason = str(req.body, "reason", { max: 500, required: false }) || null;
   await withUser(caller.userId, async (tx) => {
     await tx.query("select public.set_billing_hold($1, $2, $3)", [professionalId, raw.hold, reason]);
+    await tx.query("select app.logga_driftatgard($1, $2, $3, $4::jsonb)", [
+      "drift.billing_hold.set", "professional", professionalId,
+      JSON.stringify({ hold: raw.hold, reason }),
+    ]);
   });
   return { status: 200, body: { saved: true } };
 });
@@ -1609,6 +1628,9 @@ router.post("/v1/ops/professionals/:professionalId/billing-shadow", async (req) 
   if (typeof raw.shadow !== "boolean") throw badRequest('Fältet "shadow" ska vara true eller false.');
   await withUser(caller.userId, async (tx) => {
     await tx.query("select public.set_billing_shadow($1, $2)", [professionalId, raw.shadow]);
+    await tx.query("select app.logga_driftatgard($1, $2, $3, $4::jsonb)", [
+      "drift.billing_shadow.set", "professional", professionalId, JSON.stringify({ shadow: raw.shadow }),
+    ]);
   });
   return { status: 200, body: { saved: true } };
 });
@@ -1637,6 +1659,9 @@ router.post("/v1/ops/company-plan", async (req) => {
        on conflict (key) do update set value = excluded.value, updated_at = now()`,
       [JSON.stringify(value)],
     );
+    await tx.query("select app.logga_driftatgard($1, $2, $3, $4::jsonb)", [
+      "drift.company_plan.set", "app_settings", "company_plan", JSON.stringify(value),
+    ]);
   });
   return { status: 200, body: { saved: true } };
 });
@@ -1666,8 +1691,46 @@ router.post("/v1/ops/retention-policy", async (req) => {
        on conflict (key) do update set value = excluded.value, updated_at = now()`,
       [JSON.stringify({ overrides: raw.overrides })],
     );
+    await tx.query("select app.logga_driftatgard($1, $2, $3, $4::jsonb)", [
+      "drift.retention_policy.set", "app_settings", "retention_policy",
+      JSON.stringify({ overrides: raw.overrides }),
+    ]);
   });
   return { status: 200, body: { saved: true } };
+});
+
+// Driftens revisionsspår: vem gjorde vad, på plattformsnivå.
+router.get("/v1/ops/audit", async (req) => {
+  const caller = await authenticate(req);
+  // case_id is null = driftåtgärd. Radskyddet ger en icke-administratör noll
+  // rader; ingen egen kontroll behövs här.
+  const rows = await withUser(caller.userId, async (tx) => {
+    const { rows } = await tx.query(
+      `select id, actor_user_id, action, object_type, object_id, after, occurred_at
+         from public.audit_events
+        -- Namnrymden "drift." skiljer driftåtgärder från de trigger-skrivna
+        -- händelser som råkar sakna ärende (t.ex. en profiluppdatering).
+        -- Utan den blir "driftens revisionsspår" en blandning.
+        where case_id is null and action like 'drift.%'
+        order by occurred_at desc
+        limit 200`,
+    );
+    return rows;
+  });
+  return {
+    status: 200,
+    body: {
+      events: rows.map((r) => ({
+        id: String(r.id),
+        actorUserId: r.actor_user_id ?? null,
+        action: r.action,
+        objectType: r.object_type,
+        objectId: r.object_id ?? null,
+        detaljer: r.after ?? null,
+        occurredAt: iso(r.occurred_at),
+      })),
+    },
+  };
 });
 
 // North Star och churn
@@ -1781,6 +1844,9 @@ router.post("/v1/billing/accounts/:userId/close", async (req) => {
   // ingen rad. Raderar ingenting - sätter bara closed_at.
   await withUser(caller.userId, async (tx) => {
     await tx.query("update public.account_billing set closed_at = now() where user_id = $1", [userId]);
+    await tx.query("select app.logga_driftatgard($1, $2, $3, $4::jsonb)", [
+      "drift.account.close", "account_billing", userId, JSON.stringify({ userId }),
+    ]);
   });
   return { status: 200, body: { closed: true } };
 });

@@ -2899,6 +2899,43 @@
           }
         }
       }
+    },
+    "/ops/audit": {
+      "get": {
+        "operationId": "listOpsAuditTrail",
+        "summary": "Driftens revisionsspår: vem gjorde vad på plattformsnivå (nyckelvalv, prisplaner, kreditspärr, gallring, kontostängning). Spåret bär aldrig hemligheten som ändrades. Endast drift.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Spåret",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "events": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "webhooks": {

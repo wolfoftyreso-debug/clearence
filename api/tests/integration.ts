@@ -1450,6 +1450,94 @@ check("masstilldelning: status sattes av servern, inte av kroppen", massKontakt.
 check("masstilldelning: kontot kunde inte tillskrivas någon annan", massKontakt.user_id === null, massKontakt);
 check("masstilldelning: handläggare och intern anteckning ignorerades", massKontakt.handled_by === null && massKontakt.internal_note === null, massKontakt);
 
+/* --- 8m2. Driftens revisionsspår ---------------------------------------- */
+
+/*
+ * De mest privilegierade åtgärderna i produkten hade inget spår alls: en
+ * bytt Creditsafe-nyckel, en ändrad prisplan eller en påslagen kreditspärr
+ * var osynlig efteråt. "Vem gjorde det, och när?" gick inte att svara på.
+ *
+ * Spåret skrivs i SAMMA transaktion som åtgärden - en åtgärd utan spår, och
+ * ett spår utan åtgärd, är båda omöjliga. Och det bär ALDRIG hemligheten:
+ * att logga att nyckeln byttes är spårbarhet, att logga nyckeln är att
+ * flytta valvet till loggen.
+ */
+
+const HEMLIG_NYCKEL = "supersecret-creditsafe-9876";
+await call("POST", "/v1/ops/secrets", {
+  token: adminToken,
+  body: { provider: "creditsafe", secret: HEMLIG_NYCKEL },
+});
+await call("POST", "/v1/ops/company-plan", { token: adminToken, body: { monthlyExVatSek: 1195 } });
+
+const spar = await call("GET", "/v1/ops/audit", { token: adminToken });
+check("driftens revisionsspår kan läsas av drift", spar.status === 200, spar.body);
+const sparat = arr(spar.body.events);
+check(
+  "att en hemlighet sattes finns i spåret",
+  sparat.some((e) => e.action === "drift.secret.set" && e.objectId === "creditsafe"),
+  sparat.slice(0, 3),
+);
+check(
+  "SJÄLVA HEMLIGHETEN finns INTE i spåret",
+  !JSON.stringify(spar.body).includes(HEMLIG_NYCKEL),
+  "hemligheten läckte till revisionsspåret",
+);
+check(
+  "prisändringen finns i spåret",
+  sparat.some((e) => e.action === "drift.company_plan.set"),
+  sparat.slice(0, 3),
+);
+check(
+  "spåret säger VEM som gjorde det",
+  sparat.length > 0 && sparat.every((e) => e.actorUserId === AGNES),
+  sparat.slice(0, 3).map((e) => e.actorUserId),
+);
+check(
+  "och spåret bär BARA driftåtgärder, inte trigger-händelser utan ärende",
+  sparat.every((e) => String(e.action).startsWith("drift.")),
+  sparat.map((e) => e.action).slice(0, 6),
+);
+check("och NÄR", sparat.every((e) => typeof e.occurredAt === "string" && e.occurredAt.length > 0));
+
+const bertilSpar = await call("GET", "/v1/ops/audit", { token: bertilToken });
+check(
+  "en icke-administratör ser ett TOMT spår (radskyddet)",
+  bertilSpar.status === 200 && arr(bertilSpar.body.events).length === 0,
+  bertilSpar.body,
+);
+
+// Spåret får inte gå att förfalska: klienten har ingen väg att skriva rader,
+// och funktionen kräver driftbehörighet.
+const bertilForfalska = await withUser(BERTIL, async (tx) => {
+  try {
+    await tx.query("select app.logga_driftatgard($1, $2, $3, null)", ["fusk", "x", "y"]);
+    return "gick igenom";
+  } catch (e) {
+    return (e as { code?: string }).code ?? "nekad";
+  }
+});
+check("en icke-administratör kan inte skriva i spåret", bertilForfalska !== "gick igenom", bertilForfalska);
+
+// En skriven rad går inte att ändra eller ta bort - inte ens av drift.
+const oforanderligt = await withUser(AGNES, async (tx) => {
+  const ut: string[] = [];
+  for (const sql of [
+    "update public.audit_events set action = 'ändrat' where case_id is null",
+    "delete from public.audit_events where case_id is null",
+  ]) {
+    try {
+      await tx.query(sql);
+      ut.push("gick igenom");
+    } catch {
+      ut.push("nekad");
+    }
+  }
+  return ut;
+});
+check("revisionsspåret går inte att skriva om", oforanderligt[0] === "nekad", oforanderligt);
+check("och inte att radera", oforanderligt[1] === "nekad", oforanderligt);
+
 /* --- 8n. Databasrollen prövas mot den RIKTIGA katalogen ----------------- */
 
 /*

@@ -112,6 +112,16 @@ och 34 nya adversariella API-kontroller, alla gröna.
 | **Åtgärd** | `api/server/logg.ts`: strukturen behålls (felkod, villkor, tabell — det som faktiskt hjälper vid felsökning), värdena maskeras. Fältnamn (`password`, `token`, `parameters`, …) maskeras på alla djup; mönster (våra `clr_`-nycklar, Anthropic-nycklar, AWS-id, JWT, sha256, anslutningssträngar, e-postadresser) maskeras även mitt i fritext. Djupgräns så en cyklisk struktur inte kan hänga loggningen. |
 | **Regressionstest** | `tests/sakerhet.ts`: felkod och villkor finns kvar, medan parametervärden, lösenordshash och e-postadress är borta; cykliska objekt hanteras; källkodsvakt mot att ett rått felobjekt loggas igen. |
 
+
+### H-3 · Driftåtgärder lämnade inga spår — **MEDIUM** — ÅTGÄRDAD (rond 2)
+
+| | |
+|---|---|
+| **Attackvektor** | En komprometterad eller illojal driftsession kunde byta Creditsafe-nyckeln, ändra en byrås prisplan, slå på kreditspärren eller stänga ett konto — **utan att något gick att härleda efteråt**. "Vem bytte nyckeln i tisdags?" gick inte att svara på. |
+| **Root cause** | Ärendenivån var spårad (triggers på uppgifter, inbjudningar, beslut), men de mest privilegierade operationerna skrev ingenting till `audit_events`. En behörighet utan spår är en behörighet ingen kan granska. |
+| **Åtgärd** | `app.logga_driftatgard()` (SECURITY DEFINER, kräver `is_platform_admin`) skriver till `audit_events` med `case_id null` i **samma transaktion** som åtgärden — en åtgärd utan spår, och ett spår utan åtgärd, är båda omöjliga. Nio åtgärder kopplade. Namnrymden `drift.*` skiljer dem från trigger-händelser som råkar sakna ärende. Ny läsrutt `GET /v1/ops/audit`. Spåret bär **aldrig** hemligheten — bara leverantörsnamnet och vad som ändrades. |
+| **Regressionstest** | `api/tests/integration.ts` mot riktig Postgres: åtgärden syns, **hemligheten finns inte i spåret**, vem och när står där, en icke-administratör ser ett tomt spår och kan inte skriva i det, och en skriven rad går inte att ändra eller radera — inte ens av drift. |
+
 ---
 
 ## 2. Revisioner per område
@@ -164,6 +174,8 @@ och 34 nya adversariella API-kontroller, alla gröna.
 - Podar: `runAsNonRoot`, `readOnlyRootFilesystem`, alla capabilities släppta, `seccompProfile: RuntimeDefault`. NetworkPolicy default-deny.
 - TLS termineras i ingressen med cert-manager; HSTS sätts nu av ursprunget.
 - Migrationsjobbet kör som superanvändare i en Helm-hook, skild från API-rollen.
+- **Uppstarten vägrar en databasroll som stänger av radskyddet** (H-1) — verifierat end-to-end.
+- **Driftåtgärder är spårade** (H-3): vem, vad, när — utan att hemligheten hamnar i spåret.
 - CI-grinden `sakerhet` blockerar bildbygget (`needs: [prova, sakerhet, databas]`).
 
 ---
@@ -180,7 +192,7 @@ och 34 nya adversariella API-kontroller, alla gröna.
 | `test:dataskydd` | **40 / 40** |
 | RLS, båda miljöerna | **253 / 253** |
 | `test:sakerhet` efter rond 2 | **84 / 84** |
-| `test:api` efter rond 2 | **283 / 283** |
+| `test:api` efter rond 2 | **294 / 294** |
 | Uppstartsspärren, end-to-end | **verifierad** (osäker roll → exit 1; säker roll → 200) |
 | Övriga sviter | gröna (se nedan) |
 
