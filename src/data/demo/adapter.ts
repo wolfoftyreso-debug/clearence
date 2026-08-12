@@ -16,7 +16,15 @@
  */
 
 import type { DataPort } from "../ports";
+import type { SimulationRecord, SimulationRun } from "../types";
 import { parseSie } from "@/lib/financial/sie";
+import {
+  MOTORVERSION,
+  kor as korSimulering,
+  nyttFro,
+  valideraSpec,
+  type Simuleringsspec,
+} from "@/lib/montecarlo/motor";
 import { snapshotFromSie } from "@/lib/financial/fromSie";
 import {
   isVerificationCode,
@@ -99,8 +107,23 @@ import { DEFAULT_RETENTION, mergeRetentionPolicy, type RetentionOverride } from 
 
 const STORAGE_KEY = "clearance-demo-state";
 
+/** Specen plus det körningen bidrar med: iterationer och frö. */
+const demoSpec = (spec: unknown, namn: string, iterationer: number, fro: number): Simuleringsspec => {
+  const rå = (spec ?? {}) as Record<string, unknown>;
+  return {
+    namn,
+    inputs: (rå.inputs ?? []) as Simuleringsspec["inputs"],
+    outputs: (rå.outputs ?? []) as Simuleringsspec["outputs"],
+    konstanter: (rå.konstanter ?? {}) as Record<string, number>,
+    iterationer,
+    fro,
+  };
+};
+
 interface DemoState {
   user: AuthUser | null;
+  simulations: SimulationRecord[];
+  simulationRuns: SimulationRun[];
   /** En SIE-fil som användaren själv laddat upp i demoläget. Slår demodatan. */
   importedSnapshot?: FinancialSnapshot | null;
   cases: CaseRecord[];
@@ -170,6 +193,8 @@ const emptyState = (): DemoState => ({
   cases: [],
   payments: [],
   invoices: [],
+  simulations: [],
+  simulationRuns: [],
   documents: [],
   referrals: [],
   application: null,
@@ -2727,6 +2752,121 @@ export const demoAdapter: DataPort = {
         doc.reviewedAt = null;
       }
       save();
+    },
+  },
+
+  /**
+   * Simuleringarna i demoläget.
+   *
+   * MOTORN ÄR DEN RIKTIGA. Demon har ingen server och ingen kö, men
+   * src/lib/montecarlo/motor.ts är ren och körs lika gärna i en flik som i
+   * arbetaren - så siffrorna som visas här är genuint uträknade, inte
+   * påhittade. Det som saknas är persistensen bortom fliken och kön för
+   * riktigt tunga körningar.
+   */
+  simulations: {
+    async listByCase(caseId) {
+      return state.simulations.filter((s) => s.caseId === caseId).map((s) => ({ ...s }));
+    },
+    async get(simulationId) {
+      const sim = state.simulations.find((s) => s.id === simulationId);
+      if (!sim) return null;
+      return {
+        ...sim,
+        runs: state.simulationRuns
+          .filter((r) => r.simulationId === simulationId)
+          .slice(0, 25)
+          .map((r) => ({ ...r })),
+      };
+    },
+    async create(input) {
+      const fel = valideraSpec(demoSpec(input.spec, input.name, 10000, 1));
+      if (fel.length > 0) throw new Error(fel.map((f) => f.meddelande).join(" "));
+      const nu = new Date().toISOString();
+      const sim: SimulationRecord = {
+        id: crypto.randomUUID(),
+        caseId: input.caseId,
+        name: input.name,
+        description: input.description ?? null,
+        spec: input.spec,
+        specVersion: 1,
+        createdAt: nu,
+        updatedAt: nu,
+      };
+      state.simulations = [sim, ...state.simulations];
+      save();
+      return { ...sim };
+    },
+    async update(input) {
+      const sim = state.simulations.find((s) => s.id === input.simulationId);
+      if (!sim) throw new Error("Simuleringen finns inte.");
+      const fel = valideraSpec(demoSpec(input.spec, input.name, 10000, 1));
+      if (fel.length > 0) throw new Error(fel.map((f) => f.meddelande).join(" "));
+      // Versionen höjs bara när specen faktiskt ändrats - samma regel som
+      // triggern i databasen.
+      const andrad = JSON.stringify(sim.spec) !== JSON.stringify(input.spec);
+      sim.name = input.name;
+      sim.description = input.description ?? null;
+      sim.spec = input.spec;
+      if (andrad) sim.specVersion += 1;
+      sim.updatedAt = new Date().toISOString();
+      save();
+      return { ...sim };
+    },
+    async remove(simulationId) {
+      state.simulations = state.simulations.filter((s) => s.id !== simulationId);
+      state.simulationRuns = state.simulationRuns.filter((r) => r.simulationId !== simulationId);
+      save();
+    },
+    async run(input) {
+      const sim = state.simulations.find((s) => s.id === input.simulationId);
+      if (!sim) throw new Error("Simuleringen finns inte.");
+      const fro = input.seed ?? nyttFro();
+      const start = new Date().toISOString();
+      const resultat = korSimulering(demoSpec(sim.spec, sim.name, input.iterations, fro));
+      const run: SimulationRun = {
+        id: crypto.randomUUID(),
+        simulationId: sim.id,
+        status: "done",
+        seed: fro,
+        engineVersion: MOTORVERSION,
+        specVersion: sim.specVersion,
+        iterations: resultat.iterationer,
+        discardedIterations: resultat.forkastadeIterationer,
+        durationMs: resultat.varaktighetMs,
+        error: null,
+        notes: resultat.anmarkningar,
+        queuedAt: start,
+        startedAt: start,
+        finishedAt: new Date().toISOString(),
+        results: { outputs: resultat.outputs },
+        spec: sim.spec,
+      };
+      state.simulationRuns = [run, ...state.simulationRuns];
+      save();
+      return { ...run };
+    },
+    async cancel(simulationId) {
+      // Demon kör synkront, så det finns aldrig något pågående att avbryta.
+      const antal = state.simulationRuns.filter(
+        (r) => r.simulationId === simulationId && (r.status === "queued" || r.status === "running"),
+      ).length;
+      for (const r of state.simulationRuns) {
+        if (r.simulationId === simulationId && (r.status === "queued" || r.status === "running")) {
+          r.status = "cancelled";
+          r.finishedAt = new Date().toISOString();
+        }
+      }
+      if (antal > 0) save();
+      return antal;
+    },
+    async latestRun(simulationId) {
+      const run = state.simulationRuns.find((r) => r.simulationId === simulationId);
+      return run ? { ...run } : null;
+    },
+    async getRun(runId) {
+      const run = state.simulationRuns.find((r) => r.id === runId);
+      return run ? { ...run } : null;
     },
   },
 

@@ -915,3 +915,49 @@ export interface NotificationDeliveryRecord {
   /** Läsbart skäl. Null när den gick fram. */
   reason: string | null;
 }
+
+/* -------------------------------------------------------------------------- */
+/* Monte Carlo                                                                */
+/* -------------------------------------------------------------------------- */
+
+/** Antagandena. Redigeras; `specVersion` höjs av databasen vid varje ändring. */
+export interface SimulationRecord {
+  id: string;
+  caseId: string;
+  name: string;
+  description: string | null;
+  /** Simuleringsspec utan iterationer och frö - de hör till körningen. */
+  spec: unknown;
+  specVersion: number;
+  createdAt: string;
+  updatedAt: string;
+  /** De senaste körningarna, utan resultatkroppar. Bara från get(). */
+  runs?: SimulationRun[];
+}
+
+export type SimulationStatus = "queued" | "running" | "done" | "failed" | "cancelled";
+
+/**
+ * En körning. Allt som krävs för att köra om den står här: fröet,
+ * motorversionen och specen som gällde.
+ */
+export interface SimulationRun {
+  id: string;
+  simulationId: string;
+  status: SimulationStatus;
+  seed: number;
+  engineVersion: string;
+  specVersion: number;
+  iterations: number;
+  discardedIterations: number;
+  durationMs: number | null;
+  error: string | null;
+  /** Kvalitetsanmärkningar från motorn. Visas, göms aldrig. */
+  notes: { allvar: "fel" | "varning"; kod: string; meddelande: string }[] | null;
+  queuedAt: string;
+  startedAt: string | null;
+  finishedAt: string | null;
+  /** Aggregat: statistik, sannolikheter, histogram, känslighet, konvergens. Aldrig rådata. */
+  results?: { outputs: unknown[] } | null;
+  spec?: unknown;
+}

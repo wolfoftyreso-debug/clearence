@@ -66,6 +66,8 @@ import type {
   NotificationPrefsInput,
   VerifiedPhoneRecord,
   NotificationDeliveryRecord,
+  SimulationRecord,
+  SimulationRun,
 } from "./types";
 import type { FinancialSnapshot } from "@/lib/financial/model";
 
@@ -297,6 +299,34 @@ export interface DocumentsPort {
     statementVersion: string;
     statementText: string;
   }): Promise<DocumentSignature>;
+}
+
+/**
+ * Monte Carlo-simuleringarna.
+ *
+ * Två sorters objekt, och skillnaden är avsiktlig: `SimulationRecord` är
+ * ANTAGANDENA (redigeras), `SimulationRun` är en KÖRNING av dem (skrivs en
+ * gång, ändras aldrig). Att slå ihop dem hade gjort det omöjligt att svara
+ * på vilka antaganden som gällde när en viss siffra togs fram.
+ */
+export interface SimulationsPort {
+  listByCase(caseId: string): Promise<SimulationRecord[]>;
+  get(simulationId: string): Promise<SimulationRecord | null>;
+  create(input: { caseId: string; name: string; description?: string | null; spec: unknown }): Promise<SimulationRecord>;
+  update(input: { simulationId: string; name: string; description?: string | null; spec: unknown }): Promise<SimulationRecord>;
+  remove(simulationId: string): Promise<void>;
+  /**
+   * Kör. Körningar över motorns tröskel köas och kommer tillbaka med
+   * status "queued" - anroparen får då hämta resultatet senare.
+   *
+   * `seed` är hela reproducerbarheten. Utelämnas det väljer SERVERN ett,
+   * en gång, och skriver ned det.
+   */
+  run(input: { simulationId: string; iterations: number; seed?: number | null }): Promise<SimulationRun>;
+  cancel(simulationId: string): Promise<number>;
+  /** Senaste körningen med resultat, eller null när ingen gjorts. */
+  latestRun(simulationId: string): Promise<SimulationRun | null>;
+  getRun(runId: string): Promise<SimulationRun | null>;
 }
 
 export interface FinancialPort {
@@ -742,5 +772,6 @@ export interface DataPort {
   referrals: ReferralsPort;
   documents: DocumentsPort;
   financial: FinancialPort;
+  simulations: SimulationsPort;
   companyLookup: CompanyLookupPort;
 }

@@ -187,6 +187,29 @@ worker:
     enabled: true
     image:
       repository: clearance/notification-worker
+  # Simuleringsarbetaren: plockar köade Monte Carlo-körningar. Egen binär
+  # (db/worker/simulation-worker.ts), egen avbild.
+  #
+  # Varje minut: kön är oftast tom, och ett jobb som startar, tömmer och
+  # avslutar kostar inget mellan körningarna.
+  simulation:
+    enabled: true
+    schedule: "* * * * *"
+    image:
+      repository: clearance/simulation-worker
+    # Antal körningar per varv. Fler än ett par gör podden långlivad utan
+    # att kön töms nämnvärt snabbare.
+    batch: 2
+    # Arbetarens EGET tak per körning. Måste ligga UNDER
+    # activeDeadlineSeconds, annars dödas podden innan den hinner skriva
+    # "failed" - och raden fastnar i 'running'.
+    maxMs: 120000
+    activeDeadlineSeconds: 240
+    # En miljon iterationer håller hela outputserien i minnet under
+    # sorteringen. 512 Mi ger marginal för flera resultat samtidigt.
+    resources:
+      requests: { cpu: 200m, memory: 256Mi }
+      limits: { cpu: "1", memory: 512Mi }
 
 # --- Migrations-jobbet (Helm-hook före install/upgrade) -----------------
 migrate:

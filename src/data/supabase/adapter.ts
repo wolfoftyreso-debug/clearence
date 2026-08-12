@@ -2,6 +2,14 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Json } from "@/integrations/supabase/types";
 import { parsePremiseWatch } from "../premise";
 import { parseSie } from "@/lib/financial/sie";
+import {
+  MOTORVERSION,
+  kor as korSimulering,
+  nyttFro,
+  valideraSpec,
+  type Simuleringsspec,
+} from "@/lib/montecarlo/motor";
+import type { SimulationRecord, SimulationRun } from "../types";
 import { snapshotFromSie } from "@/lib/financial/fromSie";
 import type { FinancialSnapshot } from "@/lib/financial/model";
 import type { NotificationDeliveryRecord, NotificationPrefsRecord } from "../types";
@@ -376,6 +384,50 @@ const toPayment = (row: {
   dueDate: row.due_date,
   recurring: row.recurring,
 });
+
+/** Raden -> SimulationRecord. Delas av list, get, create och update. */
+const toSimulation = (row: Record<string, unknown>): SimulationRecord => ({
+  id: row.id as string,
+  caseId: row.case_id as string,
+  name: row.name as string,
+  description: (row.description as string | null) ?? null,
+  spec: row.spec,
+  specVersion: Number(row.spec_version ?? 1),
+  createdAt: row.created_at as string,
+  updatedAt: row.updated_at as string,
+});
+
+const toRun = (row: Record<string, unknown>): SimulationRun => ({
+  id: row.id as string,
+  simulationId: row.simulation_id as string,
+  status: row.status as SimulationRun["status"],
+  seed: Number(row.seed),
+  engineVersion: row.engine_version as string,
+  specVersion: Number(row.spec_version ?? 1),
+  iterations: Number(row.iterations ?? 0),
+  discardedIterations: Number(row.discarded_iterations ?? 0),
+  durationMs: row.duration_ms === null || row.duration_ms === undefined ? null : Number(row.duration_ms),
+  error: (row.error as string | null) ?? null,
+  notes: (row.notes as SimulationRun["notes"]) ?? null,
+  queuedAt: row.queued_at as string,
+  startedAt: (row.started_at as string | null) ?? null,
+  finishedAt: (row.finished_at as string | null) ?? null,
+  results: (row.results as SimulationRun["results"]) ?? null,
+  spec: row.spec,
+});
+
+/** Specen ur databasen plus det körningen bidrar med: iterationer och frö. */
+const specMed = (spec: unknown, namn: string, iterationer: number, fro: number): Simuleringsspec => {
+  const rå = (spec ?? {}) as Record<string, unknown>;
+  return {
+    namn,
+    inputs: (rå.inputs ?? []) as Simuleringsspec["inputs"],
+    outputs: (rå.outputs ?? []) as Simuleringsspec["outputs"],
+    konstanter: (rå.konstanter ?? {}) as Record<string, number>,
+    iterationer,
+    fro,
+  };
+};
 
 const toInvoice = (row: {
   id: string;
@@ -2345,6 +2397,127 @@ export const supabaseAdapter: DataPort = {
         p_action: action,
       });
       if (error) throw error;
+    },
+  },
+
+  /**
+   * Simuleringarna.
+   *
+   * KÖRNINGEN SKER I KLIENTEN HÄR, och det är en känd skillnad mot
+   * aws-adaptern - inte ett förbiseende. PostgREST har ingen serverprocess att
+   * lägga motorn i. Motorn är densamma (src/lib/montecarlo/motor.ts), så siffrorna blir
+   * identiska för samma frö; det som skiljer är VEM som räknar dem, och
+   * därmed hur mycket en klient i teorin kan påverka. Radskyddet begränsar
+   * det till det egna ärendet.
+   *
+   * Det finns ingen kö: allt körs direkt, och en riktigt tung körning
+   * belastar då webbläsaren i stället för att köas.
+   */
+  simulations: {
+    async listByCase(caseId) {
+      const { data, error } = await supabase
+        .from("simulations")
+        .select("*")
+        .eq("case_id", caseId)
+        .order("updated_at", { ascending: false });
+      if (error) throw error;
+      return (data ?? []).map(toSimulation);
+    },
+    async get(simulationId) {
+      const { data, error } = await supabase
+        .from("simulations").select("*").eq("id", simulationId).maybeSingle();
+      if (error) throw error;
+      if (!data) return null;
+      const { data: runs } = await supabase
+        .from("simulation_runs").select("*").eq("simulation_id", simulationId)
+        .order("queued_at", { ascending: false }).limit(25);
+      return { ...toSimulation(data), runs: (runs ?? []).map(toRun) };
+    },
+    async create(input) {
+      const { data: auth } = await supabase.auth.getUser();
+      const userId = auth.user?.id;
+      if (!userId) throw new Error("Inte inloggad");
+      const fel = valideraSpec(specMed(input.spec, input.name, 10000, 1));
+      if (fel.length > 0) throw new Error(fel.map((f) => f.meddelande).join(" "));
+      const { data, error } = await supabase.from("simulations").insert({
+        case_id: input.caseId, created_by: userId, name: input.name,
+        description: input.description ?? null, spec: input.spec as Json,
+      }).select().single();
+      if (error) throw error;
+      return toSimulation(data);
+    },
+    async update(input) {
+      const fel = valideraSpec(specMed(input.spec, input.name, 10000, 1));
+      if (fel.length > 0) throw new Error(fel.map((f) => f.meddelande).join(" "));
+      const { data, error } = await supabase.from("simulations").update({
+        name: input.name, description: input.description ?? null, spec: input.spec as Json,
+      }).eq("id", input.simulationId).select().single();
+      if (error) throw error;
+      return toSimulation(data);
+    },
+    async remove(simulationId) {
+      const { error } = await supabase.from("simulations").delete().eq("id", simulationId);
+      if (error) throw error;
+    },
+    async run(input) {
+      const { data: auth } = await supabase.auth.getUser();
+      const userId = auth.user?.id;
+      if (!userId) throw new Error("Inte inloggad");
+      const { data: sim, error: simFel } = await supabase
+        .from("simulations").select("*").eq("id", input.simulationId).maybeSingle();
+      if (simFel) throw simFel;
+      if (!sim) throw new Error("Simuleringen finns inte.");
+
+      // Fröet väljs EN gång och skrivs ned - annars går körningen inte att
+      // upprepa, och då är den inte ett underlag.
+      const fro = input.seed ?? nyttFro();
+      const spec = specMed(sim.spec, sim.name, input.iterations, fro);
+      const { data: rad, error } = await supabase.from("simulation_runs").insert({
+        simulation_id: sim.id, case_id: sim.case_id, started_by: userId,
+        seed: fro, engine_version: MOTORVERSION, spec: sim.spec as Json,
+        spec_version: sim.spec_version, iterations: input.iterations,
+        status: "running", started_at: new Date().toISOString(),
+      }).select().single();
+      if (error) throw error;
+
+      try {
+        const resultat = korSimulering(spec);
+        const { data: klar, error: uppdFel } = await supabase.from("simulation_runs").update({
+          status: "done",
+          results: { outputs: resultat.outputs } as unknown as Json,
+          notes: resultat.anmarkningar as unknown as Json,
+          duration_ms: resultat.varaktighetMs,
+          discarded_iterations: resultat.forkastadeIterationer,
+          finished_at: new Date().toISOString(),
+        }).eq("id", rad.id).select().single();
+        if (uppdFel) throw uppdFel;
+        return toRun(klar);
+      } catch (e) {
+        await supabase.from("simulation_runs").update({
+          status: "failed", error: e instanceof Error ? e.message : "Okänt fel",
+          finished_at: new Date().toISOString(),
+        }).eq("id", rad.id);
+        throw e;
+      }
+    },
+    async cancel(simulationId) {
+      const { data, error } = await supabase.from("simulation_runs")
+        .update({ status: "cancelled", finished_at: new Date().toISOString() })
+        .eq("simulation_id", simulationId).in("status", ["queued", "running"]).select("id");
+      if (error) throw error;
+      return (data ?? []).length;
+    },
+    async latestRun(simulationId) {
+      const { data, error } = await supabase.from("simulation_runs").select("*")
+        .eq("simulation_id", simulationId).order("queued_at", { ascending: false })
+        .limit(1).maybeSingle();
+      if (error) throw error;
+      return data ? toRun(data) : null;
+    },
+    async getRun(runId) {
+      const { data, error } = await supabase.from("simulation_runs").select("*").eq("id", runId).maybeSingle();
+      if (error) throw error;
+      return data ? toRun(data) : null;
     },
   },
 

@@ -822,6 +822,108 @@ export type Database = {
         }
         Relationships: []
       }
+      simulations: {
+        Row: {
+          id: string
+          case_id: string
+          created_by: string
+          name: string
+          description: string | null
+          spec: Json
+          spec_version: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          case_id: string
+          created_by: string
+          name: string
+          description?: string | null
+          spec: Json
+          spec_version?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          case_id?: string
+          created_by?: string
+          name?: string
+          description?: string | null
+          spec?: Json
+          spec_version?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      simulation_runs: {
+        Row: {
+          id: string
+          simulation_id: string
+          case_id: string
+          started_by: string
+          seed: number
+          engine_version: string
+          spec: Json
+          spec_version: number
+          iterations: number
+          status: Database["public"]["Enums"]["simulation_status"]
+          results: Json | null
+          notes: Json | null
+          error: string | null
+          queued_at: string
+          started_at: string | null
+          finished_at: string | null
+          duration_ms: number | null
+          discarded_iterations: number
+          attempts: number
+        }
+        Insert: {
+          id?: string
+          simulation_id: string
+          case_id: string
+          started_by: string
+          seed: number
+          engine_version: string
+          spec: Json
+          spec_version: number
+          iterations: number
+          status?: Database["public"]["Enums"]["simulation_status"]
+          results?: Json | null
+          notes?: Json | null
+          error?: string | null
+          queued_at?: string
+          started_at?: string | null
+          finished_at?: string | null
+          duration_ms?: number | null
+          discarded_iterations?: number
+          attempts?: number
+        }
+        Update: {
+          id?: string
+          simulation_id?: string
+          case_id?: string
+          started_by?: string
+          seed?: number
+          engine_version?: string
+          spec?: Json
+          spec_version?: number
+          iterations?: number
+          status?: Database["public"]["Enums"]["simulation_status"]
+          results?: Json | null
+          notes?: Json | null
+          error?: string | null
+          queued_at?: string
+          started_at?: string | null
+          finished_at?: string | null
+          duration_ms?: number | null
+          discarded_iterations?: number
+          attempts?: number
+        }
+        Relationships: []
+      }
       kbr_assessments: {
         Row: {
           ambition_level: string | null
@@ -1865,6 +1967,7 @@ export type Database = {
       }
     }
     Enums: {
+      simulation_status: "queued" | "running" | "done" | "failed" | "cancelled"
       application_status: "pending" | "needs_info" | "approved" | "rejected"
       case_role:
         | "owner"

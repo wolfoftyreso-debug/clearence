@@ -47,6 +47,14 @@ import { deriveAuditDetail } from "../../src/lib/auditDetail";
 import { parseSie } from "../../src/lib/financial/sie";
 import { snapshotFromSie } from "../../src/lib/financial/fromSie";
 import {
+  MOTORVERSION,
+  korDirekt,
+  kor as korSimulering,
+  nyttFro,
+  valideraSpec,
+  type Simuleringsspec,
+} from "../../src/lib/montecarlo/motor";
+import {
   DEFAULT_RETENTION,
   mergeRetentionPolicy,
   type RetentionOverride,
@@ -1100,6 +1108,366 @@ router.post("/v1/cases/:caseId/tasks", async (req) => {
   });
   if (!row) throw forbidden("Uppgiften kunde inte läggas till i det här ärendet.");
   return { status: 201, body: toTask(row) };
+});
+
+/* --- Monte Carlo: simuleringarna ----------------------------------------- */
+
+/*
+ * TRE BESLUT SOM STYR HELA DEN HÄR YTAN.
+ *
+ * 1. TUNGA KÖRNINGAR KÖAS, LÄTTA KÖRS DIREKT. API:t är EN process. En
+ *    miljon iterationer tar dryga två sekunder - i en handler betyder det
+ *    två sekunders kö för alla andras anrop. Tröskeln bor i motorn
+ *    (korDirekt); köade körningar plockas av den betrodda arbetaren, samma
+ *    mönster som utkorgen och aviseringarna.
+ *
+ * 2. MODELLEN ÄR ETT UTTRYCK, INTE KOD. Klienten skickar text som tolkas
+ *    till ett träd av ett fåtal nodtyper (src/lib/montecarlo/uttryck.ts).
+ *    Det finns ingen eval och ingen new Function någonstans i kedjan -
+ *    annars vore varje inloggad användare en steg från exekvering i
+ *    API-processen.
+ *
+ * 3. RÅDATA LÄMNAR ALDRIG MOTORN. Det som sparas och skickas är aggregat:
+ *    statistik, sannolikheter, histogram, känslighet, konvergens. Med samma
+ *    frö och samma motorversion går rådata att återskapa exakt, och en
+ *    miljon flyttal per resultat har ingen i ett svar att göra.
+ */
+
+/** Taket per körning. Över det säger vi nej i stället för att ta emot en order vi inte kan hålla. */
+const MAX_ITERATIONER = 1000000;
+
+const toSimulation = (row: Record<string, unknown>) => ({
+  id: row.id,
+  caseId: row.case_id,
+  name: row.name,
+  description: row.description ?? null,
+  spec: row.spec,
+  specVersion: Number(row.spec_version ?? 1),
+  createdAt: iso(row.created_at),
+  updatedAt: iso(row.updated_at),
+});
+
+/**
+ * En körning. `results` utelämnas i listvyer - ett histogram per körning
+ * gånger femtio körningar är ett svar ingen bad om.
+ */
+const toRun = (row: Record<string, unknown>, medResultat = false) => ({
+  id: row.id,
+  simulationId: row.simulation_id,
+  status: row.status,
+  seed: Number(row.seed),
+  engineVersion: row.engine_version,
+  specVersion: Number(row.spec_version ?? 1),
+  iterations: Number(row.iterations ?? 0),
+  discardedIterations: Number(row.discarded_iterations ?? 0),
+  durationMs: row.duration_ms === null || row.duration_ms === undefined ? null : Number(row.duration_ms),
+  error: row.error ?? null,
+  notes: row.notes ?? null,
+  queuedAt: iso(row.queued_at),
+  startedAt: iso(row.started_at),
+  finishedAt: iso(row.finished_at),
+  ...(medResultat ? { results: row.results ?? null, spec: row.spec } : {}),
+});
+
+/** Läser och prövar en spec ur kroppen. Kastar 400 med varje fel uppräknat. */
+const lasSpec = (varde: unknown, namn: string, iterationer: number, fro: number): Simuleringsspec => {
+  if (varde === null || typeof varde !== "object" || Array.isArray(varde)) {
+    throw badRequest('Fältet "spec" ska vara ett objekt.');
+  }
+  const rå = varde as Record<string, unknown>;
+  const spec: Simuleringsspec = {
+    namn,
+    inputs: Array.isArray(rå.inputs) ? (rå.inputs as Simuleringsspec["inputs"]) : [],
+    outputs: Array.isArray(rå.outputs) ? (rå.outputs as Simuleringsspec["outputs"]) : [],
+    konstanter:
+      rå.konstanter && typeof rå.konstanter === "object" && !Array.isArray(rå.konstanter)
+        ? (rå.konstanter as Record<string, number>)
+        : {},
+    iterationer,
+    fro,
+  };
+  const fel = valideraSpec(spec);
+  if (fel.length > 0) {
+    // ALLA fel på en gång. Att bara visa det första gör rättningen till en
+    // serie omtag, och specen kan ha tio variabler.
+    throw badRequest(`Simuleringen kan inte köras: ${fel.map((f) => f.meddelande).join(" ")}`);
+  }
+  return spec;
+};
+
+const heltal = (body: unknown, falt: string, standard: number, min: number, max: number): number => {
+  const v = (body as Record<string, unknown> | undefined)?.[falt];
+  if (v === undefined || v === null) return standard;
+  const n = Number(v);
+  if (!Number.isInteger(n) || n < min || n > max) {
+    throw badRequest(`Fältet "${falt}" ska vara ett heltal mellan ${min} och ${max}.`);
+  }
+  return n;
+};
+
+router.get("/v1/cases/:caseId/simulations", async (req) => {
+  const caller = await authenticate(req);
+  const caseId = uuidParam(req, "caseId");
+  const rows = await withUser(caller.userId, async (tx) => {
+    const { rows } = await tx.query(
+      `select id, case_id, name, description, spec, spec_version, created_at, updated_at
+         from public.simulations where case_id = $1::uuid order by updated_at desc`,
+      [caseId],
+    );
+    return rows;
+  });
+  return { status: 200, body: { simulations: rows.map(toSimulation) } };
+});
+
+router.post("/v1/cases/:caseId/simulations", async (req) => {
+  const caller = await authenticate(req);
+  const caseId = uuidParam(req, "caseId");
+  const name = str(req.body, "name", { max: 200 });
+  const description = str(req.body, "description", { max: 2000, required: false }) || null;
+  // Specen prövas redan här. En sparad modell som inte går att köra är en
+  // fälla som ställs ut åt nästa person som öppnar ärendet.
+  const spec = lasSpec((req.body as Record<string, unknown>)?.spec, name, 10000, 1);
+
+  const row = await withUser(caller.userId, async (tx) => {
+    const { rows } = await tx.query(
+      `insert into public.simulations (case_id, created_by, name, description, spec)
+       values ($1::uuid, $2::uuid, $3, $4, $5::jsonb)
+       returning id, case_id, name, description, spec, spec_version, created_at, updated_at`,
+      [
+        caseId,
+        caller.userId,
+        name,
+        description,
+        JSON.stringify({ inputs: spec.inputs, outputs: spec.outputs, konstanter: spec.konstanter }),
+      ],
+    );
+    return rows[0] ?? null;
+  });
+  if (!row) throw forbidden("Simuleringen kunde inte sparas i det här ärendet.");
+  return { status: 201, body: toSimulation(row) };
+});
+
+router.get("/v1/simulations/:simulationId", async (req) => {
+  const caller = await authenticate(req);
+  const simulationId = uuidParam(req, "simulationId");
+  const data = await withUser(caller.userId, async (tx) => {
+    const { rows } = await tx.query(
+      `select id, case_id, name, description, spec, spec_version, created_at, updated_at
+         from public.simulations where id = $1::uuid`,
+      [simulationId],
+    );
+    if (!rows[0]) return null;
+    const { rows: runs } = await tx.query(
+      `select id, simulation_id, status, seed, engine_version, spec_version, iterations,
+              discarded_iterations, duration_ms, error, notes, queued_at, started_at, finished_at
+         from public.simulation_runs where simulation_id = $1::uuid
+        order by queued_at desc limit 25`,
+      [simulationId],
+    );
+    return { sim: rows[0], runs };
+  });
+  if (!data) throw notFound("Simuleringen finns inte.");
+  return {
+    status: 200,
+    body: { ...toSimulation(data.sim), runs: data.runs.map((r) => toRun(r)) },
+  };
+});
+
+router.patch("/v1/simulations/:simulationId", async (req) => {
+  const caller = await authenticate(req);
+  const simulationId = uuidParam(req, "simulationId");
+  const name = str(req.body, "name", { max: 200 });
+  const description = str(req.body, "description", { max: 2000, required: false }) || null;
+  const spec = lasSpec((req.body as Record<string, unknown>)?.spec, name, 10000, 1);
+  const row = await withUser(caller.userId, async (tx) => {
+    // spec_version höjs av triggern, inte här. Två flikar som sparar
+    // samtidigt skulle annars kunna skriva samma nummer.
+    const { rows } = await tx.query(
+      `update public.simulations set name = $2, description = $3, spec = $4::jsonb
+        where id = $1::uuid
+       returning id, case_id, name, description, spec, spec_version, created_at, updated_at`,
+      [
+        simulationId,
+        name,
+        description,
+        JSON.stringify({ inputs: spec.inputs, outputs: spec.outputs, konstanter: spec.konstanter }),
+      ],
+    );
+    return rows[0] ?? null;
+  });
+  if (!row) throw notFound("Simuleringen finns inte, eller får inte ändras.");
+  return { status: 200, body: toSimulation(row) };
+});
+
+router.del("/v1/simulations/:simulationId", async (req) => {
+  const caller = await authenticate(req);
+  const simulationId = uuidParam(req, "simulationId");
+  await withUser(caller.userId, async (tx) => {
+    await tx.query("delete from public.simulations where id = $1::uuid", [simulationId]);
+  });
+  return { status: 200, body: { deleted: true } };
+});
+
+/**
+ * Kör simuleringen.
+ *
+ * Fröet får anges - det är hela reproducerbarheten - och väljs annars av
+ * SERVERN, en gång, och skrivs ned. Ett frö klienten slumpar per anrop hade
+ * varit lika oåterskapligt som inget frö alls.
+ */
+router.post("/v1/simulations/:simulationId/run", async (req) => {
+  const caller = await authenticate(req);
+  const simulationId = uuidParam(req, "simulationId");
+  const iterationer = heltal(req.body, "iterations", 10000, 100, MAX_ITERATIONER);
+  const angivetFro = (req.body as Record<string, unknown> | undefined)?.seed;
+  const fro =
+    angivetFro === undefined || angivetFro === null
+      ? nyttFro()
+      : heltal(req.body, "seed", 0, 0, 4294967295);
+
+  const sim = await withUser(caller.userId, async (tx) => {
+    const { rows } = await tx.query(
+      "select id, case_id, name, spec, spec_version from public.simulations where id = $1::uuid",
+      [simulationId],
+    );
+    return rows[0] ?? null;
+  });
+  if (!sim) throw notFound("Simuleringen finns inte.");
+
+  const spec = lasSpec(sim.spec, String(sim.name), iterationer, fro);
+  const direkt = korDirekt(iterationer);
+
+  const run = await withUser(caller.userId, async (tx) => {
+    const { rows } = await tx.query(
+      `insert into public.simulation_runs
+         (simulation_id, case_id, started_by, seed, engine_version, spec, spec_version,
+          iterations, status, started_at)
+       values ($1::uuid, $2::uuid, $3::uuid, $4::bigint, $5, $6::jsonb, $7::integer,
+               $8::integer, $9::public.simulation_status, case when $9 = 'running' then now() else null end)
+       returning id, simulation_id, status, seed, engine_version, spec_version, iterations,
+                 discarded_iterations, duration_ms, error, notes, queued_at, started_at, finished_at`,
+      [
+        simulationId,
+        sim.case_id,
+        caller.userId,
+        fro,
+        MOTORVERSION,
+        JSON.stringify(sim.spec),
+        sim.spec_version,
+        iterationer,
+        direkt ? "running" : "queued",
+      ],
+    );
+    return rows[0] ?? null;
+  });
+  if (!run) throw forbidden("Körningen kunde inte startas i det här ärendet.");
+
+  if (!direkt) {
+    // Köad. Arbetaren plockar den; klienten pollar GET .../results.
+    return { status: 202, body: { ...toRun(run), queued: true } };
+  }
+
+  // Direktkörning. Motorn kastar bara på en spec som redan prövats, men
+  // ett fel här får inte lämna raden i 'running' för evigt.
+  try {
+    const resultat = korSimulering(spec);
+    const klar = await withUser(caller.userId, async (tx) => {
+      const { rows } = await tx.query(
+        // complete_own_simulation_run och inte arbetarens finish_*: den
+        // här vägen körs som användaren, och funktionen grindar därför på
+        // can_write_case OCH på att det är samma person som startade.
+        `select public.complete_own_simulation_run($1::uuid, 'done'::public.simulation_status,
+                 $2::jsonb, $3::jsonb, null, $4::integer, $5::integer) as klar`,
+        [
+          run.id,
+          JSON.stringify({ outputs: resultat.outputs }),
+          JSON.stringify(resultat.anmarkningar),
+          resultat.varaktighetMs,
+          resultat.forkastadeIterationer,
+        ],
+      );
+      return rows[0]?.klar === true;
+    });
+    if (!klar) throw new ApiError(409, "conflict", "Körningen hann avbrytas.");
+    return {
+      status: 201,
+      body: {
+        ...toRun(run),
+        status: "done",
+        durationMs: resultat.varaktighetMs,
+        discardedIterations: resultat.forkastadeIterationer,
+        notes: resultat.anmarkningar,
+        results: { outputs: resultat.outputs },
+      },
+    };
+  } catch (error) {
+    const meddelande = error instanceof Error ? error.message : "Okänt fel";
+    await withUser(caller.userId, async (tx) => {
+      await tx.query(
+        `select public.complete_own_simulation_run($1::uuid, 'failed'::public.simulation_status,
+                 null, null, $2::text, null, 0)`,
+        [run.id, meddelande.slice(0, 2000)],
+      );
+    });
+    if (error instanceof ApiError) throw error;
+    throw badRequest(`Simuleringen misslyckades: ${meddelande}`);
+  }
+});
+
+/**
+ * Avbryter en körning som inte hunnit bli klar.
+ *
+ * Policyn tillåter bara övergången queued/running -> cancelled; en färdig
+ * körning kan alltså inte "avbrytas" i efterhand och därmed inte heller
+ * göras om till något annat än det den var.
+ */
+router.post("/v1/simulations/:simulationId/cancel", async (req) => {
+  const caller = await authenticate(req);
+  const simulationId = uuidParam(req, "simulationId");
+  const antal = await withUser(caller.userId, async (tx) => {
+    const { rowCount } = await tx.query(
+      `update public.simulation_runs
+          set status = 'cancelled', finished_at = now()
+        where simulation_id = $1::uuid and status in ('queued', 'running')`,
+      [simulationId],
+    );
+    return rowCount ?? 0;
+  });
+  return { status: 200, body: { cancelled: antal } };
+});
+
+/** Den senaste körningen MED resultat. Det gränssnittet ritar. */
+router.get("/v1/simulations/:simulationId/results", async (req) => {
+  const caller = await authenticate(req);
+  const simulationId = uuidParam(req, "simulationId");
+  const row = await withUser(caller.userId, async (tx) => {
+    const { rows } = await tx.query(
+      `select * from public.simulation_runs
+        where simulation_id = $1::uuid order by queued_at desc limit 1`,
+      [simulationId],
+    );
+    return rows[0] ?? null;
+  });
+  // null och inte 404: "ingen körning ännu" är ett giltigt läge om en
+  // simulering, inte ett fel.
+  return { status: 200, body: row ? toRun(row, true) : null };
+});
+
+/**
+ * En enskild körning, i sin helhet.
+ *
+ * Det HÄR är granskningsvägen: frö, motorversion, specen som gällde och
+ * resultatet, i ett svar. Räcker för att köra om körningen och jämföra.
+ */
+router.get("/v1/simulation-runs/:runId", async (req) => {
+  const caller = await authenticate(req);
+  const runId = uuidParam(req, "runId");
+  const row = await withUser(caller.userId, async (tx) => {
+    const { rows } = await tx.query("select * from public.simulation_runs where id = $1::uuid", [runId]);
+    return rows[0] ?? null;
+  });
+  if (!row) throw notFound("Körningen finns inte.");
+  return { status: 200, body: toRun(row, true) };
 });
 
 /* --- Bokföringen som lägesbild ------------------------------------------- */

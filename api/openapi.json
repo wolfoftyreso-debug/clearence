@@ -2059,6 +2059,240 @@
         }
       }
     },
+    "/cases/{caseId}/simulations": {
+      "get": {
+        "operationId": "listSimulations",
+        "summary": "Ärendets simuleringar (antagandena, inte körningarna).",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Simuleringarna",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "simulations"
+                  ],
+                  "properties": {
+                    "simulations": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "createSimulation",
+        "summary": "Spara en uppsättning antaganden. Specen prövas redan här - en sparad modell som inte går att köra är en fälla för nästa person.",
+        "x-status": "beta",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "name",
+                  "spec"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "maxLength": 200
+                  },
+                  "description": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "maxLength": 2000
+                  },
+                  "spec": {
+                    "type": "object",
+                    "required": [
+                      "inputs",
+                      "outputs"
+                    ],
+                    "description": "Antagandena. inputs bär fördelningar, outputs bär uttryck som räknas i ordning.",
+                    "properties": {
+                      "inputs": {
+                        "type": "array",
+                        "maxItems": 50,
+                        "items": {
+                          "type": "object",
+                          "required": [
+                            "namn",
+                            "fordelning"
+                          ],
+                          "properties": {
+                            "namn": {
+                              "type": "string",
+                              "description": "Variabelnamnet som används i uttrycken."
+                            },
+                            "etikett": {
+                              "type": "string"
+                            },
+                            "enhet": {
+                              "type": "string"
+                            },
+                            "kalla": {
+                              "type": "string"
+                            },
+                            "tilltro": {
+                              "type": "string",
+                              "enum": [
+                                "hog",
+                                "medel",
+                                "lag"
+                              ]
+                            },
+                            "beskrivning": {
+                              "type": "string"
+                            },
+                            "fordelning": {
+                              "type": "object",
+                              "required": [
+                                "typ",
+                                "parametrar"
+                              ],
+                              "properties": {
+                                "typ": {
+                                  "type": "string",
+                                  "enum": [
+                                    "normal",
+                                    "lognormal",
+                                    "uniform",
+                                    "triangular",
+                                    "beta",
+                                    "exponential",
+                                    "poisson",
+                                    "bernoulli",
+                                    "binomial",
+                                    "discrete",
+                                    "custom"
+                                  ]
+                                },
+                                "parametrar": {
+                                  "type": "object",
+                                  "additionalProperties": {
+                                    "type": "number"
+                                  }
+                                },
+                                "punkter": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "required": [
+                                      "varde",
+                                      "vikt"
+                                    ],
+                                    "properties": {
+                                      "varde": {
+                                        "type": "number"
+                                      },
+                                      "vikt": {
+                                        "type": "number"
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      },
+                      "outputs": {
+                        "type": "array",
+                        "maxItems": 20,
+                        "items": {
+                          "type": "object",
+                          "required": [
+                            "namn",
+                            "uttryck"
+                          ],
+                          "properties": {
+                            "namn": {
+                              "type": "string"
+                            },
+                            "etikett": {
+                              "type": "string"
+                            },
+                            "enhet": {
+                              "type": "string"
+                            },
+                            "uttryck": {
+                              "type": "string",
+                              "description": "Uttryck i motorns egna språk. Ingen eval - se src/lib/montecarlo/uttryck.ts."
+                            },
+                            "mal": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "kritiskGrans": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            }
+                          }
+                        }
+                      },
+                      "konstanter": {
+                        "type": "object",
+                        "additionalProperties": {
+                          "type": "number"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Skapad",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/cases/{caseId}/tasks": {
       "get": {
         "operationId": "listTasks",
@@ -4330,6 +4564,429 @@
             }
           }
         ]
+      }
+    },
+    "/simulation-runs/{runId}": {
+      "get": {
+        "operationId": "getSimulationRun",
+        "summary": "En enskild körning i sin helhet - frö, motorversion, specen som gällde och resultatet. Granskningsvägen.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Körningen",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/simulations/{simulationId}": {
+      "get": {
+        "operationId": "getSimulation",
+        "summary": "En simulering med sina 25 senaste körningar (utan resultatkroppar).",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Simuleringen",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "operationId": "updateSimulation",
+        "summary": "Ändra antagandena. spec_version höjs av databasen, aldrig av klienten.",
+        "x-status": "beta",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "name",
+                  "spec"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "maxLength": 200
+                  },
+                  "description": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "maxLength": 2000
+                  },
+                  "spec": {
+                    "type": "object",
+                    "required": [
+                      "inputs",
+                      "outputs"
+                    ],
+                    "description": "Antagandena. inputs bär fördelningar, outputs bär uttryck som räknas i ordning.",
+                    "properties": {
+                      "inputs": {
+                        "type": "array",
+                        "maxItems": 50,
+                        "items": {
+                          "type": "object",
+                          "required": [
+                            "namn",
+                            "fordelning"
+                          ],
+                          "properties": {
+                            "namn": {
+                              "type": "string",
+                              "description": "Variabelnamnet som används i uttrycken."
+                            },
+                            "etikett": {
+                              "type": "string"
+                            },
+                            "enhet": {
+                              "type": "string"
+                            },
+                            "kalla": {
+                              "type": "string"
+                            },
+                            "tilltro": {
+                              "type": "string",
+                              "enum": [
+                                "hog",
+                                "medel",
+                                "lag"
+                              ]
+                            },
+                            "beskrivning": {
+                              "type": "string"
+                            },
+                            "fordelning": {
+                              "type": "object",
+                              "required": [
+                                "typ",
+                                "parametrar"
+                              ],
+                              "properties": {
+                                "typ": {
+                                  "type": "string",
+                                  "enum": [
+                                    "normal",
+                                    "lognormal",
+                                    "uniform",
+                                    "triangular",
+                                    "beta",
+                                    "exponential",
+                                    "poisson",
+                                    "bernoulli",
+                                    "binomial",
+                                    "discrete",
+                                    "custom"
+                                  ]
+                                },
+                                "parametrar": {
+                                  "type": "object",
+                                  "additionalProperties": {
+                                    "type": "number"
+                                  }
+                                },
+                                "punkter": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "required": [
+                                      "varde",
+                                      "vikt"
+                                    ],
+                                    "properties": {
+                                      "varde": {
+                                        "type": "number"
+                                      },
+                                      "vikt": {
+                                        "type": "number"
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      },
+                      "outputs": {
+                        "type": "array",
+                        "maxItems": 20,
+                        "items": {
+                          "type": "object",
+                          "required": [
+                            "namn",
+                            "uttryck"
+                          ],
+                          "properties": {
+                            "namn": {
+                              "type": "string"
+                            },
+                            "etikett": {
+                              "type": "string"
+                            },
+                            "enhet": {
+                              "type": "string"
+                            },
+                            "uttryck": {
+                              "type": "string",
+                              "description": "Uttryck i motorns egna språk. Ingen eval - se src/lib/montecarlo/uttryck.ts."
+                            },
+                            "mal": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "kritiskGrans": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            }
+                          }
+                        }
+                      },
+                      "konstanter": {
+                        "type": "object",
+                        "additionalProperties": {
+                          "type": "number"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Ändrad",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteSimulation",
+        "summary": "Ta bort simuleringen och dess körningar.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Borttagen",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "deleted"
+                  ],
+                  "properties": {
+                    "deleted": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/simulations/{simulationId}/cancel": {
+      "post": {
+        "operationId": "cancelSimulation",
+        "summary": "Avbryter körningar som inte hunnit bli klara. En färdig körning kan inte avbrytas i efterhand - den är en observation.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Antal avbrutna",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "cancelled"
+                  ],
+                  "properties": {
+                    "cancelled": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/simulations/{simulationId}/results": {
+      "get": {
+        "operationId": "getSimulationResults",
+        "summary": "Senaste körningen med resultat: statistik, sannolikheter, histogram, känslighet och konvergens. null när ingen körning gjorts.",
+        "description": "RÅDATA INGÅR ALDRIG. En miljon flyttal per resultat hör inte hemma i ett svar, och med samma frö och motorversion går de att återskapa exakt.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Körningen, eller null",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": [
+                    "object",
+                    "null"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/simulations/{simulationId}/run": {
+      "post": {
+        "operationId": "runSimulation",
+        "summary": "Kör simuleringen. Körningar över tröskeln köas till arbetaren och svarar 202; lättare körs direkt och svarar 201 med resultatet.",
+        "description": "seed får anges och är hela reproducerbarheten. Utelämnas det väljer SERVERN ett, en gång, och skriver ned det - ett frö klienten slumpar per anrop vore lika oåterskapligt som inget frö.",
+        "x-status": "beta",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "iterations": {
+                    "type": "integer",
+                    "minimum": 100,
+                    "maximum": 1000000,
+                    "default": 10000
+                  },
+                  "seed": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ],
+                    "minimum": 0,
+                    "maximum": 4294967295
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Kördes direkt",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Köad till arbetaren",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/sources/google": {

@@ -56,6 +56,8 @@ import type {
   ProfessionalTerms,
   SecretInfo,
   SharedCaseView,
+  SimulationRecord,
+  SimulationRun,
   TimeEntryRecord,
   UserProfile,
   UserRole,
@@ -161,6 +163,15 @@ export const MIGRATED_PORTS = [
   "kbr.getLatestByCase",
   "financial.getLatestSnapshot",
   "financial.importSie",
+  "simulations.listByCase",
+  "simulations.get",
+  "simulations.create",
+  "simulations.update",
+  "simulations.remove",
+  "simulations.run",
+  "simulations.cancel",
+  "simulations.latestRun",
+  "simulations.getRun",
   "audit.listByCase",
 ] as const;
 
@@ -796,6 +807,66 @@ const financial = {
   },
 };
 
+/**
+ * Simuleringarna.
+ *
+ * Den enda porten där en metod kan svara "inte klar än": tunga körningar
+ * köas till arbetaren, och `run` returnerar då status "queued". Att i
+ * stället vänta in svaret hade bundit en HTTP-förbindelse i minuter.
+ */
+const simulations = {
+  async listByCase(caseId: string): Promise<SimulationRecord[]> {
+    const res = await apiFetch<{ simulations: SimulationRecord[] }>(`/v1/cases/${caseId}/simulations`);
+    return res.simulations;
+  },
+  async get(simulationId: string): Promise<SimulationRecord | null> {
+    try {
+      return await apiFetch<SimulationRecord>(`/v1/simulations/${simulationId}`);
+    } catch (error) {
+      if (error instanceof ApiRequestError && error.status === 404) return null;
+      throw error;
+    }
+  },
+  async create(input: { caseId: string; name: string; description?: string | null; spec: unknown }) {
+    return apiFetch<SimulationRecord>(`/v1/cases/${input.caseId}/simulations`, {
+      method: "POST",
+      body: { name: input.name, description: input.description ?? null, spec: input.spec },
+    });
+  },
+  async update(input: { simulationId: string; name: string; description?: string | null; spec: unknown }) {
+    return apiFetch<SimulationRecord>(`/v1/simulations/${input.simulationId}`, {
+      method: "PATCH",
+      body: { name: input.name, description: input.description ?? null, spec: input.spec },
+    });
+  },
+  async remove(simulationId: string): Promise<void> {
+    await apiFetch(`/v1/simulations/${simulationId}`, { method: "DELETE" });
+  },
+  async run(input: { simulationId: string; iterations: number; seed?: number | null }) {
+    return apiFetch<SimulationRun>(`/v1/simulations/${input.simulationId}/run`, {
+      method: "POST",
+      body: { iterations: input.iterations, seed: input.seed ?? null },
+    });
+  },
+  async cancel(simulationId: string): Promise<number> {
+    const res = await apiFetch<{ cancelled: number }>(`/v1/simulations/${simulationId}/cancel`, {
+      method: "POST",
+    });
+    return res.cancelled;
+  },
+  async latestRun(simulationId: string): Promise<SimulationRun | null> {
+    return apiFetch<SimulationRun | null>(`/v1/simulations/${simulationId}/results`);
+  },
+  async getRun(runId: string): Promise<SimulationRun | null> {
+    try {
+      return await apiFetch<SimulationRun>(`/v1/simulation-runs/${runId}`);
+    } catch (error) {
+      if (error instanceof ApiRequestError && error.status === 404) return null;
+      throw error;
+    }
+  },
+};
+
 const kbr = {
   ...supabaseAdapter.kbr,
   async create(input: KbrAssessmentInput & { userId: string }): Promise<void> {
@@ -921,6 +992,7 @@ export const awsAdapter: DataPort = {
   payments: payments as DataPort["payments"],
   invoices: invoices as DataPort["invoices"],
   financial: financial as DataPort["financial"],
+  simulations: simulations as DataPort["simulations"],
   documents: documents as DataPort["documents"],
   messages: messages as DataPort["messages"],
   notificationSettings: notificationSettings as DataPort["notificationSettings"],

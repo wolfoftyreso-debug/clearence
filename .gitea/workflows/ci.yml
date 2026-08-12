@@ -78,6 +78,13 @@ jobs:
       - name: Lägesbilden ur bokföringen
         run: npm run test:lagesbild
 
+      # Monte Carlo. Statistiska kontroller med FAST frö - en samplare går
+      # inte att pröva med ett likhetstecken, men den ska träffa sin
+      # fördelnings teoretiska moment. Prestandakontrollerna fångar en
+      # regression i storleksordning, inte maskinen de körs på.
+      - name: Monte Carlo-motorn
+        run: npm run test:montecarlo
+
       - name: Inga secrets i historiken
         run: |
           # Mönstren är de som ger direkt åtkomst om de läcker. En träff är

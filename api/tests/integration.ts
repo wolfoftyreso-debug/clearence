@@ -2211,6 +2211,268 @@ check("en utomstående kan inte påbörja uppladdning i annans ärende", bertilS
   );
 }
 
+/* --- 8m9. Monte Carlo: hela kedjan ------------------------------------- */
+
+/*
+ * USER INPUT -> FÖRDELNING -> SAMPEL -> SIMULERING -> BERÄKNING -> OUTPUT
+ * -> STATISTIK -> KÄNSLIGHET -> KONVERGENS -> PERSISTENS -> JOURNAL.
+ *
+ * Provet går hela vägen genom HTTP-lagret mot riktig Postgres. Det som
+ * betyder mest är inte att siffrorna kommer fram utan tre andra saker:
+ * att SAMMA FRÖ ger samma resultat, att en annan tenant inte ser något,
+ * och att en modell som inte går att köra avvisas innan den sparas.
+ */
+{
+  const agnesS = await call("POST", "/v1/auth/login", {
+    body: { email: "agnes@bolag-a.se", password: "hemligt-losen-agnes" },
+  });
+  const tokS: string = agnesS.body.token as string;
+
+  const SPEC = {
+    inputs: [
+      { namn: "Kunder", etikett: "Antal kunder", fordelning: { typ: "poisson", parametrar: { lambda: 40 } } },
+      { namn: "Snittintakt", fordelning: { typ: "lognormal", parametrar: { mu: 9.5, sigma: 0.4 } }, enhet: "kr" },
+      { namn: "Rorlig", fordelning: { typ: "triangular", parametrar: { min: 200000, mode: 350000, max: 700000 } } },
+    ],
+    outputs: [
+      { namn: "Intakter", uttryck: "Kunder * Snittintakt", enhet: "kr" },
+      { namn: "Resultat", uttryck: "Intakter - Rorlig - Fasta", enhet: "kr", mal: 0, kritiskGrans: -500000 },
+    ],
+    konstanter: { Fasta: 400000 },
+  };
+
+  /* --- Spara antagandena --------------------------------------------- */
+
+  const skapad = await call("POST", `/v1/cases/${CASE_A}/simulations`, {
+    token: tokS,
+    body: { name: "Likviditet om 90 dagar", description: "Basfall", spec: SPEC },
+  });
+  check("simuleringen går att spara", skapad.status === 201, skapad.body);
+  const simId = skapad.body.id as string;
+  check("versionen börjar på 1", skapad.body.specVersion === 1, skapad.body.specVersion);
+
+  // En modell som refererar en variabel som inte finns ska ALDRIG sparas.
+  const trasigModell = await call("POST", `/v1/cases/${CASE_A}/simulations`, {
+    token: tokS,
+    body: { name: "Trasig", spec: { ...SPEC, outputs: [{ namn: "X", uttryck: "Finnsinte * 2" }] } },
+  });
+  check("en modell med okänd variabel avvisas", trasigModell.status === 400, trasigModell.body);
+  check(
+    "och beskedet namnger variabeln",
+    /Finnsinte/.test(String((trasigModell.body.error as Record<string, unknown>)?.message ?? "")),
+    trasigModell.body,
+  );
+
+  // Ogiltig fördelning likaså.
+  const trasigFordelning = await call("POST", `/v1/cases/${CASE_A}/simulations`, {
+    token: tokS,
+    body: {
+      name: "Omöjlig triangel",
+      spec: {
+        ...SPEC,
+        inputs: [{ namn: "X", fordelning: { typ: "triangular", parametrar: { min: 0, mode: 100, max: 10 } } }],
+        outputs: [{ namn: "Y", uttryck: "X" }],
+      },
+    },
+  });
+  check("en omöjlig triangelfördelning avvisas", trasigFordelning.status === 400, trasigFordelning.body);
+
+  /* --- Kör med ett känt frö ------------------------------------------- */
+
+  const FRO = 20260812;
+  const kord = await call("POST", `/v1/simulations/${simId}/run`, {
+    token: tokS,
+    body: { iterations: 20000, seed: FRO },
+  });
+  check("körningen går igenom direkt under tröskeln", kord.status === 201, kord.body);
+  check("statusen är klar", kord.body.status === "done", kord.body.status);
+  check("fröet är det som angavs", kord.body.seed === FRO, kord.body.seed);
+  check("motorversionen sparas", typeof kord.body.engineVersion === "string", kord.body.engineVersion);
+
+  const utfall = ((kord.body.results as Record<string, unknown>)?.outputs ?? []) as Record<string, unknown>[];
+  check("båda resultaten räknades", utfall.length === 2, utfall.length);
+  const resultat = utfall.find((o) => o.namn === "Resultat") as Record<string, unknown>;
+  const statistik = (resultat?.statistik ?? {}) as Record<string, unknown>;
+  const percentiler = (statistik.percentiler ?? {}) as Record<string, number>;
+
+  check("alla åtta percentiler finns", ["p5","p10","p25","p50","p75","p90","p95","p99"].every((k) => typeof percentiler[k] === "number"), Object.keys(percentiler));
+  check("percentilerna är ordnade", percentiler.p5 <= percentiler.p50 && percentiler.p50 <= percentiler.p95, percentiler);
+  check("medelvärdet är ett tal", Number.isFinite(statistik.medel as number), statistik.medel);
+  check("standardavvikelsen är positiv", (statistik.standardavvikelse as number) > 0, statistik.standardavvikelse);
+
+  const sannolikheter = (resultat?.sannolikheter ?? {}) as Record<string, number | null>;
+  check(
+    "sannolikheten att nå målet är en andel mellan 0 och 1",
+    typeof sannolikheter.narMal === "number" && sannolikheter.narMal >= 0 && sannolikheter.narMal <= 1,
+    sannolikheter.narMal,
+  );
+  check("sannolikheten under kritisk gräns räknas", typeof sannolikheter.underKritisk === "number", sannolikheter.underKritisk);
+
+  const kanslighet = (resultat?.kanslighet ?? []) as Record<string, number | string>[];
+  check("känsligheten rankar alla tre inputs", kanslighet.length === 3, kanslighet.length);
+  check(
+    "andelarna summerar till 1",
+    Math.abs(kanslighet.reduce((a, k) => a + (k.andelAvVariation as number), 0) - 1) < 1e-9,
+    kanslighet.map((k) => k.andelAvVariation),
+  );
+  check(
+    "listan är sorterad efter påverkan",
+    kanslighet.every((k, i) => i === 0 || (kanslighet[i - 1].andelAvVariation as number) >= (k.andelAvVariation as number)),
+    kanslighet.map((k) => `${k.input}:${k.andelAvVariation}`),
+  );
+
+  const konvergens = (resultat?.konvergens ?? []) as Record<string, number>[];
+  check("konvergensen har flera avstämningar", konvergens.length >= 4, konvergens.length);
+  check("den sista avstämningen är hela körningen", konvergens[konvergens.length - 1].iterationer === 20000, konvergens);
+  check("körningen bedöms stabil", resultat?.stabil === true, resultat?.stabil);
+
+  const hist = (resultat?.histogram ?? {}) as { kanter: number[]; antal: number[] };
+  check("histogrammet har staplar", hist.antal.length > 10, hist.antal.length);
+  check("kanterna är en fler än staplarna", hist.kanter.length === hist.antal.length + 1, [hist.kanter.length, hist.antal.length]);
+  check("alla iterationer ligger i en stapel", hist.antal.reduce((a, b) => a + b, 0) === 20000, hist.antal.reduce((a, b) => a + b, 0));
+
+  /* --- REPRODUCERBARHET: samma frö, samma svar ------------------------ */
+
+  const omkord = await call("POST", `/v1/simulations/${simId}/run`, {
+    token: tokS,
+    body: { iterations: 20000, seed: FRO },
+  });
+  const resultat2 = (((omkord.body.results as Record<string, unknown>)?.outputs ?? []) as Record<string, unknown>[])
+    .find((o) => o.namn === "Resultat") as Record<string, unknown>;
+  const p2 = ((resultat2?.statistik as Record<string, unknown>)?.percentiler ?? {}) as Record<string, number>;
+  check(
+    "SAMMA FRÖ GER SAMMA PERCENTILER, exakt",
+    JSON.stringify(p2) === JSON.stringify(percentiler),
+    { forst: percentiler.p50, sedan: p2.p50 },
+  );
+
+  const annatFro = await call("POST", `/v1/simulations/${simId}/run`, {
+    token: tokS,
+    body: { iterations: 20000, seed: FRO + 1 },
+  });
+  const p3 = ((((annatFro.body.results as Record<string, unknown>)?.outputs ?? []) as Record<string, unknown>[])
+    .find((o) => o.namn === "Resultat") as Record<string, unknown>)?.statistik as Record<string, unknown>;
+  check(
+    "ett annat frö ger ett annat utfall",
+    (p3.percentiler as Record<string, number>).p50 !== percentiler.p50,
+    { fro: percentiler.p50, annat: (p3.percentiler as Record<string, number>).p50 },
+  );
+
+  // Utan angivet frö väljer SERVERN ett och skriver ned det.
+  const utanFro = await call("POST", `/v1/simulations/${simId}/run`, {
+    token: tokS,
+    body: { iterations: 1000 },
+  });
+  check("servern väljer ett frö när inget anges", Number.isInteger(utanFro.body.seed), utanFro.body.seed);
+  check("och det sparas med körningen", (utanFro.body.seed as number) >= 0, utanFro.body.seed);
+
+  /* --- Tunga körningar KÖAS i stället för att blockera --------------- */
+
+  const tung = await call("POST", `/v1/simulations/${simId}/run`, {
+    token: tokS,
+    body: { iterations: 500000, seed: 1 },
+  });
+  check("en tung körning köas i stället för att köras i handlern", tung.status === 202, tung.status);
+  check("och den ligger som queued", tung.body.status === "queued", tung.body.status);
+
+  const avbrutna = await call("POST", `/v1/simulations/${simId}/cancel`, { token: tokS });
+  check("den köade körningen går att avbryta", (avbrutna.body.cancelled as number) >= 1, avbrutna.body);
+  // En färdig körning ska INTE gå att avbryta i efterhand - den är en
+  // observation, inte ett tillstånd.
+  const efterAvbrott = await call("GET", `/v1/simulation-runs/${kord.body.id}`, { token: tokS });
+  check("en färdig körning står kvar som klar", efterAvbrott.body.status === "done", efterAvbrott.body.status);
+
+  /* --- Taket ---------------------------------------------------------- */
+
+  const forMycket = await call("POST", `/v1/simulations/${simId}/run`, {
+    token: tokS,
+    body: { iterations: 50000000 },
+  });
+  check("ett orimligt antal iterationer avvisas", forMycket.status === 400, forMycket.status);
+  const forFa = await call("POST", `/v1/simulations/${simId}/run`, { token: tokS, body: { iterations: 10 } });
+  check("för få iterationer avvisas också", forFa.status === 400, forFa.status);
+
+  /* --- Versionen höjs av databasen ------------------------------------ */
+
+  const andrad = await call("PATCH", `/v1/simulations/${simId}`, {
+    token: tokS,
+    body: {
+      name: "Likviditet om 90 dagar",
+      spec: { ...SPEC, konstanter: { Fasta: 450000 } },
+    },
+  });
+  check("versionen höjs vid ändrad spec", andrad.body.specVersion === 2, andrad.body.specVersion);
+  // En körning bär specen SOM DEN VAR, inte en pekare till den ändrade.
+  const gammalKorning = await call("GET", `/v1/simulation-runs/${kord.body.id}`, { token: tokS });
+  check(
+    "en gammal körning bär sin egen spec-version",
+    gammalKorning.body.specVersion === 1,
+    gammalKorning.body.specVersion,
+  );
+  check(
+    "och sina egna konstanter, inte de nya",
+    ((gammalKorning.body.spec as Record<string, unknown>)?.konstanter as Record<string, number>)?.Fasta === 400000,
+    (gammalKorning.body.spec as Record<string, unknown>)?.konstanter,
+  );
+
+  /* --- GRÄNSEN: en annan tenant ser ingenting ------------------------- */
+
+  const bertilLista = await call("GET", `/v1/cases/${CASE_A}/simulations`, { token: bertilToken });
+  check("en utomstående ser inga simuleringar", (bertilLista.body.simulations as unknown[]).length === 0, bertilLista.body);
+  const bertilLas = await call("GET", `/v1/simulations/${simId}`, { token: bertilToken });
+  check("och kan inte öppna en enskild", bertilLas.status === 404, bertilLas.status);
+  const bertilKor = await call("POST", `/v1/simulations/${simId}/run`, { token: bertilToken, body: { iterations: 1000 } });
+  check("och kan inte köra den", bertilKor.status === 404, bertilKor.status);
+  const bertilResultat = await call("GET", `/v1/simulations/${simId}/results`, { token: bertilToken });
+  check("och får inga resultat", bertilResultat.body === null, bertilResultat.body);
+  const bertilRun = await call("GET", `/v1/simulation-runs/${kord.body.id}`, { token: bertilToken });
+  check("och når inte körningen direkt heller", bertilRun.status === 404, bertilRun.status);
+  const bertilSkriv = await call("POST", `/v1/cases/${CASE_A}/simulations`, {
+    token: bertilToken,
+    body: { name: "Smyg", spec: SPEC },
+  });
+  check("och kan inte skapa en i annans ärende", bertilSkriv.status >= 400, bertilSkriv.status);
+
+  /* --- Journalen ------------------------------------------------------ */
+
+  const journalS = await call("GET", `/v1/cases/${CASE_A}/journal`, { token: tokS });
+  const handelser = (journalS.body.events as Record<string, unknown>[]).map((e) => `${e.objectType}/${e.action}`);
+  check("simuleringen syns i journalen", handelser.includes("simulations/insert"), handelser.slice(0, 10));
+  check("och körningarna också", handelser.includes("simulation_runs/insert"), handelser.slice(0, 10));
+
+  /* --- Utan inloggning finns ingen av vägarna -------------------------- */
+
+  for (const [metod, vag] of [
+    ["GET", `/v1/cases/${CASE_A}/simulations`],
+    ["POST", `/v1/cases/${CASE_A}/simulations`],
+    ["GET", `/v1/simulations/${simId}`],
+    ["PATCH", `/v1/simulations/${simId}`],
+    ["DELETE", `/v1/simulations/${simId}`],
+    ["POST", `/v1/simulations/${simId}/run`],
+    ["POST", `/v1/simulations/${simId}/cancel`],
+    ["GET", `/v1/simulations/${simId}/results`],
+    ["GET", `/v1/simulation-runs/${kord.body.id}`],
+  ] as const) {
+    const svar = await call(metod, vag, { body: {} });
+    check(`${metod} ${vag.replace(/[0-9a-f-]{36}/g, "{id}")} kräver inloggning`, svar.status === 401, svar.status);
+  }
+
+  /* --- Borttagning ----------------------------------------------------- */
+
+  const bortS = await call("DELETE", `/v1/simulations/${simId}`, { token: tokS });
+  check("simuleringen går att ta bort", bortS.status === 200, bortS.body);
+  const efterBortS = await call("GET", `/v1/simulations/${simId}`, { token: tokS });
+  check("och är då borta", efterBortS.status === 404, efterBortS.status);
+  const foraldralos = await withAnon(async (tx) => {
+    const { rows } = await tx.query(
+      "select count(*)::int as n from public.simulation_runs where simulation_id = $1::uuid",
+      [simId],
+    );
+    return rows[0]?.n ?? -1;
+  });
+  check("körningarna följde med (on delete cascade)", foraldralos === 0, foraldralos);
+}
+
 /* --- 8m4. Telefonverifieringen bevisar innehav av telefonen -------------- */
 
 /*
