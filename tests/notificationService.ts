@@ -333,11 +333,31 @@ check("verifierings-SMS:et ryms i ett segment", codeSms.length <= SMS_SEGMENT_LI
  * Två källor som säger samma sak glider isär om ingen tvingar dem. Den
  * som skriver om texten i den ena ska få rött tills den andra följer med.
  */
+/**
+ * Den GÄLLANDE definitionen av start_phone_verification.
+ *
+ * Filnamnet står inte här, och det är avsiktligt: funktionen har redan
+ * skrivits om en gång (taket per konto och dygn, migration 20260826100000),
+ * och ett prov som pekar på ett filnamn hade då granskat en definition
+ * databasen inte längre använder - grönt, och meningslöst. Sista
+ * migrationen som definierar funktionen är den som gäller.
+ */
+const gallandeVerifieringsSql = (): string => {
+  const katalog = join(process.cwd(), "supabase/migrations");
+  const filer = readdirSync(katalog)
+    .filter((f) => f.endsWith(".sql"))
+    .sort();
+  let senast = "";
+  for (const fil of filer) {
+    const text = readFileSync(join(katalog, fil), "utf8");
+    if (/create or replace function public\.start_phone_verification/.test(text)) senast = text;
+  }
+  return senast;
+};
+
 {
-  const sql = readFileSync(
-    "supabase/migrations/20260822100000_verifieringskoden_fods_i_databasen.sql",
-    "utf8",
-  );
+  const sql = gallandeVerifieringsSql();
+  check("den gällande verifieringsmigrationen hittades", sql.length > 500, sql.length);
   const rad = /v_kod \|\| '([^']*)'\s*\|\| p_ttl_minutes \|\| '([^']*)'/.exec(sql);
   const franSql = rad ? `123456${rad[1]}10${rad[2]}` : "";
   const franKod = verificationSms("123456").replace(

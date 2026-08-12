@@ -20,7 +20,7 @@
 import { isPrivateAddress, fetchWebsite } from "../api/server/website";
 import { klientNyckel } from "../api/server/rateLimit";
 import { loggaFel, maskera, maskeraText } from "../api/server/logg";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 let passed = 0;
@@ -454,19 +454,51 @@ for (const [namn, kod] of [["supabase", supabaseKod], ["aws", awsKod]] as const)
   );
 }
 
-const verifieringSql = readFileSync(
+/**
+ * Den GÄLLANDE definitionen av start_phone_verification.
+ *
+ * Filnamnet står inte här, och det är avsiktligt: funktionen har redan
+ * skrivits om en gång (taket per konto och dygn, migration 20260826100000),
+ * och ett prov som pekar på ett filnamn hade då granskat en definition
+ * databasen inte längre använder - grönt, och meningslöst. Sista
+ * migrationen som definierar funktionen är den som gäller.
+ */
+const gallandeVerifieringsSql = (): string => {
+  const katalog = join(process.cwd(), "supabase/migrations");
+  const filer = readdirSync(katalog)
+    .filter((f) => f.endsWith(".sql"))
+    .sort();
+  let senast = "";
+  for (const fil of filer) {
+    const text = readFileSync(join(katalog, fil), "utf8");
+    if (/create or replace function public\.start_phone_verification/.test(text)) senast = text;
+  }
+  return senast;
+};
+
+const verifieringSql = gallandeVerifieringsSql();
+check("den gällande verifieringsdefinitionen hittades", verifieringSql.length > 500, verifieringSql.length);
+
+/*
+ * De två kontrollerna nedan är påståenden om en HÄNDELSE - att den gamla
+ * signaturen och queue_verification_sms faktiskt togs bort - och den
+ * händelsen ligger i sin migration för alltid. Därför läses den vid namn.
+ * Kontrollerna efter dem gäller hur funktionen ser ut NU, och följer
+ * därför den senaste definitionen.
+ */
+const ursprungsMigrationen = readFileSync(
   join(process.cwd(), "supabase/migrations/20260822100000_verifieringskoden_fods_i_databasen.sql"),
   "utf8",
 );
 check(
   "migrationen DROPPAR den gamla signaturen i stället för att lämna den kvar",
   /drop function if exists public\.start_phone_verification\(text, text, integer\)/.test(
-    verifieringSql,
+    ursprungsMigrationen,
   ),
 );
 check(
   "queue_verification_sms finns inte kvar som egen yta",
-  /drop function if exists public\.queue_verification_sms\(text\)/.test(verifieringSql),
+  /drop function if exists public\.queue_verification_sms\(text\)/.test(ursprungsMigrationen),
 );
 check(
   "koden slumpas med gen_random_bytes, inte med random()",

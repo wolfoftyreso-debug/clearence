@@ -452,6 +452,49 @@ begin
   end;
 end $$;
 
+/* --- Taket per KONTO och dygn -------------------------------------------- */
+
+/*
+ * Nummertaket ovan stoppar den som tjatar på samma nummer. Det stoppar
+ * INTE den som byter nummer mellan varje begäran - och det är den som
+ * kostar pengar. Här prövas att kontot har ett eget tak, och att det inte
+ * går att gå runt genom att rotera mottagare.
+ *
+ * Kontot i avsnittet ovan har redan förbrukat fem av tio.
+ */
+do $$
+declare
+  v_nummer text;
+begin
+  perform set_config('request.jwt.claim.sub', 'a0000000-0000-0000-0000-000000000002', true);
+  perform set_config('app.user_id', 'a0000000-0000-0000-0000-000000000002', true);
+
+  -- Fem nya nummer, ett SMS var: nummertaket är orört för vart och ett,
+  -- men kontots dygnskvot tar slut.
+  for i in 1..5 loop
+    v_nummer := '+4670' || lpad((6000000 + i)::text, 7, '0');
+    perform public.start_phone_verification(v_nummer, 10);
+  end loop;
+
+  begin
+    perform public.start_phone_verification('+46709999911', 10);
+    raise exception 'FAIL  kontotaket gick att gå runt genom att byta nummer';
+  exception when others then
+    if sqlerrm like 'FAIL%' then raise; end if;
+    raise notice 'ok 27b: tio koder per konto och dygn, oavsett hur många nummer';
+  end;
+
+  -- Och det ska vara KONTOTS kvot, inte en global. Ett annat konto som
+  -- inte begärt något ska komma fram.
+  perform set_config('request.jwt.claim.sub', 'a0000000-0000-0000-0000-000000000001', true);
+  perform set_config('app.user_id', 'a0000000-0000-0000-0000-000000000001', true);
+  perform public.start_phone_verification('+46709999912', 10);
+  if not exists (select 1 from public.outbound_sms where recipient = '+46709999912') then
+    raise exception 'FAIL  ett annat konto spärrades av någon annans förbrukning';
+  end if;
+  raise notice 'ok 27c: taket är kontots eget, inte en global spärr';
+end $$;
+
 do $$
 begin
   raise notice 'ALL NOTIFICATION TESTS PASSED';
