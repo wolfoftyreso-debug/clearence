@@ -961,3 +961,21 @@ export interface SimulationRun {
   results?: { outputs: unknown[] } | null;
   spec?: unknown;
 }
+
+/**
+ * En begäran om radering (GDPR art. 17).
+ *
+ * `effectiveAt` är karenstiden: begäran verkställs tidigast då, och kan
+ * återkallas fram till dess. `result` fylls först vid verkställandet och
+ * säger hur många rader som faktiskt rördes per kategori - siffrorna är
+ * det enda som i efterhand kan visa att raderingen gjorde något.
+ */
+export interface ErasureRequestRecord {
+  id: string;
+  requestedAt: string;
+  effectiveAt: string;
+  status: "begard" | "genomford" | "aterkallad";
+  executedAt: string | null;
+  cancelledAt: string | null;
+  result: Record<string, number> | null;
+}

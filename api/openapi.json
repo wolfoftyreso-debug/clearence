@@ -5330,6 +5330,99 @@
           }
         }
       }
+    },
+    "/me/erasure": {
+      "get": {
+        "operationId": "getMyErasureRequest",
+        "summary": "Den egna begäran om radering",
+        "description": "Svarar 200 med null när ingen begäran finns. Radskyddet gör urvalet - anropet kan bara nå det egna kontot.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Begäran om radering, eller null när ingen finns",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/ErasureRequest"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "requestMyErasure",
+        "summary": "Begär radering av det egna kontot",
+        "description": "Verkställs tidigast efter karenstiden på sju dagar. En andra begäran ger tillbaka den befintliga med oförändrad karenstid - att förlänga den vid varje klick hade gjort raderingen omöjlig att nå. Vad som raderas, anonymiseras och behålls står i manifestet på inställningssidan; fakturor och händelselogg behålls med rättslig grund.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Begäran om radering",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErasureRequest"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "cancelMyErasure",
+        "summary": "Återkallar begäran om radering",
+        "description": "Verbet gäller BEGÄRAN, inte kontot: att lägga verkställandet bakom DELETE hade gjort den farligaste operationen i produkten till den lättaste att råka anropa. Går bara så länge begäran inte verkställts.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Begäran om radering",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErasureRequest"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "webhooks": {
@@ -6009,6 +6102,69 @@
               "string",
               "null"
             ]
+          }
+        }
+      },
+      "ErasureRequest": {
+        "type": "object",
+        "description": "En begäran om radering enligt GDPR art. 17. Verkställs tidigast vid effectiveAt och kan återkallas fram till dess.",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "requestedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "effectiveAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Karenstiden. Sju dagar, satt av databasen - inte av klienten."
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "begard",
+              "genomford",
+              "aterkallad"
+            ]
+          },
+          "executedAt": {
+            "oneOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "cancelledAt": {
+            "oneOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "result": {
+            "oneOf": [
+              {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "integer"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Antal berörda rader per kategori. Fylls först vid verkställandet."
           }
         }
       }

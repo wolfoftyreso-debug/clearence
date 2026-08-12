@@ -3289,6 +3289,64 @@ const toProfile = (row: Record<string, unknown>) => ({
   phone: row.phone ?? null,
 });
 
+/* -------------------------------------------------------------------------- */
+/* Den registrerades rättigheter (GDPR art. 16-17)                            */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Radbilden ur erasure_requests. `result` skickas med: den som begärt
+ * radering ska kunna se vad som faktiskt hände, inte bara att det hände.
+ */
+const toErasureRequest = (row: Record<string, unknown>) => ({
+  id: row.id,
+  requestedAt: iso(row.requested_at),
+  effectiveAt: iso(row.effective_at),
+  status: row.status,
+  executedAt: row.executed_at ? iso(row.executed_at) : null,
+  cancelledAt: row.cancelled_at ? iso(row.cancelled_at) : null,
+  result: row.result ?? null,
+});
+
+/*
+ * Ingen where-sats på användaren, av samma skäl som profilen ovan:
+ * radskyddet gör urvalet, och en klient som skickar ett annat konto-id
+ * får ändå bara sitt eget.
+ */
+router.get("/v1/me/erasure", async (req) => {
+  const caller = await authenticate(req);
+  const row = await withUser(caller.userId, async (tx) => {
+    const { rows } = await tx.query(
+      "select * from public.erasure_requests order by requested_at desc limit 1",
+    );
+    return rows[0] ?? null;
+  });
+  return { status: 200, body: row ? toErasureRequest(row) : null };
+});
+
+router.post("/v1/me/erasure", async (req) => {
+  const caller = await authenticate(req);
+  const row = await withUser(caller.userId, async (tx) => {
+    const { rows } = await tx.query("select * from public.request_account_erasure()");
+    return rows[0];
+  });
+  return { status: 200, body: toErasureRequest(row) };
+});
+
+/*
+ * DELETE på begäran, inte på kontot. Verbet gäller resursen i sökvägen -
+ * begäran - och att återkalla den är att ta bort den. Att lägga
+ * verkställandet bakom DELETE hade varit att göra den farligaste
+ * operationen i produkten till den lättaste att råka anropa.
+ */
+router.del("/v1/me/erasure", async (req) => {
+  const caller = await authenticate(req);
+  const row = await withUser(caller.userId, async (tx) => {
+    const { rows } = await tx.query("select * from public.cancel_account_erasure()");
+    return rows[0];
+  });
+  return { status: 200, body: toErasureRequest(row) };
+});
+
 router.get("/v1/profile", async (req) => {
   const caller = await authenticate(req);
   const row = await withUser(caller.userId, async (tx) => {

@@ -7,6 +7,15 @@
  *
  *  1. DATAMINIMERING VID FRITEXT (art. 9): påminnelsen finns, är konkret,
  *     och står faktiskt där fritext skrivs - samtalet och onboardingen.
+ *  2. GALLRINGEN (art. 5.1 e): policyn, brytdatumen och skuggläget.
+ *  3. REGISTERUTDRAGET (art. 15 och 20): formen och innehållet.
+ *  4. RADERING OCH RÄTTELSE (art. 16 och 17): att LÖFTET OCH KODEN SÄGER
+ *     SAMMA SAK. Manifestet i src/lib/erasure.ts lovar vad som raderas,
+ *     anonymiseras och behålls; app.erase_user() i migrationen utför det.
+ *     Avsnitt 4 läser båda och kräver att de täcker varandra - annars kan
+ *     sidan lova en sak och databasen göra en annan, och den skillnaden
+ *     upptäcks först av någon som begärt radering och fått behålla sina
+ *     uppgifter.
  */
 
 import { readFileSync } from "node:fs";
@@ -20,6 +29,12 @@ import {
   retentionSummary,
 } from "../src/lib/retention";
 import { buildMyDataExport } from "../src/lib/dataExport";
+import {
+  ERASURE_MANIFEST,
+  KARENSDAGAR,
+  RECTIFICATION_MAP,
+  erasureSummary,
+} from "../src/lib/erasure";
 
 let passed = 0;
 let failed = 0;
@@ -139,19 +154,109 @@ const tomtUtdrag = buildMyDataExport(
 );
 check("ett tomt utdrag är fortfarande giltigt", tomtUtdrag.data.konto.epost === null && Array.isArray(tomtUtdrag.data.arenden));
 
-// Sidan: exporten laddas ned, rättelse pekar på profilen, radering går via
-// dataskyddskanalen. Och det står rakt ut vad som ändå måste sparas.
+// Sidan: exporten laddas ned lokalt, och rättigheterna har en egen sektion.
 const settings = read("src/pages/DashboardSettings.tsx");
 check("inställningarna har en dataskyddssektion", /DataskyddSection/.test(settings));
 check("registerutdraget laddas ned lokalt", /buildMyDataExport/.test(settings) && /downloadTextFile/.test(settings));
-check("raderingen går via dataskyddskanalen", /amne=dataskydd/.test(settings));
-check(
-  "raderingen är ärlig om vad som måste sparas",
-  /bokföringsunderlag|bokföring/i.test(settings) && /spårbarhet/i.test(settings),
+check("radering och rättelse har en egen sektion", /ErasureSection/.test(settings));
+
+/* --- 4. Radering och rättelse (art. 16-17) -------------------------------- */
+
+const sql = read("supabase/migrations/20260825100000_rattigheterna_radering_och_gallring.sql");
+// Bara kroppen i app.erase_user(): det är DEN som utför löftet. Övriga
+// funktioner i filen rör begäran och gallringen, och ska inte räknas in.
+const eraseKropp = sql.slice(
+  sql.indexOf("create or replace function app.erase_user"),
+  sql.indexOf("comment on function app.erase_user"),
 );
-// Kontaktsidan förväljer Personuppgifter när dataskyddslänken följs.
-const kontakt = read("src/pages/Contact.tsx");
-check("kontaktsidan förväljer personuppgifter från länken", /amne.*dataskydd/.test(kontakt) && /setTopic\("privacy"\)/.test(kontakt));
+check("app.erase_user hittades i migrationen", eraseKropp.length > 1000, String(eraseKropp.length));
+
+// (a) Allt manifestet lovar RÖRA ska SQL:en faktiskt röra.
+const olovade = ERASURE_MANIFEST.filter((p) => p.action !== "behalls")
+  .flatMap((p) => p.tabeller)
+  .filter((t) => !eraseKropp.includes(t));
+check("varje utlovad radering finns i SQL:en", olovade.length === 0, olovade.join(", "));
+
+// (b) Och allt SQL:en rör ska stå i manifestet. Den här riktningen är den
+// viktiga: en tyst radering av en tabell ingen berättat om är exakt vad
+// ett manifest finns för att omöjliggöra.
+const alla = new Set(ERASURE_MANIFEST.flatMap((p) => p.tabeller));
+const rorda = [
+  ...eraseKropp.matchAll(/\b(?:delete\s+from|update)\s+((?:public|auth|app)\.[a-z_]+)/g),
+].map((m) => m[1]);
+const oanmalda = [...new Set(rorda)].filter((t) => !alla.has(t));
+check("ingen tabell rörs utan att stå i manifestet", oanmalda.length === 0, oanmalda.join(", "));
+
+// (c) Det som BEHÅLLS får inte raderas, och får bara ändras om posten
+// uttryckligen säger på vilket sätt.
+const behallna = ERASURE_MANIFEST.filter((p) => p.action === "behalls");
+const raderade = behallna.flatMap((p) =>
+  p.tabeller.filter((t) => new RegExp(`delete\\s+from\\s+${t}\\b`).test(eraseKropp)),
+);
+check("inget som ska behållas raderas", raderade.length === 0, raderade.join(", "));
+const andrade = behallna
+  .filter((p) => !p.andring)
+  .flatMap((p) => p.tabeller.filter((t) => new RegExp(`update\\s+${t}\\b`).test(eraseKropp)));
+check("inget som ska stå oförändrat ändras", andrade.length === 0, andrade.join(", "));
+
+// (d) Varje undantag bär sin rättsliga grund. Ett undantag utan grund är
+// inte ett undantag, det är godtycke.
+const utanGrund = behallna.filter((p) => !p.grund || p.grund.length < 30).map((p) => p.id);
+check("varje undantag har en rättslig grund", utanGrund.length === 0, utanGrund.join(", "));
+check(
+  "bokföringsundantaget hänvisar till lagen",
+  behallna.some((p) => /[Bb]okföringslagen/.test(p.grund ?? "")),
+);
+check(
+  "loggen och underskrifterna hänvisar till art. 17.3",
+  behallna.filter((p) => /17\.3/.test(p.grund ?? "")).length >= 2,
+);
+
+// (e) Karenstiden i koden och i databasen är samma tid.
+check(
+  "karenstiden är densamma i koden och i SQL:en",
+  new RegExp(`interval '${KARENSDAGAR} days'`).test(sql),
+  String(KARENSDAGAR),
+);
+
+// (f) Loggen ska inte gå att städa i efterhand - masken sätts vid skrivning.
+check("händelseloggen maskeras vid skrivning", /maska_personuppgifter/.test(sql));
+check(
+  "raderingen försöker inte ändra i händelseloggen",
+  !/update\s+public\.audit_events/.test(eraseKropp),
+);
+
+// (g) Kontoraden får inte raderas: kaskaden hade tagit delade ärenden.
+check(
+  "kontoraden raderas aldrig",
+  !/delete\s+from\s+auth\.users/.test(eraseKropp) && /update auth\.users/.test(eraseKropp),
+);
+
+// (h) Rättelsekartan: varje uppgift har antingen en plats eller ett skäl
+// OCH en väg. "Går inte att ändra" utan förklaring är inget svar.
+const otydliga = RECTIFICATION_MAP.filter(
+  (r) => !r.plats && (!r.varfor || !r.vag),
+).map((r) => r.uppgift);
+check("varje uppgift har en plats eller ett skäl och en väg", otydliga.length === 0, otydliga.join(", "));
+check("rättelsekartan täcker de självbetjänade fälten", RECTIFICATION_MAP.filter((r) => r.plats).length >= 3);
+check("och är ärlig om det som inte går", RECTIFICATION_MAP.filter((r) => !r.plats).length >= 2);
+
+// (i) Sammanfattningen ska nämna BÅDE det som försvinner och det som blir
+// kvar. "Vi raderar dina uppgifter" utan undantagen är osant.
+const sammanfattning = erasureSummary();
+check("sammanfattningen räknar både bort och kvar", /raderas eller anonymiseras/.test(sammanfattning) && /behålls/.test(sammanfattning));
+
+// (j) Vägen in för en användare rör bara det egna kontot. erase_user tar
+// ett konto-id och kör som ägare - den får aldrig nås av en inloggad.
+check(
+  "arbetarfunktionerna är stängda för klientrollerna",
+  /revoke all on function app\.erase_user\(uuid\) from public, anon, authenticated;/.test(sql) &&
+    /revoke all on function app\.gallra\(text, timestamptz, boolean\) from public, anon, authenticated;/.test(sql),
+);
+check(
+  "men den egna begäran är öppen för den inloggade",
+  /grant execute on function public\.request_account_erasure\(\) to authenticated;/.test(sql),
+);
 
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

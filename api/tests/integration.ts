@@ -2674,6 +2674,59 @@ check("Agnes kan logga in igen inför aviseringsproven", typeof agnesSession ===
   check("kvittolistan svarar", kvitton.status === 200 && Array.isArray(kvitton.body.deliveries), kvitton.body);
 }
 
+/* --- 8m10. Den registrerades rättigheter över HTTP ---------------------- */
+
+/*
+ * Radering är den enda operationen i produkten som förstör något med
+ * avsikt. Den ska därför prövas som den faktiskt nås: som `authenticated`
+ * över HTTP, med en riktig session - inte som tabellägare i ett SQL-prov.
+ * Själva raderingens innehåll prövas i supabase/tests/radering.sql; här
+ * prövas vägen dit, karenstiden och att ingen kan röra någon annans konto.
+ */
+{
+  const innan = await call("GET", "/v1/me/erasure", { token: bertilToken });
+  check("utan begäran svarar API:et null, inte 404", innan.status === 200 && innan.body === null, innan.body);
+
+  const begard = await call("POST", "/v1/me/erasure", { token: bertilToken });
+  const b = (begard.body ?? {}) as Record<string, unknown>;
+  check("begäran registreras", begard.status === 200 && b.status === "begard", begard.body);
+  check("karenstiden ligger framåt i tiden", new Date(String(b.effectiveAt)).getTime() > Date.now(), b.effectiveAt);
+  check("och ingenting är verkställt ännu", b.executedAt === null && b.result === null, begard.body);
+
+  // Ett andra klick får inte flytta karenstiden - då hade raderingen aldrig
+  // gått att nå för den som är osäker och trycker två gånger.
+  const igen = await call("POST", "/v1/me/erasure", { token: bertilToken });
+  check(
+    "en andra begäran ger samma rad och samma karenstid",
+    (igen.body ?? {}).id === b.id && (igen.body ?? {}).effectiveAt === b.effectiveAt,
+    igen.body,
+  );
+
+  // Agnes ska varken se eller kunna röra Bertils begäran.
+  const agnesSer = await call("GET", "/v1/me/erasure", { token: agnesSession });
+  check("en annan användare ser inte begäran", agnesSer.body === null, agnesSer.body);
+  const agnesAngrar = await call("DELETE", "/v1/me/erasure", { token: agnesSession });
+  check("och kan inte återkalla den", agnesAngrar.status >= 400, agnesAngrar.status);
+  const bertilKvar = await call("GET", "/v1/me/erasure", { token: bertilToken });
+  check("Bertils begäran står kvar orörd", (bertilKvar.body ?? {}).status === "begard", bertilKvar.body);
+
+  // Kontot lever tills karenstiden gått ut. Ingenting får ha hänt.
+  const loggarIn = await call("GET", "/v1/profile", { token: bertilToken });
+  check("kontot fungerar under karenstiden", loggarIn.status === 200, loggarIn.status);
+
+  const angrat = await call("DELETE", "/v1/me/erasure", { token: bertilToken });
+  check("den egna begäran går att återkalla", angrat.status === 200 && (angrat.body ?? {}).status === "aterkallad", angrat.body);
+
+  const efter = await call("DELETE", "/v1/me/erasure", { token: bertilToken });
+  check("men bara en gång", efter.status >= 400, efter.status);
+
+  // Utan session ska ingenting av detta gå.
+  for (const metod of ["GET", "POST", "DELETE"] as const) {
+    const utan = await call(metod, "/v1/me/erasure", {});
+    check(`${metod} /v1/me/erasure kräver inloggning`, utan.status === 401, utan.status);
+  }
+}
+
 /* --- 8n. Databasrollen prövas mot den RIKTIGA katalogen ----------------- */
 
 /*

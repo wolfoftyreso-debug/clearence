@@ -27,3 +27,9 @@ $PSQL -d "$DB" -f supabase/tests/usageInvoicing.sql 2>&1 | grep -E "^(NOTICE|ERR
 $PSQL -d "$DB" -f supabase/tests/invoiceNumbering.sql 2>&1 | grep -E "^(NOTICE|ERROR|psql:)|ALL INVOICE NUMBERING" | sed 's/^NOTICE:  //'
 
 $PSQL -d "$DB" -f supabase/tests/notifications.sql 2>&1 | grep -E "^(NOTICE|ERROR|psql:)|ALL NOTIFICATION" | sed 's/^NOTICE:  //'
+
+# Raderingen (art. 17) och den skarpa gallringen (art. 5.1 e). Sveptestet
+# letar efter personuppgifter i varje textkolumn i varje tabell - det är
+# den enda kontroll som inte bygger på att den som skrev den kom ihåg alla
+# tabeller.
+$PSQL -d "$DB" -f supabase/tests/radering.sql 2>&1 | grep -E "^(NOTICE|ERROR|psql:)|ALL ERASURE" | sed 's/^NOTICE:  //'

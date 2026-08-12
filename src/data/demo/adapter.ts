@@ -64,6 +64,7 @@ import type {
   NotificationDeliveryRecord,
   ApiKeyRecord,
   DocumentSignature,
+  ErasureRequestRecord,
   AccountBillingRecord,
   AuditEventRecord,
   ApplicationForReview,
@@ -104,6 +105,7 @@ import { accountClosedEmail, caseInvitationEmail, invoiceEmail, receiptEmail } f
 import { COMPANY } from "@/lib/company";
 import { CASE_ROLE_DESCRIPTIONS, CASE_ROLE_LABELS, type CaseRole } from "@/lib/caseRoles";
 import { DEFAULT_RETENTION, mergeRetentionPolicy, type RetentionOverride } from "@/lib/retention";
+import { KARENSDAGAR } from "@/lib/erasure";
 
 const STORAGE_KEY = "clearance-demo-state";
 
@@ -186,6 +188,8 @@ interface DemoState {
   companyPlanEnterpriseExVatSek: number | null;
   /** Gallringspolicyns drift-override per kategori - driftparameter. */
   retentionOverrides: RetentionOverride[];
+  /** Begäran om radering (GDPR art. 17). Registreras, verkställs aldrig här. */
+  erasureRequest: ErasureRequestRecord | null;
 }
 
 const emptyState = (): DemoState => ({
@@ -230,6 +234,7 @@ const emptyState = (): DemoState => ({
   companyPlanBusinessExVatSek: null,
   companyPlanEnterpriseExVatSek: null,
   retentionOverrides: [],
+  erasureRequest: null,
 });
 
 /** Files cannot go in localStorage, so they live for the session only. */
@@ -2752,6 +2757,50 @@ export const demoAdapter: DataPort = {
         doc.reviewedAt = null;
       }
       save();
+    },
+  },
+
+  /**
+   * Radering i demoläget.
+   *
+   * Demon har ingen databas och därmed ingen transaktion att radera i.
+   * Att låtsas radera - visa "genomförd" och sedan ha kvar allt - hade
+   * varit precis den sortens fasad den här produkten inte ska ha. Begäran
+   * registreras därför på riktigt i demotillståndet, med karenstiden, och
+   * verkställandet sker aldrig här: det är arbetarens jobb, och demon har
+   * ingen arbetare. Texten i gränssnittet säger samma sak.
+   */
+  privacy: {
+    async getErasureRequest() {
+      return state.erasureRequest ? { ...state.erasureRequest } : null;
+    },
+    async requestErasure() {
+      if (state.erasureRequest?.status === "begard") return { ...state.erasureRequest };
+      const nu = new Date();
+      const effektiv = new Date(nu.getTime() + KARENSDAGAR * 24 * 60 * 60 * 1000);
+      state.erasureRequest = {
+        id: `erasure-${nu.getTime()}`,
+        requestedAt: nu.toISOString(),
+        effectiveAt: effektiv.toISOString(),
+        status: "begard",
+        executedAt: null,
+        cancelledAt: null,
+        result: null,
+      };
+      save();
+      return { ...state.erasureRequest };
+    },
+    async cancelErasure() {
+      if (!state.erasureRequest || state.erasureRequest.status !== "begard") {
+        throw new Error("Det finns ingen begäran att återkalla.");
+      }
+      state.erasureRequest = {
+        ...state.erasureRequest,
+        status: "aterkallad",
+        cancelledAt: new Date().toISOString(),
+      };
+      save();
+      return { ...state.erasureRequest };
     },
   },
 

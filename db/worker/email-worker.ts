@@ -5,7 +5,7 @@
  *   node db/dist/email-worker.cjs --remind   per timme: köa påminnelser
  *   node db/dist/email-worker.cjs --close    per dygn: stäng + köa besked
  *   node db/dist/email-worker.cjs --credit   per dygn: kreditbevakning
- *   node db/dist/email-worker.cjs --gallra   per dygn: gallring (skuggläge)
+ *   node db/dist/email-worker.cjs --gallra   per dygn: gallring + raderingar
  *   node db/dist/email-worker.cjs --invoice-referrals   1:a varje månad
  *   node db/dist/email-worker.cjs --invoice-usage       1:a varje månad
  *
@@ -42,6 +42,7 @@ import { COMPANY, missingInvoiceFields } from "../../src/lib/company";
 import {
   DEFAULT_RETENTION,
   mergeRetentionPolicy,
+  retentionCutoff,
   retentionSummary,
   type RetentionOverride,
 } from "../../src/lib/retention";
@@ -167,15 +168,17 @@ const runCreditChecks = async (): Promise<void> => {
  *
  * Policyn - en tid och en åtgärd per kategori - bor i src/lib/retention.ts
  * (samma byggare som testas), och drift kan lägga en override i app_settings
- * (nyckeln retention_policy). Här läses den, slås ihop, och en plan loggas.
+ * (nyckeln retention_policy). Här läses den, slås ihop, och körs.
  *
- * SKUGGLÄGE ÄR MEDVETET. Precis som skuggdebiteringen registreras vad som
- * SKULLE gallras utan att något raderas, tills en människa slår på en
- * kategori (aktiv=true). Den skarpa, destruktiva gallringen per kategori
- * kopplas in när respektive DB-funktion är skriven och prövad i
- * db/tests-sviten - att radera fel, eller det spårbarheten kräver, är värre
- * än att spara en månad för länge. Den här körningen rör därför ingen rad
- * ännu; den gör mekaniken och planen synlig och granskningsbar först.
+ * SKUGGLÄGET FINNS KVAR, MEN ÄR INTE LÄNGRE EN GISSNING. Varje kategori
+ * anropar app.gallra() - den påslagna skarpt, den avstängda som torrkörning.
+ * Samma fråga i båda fallen, så siffran skuggläget visar är den siffra som
+ * kommer att gallras den dag någon slår på kategorin. Förut loggades bara
+ * planen; en plan utan siffra går inte att granska.
+ *
+ * Att slå på en kategori är fortfarande ett medvetet beslut av en människa
+ * i driftpanelen, inte en default: att radera fel, eller det spårbarheten
+ * kräver, är värre än att spara en månad för länge.
  */
 const runGallring = async (): Promise<void> => {
   const { rows } = await db.query(
@@ -183,18 +186,56 @@ const runGallring = async (): Promise<void> => {
   );
   const override = ((rows[0]?.value as { overrides?: RetentionOverride[] } | undefined)?.overrides) ?? [];
   const policy = mergeRetentionPolicy(DEFAULT_RETENTION, override);
+  const nu = new Date();
 
-  console.log(`gallring (skuggläge): ${retentionSummary(policy)}`);
+  console.log(`gallring: ${retentionSummary(policy)}`);
   for (const cat of policy) {
     if (cat.action === "behall") {
       console.log(`  ${cat.id}: behålls för spårbarhet, gallras inte på tid.`);
       continue;
     }
-    const nar = cat.months === null ? "ingen tidsgräns" : `efter ${cat.months} mån`;
-    const lage = cat.aktiv
-      ? "AKTIV – skarp gallring kopplas in via DB-funktion (ännu ej driftsatt)"
-      : "skuggläge – räknas, gallras inte";
-    console.log(`  ${cat.id}: ${cat.action} ${nar} · ${lage}`);
+    const brytdatum = retentionCutoff(cat, nu);
+    const torrkorning = !cat.aktiv;
+    try {
+      const { rows: res } = await db.query(
+        "select app.gallra($1, $2::timestamptz, $3) as antal",
+        [cat.id, brytdatum, torrkorning],
+      );
+      const antal = Number(res[0]?.antal ?? 0);
+      const nar = cat.months === null ? "ingen tidsgräns" : `efter ${cat.months} mån`;
+      console.log(
+        torrkorning
+          ? `  ${cat.id}: skuggläge - ${antal} rad(er) SKULLE ${cat.action}s ${nar}`
+          : `  ${cat.id}: ${antal} rad(er) ${cat.action}de ${nar}`,
+      );
+    } catch (error) {
+      // En kategori som fallerar ska inte stoppa de andra - men den ska
+      // synas. Tyst överhoppning är hur en gallring slutar gallra.
+      console.error(`  ${cat.id}: MISSLYCKADES - ${(error as Error).message}`);
+      process.exitCode = 1;
+    }
+  }
+};
+
+/**
+ * RADERINGARNA (GDPR art. 17). Körs samma dygnsrytm som gallringen.
+ *
+ * Karenstiden och hela utförandet bor i databasen; arbetaren gör ett anrop
+ * och skriver ut vad som hände. Att lägga logiken här hade betytt att en
+ * halvvägs krashad körning lämnade ett halvraderat konto - i databasen är
+ * det en transaktion.
+ */
+const runRaderingar = async (): Promise<void> => {
+  const { rows } = await db.query("select app.execute_due_erasures() as resultat");
+  const resultat = (rows[0]?.resultat ?? {}) as { utforda?: number; detaljer?: unknown[] };
+  const antal = Number(resultat.utforda ?? 0);
+  if (antal === 0) {
+    console.log("radering: ingen begäran har passerat sin karenstid.");
+    return;
+  }
+  console.log(`radering: ${antal} konto(n) raderade.`);
+  for (const rad of resultat.detaljer ?? []) {
+    console.log(`  ${JSON.stringify(rad)}`);
   }
 };
 
@@ -324,6 +365,7 @@ const main = async () => {
 
   if (process.argv.includes("--gallra")) {
     await runGallring();
+    await runRaderingar();
     await db.end();
     return;
   }

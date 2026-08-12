@@ -8,6 +8,7 @@ import type {
   AuditEventRecord,
   AuthUser,
   CaseDecisionRecord,
+  ErasureRequestRecord,
   PremiseWatch,
   CaseExitReason,
   CaseInvitationRecord,
@@ -747,6 +748,32 @@ export interface MembersPort {
   acceptInvitation(invitationId: string): Promise<string>;
 }
 
+/**
+ * DEN REGISTRERADES RÄTTIGHETER (GDPR kap. III).
+ *
+ * Utdraget (art. 15 och 20) byggs i klienten ur de portar som redan finns
+ * - se src/lib/dataExport.ts - och behöver därför ingen egen metod här.
+ * Radering är en annan sak: den kan inte göras av en klient som raderar
+ * rad för rad, för då blir resultatet olika beroende på var den avbryts.
+ * Den bor i EN transaktion i databasen, och det här är vägen dit.
+ *
+ * Rättelse (art. 16) sker via profile och cases - RECTIFICATION_MAP i
+ * src/lib/erasure.ts säger var varje uppgift ändras, och vilka som inte
+ * går att ändra själv.
+ */
+export interface PrivacyPort {
+  /** Den öppna eller senast avslutade begäran, eller null. */
+  getErasureRequest(): Promise<ErasureRequestRecord | null>;
+  /**
+   * Begär radering av det egna kontot. Verkställs tidigast efter
+   * karenstiden. En andra begäran ger tillbaka den befintliga - att
+   * förlänga karenstiden vid varje klick hade gjort raderingen omöjlig.
+   */
+  requestErasure(): Promise<ErasureRequestRecord>;
+  /** Återkallar begäran. Går bara innan den verkställts. */
+  cancelErasure(): Promise<ErasureRequestRecord>;
+}
+
 export interface DataPort {
   auth: AuthPort;
   contact: ContactPort;
@@ -773,5 +800,6 @@ export interface DataPort {
   documents: DocumentsPort;
   financial: FinancialPort;
   simulations: SimulationsPort;
+  privacy: PrivacyPort;
   companyLookup: CompanyLookupPort;
 }

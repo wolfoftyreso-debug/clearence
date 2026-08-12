@@ -822,6 +822,39 @@ export type Database = {
         }
         Relationships: []
       }
+      erasure_requests: {
+        Row: {
+          id: string
+          user_id: string
+          requested_at: string
+          effective_at: string
+          status: string
+          executed_at: string | null
+          cancelled_at: string | null
+          result: Json | null
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          requested_at?: string
+          effective_at: string
+          status?: string
+          executed_at?: string | null
+          cancelled_at?: string | null
+          result?: Json | null
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          requested_at?: string
+          effective_at?: string
+          status?: string
+          executed_at?: string | null
+          cancelled_at?: string | null
+          result?: Json | null
+        }
+        Relationships: []
+      }
       simulations: {
         Row: {
           id: string
@@ -1944,6 +1977,14 @@ export type Database = {
       confirm_phone_verification: {
         Args: { p_code: string }
         Returns: boolean
+      }
+      request_account_erasure: {
+        Args: Record<string, never>
+        Returns: Database["public"]["Tables"]["erasure_requests"]["Row"]
+      }
+      cancel_account_erasure: {
+        Args: Record<string, never>
+        Returns: Database["public"]["Tables"]["erasure_requests"]["Row"]
       }
       remove_phone: {
         Args: Record<string, never>

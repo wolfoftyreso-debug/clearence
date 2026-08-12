@@ -36,6 +36,7 @@ import type {
   CaseTask,
   ContactMessageRecord,
   CustomerInvoiceRecord,
+  ErasureRequestRecord,
   CustomerOverview,
   OutboundEmailRecord,
   DocumentRecord,
@@ -386,6 +387,17 @@ const toPayment = (row: {
 });
 
 /** Raden -> SimulationRecord. Delas av list, get, create och update. */
+/** Radbilden ur erasure_requests, i produktens språk. */
+const toErasureRequest = (row: Record<string, unknown>): ErasureRequestRecord => ({
+  id: String(row.id),
+  requestedAt: String(row.requested_at),
+  effectiveAt: String(row.effective_at),
+  status: row.status as ErasureRequestRecord["status"],
+  executedAt: row.executed_at ? String(row.executed_at) : null,
+  cancelledAt: row.cancelled_at ? String(row.cancelled_at) : null,
+  result: (row.result as Record<string, number> | null) ?? null,
+});
+
 const toSimulation = (row: Record<string, unknown>): SimulationRecord => ({
   id: row.id as string,
   caseId: row.case_id as string,
@@ -2413,6 +2425,36 @@ export const supabaseAdapter: DataPort = {
    * Det finns ingen kö: allt körs direkt, och en riktigt tung körning
    * belastar då webbläsaren i stället för att köas.
    */
+  /**
+   * Radering via bryggan.
+   *
+   * Allt ligger i databasfunktionerna, och det är avsiktligt: en klient som
+   * raderar tabell för tabell lämnar halvvägs-tillstånd så fort den tappar
+   * nätet. Här finns bara anropen.
+   */
+  privacy: {
+    async getErasureRequest() {
+      const { data, error } = await supabase
+        .from("erasure_requests")
+        .select("*")
+        .order("requested_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (error) throw error;
+      return data ? toErasureRequest(data) : null;
+    },
+    async requestErasure() {
+      const { data, error } = await supabase.rpc("request_account_erasure");
+      if (error) throw error;
+      return toErasureRequest(data);
+    },
+    async cancelErasure() {
+      const { data, error } = await supabase.rpc("cancel_account_erasure");
+      if (error) throw error;
+      return toErasureRequest(data);
+    },
+  },
+
   simulations: {
     async listByCase(caseId) {
       const { data, error } = await supabase

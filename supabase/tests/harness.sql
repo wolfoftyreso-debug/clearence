@@ -32,7 +32,28 @@ create table if not exists auth.users (
   email text unique,
   -- Present only so the shared fixture in rls.sql loads under both this shim
   -- and the self-hosted schema in db/bootstrap.sql.
-  password_hash text
+  password_hash text,
+  -- Raderingen (migration 20260825100000) stänger kontot och stämplar det i
+  -- stället för att radera raden. Kolumnerna finns här av samma skäl som
+  -- password_hash: skalet ska bära den yta migrationerna faktiskt rör,
+  -- annars blir en funktion grön självhostat och röd här - eller tvärtom.
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  disabled_at timestamptz
+);
+
+-- Supabase äger sessionerna själv; självhostat är de en egen tabell som
+-- raderingen tömmer. Skalet behöver den för att samma funktion ska gå att
+-- pröva i båda miljöerna.
+create table if not exists auth.sessions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users (id) on delete cascade,
+  token_hash text not null unique,
+  issued_at timestamptz not null default now(),
+  expires_at timestamptz not null default now() + interval '7 days',
+  revoked_at timestamptz,
+  user_agent text,
+  ip inet
 );
 
 -- Reads the signed-in user the same way Supabase does: from a request-scoped

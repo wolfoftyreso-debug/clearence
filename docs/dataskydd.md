@@ -41,21 +41,27 @@ Särskilda kategorier (art. 9) samlas inte in avsiktligt; fritextfält kan dock 
 - **Regelaktualitet i samtalet:** modellen får aldrig påstå en specifik frist, ett belopp eller ett gränsvärde som säkert gällande, utan hänvisar till primärkälla eller en människa. (`api/server/anthropic.ts`, vaktat i `tests/anthropic.ts`.)
 
 ## 6. Lagring & gallring — policy satt i kod
-Gallringspolicyn är **satt**, inte längre bara ett förslag: en tid och en åtgärd per kategori i `src/lib/retention.ts`, med tiderna som **driftparametrar** (app_settings, nyckeln `retention_policy`) och åtgärden (radera / anonymisera / behåll) medveten per kategori. Driftpanelen visar policyn ärligt (RetentionSection), och workern kör den via `--gallra`. Vaktat i `tests/dataskydd.ts`.
-- **Skuggläge som default:** gallringen räknar vad som skulle tas bort men raderar inget förrän en kategori aktiveras medvetet — samma försiktighet som skuggdebiteringen. Bara hastighetsgränsens sekundfärska teknikrader gallras skarpt från start.
+Gallringspolicyn är **satt och utförd**: en tid och en åtgärd per kategori i `src/lib/retention.ts`, med tiderna som **driftparametrar** (app_settings, nyckeln `retention_policy`) och åtgärden (radera / anonymisera / behåll) medveten per kategori. Utförandet ligger i `app.gallra(kategori, brytdatum, torrkörning)` (migration `20260825100000`), en gren per kategori, stängd för klientrollerna och prövad i `supabase/tests/radering.sql` i båda databasmiljöerna. Driftpanelen visar policyn ärligt (RetentionSection), och workern kör den via `--gallra`.
+- **Skuggläge som default:** en kategori som inte är påslagen körs som **torrkörning** — samma fråga, raderna räknas, ingenting ändras. Skuggsiffran är därför den siffra som faktiskt kommer att gallras den dag kategorin slås på, och det prövas: provet kräver att torrkörningen och den skarpa körningen ger samma tal. Bara hastighetsgränsens sekundfärska teknikrader gallras skarpt från start.
 - Aktiva ärenden: bevaras under uppdraget.
-- Avslutade ärenden: kontaktuppgifter anonymiseras efter satt tid (standard 24 mån, driftparameter). **[ÖPPET: DBA bekräftar tid mot bokförings-/preskriptionskrav och aktiverar kategorin.]**
-- Samtalsloggar/journal: anonymiseras i sedan länge avslutade ärenden (fritexten bort, posten/tidslinjen kvar). **[ÖPPET: DBA aktiverar och skriver den per-kategori DB-funktion som utför raderingen, prövad i db/tests.]**
+- Avslutade ärenden: kontaktuppgifter anonymiseras efter satt tid (standard 24 mån, driftparameter). **[ÖPPET: DBA bekräftar tid mot bokförings-/preskriptionskrav och aktiverar kategorin.]** Funktionen finns och är prövad; det som återstår är beslutet om tiden.
+- Samtalsloggar/journal: anonymiseras i sedan länge avslutade ärenden (fritexten bort, posten/tidslinjen kvar). **[ÖPPET: DBA aktiverar kategorin.]**
 - Händelseloggen: **behålls** för spårbarhet, gallras inte på tid (medvetet val i policyn).
 - Modell-leverantör: **ZDR** så inget innehåll lagras hos underbiträdet. **[ÖPPET: aktivera på kontonivå.]**
 
 ## 7. Den registrerades rättigheter — byggt i produkten
-En dataskyddssektion under Inställningar (`src/pages/DashboardSettings.tsx`) ger den registrerade tre raka vägar, vaktade i `tests/dataskydd.ts`:
+En dataskyddssektion under Inställningar (`src/pages/DashboardSettings.tsx`, `src/components/settings/ErasureSection.tsx`) ger den registrerade tre raka vägar, vaktade i `tests/dataskydd.ts`:
 - **Registerutdrag & dataportabilitet (art. 15, 20):** "Ladda ner mina uppgifter" bygger en maskinläsbar JSON lokalt i webbläsaren ur samma läsvägar appen använder (`src/lib/dataExport.ts`).
-- **Rättelse (art. 16):** namn och telefon i profilen; ärendefakta i ärendet.
-- **Radering (art. 17):** formell begäran via dataskyddskanalen (kontakt, ämne Personuppgifter), med rakt besked om vad som ändå måste sparas (fakturor/bokföring, händelseloggens spårbarhet) och vad som gallras enligt policyn.
+- **Rättelse (art. 16):** `RECTIFICATION_MAP` i `src/lib/erasure.ts` säger för varje uppgift var den ändras — och för dem som inte går att ändra själv (e-postadressen, händelseloggen, en bokförd faktura) både **varför** och **vilken väg** som finns i stället. Provet kräver att varje post har antingen en plats eller ett skäl och en väg.
+- **Radering (art. 17):** självbetjäning, inte en kontaktblankett. `request_account_erasure()` registrerar begäran med sju dagars karenstid, `cancel_account_erasure()` tar tillbaka den, och `app.execute_due_erasures()` verkställer via `app.erase_user()` i **en transaktion** — allt i migration `20260825100000`, exponerat som `GET/POST/DELETE /v1/me/erasure`.
 
-**[ÖPPET: fastställ svarstid (en månad enligt art. 12.3), utpekad ansvarig och en rutin för identitetskontroll av den som begär utdrag/radering.]**
+**Manifestet är löftet, i kod.** `ERASURE_MANIFEST` i `src/lib/erasure.ts` säger post för post vad som raderas, anonymiseras och behålls, med rättslig grund för varje undantag (bokföringslagen 7 kap. 2 § för fakturor; art. 17.3 e för händelseloggen och underskrifterna). `tests/dataskydd.ts` läser både manifestet och SQL:en och kräver att de täcker varandra i **båda riktningarna** — ingen utlovad radering saknas i koden, och ingen tabell rörs utan att stå i manifestet.
+
+**Två arkitekturbeslut värda att känna till:**
+- **Kontoraden raderas aldrig.** `cases.user_id` har `on delete cascade`; en borttagen rad hade tagit med sig delade ärenden och därmed rekonstruktörens underlag mitt i ett pågående ärende. E-post och lösenord byts mot en död platshållare (`@borttaget.invalid`) och kontot stängs. Ett ärende där ingen annan har behörighet raderas däremot i sin helhet.
+- **Händelseloggen städas inte i efterhand — den maskeras vid skrivning.** Revisionstriggern lade en ögonblicksbild av hela den ändrade raden i `before`/`after`, och identifikatorer följde med; en radering loggade dessutom sin egen före-bild och skrev tillbaka adressen den nyss tagit bort. Loggen är append-only med en trigger som vägrar UPDATE för **varje** roll inklusive ägaren, och den garantin lämnades orörd. I stället maskerar `app.maska_personuppgifter()` kända identifikatorfält innan de skrivs. Rader skrivna före migrationen skrivs inte om — i en miljö som redan har sådana rader är det en kvarvarande brist och ska hanteras som en.
+
+**[ÖPPET: fastställ svarstid (en månad enligt art. 12.3), utpekad ansvarig och en rutin för identitetskontroll av den som begär utdrag. För radering sker identitetskontrollen genom inloggningen — begäran kan bara göras för det egna kontot.]**
 
 ## 8. Öppna punkter före deploy (sammanfattning)
 
@@ -63,10 +69,11 @@ En dataskyddssektion under Inställningar (`src/pages/DashboardSettings.tsx`) ge
 1. Signera DPA med Anthropic, Google, AWS, SMS- och kreditupplysningsleverantör.
 2. Bekräfta **EU-dataregion** för varje underbiträde; aktivera **ZDR** hos modell-leverantören.
 3. Genomför och dokumentera **DPIA**.
-4. Rättighetsprocessen: fastställ svarstid, ansvarig och identitetskontroll (rutinen kring den byggda funktionen i §7).
-5. Gallringen: DBA bekräftar tiderna och aktiverar kategorierna, och skriver+prövar den per-kategori DB-funktion som utför anonymiseringen/raderingen (§6).
+4. Rättighetsprocessen: fastställ svarstid och ansvarig för utdragsbegäran som kommer via annan kanal än inloggningen (§7).
+5. Gallringen: DBA bekräftar tiderna och **aktiverar** kategorierna. Funktionen som utför dem finns, är stängd för klientrollerna och prövad i båda databasmiljöerna (§6).
 
 **Byggt i koden i den här omgången (se `docs/deploy-compliance.md`):**
-- Gallringspolicy som driftparameter + skuggläges-worker (§6).
-- Registerutdrag, dataportabilitet, rättelse- och raderingsvägar (§7).
+- Gallringspolicy som driftparameter + `app.gallra()` med torrkörning som skuggläge (§6).
+- Registerutdrag, dataportabilitet, rättelsekarta och självbetjänad radering med karenstid, manifest och rättslig grund per undantag (§7).
+- Maskering av identifikatorer på väg in i den append-only händelseloggen (§7).
 - Dataminimeringspåminnelse vid fritext och regelaktualitet i samtalet (§5).

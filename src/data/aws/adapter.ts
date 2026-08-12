@@ -38,6 +38,7 @@ import type {
   ConversationRecord,
   CustomerInvoiceRecord,
   CustomerOverview,
+  ErasureRequestRecord,
   DocumentRecord,
   InvitationPeek,
   InvoiceRecord,
@@ -163,6 +164,9 @@ export const MIGRATED_PORTS = [
   "kbr.getLatestByCase",
   "financial.getLatestSnapshot",
   "financial.importSie",
+  "privacy.getErasureRequest",
+  "privacy.requestErasure",
+  "privacy.cancelErasure",
   "simulations.listByCase",
   "simulations.get",
   "simulations.create",
@@ -814,6 +818,25 @@ const financial = {
  * köas till arbetaren, och `run` returnerar då status "queued". Att i
  * stället vänta in svaret hade bundit en HTTP-förbindelse i minuter.
  */
+/**
+ * Den registrerades rättigheter mot det egna API:et.
+ *
+ * Tre anrop, ingen logik. Att radera från klienten hade betytt ett halvt
+ * raderat konto så fort nätet tappar - hela arbetet sker i en transaktion
+ * i databasen, och API:et är bara vägen dit.
+ */
+const privacy = {
+  async getErasureRequest(): Promise<ErasureRequestRecord | null> {
+    return apiFetch<ErasureRequestRecord | null>("/v1/me/erasure");
+  },
+  async requestErasure(): Promise<ErasureRequestRecord> {
+    return apiFetch<ErasureRequestRecord>("/v1/me/erasure", { method: "POST" });
+  },
+  async cancelErasure(): Promise<ErasureRequestRecord> {
+    return apiFetch<ErasureRequestRecord>("/v1/me/erasure", { method: "DELETE" });
+  },
+};
+
 const simulations = {
   async listByCase(caseId: string): Promise<SimulationRecord[]> {
     const res = await apiFetch<{ simulations: SimulationRecord[] }>(`/v1/cases/${caseId}/simulations`);
@@ -993,6 +1016,7 @@ export const awsAdapter: DataPort = {
   invoices: invoices as DataPort["invoices"],
   financial: financial as DataPort["financial"],
   simulations: simulations as DataPort["simulations"],
+  privacy: privacy as DataPort["privacy"],
   documents: documents as DataPort["documents"],
   messages: messages as DataPort["messages"],
   notificationSettings: notificationSettings as DataPort["notificationSettings"],
