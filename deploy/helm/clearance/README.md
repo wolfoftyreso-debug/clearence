@@ -38,12 +38,26 @@ efter migrationerna) tätar det:
 - **`app_worker`** — betrodd batch-roll med **BYPASSRLS**. Den arbetar per sin
   natur över alla tenants (skickar allas post, kontrollerar allas krediter);
   BYPASSRLS är rätt här och **bara** här.
-- **`clearance_api`** — API:ets roll: LOGIN, medlem i `authenticated`, **aldrig**
-  BYPASSRLS. Radskyddet gäller varje klientfråga.
+- **`app_api`** — rättighetssamling, NOLOGIN. Bär de **två** tabeller
+  anonymvägen behöver: `select` på `auth.users` och `select/insert/update` på
+  `auth.sessions`. Inget `delete` — en session återkallas, den raderas inte.
+- **`clearance_api`** — API:ets roll: LOGIN, medlem i `authenticated` **och
+  `app_api`**, **aldrig** BYPASSRLS. Radskyddet gäller varje klientfråga.
+
+**Varför `app_api` behövs, och hur det upptäcktes.** `withUser()` växlar till
+`authenticated`; `withAnon()` byter aldrig roll och kör som anslutningens egen.
+Anonymvägen bär inloggningen, sessionsuppslaget och utloggningen — och
+`auth.users`/`auth.sessions` är med flit revoke:ade från klientrollerna. Utan
+medlemskapet i `app_api` svarar API:t därför **403 på varje inloggningsförsök**
+(42501 i loggen), trots att `/v1/health` är grönt. Det syntes inte i sviterna:
+`api/tests/run.sh` ansluter som ägaren, som går förbi allt. Det hittades genom
+att starta den **byggda** artefakten mot en icke-ägande roll.
 
 Migrations-jobbet sätter deras lösenord ur `selfhost-*-password`. Modellen är
 vaktad i `db/tests/roles.sql` (körs i CI-jobbet `databas`): app_worker får röra
-utkorgen, `authenticated` nekas samma insert av radskyddet.
+utkorgen, `authenticated` nekas samma insert av radskyddet, `app_api` har exakt
+de rättigheter inloggningen kräver och varken mer eller mindre, och
+`authenticated` når fortfarande varken lösenordshashar eller sessioner.
 
 ## Installera
 

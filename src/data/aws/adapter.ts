@@ -61,6 +61,7 @@ import type {
   UserRole,
   VerifiedPhoneRecord,
 } from "../types";
+import type { FinancialSnapshot } from "@/lib/financial/model";
 import { supabaseAdapter } from "../supabase/adapter";
 import { ApiRequestError, apiFetch, clearToken, setToken } from "./client";
 
@@ -158,6 +159,8 @@ export const MIGRATED_PORTS = [
   "messages.ack",
   "messages.myOpenMentions",
   "kbr.getLatestByCase",
+  "financial.getLatestSnapshot",
+  "financial.importSie",
   "audit.listByCase",
 ] as const;
 
@@ -181,6 +184,22 @@ export const awsAuth = {
       clearToken();
     }
   },
+};
+
+/**
+ * Bytes till base64.
+ *
+ * `btoa` tar en sträng där varje tecken ska vara en byte, så bytesen
+ * måste först bli latin1-tecken. Att gå via `String.fromCharCode(...bytes)`
+ * i ett enda anrop spräcker anropsstacken på stora filer - därför i bitar.
+ */
+const tillBase64 = (bytes: Uint8Array): string => {
+  const BIT = 0x8000;
+  let s = "";
+  for (let i = 0; i < bytes.length; i += BIT) {
+    s += String.fromCharCode(...bytes.subarray(i, i + BIT));
+  }
+  return btoa(s);
 };
 
 /* --- Portarna som är flyttade ---------------------------------------------- */
@@ -743,6 +762,40 @@ const notificationSettings = {
  * analysen just nu" - varje gång. Ärendet ligger nu i sökvägen, så
  * misstaget inte går att göra om.
  */
+/**
+ * Bokföringen som lägesbild.
+ *
+ * `getLatestSnapshot` returnerade förut `null` rakt av - och eftersom
+ * översiktens hela analysmotor hänger på den var insiktslistan permanent
+ * tom i skarp drift. Motorn fanns; den fick aldrig något att räkna på.
+ *
+ * `importSie` skickar RÅA BYTES. Tolkningen sker på servern, för
+ * lägesbilden är underlag för beslut om rekonstruktion och konkurs - och
+ * ett underlag klienten själv sätter ihop är ett underlag klienten kan
+ * skriva vad som helst i. Klienten tolkar fortfarande SIE lokalt när den
+ * bara ska förifylla ett formulär; det är en annan sak.
+ */
+const financial = {
+  ...supabaseAdapter.financial,
+  async getLatestSnapshot(caseId: string): Promise<FinancialSnapshot | null> {
+    return apiFetch<FinancialSnapshot | null>(`/v1/cases/${caseId}/financial/snapshot`);
+  },
+  async importSie(input: {
+    caseId: string;
+    fileName: string;
+    bytes: Uint8Array;
+  }): Promise<FinancialSnapshot> {
+    const res = await apiFetch<{ snapshot: FinancialSnapshot }>(
+      `/v1/cases/${input.caseId}/financial/sie`,
+      {
+        method: "POST",
+        body: { fileName: input.fileName, content: tillBase64(input.bytes) },
+      },
+    );
+    return res.snapshot;
+  },
+};
+
 const kbr = {
   ...supabaseAdapter.kbr,
   async create(input: KbrAssessmentInput & { userId: string }): Promise<void> {
@@ -867,6 +920,7 @@ export const awsAdapter: DataPort = {
   tasks: tasks as DataPort["tasks"],
   payments: payments as DataPort["payments"],
   invoices: invoices as DataPort["invoices"],
+  financial: financial as DataPort["financial"],
   documents: documents as DataPort["documents"],
   messages: messages as DataPort["messages"],
   notificationSettings: notificationSettings as DataPort["notificationSettings"],

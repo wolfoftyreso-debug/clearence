@@ -103,8 +103,9 @@ if [[ $TORRKOR -eq 0 ]]; then
   # Sätts bara när lösenorden angetts - annars förblir rollerna NOLOGIN och
   # ingen kan logga in på dem (rätt för t.ex. CI:s migreringssteg).
   #   app_worker            arbetaren ansluter som den (bypassrls)
-  #   clearance_api         API:t ansluter som den (medlem i authenticated,
-  #                         ALDRIG bypassrls - den betjänar klientfrågor)
+  #   clearance_api         API:t ansluter som den (medlem i authenticated
+  #                         OCH app_api, ALDRIG bypassrls - den betjänar
+  #                         klientfrågor och bär anonymvägens inloggning)
   # Heredoc (stdin) så psql tolkar :'var' säkert - lösenordet citeras av
   # psql och kan inte injiceras, oavsett tecken.
   if [[ -n "${SELFHOST_WORKER_PASSWORD:-}" ]]; then
@@ -122,6 +123,16 @@ begin
   end if;
 end $$;
 grant authenticated to clearance_api;
+-- OCH app_api: rättighetssamlingen som bär ANONYMVÄGEN.
+--
+-- withUser() växlar till authenticated och fungerade utan detta.
+-- withAnon() byter aldrig roll - den kör som anslutningens egen roll, och
+-- den vägen bär inloggningen, sessionsuppslaget och utloggningen.
+-- auth.users/auth.sessions är revoke:ade från klientrollerna med flit, så
+-- utan medlemskapet här svarar API:t 403 på VARJE inloggningsförsök
+-- (42501). Det upptäcktes genom att starta den byggda artefakten mot en
+-- icke-ägande roll; sviterna kunde inte se det, för de ansluter som ägaren.
+grant app_api to clearance_api;
 alter role clearance_api login password :'apw';
 SQL
     echo "  clearance_api: inloggning påslagen."

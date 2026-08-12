@@ -44,6 +44,8 @@ import {
 import { MAX_FILSTORLEK, provaFil, provaMetadata, sakerLagringsvag } from "./filtyper";
 import { anthropicConfigured, clearanceReply, type AdvisorMessage } from "./anthropic";
 import { deriveAuditDetail } from "../../src/lib/auditDetail";
+import { parseSie } from "../../src/lib/financial/sie";
+import { snapshotFromSie } from "../../src/lib/financial/fromSie";
 import {
   DEFAULT_RETENTION,
   mergeRetentionPolicy,
@@ -1098,6 +1100,120 @@ router.post("/v1/cases/:caseId/tasks", async (req) => {
   });
   if (!row) throw forbidden("Uppgiften kunde inte läggas till i det här ärendet.");
   return { status: 201, body: toTask(row) };
+});
+
+/* --- Bokföringen som lägesbild ------------------------------------------- */
+
+/*
+ * SIE-FILEN TOLKAS PÅ SERVERN, INTE I WEBBLÄSAREN.
+ *
+ * Klienten kan redan tolka SIE - den gör det för att förifylla ett
+ * formulär, och det är rätt plats för just det. Men lägesbilden som SPARAS
+ * är underlag: den ligger till grund för insikterna på översikten, för
+ * rapporten som visas för en bank och för bedömningen av om bolaget ska
+ * rekonstrueras eller sättas i konkurs. Ett underlag som klienten själv
+ * sätter ihop är ett underlag klienten kan skriva vad som helst i.
+ *
+ * Servern får därför FILEN, inte lägesbilden. Den tolkar den, översätter
+ * den och skriver resultatet. Det som lagras går alltid att härleda till
+ * bytesen som skickades in.
+ *
+ * Parsern (src/lib/financial/sie.ts) är beroendefri och delas därför rakt
+ * av - samma mönster som auditDetail, retention och källorna.
+ */
+
+/** Filen får väga lika mycket som en uppladdning. Samma tak, samma skäl. */
+const MAX_SIE_BYTES = 25 * 1024 * 1024;
+
+router.post("/v1/cases/:caseId/financial/sie", async (req) => {
+  const caller = await authenticate(req);
+  const caseId = uuidParam(req, "caseId");
+  const b = (req.body ?? {}) as Record<string, unknown>;
+
+  const fileName = str(req.body, "fileName", { max: 260 });
+  if (typeof b.content !== "string" || b.content.length === 0) {
+    throw badRequest('Fältet "content" saknas (filens innehåll, base64-kodat).');
+  }
+  // Base64 växer 4/3; taket prövas på den avkodade storleken, som är den
+  // som betyder något.
+  if (b.content.length > Math.ceil((MAX_SIE_BYTES * 4) / 3) + 16) {
+    throw badRequest("Filen är för stor.");
+  }
+  let bytes: Uint8Array;
+  try {
+    bytes = new Uint8Array(Buffer.from(b.content, "base64"));
+  } catch {
+    throw badRequest('Fältet "content" är inte giltig base64.');
+  }
+  if (bytes.length === 0) throw badRequest("Filen är tom.");
+  if (bytes.length > MAX_SIE_BYTES) throw badRequest("Filen är för stor.");
+
+  const utfall = parseSie(bytes);
+  if (!utfall.ok) {
+    // Parserns egen förklaring går vidare ordagrant. Den är skriven för en
+    // människa som ska förstå vad som är fel med sin fil.
+    throw badRequest(`Filen kunde inte tolkas som SIE: ${utfall.error}`);
+  }
+
+  // Tidpunkten sätts av servern. En capturedAt klienten väljer hade gjort
+  // det möjligt att backdatera en lägesbild.
+  const capturedAt = new Date().toISOString();
+  const snapshot = snapshotFromSie(utfall.sie, { fileName, capturedAt });
+  const sourceDocumentId = valfrittId(req.body, "sourceDocumentId");
+
+  const row = await withUser(caller.userId, async (tx) => {
+    const { rows } = await tx.query(
+      `insert into public.financial_snapshots
+         (case_id, user_id, provider, captured_at, org_number, company_name,
+          fiscal_year_start, fiscal_year_end, source_file_name,
+          source_document_id, payload)
+       values ($1::uuid, $2::uuid, 'generic', $3::timestamptz, $4, $5,
+               $6::date, $7::date, $8, $9::uuid, $10::jsonb)
+       returning id, captured_at, payload`,
+      [
+        caseId,
+        caller.userId,
+        capturedAt,
+        utfall.sie.orgNumber,
+        utfall.sie.companyName,
+        utfall.sie.fiscalYear?.start ?? null,
+        utfall.sie.fiscalYear?.end ?? null,
+        fileName,
+        sourceDocumentId,
+        JSON.stringify(snapshot),
+      ],
+    );
+    return rows[0] ?? null;
+  });
+  if (!row) throw forbidden("Lägesbilden kunde inte sparas i det här ärendet.");
+
+  return {
+    status: 201,
+    body: {
+      id: row.id,
+      capturedAt: iso(row.captured_at),
+      snapshot: row.payload,
+      // Vad som INTE gick att läsa, sagt rakt ut i svaret och inte bara
+      // begravt i dokumentet.
+      skippedLines: utfall.sie.skipped.length,
+    },
+  };
+});
+
+router.get("/v1/cases/:caseId/financial/snapshot", async (req) => {
+  const caller = await authenticate(req);
+  const caseId = uuidParam(req, "caseId");
+  const row = await withUser(caller.userId, async (tx) => {
+    const { rows } = await tx.query(
+      `select payload from public.financial_snapshots
+        where case_id = $1::uuid order by captured_at desc limit 1`,
+      [caseId],
+    );
+    return rows[0] ?? null;
+  });
+  // null betyder "vi har inte läst något", inte "det finns inget".
+  // Kontraktet måste kunna säga skillnaden - se FinancialPort.
+  return { status: 200, body: row ? row.payload : null };
 });
 
 /* --- Likviditeten: betalningar och fakturor ------------------------------ */

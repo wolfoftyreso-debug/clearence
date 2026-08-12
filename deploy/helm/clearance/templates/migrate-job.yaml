@@ -39,7 +39,8 @@ spec:
                   name: {{ include "clearance.secretName" . }}
                   key: migrate-database-url
             # Med dessa satta skapar migrera.sh inloggningsrollerna:
-            # app_worker (bypassrls) och clearance_api (medlem i authenticated).
+            # app_worker (bypassrls) och clearance_api (medlem i authenticated
+            # och app_api - det senare bär inloggningens auth-tabeller).
             # Lösenorden måste matcha dem i database-url/worker-database-url.
             - name: SELFHOST_API_PASSWORD
               valueFrom:

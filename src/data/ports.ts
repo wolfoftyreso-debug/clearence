@@ -309,6 +309,24 @@ export interface FinancialPort {
    * src/lib/financial/model.ts.
    */
   getLatestSnapshot(caseId: string): Promise<FinancialSnapshot | null>;
+
+  /**
+   * Läser in en SIE-fil och sparar den som ärendets lägesbild.
+   *
+   * SIE är bokföringsadaptern som inte kräver ett leverantörsavtal: varje
+   * svenskt bokföringsprogram exporterar den. Bytesen skickas in RÅA -
+   * tolkningen sker på servern, för lägesbilden är underlag för beslut om
+   * rekonstruktion och konkurs, och ett underlag klienten själv sätter
+   * ihop är ett underlag klienten kan skriva vad som helst i.
+   *
+   * Returnerar lägesbilden som den sparades, så att anroparen kan visa
+   * den direkt - inklusive `gaps`, det som INTE gick att läsa.
+   */
+  importSie(input: {
+    caseId: string;
+    fileName: string;
+    bytes: Uint8Array;
+  }): Promise<FinancialSnapshot>;
 }
 
 export interface ContactPort {

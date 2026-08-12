@@ -72,6 +72,12 @@ jobs:
       - name: Säkerhetssviten (angreppen ska BLOCKERAS)
         run: npm run test:sakerhet
 
+      # Bokföringen -> lägesbild. Tecknen är det som betyder mest: skulder
+      # står i kredit och ska visas positiva. Vänds de fel visar produkten
+      # ett bolag som går med vinst när det blöder.
+      - name: Lägesbilden ur bokföringen
+        run: npm run test:lagesbild
+
       - name: Inga secrets i historiken
         run: |
           # Mönstren är de som ger direkt åtkomst om de läcker. En träff är

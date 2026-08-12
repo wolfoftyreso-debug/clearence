@@ -16,6 +16,8 @@
  */
 
 import type { DataPort } from "../ports";
+import { parseSie } from "@/lib/financial/sie";
+import { snapshotFromSie } from "@/lib/financial/fromSie";
 import {
   isVerificationCode,
   maskPhone,
@@ -99,6 +101,8 @@ const STORAGE_KEY = "clearance-demo-state";
 
 interface DemoState {
   user: AuthUser | null;
+  /** En SIE-fil som användaren själv laddat upp i demoläget. Slår demodatan. */
+  importedSnapshot?: FinancialSnapshot | null;
   cases: CaseRecord[];
   payments: PaymentRecord[];
   invoices: InvoiceRecord[];
@@ -2728,7 +2732,23 @@ export const demoAdapter: DataPort = {
 
   financial: {
     async getLatestSnapshot(caseId) {
-      return demoSnapshot(caseId);
+      // En importerad fil slår demoinnehållet: har man laddat upp sin
+      // egen bokföring i demoläget är det den man vill se.
+      return state.importedSnapshot ?? demoSnapshot(caseId);
+    },
+    async importSie(input) {
+      // Demon har ingen server att tolka i, men parsern är densamma - och
+      // det är den som gör jobbet. Filen som laddas upp här är en RIKTIG
+      // fil, och siffrorna som visas kommer ur den.
+      const outcome = parseSie(input.bytes);
+      if (!outcome.ok) throw new Error(`Filen kunde inte tolkas som SIE: ${outcome.error}`);
+      const snapshot = snapshotFromSie(outcome.sie, {
+        fileName: input.fileName,
+        capturedAt: new Date().toISOString(),
+      });
+      state.importedSnapshot = snapshot;
+      save();
+      return snapshot;
     },
   },
 

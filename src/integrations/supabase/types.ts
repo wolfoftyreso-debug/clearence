@@ -774,6 +774,54 @@ export type Database = {
         }
         Relationships: []
       }
+      financial_snapshots: {
+        Row: {
+          id: string
+          case_id: string
+          user_id: string
+          provider: string
+          captured_at: string
+          org_number: string | null
+          company_name: string | null
+          fiscal_year_start: string | null
+          fiscal_year_end: string | null
+          source_file_name: string
+          source_document_id: string | null
+          payload: Json
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          case_id: string
+          user_id: string
+          provider?: string
+          captured_at: string
+          org_number?: string | null
+          company_name?: string | null
+          fiscal_year_start?: string | null
+          fiscal_year_end?: string | null
+          source_file_name: string
+          source_document_id?: string | null
+          payload: Json
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          case_id?: string
+          user_id?: string
+          provider?: string
+          captured_at?: string
+          org_number?: string | null
+          company_name?: string | null
+          fiscal_year_start?: string | null
+          fiscal_year_end?: string | null
+          source_file_name?: string
+          source_document_id?: string | null
+          payload?: Json
+          created_at?: string
+        }
+        Relationships: []
+      }
       kbr_assessments: {
         Row: {
           ambition_level: string | null

@@ -976,6 +976,122 @@
         }
       }
     },
+    "/cases/{caseId}/financial/sie": {
+      "post": {
+        "operationId": "importSie",
+        "summary": "Läs in en SIE-fil som ärendets lägesbild. Filen tolkas PÅ SERVERN - lägesbilden är underlag för beslut om rekonstruktion och konkurs, och ett underlag klienten sätter ihop är ett underlag klienten kan skriva vad som helst i.",
+        "description": "capturedAt sätts av servern; en tidpunkt klienten väljer hade gjort det möjligt att backdatera en lägesbild. Svaret bär även gaps - det som INTE gick att läsa ur filen. En lucka är inte en nolla.",
+        "x-status": "beta",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "fileName",
+                  "content"
+                ],
+                "properties": {
+                  "fileName": {
+                    "type": "string",
+                    "maxLength": 260
+                  },
+                  "content": {
+                    "type": "string",
+                    "description": "Filens bytes, base64-kodade. Högst 25 MB avkodat."
+                  },
+                  "sourceDocumentId": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "format": "uuid",
+                    "description": "Uppladdningen filen kom ur, när den finns."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Lägesbilden sparad",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "id",
+                    "capturedAt",
+                    "snapshot"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "capturedAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "snapshot": {
+                      "type": "object"
+                    },
+                    "skippedLines": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/cases/{caseId}/financial/snapshot": {
+      "get": {
+        "operationId": "getLatestFinancialSnapshot",
+        "summary": "Senaste lägesbilden ur bokföringen, eller null.",
+        "description": "null betyder \"vi har inte läst något\", inte \"det finns inget\". Gränssnittet skiljer på de två - en tom balansräkning läses som \"du är skuldfri\".",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Lägesbilden, eller null",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": [
+                    "object",
+                    "null"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/cases/{caseId}/invitations": {
       "get": {
         "operationId": "listCaseInvitations",

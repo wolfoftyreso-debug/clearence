@@ -2324,6 +2324,104 @@ begin
   end;
 end $$;
 
+/* ========================================================================== */
+/* Financial snapshots: bokföringen är det känsligaste ärendet bär            */
+/* ========================================================================== */
+
+/*
+ * En lägesbild ur bokföringen visar exakt hur illa det står till: kassan,
+ * skulderna, vem som inte fått betalt. Den får läsas av ärendets deltagare
+ * och av ingen annan.
+ *
+ * Tabellen har med flit INGEN update-policy. En lägesbild är en observation
+ * vid en tidpunkt - att kunna skriva om den i efterhand hade gjort den
+ * värdelös som underlag för en bank eller en rekonstruktör.
+ */
+
+select pg_temp.as_user('11111111-1111-1111-1111-111111111111');
+
+insert into public.financial_snapshots
+  (case_id, user_id, provider, captured_at, org_number, company_name,
+   source_file_name, payload)
+values ('aaaaaaaa-0000-0000-0000-000000000001',
+        '11111111-1111-1111-1111-111111111111',
+        'generic', now(), '556000-0001', 'Bolag A AB',
+        'bokforing.se', '{"provider":"generic","gaps":[]}'::jsonb);
+
+select pg_temp.check('owner reads own financial snapshot',
+  (select count(*)::int from public.financial_snapshots), 1);
+
+-- Den andra företagaren ska inte se den. Det här är kontrollen som betyder
+-- mest i hela avsnittet.
+select pg_temp.as_user('22222222-2222-2222-2222-222222222222');
+select pg_temp.check('the other company sees NO financial snapshot',
+  (select count(*)::int from public.financial_snapshots), 0);
+
+-- Och kan inte skriva en i någon annans ärende.
+do $$
+begin
+  perform pg_temp.as_user('22222222-2222-2222-2222-222222222222');
+  begin
+    insert into public.financial_snapshots
+      (case_id, user_id, provider, captured_at, source_file_name, payload)
+    values ('aaaaaaaa-0000-0000-0000-000000000001',
+            '22222222-2222-2222-2222-222222222222',
+            'generic', now(), 'smyg.se', '{}'::jsonb);
+    raise exception 'FAIL  an outsider wrote a financial snapshot into another case';
+  exception when insufficient_privilege or check_violation then
+    raise notice 'ok    an outsider cannot write a financial snapshot into another case';
+  end;
+end $$;
+
+-- Ingen får skriva om en sparad lägesbild - det finns ingen update-policy.
+do $$
+declare
+  v_count int;
+begin
+  perform pg_temp.as_user('11111111-1111-1111-1111-111111111111');
+  update public.financial_snapshots set company_name = 'Omskrivet AB';
+  get diagnostics v_count = row_count;
+  if v_count <> 0 then
+    raise exception 'FAIL  a saved financial snapshot could be rewritten (% rows)', v_count;
+  end if;
+  raise notice 'ok    a saved financial snapshot cannot be rewritten';
+end $$;
+
+-- Dokumentet måste vara ett objekt: en sträng eller en lista i payload gör
+-- lägesbilden oläsbar för alla som förväntar sig FinancialSnapshot.
+do $$
+begin
+  perform pg_temp.as_user('11111111-1111-1111-1111-111111111111');
+  begin
+    insert into public.financial_snapshots
+      (case_id, user_id, provider, captured_at, source_file_name, payload)
+    values ('aaaaaaaa-0000-0000-0000-000000000001',
+            '11111111-1111-1111-1111-111111111111',
+            'generic', now(), 'trasig.se', '"inte ett objekt"'::jsonb);
+    raise exception 'FAIL  a non-object payload was accepted';
+  exception when check_violation then
+    raise notice 'ok    the payload must be an object';
+  end;
+end $$;
+
+-- Och räkenskapsåret ska inte kunna sluta innan det börjat.
+do $$
+begin
+  perform pg_temp.as_user('11111111-1111-1111-1111-111111111111');
+  begin
+    insert into public.financial_snapshots
+      (case_id, user_id, provider, captured_at, source_file_name, payload,
+       fiscal_year_start, fiscal_year_end)
+    values ('aaaaaaaa-0000-0000-0000-000000000001',
+            '11111111-1111-1111-1111-111111111111',
+            'generic', now(), 'bakvant.se', '{}'::jsonb,
+            '2025-12-31', '2025-01-01');
+    raise exception 'FAIL  a backwards fiscal year was accepted';
+  exception when check_violation then
+    raise notice 'ok    the fiscal year cannot end before it starts';
+  end;
+end $$;
+
 reset role;
 select 'ALL RLS TESTS PASSED' as result;
 

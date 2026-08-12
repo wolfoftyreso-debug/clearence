@@ -2038,6 +2038,179 @@ check("en utomstående kan inte påbörja uppladdning i annans ärende", bertilS
   }
 }
 
+/* --- 8m8. Bokföringen blir en lägesbild --------------------------------- */
+
+/*
+ * DET HÄR VAR PRODUKTENS STÖRSTA GLAPP MELLAN AVSETT OCH FAKTISKT.
+ *
+ * `financial.getLatestSnapshot()` returnerade `null` rakt av. Hela
+ * analysmotorn i src/lib/financial/insights.ts - koncentration,
+ * åldersfördelning, kostnadsavvikelser, betalningsprioritering - hängde på
+ * den, så översiktens insiktslista var permanent tom i skarp drift. Motorn
+ * fanns; den fick aldrig något att räkna på.
+ *
+ * Provet nedan går hela kedjan mot riktig Postgres: en riktig SIE-fil in
+ * genom HTTP-lagret, tolkad PÅ SERVERN, sparad bakom radskyddet, läst
+ * tillbaka - och med gränsen prövad från andra hållet.
+ */
+{
+  const agnesF = await call("POST", "/v1/auth/login", {
+    body: { email: "agnes@bolag-a.se", password: "hemligt-losen-agnes" },
+  });
+  const tokF: string = agnesF.body.token as string;
+
+  // Innan något är inläst ska svaret vara null - "vi har inte läst något",
+  // inte en tom balansräkning som läses som "du är skuldfri".
+  const innan = await call("GET", `/v1/cases/${CASE_A}/financial/snapshot`, { token: tokF });
+  check("utan inläsning svarar lägesbilden null", innan.status === 200 && innan.body === null, innan.body);
+
+  const SIE_FIL = [
+    '#FLAGGA 0',
+    '#SIETYP 4',
+    '#FNAMN "Bolag A AB"',
+    '#ORGNR 556000-0001',
+    '#RAR 0 20250101 20251231',
+    '#KONTO 1930 "Företagskonto"',
+    '#KONTO 2440 "Leverantörsskulder"',
+    '#KONTO 3011 "Försäljning"',
+    '#UB 0 1930 180000.00',
+    '#UB 0 2440 -940000.00',
+    '#RES 0 3011 -1500000.00',
+    '#VER "A" "7" 20251110 "Leverantörsfaktura"',
+    '{',
+    '#TRANS 2440 {} -25000.00',
+    '#TRANS 1930 {} 25000.00',
+    '}',
+  ].join('\n');
+  const base64 = Buffer.from(SIE_FIL, "utf8").toString("base64");
+
+  const laste = await call("POST", `/v1/cases/${CASE_A}/financial/sie`, {
+    token: tokF,
+    body: { fileName: "bolag-a-2025.se", content: base64 },
+  });
+  check("SIE-filen går att läsa in", laste.status === 201, laste.body);
+  const bild = (laste.body.snapshot ?? {}) as Record<string, unknown>;
+  check("bolagsnamnet lästes ur filen", bild.companyName === "Bolag A AB", bild.companyName);
+  check("organisationsnumret lästes ur filen", bild.orgNumber === "556000-0001", bild.orgNumber);
+
+  // TECKNEN: skulder står i kredit i filen och ska visas positiva.
+  const br = (bild.balanceSheet ?? {}) as Record<string, unknown>;
+  check("skulderna är positiva i lägesbilden", br.totalLiabilities === 940000, br.totalLiabilities);
+  check("tillgångarna summeras", br.totalAssets === 180000, br.totalAssets);
+  const rr = (bild.incomeStatement ?? {}) as Record<string, unknown>;
+  check("omsättningen är positiv", rr.revenue === 1500000, rr.revenue);
+
+  // LUCKORNA ska följa med ut genom HTTP, inte bara finnas i minnet.
+  const gaps = (bild.gaps ?? []) as { dataset: string }[];
+  check(
+    "det SIE inte bär redovisas som luckor i svaret",
+    ["counterparties", "openItems", "bankAccounts", "taxAccount", "payroll"].every((d) =>
+      gaps.some((g) => g.dataset === d),
+    ),
+    gaps.map((g) => g.dataset),
+  );
+
+  // TIDPUNKTEN ÄR SERVERNS. En capturedAt klienten väljer hade gjort det
+  // möjligt att backdatera en lägesbild som visas för en bank.
+  const bakdaterat = await call("POST", `/v1/cases/${CASE_A}/financial/sie`, {
+    token: tokF,
+    body: { fileName: "bakat.se", content: base64, capturedAt: "2001-01-01T00:00:00.000Z" },
+  });
+  check(
+    "capturedAt i kroppen ignoreras",
+    bakdaterat.status === 201 &&
+      !String((bakdaterat.body.snapshot as Record<string, unknown>).capturedAt).startsWith("2001"),
+    (bakdaterat.body.snapshot as Record<string, unknown>)?.capturedAt,
+  );
+
+  // Läsvägen ger SENASTE inläsningen.
+  const efter = await call("GET", `/v1/cases/${CASE_A}/financial/snapshot`, { token: tokF });
+  check("lägesbilden läses tillbaka", efter.body !== null, efter.body);
+  check(
+    "och det är den senaste som visas",
+    (efter.body as Record<string, unknown>).capturedAt ===
+      (bakdaterat.body.snapshot as Record<string, unknown>).capturedAt,
+    { last: (efter.body as Record<string, unknown>).capturedAt },
+  );
+
+  // user_id sätts av servern, inte av kroppen.
+  const forare = await withAnon(async (tx) => {
+    const { rows } = await tx.query(
+      "select user_id from public.financial_snapshots where case_id = $1::uuid limit 1",
+      [CASE_A],
+    );
+    return rows[0]?.user_id ?? null;
+  });
+  check("den som förde in lägesbilden är den inloggade", forare === AGNES, forare);
+
+  /* --- GRÄNSEN ---------------------------------------------------------- */
+
+  // En lägesbild ur bokföringen visar exakt hur illa det står till. Den får
+  // aldrig läsas av någon utanför ärendet.
+  const bertilLas = await call("GET", `/v1/cases/${CASE_A}/financial/snapshot`, { token: bertilToken });
+  check("en utomstående får null, inte lägesbilden", bertilLas.body === null, bertilLas.body);
+  const bertilSkriv = await call("POST", `/v1/cases/${CASE_A}/financial/sie`, {
+    token: bertilToken,
+    body: { fileName: "smyg.se", content: base64 },
+  });
+  check("och kan inte skriva en lägesbild i annans ärende", bertilSkriv.status >= 400, bertilSkriv.body);
+
+  /* --- Trasig indata ---------------------------------------------------- */
+
+  const skrap = await call("POST", `/v1/cases/${CASE_A}/financial/sie`, {
+    token: tokF,
+    body: { fileName: "skrap.se", content: Buffer.from("inte en sie-fil", "utf8").toString("base64") },
+  });
+  check("en fil som inte är SIE avvisas med 400", skrap.status === 400, skrap.body);
+  check(
+    "och beskedet säger vad som är fel med filen",
+    /SIE/i.test(String((skrap.body.error as Record<string, unknown>)?.message ?? "")),
+    skrap.body,
+  );
+
+  const tom = await call("POST", `/v1/cases/${CASE_A}/financial/sie`, {
+    token: tokF,
+    body: { fileName: "tom.se", content: "" },
+  });
+  check("en tom fil avvisas", tom.status === 400, tom.body);
+
+  const utanNamn = await call("POST", `/v1/cases/${CASE_A}/financial/sie`, {
+    token: tokF,
+    body: { content: base64 },
+  });
+  check("filnamnet krävs", utanNamn.status === 400, utanNamn.body);
+
+  // Taket: en fil som är för stor ska nekas innan den tolkas.
+  const forStor = await call("POST", `/v1/cases/${CASE_A}/financial/sie`, {
+    token: tokF,
+    body: { fileName: "stor.se", content: "A".repeat(34 * 1024 * 1024) },
+  });
+  check("en för stor fil avvisas", forStor.status === 400, forStor.status);
+
+  /* --- Utan inloggning finns ingen av vägarna ---------------------------- */
+
+  for (const [metod, vag] of [
+    ["GET", `/v1/cases/${CASE_A}/financial/snapshot`],
+    ["POST", `/v1/cases/${CASE_A}/financial/sie`],
+  ] as const) {
+    const svar = await call(metod, vag, { body: {} });
+    check(`${metod} ${vag.replace(/[0-9a-f-]{36}/g, "{id}")} kräver inloggning`, svar.status === 401, svar.status);
+  }
+
+  // Lägesbilden ska synas i journalen: siffrorna därifrån ligger till grund
+  // för beslut om rekonstruktion eller konkurs.
+  const journal = await call("GET", `/v1/cases/${CASE_A}/journal`, { token: tokF });
+  check(
+    "inläsningen lämnar spår i journalen",
+    (journal.body.events as Record<string, unknown>[]).some(
+      (e) => e.objectType === "financial_snapshots" && e.action === "insert",
+    ),
+    (journal.body.events as Record<string, unknown>[])
+      .map((e) => `${e.objectType}/${e.action}`)
+      .slice(0, 8),
+  );
+}
+
 /* --- 8m4. Telefonverifieringen bevisar innehav av telefonen -------------- */
 
 /*

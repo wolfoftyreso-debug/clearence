@@ -2,7 +2,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Link, useNavigate } from "react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { CaseDocuments } from "@/components/documents/CaseDocuments";
 import { ReportButton } from "@/components/reports/ReportButton";
 import { buildCrisisReport } from "@/lib/reports/builders";
@@ -11,6 +11,7 @@ import { buildCaseBundle, timelineToIcs } from "@/lib/integrations/caseBundle";
 import { downloadTextFile } from "@/lib/integrations/download";
 import { InsightList } from "@/components/financial/InsightList";
 import { analyseSnapshot } from "@/lib/financial/insights";
+import { ImportBookkeeping } from "@/components/financial/ImportBookkeeping";
 import { providerLabel } from "@/lib/financial/ports";
 import { format } from "date-fns";
 import { sv } from "date-fns/locale";
@@ -36,6 +37,7 @@ import { countdownTo } from "@/lib/actionPlan";
 
 
 const Dashboard = () => {
+  const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { user } = useAuth();
   const { exportAndSharing } = useEntitlements();
@@ -310,14 +312,20 @@ const Dashboard = () => {
                     )}
                   </>
                 ) : (
-                  <div className="rounded-md border border-border bg-card p-5">
-                    <p className="text-sm leading-relaxed text-muted-foreground">
-                      Inget bokföringssystem är kopplat, så det här bygger bara på det du
-                      matat in själv. Koppling mot Fortnox, Visma och andra system är under
-                      arbete – tills dess kan du importera ett kontoutdrag i
-                      likviditetsplaneringen.
-                    </p>
-                  </div>
+                  /*
+                   * DET HÄR TOMMA LÄGET SA TIDIGARE "under arbete", och det
+                   * var sant: getLatestSnapshot returnerade null rakt av, så
+                   * rutan kunde aldrig fyllas. Nu finns vägen - SIE-filen är
+                   * bokföringsadaptern som inte kräver ett leverantörsavtal.
+                   */
+                  <ImportBookkeeping
+                    caseId={latestCase.id}
+                    onImported={() => {
+                      void queryClient.invalidateQueries({
+                        queryKey: ["financial-snapshot", latestCase.id],
+                      });
+                    }}
+                  />
                 )}
               </div>
 

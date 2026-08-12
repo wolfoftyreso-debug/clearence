@@ -99,7 +99,17 @@ den låtsas aldrig ha skickat.
 1. **Databasen är aldrig publik.** Radskydd hjälper inte mot någon som
    kan ansluta som ägaren. `publicly_accessible = false`, egna datasubnät
    utan default-route.
-2. **API:et kör som `authenticated`** — en roll som varken äger en tabell
+2. **API:et ansluter som `clearance_api` och kör som `authenticated`.**
+   Två roller, två uppgifter, och skillnaden är inte kosmetisk:
+   `withUser()` växlar till `authenticated` för användarens frågor, medan
+   `withAnon()` ALDRIG byter roll - den kör som anslutningens egen, och den
+   vägen bär inloggningen, sessionsuppslaget och utloggningen.
+   `auth.users`/`auth.sessions` är med flit revoke:ade från klientrollerna,
+   så anslutningsrollen måste vara medlem i `app_api` som bär exakt de
+   rättigheterna. Utan det svarar API:t 403 på varje inloggningsförsök
+   medan `/v1/health` är grönt. Se `db/roles-selfhosted.sql`.
+
+   Om rollen ändå kör som `authenticated` — en roll som varken äger en tabell
    eller har `BYPASSRLS`. Båda stänger av radscopingen *tyst*, och tyst är
    det farliga: frågorna fortsätter fungera och börjar returnera andra
    bolags insolvensdata. Rollen sätts med `set local role` i varje
@@ -127,10 +137,11 @@ den låtsas aldrig ha skickat.
 | Webbappen | **Byggd.** Noll externa anrop, verifierat (`test:external`, 9/9 sidor) |
 | Terraform för nät, databas, lagring, CDN, e-post, hemligheter, larm | **Skrivet** i `infra/` — `terraform fmt` går igenom |
 | **API:et: identitet, sessioner, översiktens data och dess skrivvägar** | **Byggt.** `api/server/`, node:http med **ett** beroende (`pg`). Läsning och skrivning för ärenden, journal, beslut, uppgifter, betalningar, dokumentmetadata (inkl. signerad nedladdning), meddelanden, KBR, kontaktinkorgen, ärendets deltagare/inbjudningar och rådgivarens anteckningar/tidsposter. `npm run test:api` kör 185 kontroller mot riktig Postgres — identiteten läcker inte mellan samtidiga requests, en utomstående får TOMT på varje resurs, avbockningens tidpunkt sätts av servern, företagaren kan inte godkänna sitt eget underlag, en icke-administratör ser en tom kontaktinkorg, en inbjudan kan bara accepteras av rätt adress, och en intern anteckning är författarens ensak även för en annan deltagare |
-| **API:et: resten av `DataPort`** | **Delvis.** Katalog, marknadsplats, fakturans utställande — 49 metoder kvar. Samma mönster igen; siffran mäts av `test:awsadapter` och ska falla |
-| **`awsAdapter` i klienten** | **Halvfärdig, och säger det själv.** `src/data/aws/`, vald med `VITE_DATA_ADAPTER=aws`. **90 av 139 portmetoder** går mot eget API; resten delegeras öppet till supabase-adaptern (strangler). `MIGRATED_PORTS` är listan och `npm run test:awsadapter` läser den — den som flyttar en port men glömmer listan får rött, och den som listar något oflyttat likaså. Delegeringen tas bort när listan täcker hela `DataPort` |
+| **API:et: resten av `DataPort`** | **Delvis.** Katalog, marknadsplats, fakturans utställande — 47 metoder kvar. Samma mönster igen; siffran mäts av `test:awsadapter` och ska falla |
+| **`awsAdapter` i klienten** | **Halvfärdig, och säger det själv.** `src/data/aws/`, vald med `VITE_DATA_ADAPTER=aws`. **92 av 139 portmetoder** går mot eget API; resten delegeras öppet till supabase-adaptern (strangler). `MIGRATED_PORTS` är listan och `npm run test:awsadapter` läser den — den som flyttar en port men glömmer listan får rött, och den som listar något oflyttat likaså. Delegeringen tas bort när listan täcker hela `DataPort` |
 | **Egen autentisering** | **Byggt.** Inloggning, sessioner och utloggning i `api/server/auth.ts`. KDF är `scrypt` ur Node själv, inte Argon2id: en nativ modul hade gett API:t en byggkedja att sitta fast i, och hashformatet bär sina parametrar så ett byte blir ett nytt prefix, inte en migrering |
 | **S3-signering** | **Byggd.** `api/server/storage.ts` + `GET /v1/documents/{id}/url`: `app.may_read_document()` → presignerad GET-URL som går ut på 60 s. `storage_path` lämnar aldrig servern. `test:storage` (11 kontroller) vaktar ordningen och att svaret bär url, inte sökväg. Tom endpoint = AWS S3; satt = MinIO (forcePathStyle) |
+| **Bokföringen som lägesbild** | **Byggd och körd.** SIE-filen är bokföringsadaptern som inte kräver ett leverantörsavtal: `POST /v1/cases/{id}/financial/sie` tolkar filen **på servern** (`src/lib/financial/sie.ts` + `fromSie.ts`), sparar en `financial_snapshots`-rad bakom radskyddet och matar analysmotorn på översikten. `financial.getLatestSnapshot()` returnerade förut `null` rakt av, så insiktslistan var permanent tom i skarp drift. Prövad mot riktig Postgres och över riktig HTTP mot det byggda API:t |
 | **`lookup-company`** | Finns som Supabase edge function, ska bli endpoint i eget API |
 | **Applicerad infrastruktur** | **Nej.** Inget AWS-konto är kopplat. `infra/` är kartan och beställningen, inte ett kvitto. Följdriktigt svarar ingen av adresserna i API-kontraktet — det står numera överst på `/api`, inte i en fotnot |
 | **`terraform validate`** | **Inte kört.** Utvecklingsmiljön når inte `registry.terraform.io`; kör det i en miljö med nätåtkomst innan första `apply` |

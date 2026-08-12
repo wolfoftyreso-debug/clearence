@@ -1,6 +1,9 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { Json } from "@/integrations/supabase/types";
 import { parsePremiseWatch } from "../premise";
+import { parseSie } from "@/lib/financial/sie";
+import { snapshotFromSie } from "@/lib/financial/fromSie";
+import type { FinancialSnapshot } from "@/lib/financial/model";
 import type { NotificationDeliveryRecord, NotificationPrefsRecord } from "../types";
 import {
   VERIFICATION_TTL_MINUTES,
@@ -2346,11 +2349,58 @@ export const supabaseAdapter: DataPort = {
   },
 
   financial: {
-    async getLatestSnapshot() {
-      // No accounting-system adapter is deployed yet. Returning null makes the
-      // interface say "not connected" rather than showing an empty balance
-      // sheet, which would read as "you owe nothing".
-      return null;
+    async getLatestSnapshot(caseId) {
+      // Radskyddet avgör vem som får se den. Ingen where-sats på användaren.
+      const { data, error } = await supabase
+        .from("financial_snapshots")
+        .select("payload")
+        .eq("case_id", caseId)
+        .order("captured_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (error) throw error;
+      // null = "vi har inte läst något", inte "det finns inget". Skillnaden
+      // är hela poängen med FinancialPort - se kommentaren i ports.ts.
+      return data ? (data.payload as unknown as FinancialSnapshot) : null;
+    },
+    async importSie(input) {
+      const { data: auth } = await supabase.auth.getUser();
+      const userId = auth.user?.id;
+      if (!userId) throw new Error("Inte inloggad");
+
+      /*
+       * HÄR TOLKAS FILEN I KLIENTEN, och det är en känd skillnad mot
+       * aws-adaptern - inte ett förbiseende.
+       *
+       * Supabase har ingen egen serverprocess att lägga tolkningen i;
+       * PostgREST skriver till tabellen, och det är klienten som anropar.
+       * Den som kör den här adaptern kan alltså i teorin skriva en
+       * lägesbild som inte motsvarar någon fil. Radskyddet begränsar det
+       * till det EGNA ärendet, så det är inte en väg till någon annans
+       * data - men det är skälet till att aws-adaptern skickar bytesen
+       * och låter servern tolka. Supabase är en brygga, inte målet.
+       */
+      const outcome = parseSie(input.bytes);
+      if (!outcome.ok) throw new Error(`Filen kunde inte tolkas som SIE: ${outcome.error}`);
+      const capturedAt = new Date().toISOString();
+      const snapshot = snapshotFromSie(outcome.sie, {
+        fileName: input.fileName,
+        capturedAt,
+      });
+      const { error } = await supabase.from("financial_snapshots").insert({
+        case_id: input.caseId,
+        user_id: userId,
+        provider: "generic",
+        captured_at: capturedAt,
+        org_number: outcome.sie.orgNumber,
+        company_name: outcome.sie.companyName,
+        fiscal_year_start: outcome.sie.fiscalYear?.start ?? null,
+        fiscal_year_end: outcome.sie.fiscalYear?.end ?? null,
+        source_file_name: input.fileName,
+        payload: snapshot as unknown as Json,
+      });
+      if (error) throw error;
+      return snapshot;
     },
   },
 
