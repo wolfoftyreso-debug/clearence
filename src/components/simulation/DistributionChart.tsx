@@ -1,4 +1,5 @@
 import { useId, useMemo, useState } from "react";
+import { beloppKort, procentAv } from "@/lib/montecarlo/format";
 
 /**
  * FÖRDELNINGEN, RITAD.
@@ -48,13 +49,10 @@ export interface DistributionChartProps {
   format?: (v: number) => string;
 }
 
-const standardFormat = (v: number): string => {
-  const abs = Math.abs(v);
-  if (abs >= 1e9) return `${(v / 1e9).toFixed(1)} mdr`;
-  if (abs >= 1e6) return `${(v / 1e6).toFixed(1)} mn`;
-  if (abs >= 1e4) return `${Math.round(v / 1000)} tkr`;
-  return Math.round(v).toLocaleString("sv-SE");
-};
+// Samma formatering som panelen. Låg som en egen kopia här, med samma
+// decimalpunkt i "2.29 mn" - två kopior av en formatering är två chanser
+// att skriva fel siffra.
+const standardFormat = beloppKort;
 
 /** Ritytan. viewBox-koordinater; SVG:n skalar sedan till sin behållare. */
 const B = 720;
@@ -242,7 +240,7 @@ export const DistributionChart = ({
             {format(aktiv.fran)} – {format(aktiv.till)}
             {enhet ? ` ${enhet}` : ""}:{" "}
             <span className="font-semibold text-foreground">
-              {aktiv.antal.toLocaleString("sv-SE")} utfall ({(aktiv.andel * 100).toFixed(1)} %)
+              {aktiv.antal.toLocaleString("sv-SE")} utfall ({procentAv(aktiv.andel)})
             </span>
           </span>
         ) : (
@@ -353,7 +351,7 @@ export const CumulativeChart = ({
       <figcaption className="mt-2 min-h-[1.25rem] text-xs leading-relaxed text-muted-foreground">
         {aktiv ? (
           <span className="text-foreground">
-            <span className="font-semibold">{(aktiv.andel * 100).toFixed(1)} %</span> sannolikhet att
+            <span className="font-semibold">{procentAv(aktiv.andel)}</span> sannolikhet att
             resultatet blir minst {format(aktiv.v)}
             {enhet ? ` ${enhet}` : ""}.
           </span>

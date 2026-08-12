@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { data } from "@/data";
 import type { SimulationRecord, SimulationRun } from "@/data/types";
 import { CumulativeChart, DistributionChart } from "./DistributionChart";
+import { beloppKort, beloppMedEnhet, procentAv } from "@/lib/montecarlo/format";
 
 /**
  * SIMULERINGSPANELEN.
@@ -32,15 +33,8 @@ interface SimulationPanelProps {
 /** De val som styr körningen. Antalet är en avvägning, inte en detalj. */
 const ITERATIONSVAL = [1000, 10000, 100000, 1000000] as const;
 
-const procent = (v: number | null | undefined): string =>
-  v === null || v === undefined ? "–" : `${(v * 100).toFixed(1)} %`;
-
-const belopp = (v: number): string => {
-  const abs = Math.abs(v);
-  if (abs >= 1e6) return `${(v / 1e6).toFixed(2)} mn`;
-  if (abs >= 1e4) return `${Math.round(v / 1000)} tkr`;
-  return Math.round(v).toLocaleString("sv-SE");
-};
+const procent = procentAv;
+const belopp = beloppKort;
 
 interface Utfall {
   namn: string;
@@ -254,16 +248,14 @@ export const SimulationPanel = ({ simulation }: SimulationPanelProps) => {
             {o.mal !== null && (
               <p className="mt-3 text-sm leading-relaxed text-foreground">
                 <span className="font-semibold">{procent(o.sannolikheter.narMal)}</span> av utfallen når
-                målet {belopp(o.mal)}
-                {o.enhet ? ` ${o.enhet}` : ""}. Det är en beräkning på angivna antaganden, inte en
-                prognos.
+                målet {beloppMedEnhet(o.mal, o.enhet)}. Det är en beräkning på angivna antaganden,
+                inte en prognos.
               </p>
             )}
             {o.kritiskGrans !== null && (
               <p className="mt-1 text-sm leading-relaxed text-foreground">
                 <span className="font-semibold">{procent(o.sannolikheter.underKritisk)}</span> hamnar under
-                den kritiska gränsen {belopp(o.kritiskGrans)}
-                {o.enhet ? ` ${o.enhet}` : ""}.
+                den kritiska gränsen {beloppMedEnhet(o.kritiskGrans, o.enhet)}.
               </p>
             )}
 

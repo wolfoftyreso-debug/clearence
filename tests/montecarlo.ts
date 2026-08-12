@@ -21,6 +21,7 @@
  */
 
 import { Slumpstrom, nyttFro } from "../src/lib/montecarlo/slump";
+import { beloppKort, beloppMedEnhet, procentAv } from "../src/lib/montecarlo/format";
 import {
   FORDELNINGAR,
   moment,
@@ -832,6 +833,55 @@ const grundspec = (over: Partial<Simuleringsspec> = {}): Simuleringsspec => ({
     "medianen vid 1M ligger nära den vid 100k",
     Math.abs(stor.outputs[1].statistik.median - hundratusen.outputs[1].statistik.median) < spann * 0.05,
     { en_miljon: stor.outputs[1].statistik.median, hundratusen: hundratusen.outputs[1].statistik.median },
+  );
+}
+
+/* --- 12. Beloppen som faktiskt visas ------------------------------------- */
+
+/*
+ * Felet som hittades genom att LÄSA SKÄRMEN, inte genom att köra motorn:
+ * "den kritiska gränsen -500 tkr kr". Formateraren satte ut ett skalord
+ * och panelen la på enheten en gång till. Tusen kronor är redan kronor.
+ * Och "2.29 mn" hade decimalpunkt i en svensk siffra.
+ *
+ * Talen prövas med samma formatering som produkten använder, så de här
+ * kontrollerna fångar även en ändrad lokal.
+ */
+{
+  // sv-SE ger HÅRT blanksteg och ett riktigt minustecken (U+2212), inte
+  // bindestreck. Att jämföra mot ASCII hade fällt provet på typografi i
+  // stället för på innehåll - samma fälla som redan fällt tre tester i
+  // produkten.
+  const normal = (s: string) => s.replace(/\u00a0/g, " ").replace(/\u2212/g, "-");
+
+  check("kronor under tio tusen skrivs ut", normal(beloppMedEnhet(1234, "kr")) === "1 234 kr", beloppMedEnhet(1234, "kr"));
+  check("tusental blir tkr - utan ett andra kr", normal(beloppMedEnhet(-500000, "kr")) === "-500 tkr", beloppMedEnhet(-500000, "kr"));
+  check("miljoner blir mkr", normal(beloppMedEnhet(2290000, "kr")) === "2,29 mkr", beloppMedEnhet(2290000, "kr"));
+  check("ingen enhet dubbleras någonsin", ![1e3, 1e4, 1e5, 1e6, 1e7].some((v) => /kr\s+kr|tkr\s+kr|mkr\s+kr/.test(beloppMedEnhet(v, "kr"))));
+
+  // Antal ska inte skalas: "40 st" är läsbart, "0 tst" är det inte.
+  check("antal skalas inte", normal(beloppMedEnhet(40, "st")) === "40 st", beloppMedEnhet(40, "st"));
+  check("stora antal behåller sin enhet", normal(beloppMedEnhet(40000, "st")) === "40 000 st", beloppMedEnhet(40000, "st"));
+  // En andel rundas inte bort till noll.
+  check("andelar överlever", normal(beloppMedEnhet(0.08, null)) === "0,08", beloppMedEnhet(0.08, null));
+  check("utan enhet står talet ensamt", normal(beloppMedEnhet(12, null)) === "12", beloppMedEnhet(12, null));
+
+  // Procenten: samma fel en rad upp på skärmen - "12.3 %" med
+  // decimalpunkt i en svensk mening.
+  check("procenten skrivs med komma", normal(procentAv(0.123)) === "12,3 %", procentAv(0.123));
+  check("hel procent får ändå en decimal", normal(procentAv(0.2)) === "20,0 %", procentAv(0.2));
+  check("okänd sannolikhet blir tankstreck, inte noll", procentAv(null) === "\u2013", procentAv(null));
+  check("odefinierad likaså", procentAv(undefined) === "\u2013");
+  check("ingen procent har decimalpunkt", ![0, 0.005, 0.123, 0.5, 1].some((v) => /\d\.\d/.test(procentAv(v))));
+
+  // Axeln: skalord utan valuta, och svenskt decimaltecken.
+  check("axeln skriver svenskt decimaltecken", normal(beloppKort(2290000)) === "2,29 mn", beloppKort(2290000));
+  check("axeln skalar tusental", normal(beloppKort(83000)) === "83 tkr", beloppKort(83000));
+  check("axeln lämnar små tal i fred", normal(beloppKort(250)) === "250", beloppKort(250));
+  check(
+    "axeln sätter aldrig ut en fristående valuta",
+    ![250, 83000, 2290000].some((v) => /(^|\s)kr$|mkr/.test(beloppKort(v))),
+    [250, 83000, 2290000].map(beloppKort),
   );
 }
 
