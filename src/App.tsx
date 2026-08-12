@@ -27,6 +27,7 @@ const ForAdvisors = lazy(() => import("./pages/ForAdvisors"));
 const AdvisorReferrals = lazy(() => import("./pages/AdvisorReferrals"));
 const AdvisorProfile = lazy(() => import("./pages/AdvisorProfile"));
 const LiquidityTimeline = lazy(() => import("./pages/LiquidityTimeline"));
+const DashboardSimulations = lazy(() => import("./pages/DashboardSimulations"));
 const LiquidityPlanner = lazy(() => import("./pages/LiquidityPlanner"));
 const KBRModule = lazy(() => import("./pages/KBRModule"));
 const Contact = lazy(() => import("./pages/Contact"));
@@ -103,6 +104,14 @@ const App = () => (
                   element={
                     <ProtectedRoute>
                       <LiquidityTimeline />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/dashboard/simuleringar"
+                  element={
+                    <ProtectedRoute>
+                      <DashboardSimulations />
                     </ProtectedRoute>
                   }
                 />

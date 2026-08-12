@@ -1,5 +1,5 @@
 import { useMemo, useState, type FormEvent } from "react";
-import { useNavigate } from "react-router";
+import { Link, useNavigate } from "react-router";
 import { buildKeyFigures, figureById, type FigureId } from "@/lib/liquidityKeyFigures";
 import { KeyFigureDetail } from "@/components/liquidity/KeyFigureDetail";
 import { GuidedArrival } from "@/components/GuidedArrival";
@@ -31,6 +31,7 @@ import {
   Loader2,
   ArrowRight,
   Info,
+  Dices,
 } from "lucide-react";
 import { ChartSlot } from "@/components/liquidity/ChartSlot";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -949,6 +950,36 @@ const LiquidityTimeline = () => {
           </Card>
           </>
           )}
+
+          {/*
+            VÄGEN VIDARE: från ETT utfall till fördelningen av alla.
+            Scenarierna ovan svarar "vad händer om X". En simulering svarar
+            "hur troligt är X" - samma fråga, men med osäkerheten synlig.
+            Länken ligger här och inte i huvudmenyn: menyn har sju val, och
+            taket är satt med avsikt (se DashboardShell).
+          */}
+          <div className="mt-6 rounded-md border border-border bg-card p-5">
+            <div className="flex items-start gap-3">
+              <Dices className="mt-0.5 h-5 w-5 flex-shrink-0 text-accent" aria-hidden="true" />
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold text-foreground">
+                  Hur troligt är det egentligen?
+                </p>
+                <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+                  Planen ovan räknar med ett antagande per post. En simulering räknar tusentals
+                  gånger med osäkerheten inlagd och visar hela fördelningen – hur ofta kassan
+                  räcker, och hur illa det blir när den inte gör det.
+                </p>
+                <Link
+                  to="/dashboard/simuleringar"
+                  className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-accent underline-offset-4 hover:underline"
+                >
+                  Simulera utfallet
+                  <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                </Link>
+              </div>
+            </div>
+          </div>
       </div>
     </DashboardShell>
   );

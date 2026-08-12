@@ -13,8 +13,8 @@
  *     golv som om det vore en prognos.
  */
 
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { readFileSync, readdirSync } from "node:fs";
+import { join, sep } from "node:path";
 import { analyseCrisis } from "../src/lib/crisisAnalysis";
 import { playbookForTask, type TaskContext } from "../src/lib/taskIntelligence";
 import {
@@ -352,6 +352,131 @@ check("brödtexten säger till vilket konto", spec.paymentAccounts.every((a) => 
 check("brödtexten ger referensen", forward.body.includes(spec.reference));
 check("brödtexten nämner bilagan", /bifogad som PDF/.test(forward.body));
 check("brödtexten namnger säljaren med org.nr", forward.body.includes(spec.seller.orgNumber));
+
+/* --- 6. Det som är byggt ska gå att nå ------------------------------------ */
+
+/*
+ * VARFÖR DEN HÄR VAKTEN FINNS.
+ *
+ * En komponent kan vara färdig, testad och korrekt - och ändå värdelös,
+ * för att ingen sida importerar den. Det hände: hela simuleringspanelen
+ * fanns, med motor, databas och 289 gröna kontroller bakom sig, men var
+ * inte nåbar från något håll i appen. Typkontrollen var nöjd, bygget var
+ * nöjt, testerna var nöjda. Bara användaren hade märkt det.
+ *
+ * Vakten läser importgrafen från src/main.tsx och kräver att varje
+ * komponent går att komma fram till. Undantagen står i UNDANTAG nedan och
+ * ska motiveras där - inte tyst utökas.
+ */
+
+const SRC = join(process.cwd(), "src");
+
+/** Läser ut varje modul en fil importerar - statiskt, lazy eller re-export. */
+const importsIn = (source: string): string[] => [
+  ...[...source.matchAll(/(?:^|[\s;{(=])(?:import|export)\s[^;]*?from\s*["']([^"']+)["']/g)].map((m) => m[1]),
+  ...[...source.matchAll(/\bimport\s*\(\s*["']([^"']+)["']\s*\)/g)].map((m) => m[1]),
+  ...[...source.matchAll(/(?:^|[\s;])import\s*["']([^"']+)["']/g)].map((m) => m[1]),
+];
+
+/** Löser ett modulnamn till en fil i src/, eller null för paket. */
+const resolveModule = (spec: string, fromFile: string): string | null => {
+  let base: string;
+  if (spec.startsWith("@/")) base = join(SRC, spec.slice(2));
+  else if (spec.startsWith("./") || spec.startsWith("../")) base = join(fromFile, "..", spec);
+  else return null; // ett paket i node_modules
+  for (const candidate of [base, `${base}.tsx`, `${base}.ts`, join(base, "index.tsx"), join(base, "index.ts")]) {
+    try {
+      if (readFileSync(candidate, "utf8")) return candidate;
+    } catch {
+      /* nästa kandidat */
+    }
+  }
+  return null;
+};
+
+const reachable = new Set<string>();
+const queue = [join(SRC, "main.tsx")];
+while (queue.length > 0) {
+  const file = queue.pop()!;
+  if (reachable.has(file)) continue;
+  reachable.add(file);
+  let source: string;
+  try {
+    source = readFileSync(file, "utf8");
+  } catch {
+    continue;
+  }
+  for (const spec of importsIn(source)) {
+    const resolved = resolveModule(spec, file);
+    if (resolved && !reachable.has(resolved)) queue.push(resolved);
+  }
+}
+check("importgrafen gick att gå igenom", reachable.size > 100, reachable.size);
+
+/**
+ * Komponenter som med avsikt inte nås från main.tsx.
+ *
+ * Tom lista är det normala. Varje post ska bära ett skäl - och skälet
+ * "vi hann inte koppla in den" är inte ett skäl, det är just det den här
+ * vakten finns för att hitta.
+ */
+const UNDANTAG: Record<string, string> = {};
+
+const readDir = (dir: string): string[] => {
+  const out: string[] = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) out.push(...readDir(full));
+    else if (entry.name.endsWith(".tsx")) out.push(full);
+  }
+  return out;
+};
+
+// src/components/ui/ är shadcn-primitiv: de levereras som ett komplett
+// bibliotek och alla används inte samtidigt. Resten är vår egen kod, och
+// vår egen kod ska ha en användare.
+const ownComponents = readDir(join(SRC, "components")).filter((f) => !f.includes(`${sep}ui${sep}`));
+check("komponenterna hittades", ownComponents.length > 30, ownComponents.length);
+
+const unreachable = ownComponents
+  .filter((f) => !reachable.has(f))
+  .map((f) => f.slice(SRC.length + 1))
+  .filter((rel) => !(rel in UNDANTAG));
+check("varje komponent går att nå från appen", unreachable.length === 0, unreachable);
+
+// Samma sak för sidorna, men strängare: en sida som App.tsx importerar
+// utan att ge en rutt är en sida ingen kan öppna.
+const pageSource = readFileSync(join(SRC, "App.tsx"), "utf8");
+const pageNames = [...pageSource.matchAll(/const\s+(\w+)\s*=\s*lazy\(\s*\(\)\s*=>\s*import\(/g)].map((m) => m[1]);
+check("de lata sidorna hittades", pageNames.length > 20, pageNames.length);
+
+// Sidan kan sitta djupt: element={<ProtectedRoute><Dashboard /></ProtectedRoute>}.
+// Klammerräkning i stället för ett mönster som bara tål det enkla fallet -
+// annars hade vakten missat varenda skyddad sida i produkten.
+const renderedInRoutes = new Set<string>();
+for (const match of pageSource.matchAll(/element=\{/g)) {
+  let djup = 1;
+  let i = match.index! + match[0].length;
+  for (; i < pageSource.length && djup > 0; i += 1) {
+    if (pageSource[i] === "{") djup += 1;
+    else if (pageSource[i] === "}") djup -= 1;
+  }
+  for (const tag of pageSource.slice(match.index!, i).matchAll(/<([A-Z]\w*)[\s/>]/g)) {
+    renderedInRoutes.add(tag[1]);
+  }
+}
+check("rutternas element gick att läsa", renderedInRoutes.size > 20, renderedInRoutes.size);
+const routeless = pageNames.filter((name) => !renderedInRoutes.has(name));
+check("varje inläst sida har en rutt", routeless.length === 0, routeless);
+
+// Och den lucka som gav upphov till vakten, uttryckligen namngiven: om
+// någon tar bort sidan eller rutten ska det synas här och inte först hos
+// en användare som letar efter simuleringarna.
+check(
+  "simuleringspanelen nås från appen",
+  reachable.has(join(SRC, "components/simulation/SimulationPanel.tsx")),
+);
+check("och sidan har en rutt", ROUTES.includes("/dashboard/simuleringar"), ROUTES.length);
 
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);
