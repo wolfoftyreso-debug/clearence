@@ -20,7 +20,7 @@
  * Körs av api/tests/run.sh, som reser databasen först.
  */
 
-import { createApiServer, handle } from "../server/index";
+import { createApiServer, datum, handle } from "../server/index";
 import { closePool, provaDatabasroll, withAnon, withUser } from "../server/db";
 import { hashPassword, sha256, verifyPassword } from "../server/auth";
 import { nollstallGranser, provaGrans } from "../server/rateLimit";
@@ -1810,6 +1810,228 @@ check("en utomstående kan inte påbörja uppladdning i annans ärende", bertilS
     ["POST", `/v1/cases/${CASE_A}/conversations`],
     ["POST", `/v1/conversations/${gruppId}/merge`],
     ["GET", "/v1/mentions"],
+  ] as const) {
+    const svar = await call(metod, vag, { body: {} });
+    check(`${metod} ${vag.replace(/[0-9a-f-]{36}/g, "{id}")} kräver inloggning`, svar.status === 401, svar.status);
+  }
+}
+
+/* --- 8m7a. datum(): regeln i sig, utan databas ------------------------- */
+
+/*
+ * Frågorna castar numera date-kolumnerna till text, och DÄRFÖR skulle
+ * proven nedanför inte märka om någon bytte tillbaka till iso(): en
+ * sträng in ger samma sträng ut oavsett funktion. Regeln måste alltså
+ * prövas där den bor.
+ *
+ * Två vägar in finns kvar utan cast - `returning *` i avbockningen och
+ * tilldelningen - och för dem är datum() det enda som står emellan
+ * fristen och en dag bakåt.
+ */
+{
+  // pg ger LOKAL midnatt för en date-kolumn. Det är exakt den formen som
+  // .toISOString() förvandlar till gårdagen öster om Greenwich.
+  const lokalMidnatt = new Date(2026, 9, 1, 0, 0, 0);
+  check("datum() ger det lokala datumet", datum(lokalMidnatt) === "2026-10-01", datum(lokalMidnatt));
+  check(
+    "och alltså inte det UTC-skiftade",
+    datum(lokalMidnatt) !== lokalMidnatt.toISOString().slice(0, 10) ||
+      lokalMidnatt.toISOString().startsWith("2026-10-01"),
+    { datum: datum(lokalMidnatt), iso: lokalMidnatt.toISOString() },
+  );
+  check("en redan textad kolumn lämnas i fred", datum("2026-10-01") === "2026-10-01");
+  check("en tidsstämpel klipps till sitt datum", datum("2026-10-01T22:00:00.000Z") === "2026-10-01");
+  check("null förblir null", datum(null) === null && datum(undefined) === null);
+  // Ensiffriga månader och dagar ska nollfyllas, annars blir formen fel.
+  check("ensiffrigt nollfylls", datum(new Date(2026, 0, 5, 0, 0, 0)) === "2026-01-05", datum(new Date(2026, 0, 5)));
+}
+
+/* --- 8m7. Likviditeten: datumen, ägarskapet och KBR-sparningen ---------- */
+
+/*
+ * TVÅ FEL SOM BÅDA VAR OSYNLIGA HÄR INNE.
+ *
+ * 1. ETT DATUM ÄR INTE EN TIDSSTÄMPEL. due_date och issue_date är
+ *    date-kolumner. `pg` ger tillbaka JS-Date satt till LOKAL midnatt, och
+ *    iso() gjorde .toISOString() på den: i svensk drift blev 2026-08-12
+ *    till "2026-08-11T22:00:00.000Z". Fel dag, i en produkt vars hela
+ *    poäng är att räkna ner till en frist. Testcontainern kör UTC, så
+ *    felet KUNDE INTE synas här - det uppstår först i den tidszon
+ *    tjänsten ska stå i. Kontrollerna nedan prövar därför formen
+ *    (yyyy-MM-dd, tio tecken), som är sann i varje tidszon.
+ *
+ * 2. KBR-BEDÖMNINGEN GICK INTE ATT SPARA ALLS. Radskyddet är
+ *    can_write_case(case_id) och klienten skickade null. Varje sparning
+ *    avvisades; vyn skrev "Kunde inte spara analysen just nu" åt alla.
+ */
+{
+  const agnesL = await call("POST", "/v1/auth/login", {
+    body: { email: "agnes@bolag-a.se", password: "hemligt-losen-agnes" },
+  });
+  const tok: string = agnesL.body.token as string;
+
+  /* --- Betalningarna --- */
+
+  const nyaBet = await call("POST", `/v1/cases/${CASE_A}/payments`, {
+    token: tok,
+    body: {
+      rows: [
+        { label: "Hyra oktober", amount: 48000, category: "rent", status: "pending", dueDate: "2026-10-01" },
+        { label: "Arbetsgivaravgift", amount: 91250.5, category: "tax", status: "pending", dueDate: "2026-10-12", recurring: true },
+      ],
+    },
+  });
+  check("betalningar går att skriva", nyaBet.status === 201, nyaBet.body);
+  const bet = nyaBet.body.payments as Record<string, unknown>[];
+  check("båda raderna kom tillbaka", bet.length === 2, bet.length);
+
+  // DATUMET. Tio tecken, inget T, ingen Z - och samma dag som skrevs.
+  const hyran = bet.find((b) => b.label === "Hyra oktober");
+  check("förfallodagen är ett datum, inte en tidsstämpel", hyran?.dueDate === "2026-10-01", hyran?.dueDate);
+  check(
+    "och den bär varken tid eller tidszon",
+    typeof hyran?.dueDate === "string" && !/[TZ]/.test(hyran.dueDate as string),
+    hyran?.dueDate,
+  );
+  check("öret överlever", bet.find((b) => b.label === "Arbetsgivaravgift")?.amount === 91250.5, bet);
+  check("recurring kommer med som boolean", hyran?.recurring === false, hyran?.recurring);
+
+  // Samma sak på LÄSVÄGEN, som är den som visas i tidslinjen.
+  const lastaBet = await call("GET", `/v1/cases/${CASE_A}/payments`, { token: tok });
+  const lastHyra = (lastaBet.body.payments as Record<string, unknown>[]).find((b) => b.label === "Hyra oktober");
+  check("läsvägen ger samma datum", lastHyra?.dueDate === "2026-10-01", lastHyra?.dueDate);
+
+  const bytStatus = await call("PATCH", `/v1/payments/${hyran?.id}`, {
+    token: tok,
+    body: { status: "paid" },
+  });
+  check("statusen går att ändra", bytStatus.status === 200 && bytStatus.body.status === "paid", bytStatus.body);
+  check("och datumet står kvar orört", bytStatus.body.dueDate === "2026-10-01", bytStatus.body.dueDate);
+
+  /* --- Fakturorna --- */
+
+  const nyaFak = await call("POST", `/v1/cases/${CASE_A}/invoices`, {
+    token: tok,
+    body: {
+      rows: [
+        { label: "Kundfaktura 101", amount: 125000, direction: "in", status: "unpaid",
+          issueDate: "2026-09-30", dueDate: "2026-10-30", counterpart: "Bygg AB" },
+      ],
+    },
+  });
+  check("fakturor går att skriva", nyaFak.status === 201, nyaFak.body);
+  const fak = (nyaFak.body.invoices as Record<string, unknown>[])[0];
+  check("fakturadatumet är ett datum", fak?.issueDate === "2026-09-30", fak?.issueDate);
+  check("förfallodagen är ett datum", fak?.dueDate === "2026-10-30", fak?.dueDate);
+  check("motparten följer med", fak?.counterpart === "Bygg AB", fak?.counterpart);
+
+  const lastaFak = await call("GET", `/v1/cases/${CASE_A}/invoices`, { token: tok });
+  check("fakturorna går att läsa", (lastaFak.body.invoices as unknown[]).length === 1, lastaFak.body);
+  const fakBytt = await call("PATCH", `/v1/invoices/${fak?.id}`, { token: tok, body: { status: "paid" } });
+  check("fakturastatusen går att ändra", fakBytt.body.status === "paid", fakBytt.body);
+
+  // UPPGIFTERNAS förfallodag hade samma fel.
+  const nyUppgift = await call("POST", `/v1/cases/${CASE_A}/tasks`, {
+    token: tok,
+    body: { label: "Kalla till kontrollstämma", dueDate: "2026-11-03" },
+  });
+  check("uppgiftens förfallodag är ett datum", nyUppgift.body.dueDate === "2026-11-03", nyUppgift.body.dueDate);
+  const uppgifterna = await call("GET", `/v1/cases/${CASE_A}/tasks`, { token: tok });
+  const denNya = (uppgifterna.body.tasks as Record<string, unknown>[]).find((t) => t.label === "Kalla till kontrollstämma");
+  check("och läsvägen ger samma datum", denNya?.dueDate === "2026-11-03", denNya?.dueDate);
+  // Avbockningen går genom "returning *" - utan cast i frågan. Nätet i
+  // datum() ska fånga den ändå.
+  const bockad = await call("POST", `/v1/tasks/${denNya?.id}/done`, { token: tok, body: { done: true } });
+  check("avbockningen behåller datumets form", bockad.body.dueDate === "2026-11-03", bockad.body.dueDate);
+
+  /* --- Ägarskapet: user_id och case_id är serverns --- */
+
+  const foreignBet = await call("POST", `/v1/cases/${CASE_B}/payments`, {
+    token: tok,
+    body: { rows: [{ label: "Smyg", amount: 1, category: "other", status: "pending", dueDate: "2026-10-01" }] },
+  });
+  check("en utomstående kan inte skriva betalningar i annans ärende", foreignBet.status >= 400, foreignBet.body);
+  const foreignFak = await call("POST", `/v1/cases/${CASE_B}/invoices`, {
+    token: tok,
+    body: { rows: [{ label: "Smyg", amount: 1, direction: "in", status: "unpaid", issueDate: "2026-09-01", dueDate: "2026-10-01" }] },
+  });
+  check("och inte fakturor heller", foreignFak.status >= 400, foreignFak.body);
+
+  // user_id i raden ska inte kunna peka om vem som förde in den.
+  await call("POST", `/v1/cases/${CASE_A}/payments`, {
+    token: tok,
+    body: { rows: [{ label: "Vems rad", amount: 10, category: "other", status: "pending", dueDate: "2026-10-05", userId: BERTIL, user_id: BERTIL }] },
+  });
+  const agare = await withAnon(async (tx) => {
+    const { rows } = await tx.query("select user_id from public.payments where label = $1::text", ["Vems rad"]);
+    return rows[0]?.user_id ?? null;
+  });
+  check("user_id i raden skriver inte om vem som förde in den", agare === AGNES, agare);
+
+  /* --- Formen prövas i servern --- */
+
+  for (const trasig of [
+    { label: "", amount: 1, category: "rent", status: "pending", dueDate: "2026-10-01" },
+    { label: "A", amount: -5, category: "rent", status: "pending", dueDate: "2026-10-01" },
+    { label: "A", amount: 1, category: "hyra", status: "pending", dueDate: "2026-10-01" },
+    { label: "A", amount: 1, category: "rent", status: "kanske", dueDate: "2026-10-01" },
+    { label: "A", amount: 1, category: "rent", status: "pending", dueDate: "1 oktober 2026" },
+    { label: "A", amount: 1, category: "rent", status: "pending", dueDate: "2026-10-01T00:00:00Z" },
+  ]) {
+    const svar = await call("POST", `/v1/cases/${CASE_A}/payments`, { token: tok, body: { rows: [trasig] } });
+    check(`trasig betalning nekas: ${JSON.stringify(trasig)}`, svar.status === 400, svar.body);
+  }
+  const utanLista = await call("POST", `/v1/cases/${CASE_A}/payments`, { token: tok, body: { rows: "nej" } });
+  check('"rows" måste vara en lista', utanLista.status === 400, utanLista.body);
+  const forManga = await call("POST", `/v1/cases/${CASE_A}/payments`, {
+    token: tok,
+    body: { rows: Array.from({ length: 201 }, () => ({ label: "A", amount: 1, category: "other", status: "pending", dueDate: "2026-10-01" })) },
+  });
+  check("och taket på antalet rader hålls", forManga.status === 400, forManga.body);
+
+  /* --- KBR: bedömningen som inte gick att spara --- */
+
+  const kbrSvar = await call("POST", `/v1/cases/${CASE_A}/kbr`, {
+    token: tok,
+    body: {
+      orgNumber: "556000-0001",
+      companyName: "Bolag A AB",
+      ambitionLevel: "hog",
+      hasRelatedCompanies: false,
+      isPartOfLargerStructure: false,
+      shareCapital: 25000,
+      totalAssets: 100000,
+      totalLiabilities: 140000,
+      status: "critical",
+    },
+  });
+  check("bedömningen går att spara", kbrSvar.status === 201, kbrSvar.body);
+  check("och den bär sin status", kbrSvar.body.status === "critical", kbrSvar.body);
+
+  // Och den går att läsa tillbaka - det är hela poängen med att spara den.
+  const kbrLast = await call("GET", `/v1/cases/${CASE_A}/kbr`, { token: tok });
+  check("bedömningen läses tillbaka", kbrLast.body?.status === "critical", kbrLast.body);
+
+  const kbrFrammande = await call("POST", `/v1/cases/${CASE_B}/kbr`, {
+    token: tok,
+    body: { shareCapital: 1, totalAssets: 1, totalLiabilities: 1, status: "warning" },
+  });
+  check("en utomstående kan inte spara bedömning i annans ärende", kbrFrammande.status >= 400, kbrFrammande.body);
+
+  const kbrTrasig = await call("POST", `/v1/cases/${CASE_A}/kbr`, {
+    token: tok,
+    body: { shareCapital: 1, totalAssets: 1, totalLiabilities: 1, status: "kanske" },
+  });
+  check("en okänd status nekas", kbrTrasig.status === 400, kbrTrasig.body);
+
+  // Utan inloggning finns ingen av vägarna.
+  for (const [metod, vag] of [
+    ["POST", `/v1/cases/${CASE_A}/payments`],
+    ["PATCH", `/v1/payments/${hyran?.id}`],
+    ["GET", `/v1/cases/${CASE_A}/invoices`],
+    ["POST", `/v1/cases/${CASE_A}/invoices`],
+    ["PATCH", `/v1/invoices/${fak?.id}`],
+    ["POST", `/v1/cases/${CASE_A}/kbr`],
   ] as const) {
     const svar = await call(metod, vag, { body: {} });
     check(`${metod} ${vag.replace(/[0-9a-f-]{36}/g, "{id}")} kräver inloggning`, svar.status === 401, svar.status);

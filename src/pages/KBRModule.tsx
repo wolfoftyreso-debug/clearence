@@ -254,8 +254,19 @@ const KBRModule = () => {
     setSaveError(null);
 
     try {
+      // ÄRENDET MÅSTE MED. Utan det avvisar radskyddet varje sparning -
+      // kbr_assessments policy är can_write_case(case_id), och
+      // can_write_case(null) är falskt. Den här vyn skickade null och har
+      // därför svarat "Kunde inte spara analysen just nu" åt alla sedan
+      // flerbolagsmigreringen bytte policyerna från användare till ärende.
+      //
+      // Finns inget ärende ännu skapas ett, precis som likviditetsplanen
+      // gör när den behöver ett att spara i.
+      const target = latestCase ?? (await data.cases.createMinimal(user.id));
+
       await data.kbr.create({
         userId: user.id,
+        caseId: target.id,
         orgNumber: formData.orgNumber || null,
         companyName: formData.companyInfo?.name ?? null,
         ambitionLevel: formData.ambitionLevel,

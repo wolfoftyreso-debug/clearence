@@ -40,13 +40,19 @@ import type {
   CustomerOverview,
   DocumentRecord,
   InvitationPeek,
+  InvoiceRecord,
+  InvoiceStatus,
+  KbrAssessmentInput,
   NewContactMessage,
+  NewInvoice,
+  NewPayment,
   NotificationDeliveryRecord,
   OpenMention,
   NotificationPrefsInput,
   NotificationPrefsRecord,
   OutboundEmailRecord,
   PaymentRecord,
+  PaymentStatus,
   ProfessionalTerms,
   SecretInfo,
   SharedCaseView,
@@ -132,6 +138,12 @@ export const MIGRATED_PORTS = [
   "tasks.assign",
   "tasks.seed",
   "payments.listByCase",
+  "payments.createMany",
+  "payments.updateStatus",
+  "invoices.listByCase",
+  "invoices.createMany",
+  "invoices.updateStatus",
+  "kbr.create",
   "documents.listByCase",
   "documents.setReview",
   "documents.getDownloadUrl",
@@ -337,14 +349,6 @@ const tasks = {
   async seed(caseId: string, labels: string[]): Promise<void> {
     if (labels.length === 0) return;
     await apiFetch(`/v1/cases/${caseId}/tasks/seed`, { method: "POST", body: { labels } });
-  },
-};
-
-const payments = {
-  ...supabaseAdapter.payments,
-  async listByCase(caseId: string): Promise<PaymentRecord[]> {
-    const res = await apiFetch<{ payments: PaymentRecord[] }>(`/v1/cases/${caseId}/payments`);
-    return res.payments;
   },
 };
 
@@ -730,10 +734,107 @@ const notificationSettings = {
   },
 };
 
+/**
+ * Kontrollbalansbedömningen.
+ *
+ * `create` gick INTE att spara mot den riktiga backenden: radskyddet på
+ * kbr_assessments är can_write_case(case_id), och anroparen skickade
+ * case_id som null. Varje sparning avvisades, vyn skrev "Kunde inte spara
+ * analysen just nu" - varje gång. Ärendet ligger nu i sökvägen, så
+ * misstaget inte går att göra om.
+ */
 const kbr = {
   ...supabaseAdapter.kbr,
+  async create(input: KbrAssessmentInput & { userId: string }): Promise<void> {
+    if (!input.caseId) {
+      // Ett tydligt fel slår ett tyst. Utan ärende finns ingen rad som
+      // radskyddet kan släppa igenom, och det ska sägas rakt ut.
+      throw new Error("Bedömningen måste höra till ett ärende.");
+    }
+    // userId skickas inte: servern tar den ur den prövade sessionen.
+    await apiFetch(`/v1/cases/${input.caseId}/kbr`, {
+      method: "POST",
+      body: {
+        orgNumber: input.orgNumber,
+        companyName: input.companyName,
+        ambitionLevel: input.ambitionLevel,
+        hasRelatedCompanies: input.hasRelatedCompanies,
+        isPartOfLargerStructure: input.isPartOfLargerStructure,
+        shareCapital: input.shareCapital,
+        totalAssets: input.totalAssets,
+        totalLiabilities: input.totalLiabilities,
+        status: input.status,
+      },
+    });
+  },
   async getLatestByCase(caseId: string) {
     return apiFetch<{ status: string; createdAt: string } | null>(`/v1/cases/${caseId}/kbr`);
+  },
+};
+
+/**
+ * Likviditeten: betalningar och fakturor.
+ *
+ * `userId` i raderna skickas inte vidare. Servern tar den ur sessionen -
+ * ett fält klienten fyller i är ett fält klienten kan ljuga i, och
+ * user_id är den kolumn som säger vem som förde in raden.
+ */
+const payments = {
+  ...supabaseAdapter.payments,
+  async listByCase(caseId: string): Promise<PaymentRecord[]> {
+    const res = await apiFetch<{ payments: PaymentRecord[] }>(`/v1/cases/${caseId}/payments`);
+    return res.payments;
+  },
+  async createMany(rows: (NewPayment & { userId: string })[]): Promise<PaymentRecord[]> {
+    if (rows.length === 0) return [];
+    const caseId = rows[0].caseId;
+    const res = await apiFetch<{ payments: PaymentRecord[] }>(`/v1/cases/${caseId}/payments`, {
+      method: "POST",
+      body: {
+        rows: rows.map((r) => ({
+          label: r.label,
+          amount: r.amount,
+          category: r.category,
+          status: r.status,
+          dueDate: r.dueDate,
+          recurring: r.recurring,
+        })),
+      },
+    });
+    return res.payments;
+  },
+  async updateStatus(id: string, status: PaymentStatus): Promise<void> {
+    await apiFetch(`/v1/payments/${id}`, { method: "PATCH", body: { status } });
+  },
+};
+
+const invoices = {
+  ...supabaseAdapter.invoices,
+  async listByCase(caseId: string): Promise<InvoiceRecord[]> {
+    const res = await apiFetch<{ invoices: InvoiceRecord[] }>(`/v1/cases/${caseId}/invoices`);
+    return res.invoices;
+  },
+  async createMany(rows: (NewInvoice & { userId: string })[]): Promise<InvoiceRecord[]> {
+    if (rows.length === 0) return [];
+    const caseId = rows[0].caseId;
+    const res = await apiFetch<{ invoices: InvoiceRecord[] }>(`/v1/cases/${caseId}/invoices`, {
+      method: "POST",
+      body: {
+        rows: rows.map((r) => ({
+          label: r.label,
+          amount: r.amount,
+          direction: r.direction,
+          status: r.status,
+          issueDate: r.issueDate,
+          dueDate: r.dueDate,
+          counterpart: r.counterpart,
+        })),
+      },
+    });
+    return res.invoices;
+  },
+  async updateStatus(id: string, status: InvoiceStatus): Promise<void> {
+    await apiFetch(`/v1/invoices/${id}`, { method: "PATCH", body: { status } });
   },
 };
 
@@ -765,6 +866,7 @@ export const awsAdapter: DataPort = {
   dialogue: dialogue as DataPort["dialogue"],
   tasks: tasks as DataPort["tasks"],
   payments: payments as DataPort["payments"],
+  invoices: invoices as DataPort["invoices"],
   documents: documents as DataPort["documents"],
   messages: messages as DataPort["messages"],
   notificationSettings: notificationSettings as DataPort["notificationSettings"],

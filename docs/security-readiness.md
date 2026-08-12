@@ -236,6 +236,8 @@ felaktigt escape-tecken. Grönt är inte samma sak som prövat.
 | `test:api` efter rond 6 | **349 / 349** (mot riktig Postgres) |
 | `test:apispec` efter rond 6 | **432 / 432** — vakten prövar numera METOD, inte bara sökväg |
 | `test:api` efter rond 7 | **400 / 400** |
+| `test:api` efter rond 8 | **445 / 445**, gröna även med `TZ=Europe/Stockholm` |
+| `test:apispec` efter rond 8 | **461 / 461** |
 | `test:aviseringar` efter rond 6 | **191 / 191** |
 | RLS mot ren självhostad Postgres | **alla sviter PASSED** med de nya migrationerna |
 | Uppstartsspärren, end-to-end | **verifierad** (osäker roll → exit 1; säker roll → 200) |
@@ -255,7 +257,7 @@ alla fyra byggen, `typecheck` och `lint`.
 | R-1 | **Ingen körande miljö har prövats.** All verifiering är gjord mot källkod, mallar och en lokal Postgres. Ingress-TLS, faktiska svarsrubriker, HSTS-leverans och nätverkspolicyer är **NOT VERIFIED** mot ett riktigt kluster. | HIGH | Blockerande |
 | R-2 | ~~Filuppladdningens innehållskontroll saknas.~~ **BYGGD OCH PRÖVAD (H-4), S3-vägen verifierad mot riktig SDK (rond 5).** Kvar: MinIO:s egenheter, och att koppla om klientadaptern. | LOW | Byggd och prövad; cutover kvarstår |
 | R-3 | **`TRUSTED_PROXY_HOPS` måste matcha den faktiska kedjan.** Sätts fel (t.ex. 1 när det finns två mellanled) blir hastighetsgränsen antingen kringgåbar eller för trubbig. Default 1 stämmer med chartet; en extra ingress-hop kräver 2. | MEDIUM | Kräver driftbeslut |
-| R-4 | **Halvmigrerad datamodell.** 55 av 139 `DataPort`-metoder går fortfarande mot Supabase med anon-nyckel i frontend. Säkerheten vilar där helt på RLS (253 gröna kontroller), men två backends innebär två uppsättningar policyer att hålla i synk. | MEDIUM | Arkitekturskuld |
+| R-4 | **Halvmigrerad datamodell.** 49 av 139 `DataPort`-metoder går fortfarande mot Supabase med anon-nyckel i frontend. Säkerheten vilar där helt på RLS (253 gröna kontroller), men två backends innebär två uppsättningar policyer att hålla i synk. | MEDIUM | Arkitekturskuld |
 | R-5 | **Ingen MFA och ingen omautentisering** för känsliga driftåtgärder (nyckelvalv, prisplaner, kontostängning). Punkt 21 i uppdraget kräver det "där lämpligt". | MEDIUM | Ej byggt |
 | R-6 | ~~Ingen loggredaktion.~~ **ÅTGÄRDAD (H-2).** Kvar: loggarna bör läsas i skarp drift en gång för att bekräfta att inget oväntat fält dyker upp. | LOW | Åtgärdad, drift-granskning kvarstår |
 | R-7 | Claude-API-nyckeln från den här sessionen **ska roteras**. | MEDIUM | Organisatoriskt |

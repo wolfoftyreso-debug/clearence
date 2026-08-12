@@ -132,6 +132,34 @@ const iso = (value: unknown): string | null => {
 };
 
 /**
+ * ETT DATUM ÄR INTE EN TIDSSTÄMPEL, och det här är skillnaden på en dag.
+ *
+ * `pg` ger tillbaka JS-Date även för en `date`-kolumn, satt till LOKAL
+ * midnatt. Körs iso() på den blir 2026-08-12 i svensk drift
+ * "2026-08-11T22:00:00.000Z" - fel dag, i en produkt vars hela poäng är
+ * att räkna ner till en frist. Utvecklingscontainern kör UTC, så felet
+ * syns inte här; det uppstår först när tjänsten står i den tidszon den
+ * ska stå i.
+ *
+ * Kontraktet säger `date` (yyyy-MM-dd). Kolumnen castas därför till text
+ * redan i frågan, och den här funktionen är säkerhetsnätet för den som
+ * glömmer casten: en Date reduceras till sitt LOKALA datum, aldrig till
+ * sitt UTC-datum.
+ */
+export const datum = (value: unknown): string | null => {
+  if (value === null || value === undefined) return null;
+  if (value instanceof Date) {
+    const ar = value.getFullYear();
+    const man = String(value.getMonth() + 1).padStart(2, "0");
+    const dag = String(value.getDate()).padStart(2, "0");
+    return `${ar}-${man}-${dag}`;
+  }
+  // Redan text (kolumnen castades i frågan). Klipp bort en eventuell
+  // tidsdel så att formen blir densamma oavsett väg hit.
+  return String(value).slice(0, 10);
+};
+
+/**
  * Ärendet, HELT.
  *
  * Den här funktionen returnerade tidigare nio fält av trettio. Adaptern
@@ -238,7 +266,9 @@ const toTask = (row: Record<string, unknown>) => ({
   id: row.id,
   caseId: row.case_id,
   label: row.label,
-  dueDate: iso(row.due_date),
+  // due_date är ett DATE. Se datum() ovan - iso() hade flyttat fristen en
+  // dag bakåt i varje drift öster om Greenwich.
+  dueDate: datum(row.due_date),
   doneAt: iso(row.done_at),
   doneBy: row.done_by,
   source: row.source,
@@ -268,8 +298,21 @@ const toPayment = (row: Record<string, unknown>) => ({
   amount: Number(row.amount),
   category: row.category,
   status: row.status,
-  dueDate: iso(row.due_date),
-  recurring: row.recurring,
+  dueDate: datum(row.due_date),
+  recurring: row.recurring === true,
+});
+
+/** En faktura in eller ut. issue_date och due_date är DATE, inte tidsstämplar. */
+const toInvoice = (row: Record<string, unknown>) => ({
+  id: row.id,
+  caseId: row.case_id,
+  label: row.label,
+  amount: Number(row.amount),
+  direction: row.direction,
+  status: row.status,
+  issueDate: datum(row.issue_date),
+  dueDate: datum(row.due_date),
+  counterpart: row.counterpart ?? null,
 });
 
 /**
@@ -965,7 +1008,9 @@ const caseScoped = (
 
 caseScoped(
   "/v1/cases/:caseId/tasks",
-  "select * from public.case_tasks where case_id = $1 order by created_at asc",
+  `select id, case_id, label, due_date::text as due_date, done_at, done_by,
+          source, created_at, assigned_to
+     from public.case_tasks where case_id = $1 order by created_at asc`,
   toTask,
   "tasks",
 );
@@ -980,7 +1025,9 @@ caseScoped(
 );
 caseScoped(
   "/v1/cases/:caseId/payments",
-  "select * from public.payments where case_id = $1 order by due_date asc",
+  `select id, case_id, label, amount, category, status,
+          due_date::text as due_date, recurring
+     from public.payments where case_id = $1 order by due_date asc`,
   toPayment,
   "payments",
 );
@@ -993,6 +1040,15 @@ caseScoped(
     order by m.created_at asc`,
   toMessage,
   "messages",
+);
+
+caseScoped(
+  "/v1/cases/:caseId/invoices",
+  `select id, case_id, label, amount, direction, status,
+          issue_date::text as issue_date, due_date::text as due_date, counterpart
+     from public.invoices where case_id = $1 order by due_date asc`,
+  toInvoice,
+  "invoices",
 );
 
 router.get("/v1/cases/:caseId/kbr", async (req) => {
@@ -1033,13 +1089,257 @@ router.post("/v1/cases/:caseId/tasks", async (req) => {
   const row = await withUser(caller.userId, async (tx) => {
     const { rows } = await tx.query(
       `insert into public.case_tasks (case_id, label, due_date, source)
-       values ($1, $2, $3, 'manual') returning *`,
+       values ($1, $2, $3, 'manual')
+       returning id, case_id, label, due_date::text as due_date, done_at, done_by,
+                 source, created_at, assigned_to`,
       [caseId, label, (dueDateRaw as string | undefined) ?? null],
     );
     return rows[0] ?? null;
   });
   if (!row) throw forbidden("Uppgiften kunde inte läggas till i det här ärendet.");
   return { status: 201, body: toTask(row) };
+});
+
+/* --- Likviditeten: betalningar och fakturor ------------------------------ */
+
+/*
+ * TVÅ SAKER SERVERN ÄGER I DE HÄR RUTTERNA.
+ *
+ * 1. user_id. Klienten skickade det förut som ett fält i varje rad
+ *    (`NewPayment & { userId }`), vilket är ett fält att ljuga i. Det tas
+ *    numera ur den prövade sessionen. Radskyddet hade ändå stoppat en
+ *    skrivning i annans ärende - can_write_case(case_id) - men user_id är
+ *    den kolumn som säger VEM som förde in raden, och den ska inte gå att
+ *    peka om.
+ *
+ * 2. case_id. Det står i sökvägen, inte i kroppen. En lista där rad tre
+ *    bär ett annat ärende än rutten hade varit en skrivning på två ställen
+ *    i ett anrop.
+ *
+ * Beloppen och datumen prövas här och inte bara i formuläret: ett datum i
+ * fel form når annars databasen som ett kastat typfel mitt i en insert,
+ * och ett NaN-belopp blir en rad ingen kan tolka.
+ */
+
+const PAYMENT_KATEGORIER = ["salary", "tax", "rent", "supplier", "loan", "other"] as const;
+const PAYMENT_STATUSAR = ["pending", "paid", "overdue"] as const;
+const INVOICE_RIKTNINGAR = ["in", "out"] as const;
+const INVOICE_STATUSAR = ["unpaid", "paid", "overdue"] as const;
+
+/** Ett belopp i kronor: ändligt, inte negativt, och avrundat till ören. */
+const belopp = (rad: Record<string, unknown>, falt: string): number => {
+  const n = Number(rad[falt]);
+  if (!Number.isFinite(n) || n < 0) throw badRequest(`Fältet "${falt}" ska vara ett tal ≥ 0.`);
+  return Math.round(n * 100) / 100;
+};
+
+const datumFalt = (rad: Record<string, unknown>, falt: string): string => {
+  const v = rad[falt];
+  if (typeof v !== "string" || !ISO_DATE.test(v)) {
+    throw badRequest(`Fältet "${falt}" ska vara ett datum på formen yyyy-MM-dd.`);
+  }
+  return v;
+};
+
+const text = (rad: Record<string, unknown>, falt: string, max: number): string => {
+  const v = rad[falt];
+  if (typeof v !== "string" || v.trim().length === 0) {
+    throw badRequest(`Fältet "${falt}" saknas.`);
+  }
+  if (v.trim().length > max) throw badRequest(`Fältet "${falt}" är längre än ${max} tecken.`);
+  return v.trim();
+};
+
+const ettAv = <T extends string>(rad: Record<string, unknown>, falt: string, giltiga: readonly T[]): T => {
+  const v = rad[falt];
+  if (typeof v !== "string" || !(giltiga as readonly string[]).includes(v)) {
+    throw badRequest(`Fältet "${falt}" ska vara en av: ${giltiga.join(", ")}.`);
+  }
+  return v as T;
+};
+
+/** Raderna ur kroppen. Ett tak, för en lista utan tak är en gratis minnesattack. */
+const rader = (body: unknown, max = 200): Record<string, unknown>[] => {
+  const v = (body as Record<string, unknown> | undefined)?.rows;
+  if (!Array.isArray(v)) throw badRequest('Fältet "rows" ska vara en lista.');
+  if (v.length > max) throw badRequest(`Högst ${max} rader per anrop.`);
+  return v.map((r) => {
+    if (typeof r !== "object" || r === null) throw badRequest('"rows" ska innehålla objekt.');
+    return r as Record<string, unknown>;
+  });
+};
+
+router.post("/v1/cases/:caseId/payments", async (req) => {
+  const caller = await authenticate(req);
+  const caseId = uuidParam(req, "caseId");
+  const inRader = rader(req.body);
+  if (inRader.length === 0) return { status: 201, body: { payments: [] } };
+  const rows = await withUser(caller.userId, async (tx) => {
+    const { rows } = await tx.query(
+      `insert into public.payments (case_id, user_id, label, amount, category, status, due_date, recurring)
+       select $1::uuid, $2::uuid, x.label, x.amount, x.category::payment_category,
+              x.status::payment_status, x.due_date::date, x.recurring
+         from jsonb_to_recordset($3::jsonb)
+              as x(label text, amount numeric, category text, status text,
+                   due_date text, recurring boolean)
+       returning id, case_id, label, amount, category, status,
+                 due_date::text as due_date, recurring`,
+      [
+        caseId,
+        caller.userId,
+        JSON.stringify(
+          inRader.map((r) => ({
+            label: text(r, "label", 300),
+            amount: belopp(r, "amount"),
+            category: ettAv(r, "category", PAYMENT_KATEGORIER),
+            status: ettAv(r, "status", PAYMENT_STATUSAR),
+            due_date: datumFalt(r, "dueDate"),
+            recurring: r.recurring === true,
+          })),
+        ),
+      ],
+    );
+    return rows;
+  });
+  // Noll rader = radskyddet sa nej. Utfallet prövas, inte vilket lager.
+  if (rows.length === 0) throw forbidden("Betalningarna kunde inte skrivas i det här ärendet.");
+  return { status: 201, body: { payments: rows.map(toPayment) } };
+});
+
+router.patch("/v1/payments/:paymentId", async (req) => {
+  const caller = await authenticate(req);
+  const paymentId = uuidParam(req, "paymentId");
+  const status = ettAv((req.body ?? {}) as Record<string, unknown>, "status", PAYMENT_STATUSAR);
+  const row = await withUser(caller.userId, async (tx) => {
+    const { rows } = await tx.query(
+      `update public.payments set status = $2::payment_status where id = $1::uuid
+       returning id, case_id, label, amount, category, status,
+                 due_date::text as due_date, recurring`,
+      [paymentId, status],
+    );
+    return rows[0] ?? null;
+  });
+  if (!row) throw notFound("Betalningen finns inte, eller får inte ändras.");
+  return { status: 200, body: toPayment(row) };
+});
+
+router.post("/v1/cases/:caseId/invoices", async (req) => {
+  const caller = await authenticate(req);
+  const caseId = uuidParam(req, "caseId");
+  const inRader = rader(req.body);
+  if (inRader.length === 0) return { status: 201, body: { invoices: [] } };
+  const rows = await withUser(caller.userId, async (tx) => {
+    const { rows } = await tx.query(
+      `insert into public.invoices (case_id, user_id, label, amount, direction, status,
+                                    issue_date, due_date, counterpart)
+       select $1::uuid, $2::uuid, x.label, x.amount, x.direction::invoice_direction,
+              x.status::invoice_status, x.issue_date::date, x.due_date::date, x.counterpart
+         from jsonb_to_recordset($3::jsonb)
+              as x(label text, amount numeric, direction text, status text,
+                   issue_date text, due_date text, counterpart text)
+       returning id, case_id, label, amount, direction, status,
+                 issue_date::text as issue_date, due_date::text as due_date, counterpart`,
+      [
+        caseId,
+        caller.userId,
+        JSON.stringify(
+          inRader.map((r) => ({
+            label: text(r, "label", 300),
+            amount: belopp(r, "amount"),
+            direction: ettAv(r, "direction", INVOICE_RIKTNINGAR),
+            status: ettAv(r, "status", INVOICE_STATUSAR),
+            issue_date: datumFalt(r, "issueDate"),
+            due_date: datumFalt(r, "dueDate"),
+            counterpart:
+              r.counterpart === null || r.counterpart === undefined || r.counterpart === ""
+                ? null
+                : text(r, "counterpart", 200),
+          })),
+        ),
+      ],
+    );
+    return rows;
+  });
+  if (rows.length === 0) throw forbidden("Fakturorna kunde inte skrivas i det här ärendet.");
+  return { status: 201, body: { invoices: rows.map(toInvoice) } };
+});
+
+router.patch("/v1/invoices/:invoiceId", async (req) => {
+  const caller = await authenticate(req);
+  const invoiceId = uuidParam(req, "invoiceId");
+  const status = ettAv((req.body ?? {}) as Record<string, unknown>, "status", INVOICE_STATUSAR);
+  const row = await withUser(caller.userId, async (tx) => {
+    const { rows } = await tx.query(
+      `update public.invoices set status = $2::invoice_status where id = $1::uuid
+       returning id, case_id, label, amount, direction, status,
+                 issue_date::text as issue_date, due_date::text as due_date, counterpart`,
+      [invoiceId, status],
+    );
+    return rows[0] ?? null;
+  });
+  if (!row) throw notFound("Fakturan finns inte, eller får inte ändras.");
+  return { status: 200, body: toInvoice(row) };
+});
+
+/**
+ * Kontrollbalansbedömningen sparas PÅ ETT ÄRENDE.
+ *
+ * DEN HÄR RUTTEN FINNS FÖR ATT DET INTE GICK ATT SPARA ALLS.
+ * kbr_assessments radskydd är can_write_case(case_id), och klienten
+ * skickade case_id som null - can_write_case(null) är falskt, så varje
+ * sparning avvisades. Vyn fångade felet och skrev "Kunde inte spara
+ * analysen just nu. Försök igen." Varje gång, för alla. Demoadaptern är
+ * lokal och gjorde rätt, så ingen såg det.
+ *
+ * Att lägga ärendet i SÖKVÄGEN är rättningen som inte kan glömmas bort:
+ * det finns ingen väg att anropa den utan att ange vilket ärende
+ * bedömningen gäller.
+ */
+router.post("/v1/cases/:caseId/kbr", async (req) => {
+  const caller = await authenticate(req);
+  const caseId = uuidParam(req, "caseId");
+  const b = (req.body ?? {}) as Record<string, unknown>;
+  const valfriText = (falt: string, max: number): string | null => {
+    const v = b[falt];
+    if (v === null || v === undefined || v === "") return null;
+    if (typeof v !== "string") throw badRequest(`Fältet "${falt}" ska vara text.`);
+    if (v.trim().length > max) throw badRequest(`Fältet "${falt}" är längre än ${max} tecken.`);
+    return v.trim();
+  };
+  const valfriFlagga = (falt: string): boolean | null => {
+    const v = b[falt];
+    if (v === null || v === undefined) return null;
+    if (typeof v !== "boolean") throw badRequest(`Fältet "${falt}" ska vara sant, falskt eller null.`);
+    return v;
+  };
+  const status = ettAv(b, "status", ["not_required", "warning", "required", "critical"] as const);
+
+  const row = await withUser(caller.userId, async (tx) => {
+    const { rows } = await tx.query(
+      `insert into public.kbr_assessments
+         (user_id, case_id, org_number, company_name, ambition_level,
+          has_related_companies, is_part_of_larger_structure,
+          share_capital, total_assets, total_liabilities, status)
+       values ($1::uuid, $2::uuid, $3, $4, $5, $6, $7, $8, $9, $10, $11::kbr_status)
+       returning id, status, created_at`,
+      [
+        caller.userId,
+        caseId,
+        valfriText("orgNumber", 20),
+        valfriText("companyName", 200),
+        valfriText("ambitionLevel", 40),
+        valfriFlagga("hasRelatedCompanies"),
+        valfriFlagga("isPartOfLargerStructure"),
+        belopp(b, "shareCapital"),
+        belopp(b, "totalAssets"),
+        belopp(b, "totalLiabilities"),
+        status,
+      ],
+    );
+    return rows[0] ?? null;
+  });
+  if (!row) throw forbidden("Bedömningen kunde inte sparas i det här ärendet.");
+  return { status: 201, body: { id: row.id, status: row.status, createdAt: iso(row.created_at) } };
 });
 
 router.post("/v1/cases/:caseId/tasks/seed", async (req) => {

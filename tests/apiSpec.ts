@@ -171,6 +171,30 @@ for (const rutt of rutter) {
 }
 
 /*
+ * ETT DATUM FÅR INTE GÅ GENOM iso().
+ *
+ * `pg` ger tillbaka JS-Date även för en date-kolumn, satt till LOKAL
+ * midnatt. iso() gör .toISOString() - och då blir 2026-10-01 till
+ * "2026-09-30T22:00:00.000Z" i svensk drift. Fel dag, i en produkt vars
+ * hela poäng är att räkna ner till en frist.
+ *
+ * Felet gick inte att se i sviterna: utvecklings- och CI-containern kör
+ * UTC, där skiftet är noll. Den här vakten läser källan i stället, för
+ * den är sann i varje tidszon.
+ */
+const DATUMKOLUMNER = ["due_date", "issue_date", "occurred_on", "period_start", "period_end"];
+for (const kolumn of DATUMKOLUMNER) {
+  const traffar = serverKod.match(new RegExp(`iso\\(row\\.${kolumn}\\)`, "g")) ?? [];
+  check(`${kolumn} serialiseras inte med iso()`, traffar.length === 0, traffar);
+}
+check(
+  "datum() finns och läser det LOKALA datumet ur en Date",
+  /export const datum = [\s\S]{0,400}getFullYear\(\)[\s\S]{0,200}getMonth\(\)[\s\S]{0,200}getDate\(\)/.test(
+    serverKod,
+  ),
+);
+
+/*
  * OCH METODEN MÅSTE VARA DEKLARERAD, INTE BARA SÖKVÄGEN.
  *
  * Kontrollen ovan hade samma sorts lucka som den ersatte. Den prövade att

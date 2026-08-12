@@ -1052,6 +1052,156 @@
         }
       }
     },
+    "/cases/{caseId}/invoices": {
+      "get": {
+        "operationId": "listInvoices",
+        "summary": "Fakturorna i ärendet, in och ut. Datumen är DATE - yyyy-MM-dd, aldrig tidsstämplar.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Fakturorna",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "invoices"
+                  ],
+                  "properties": {
+                    "invoices": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "createInvoices",
+        "summary": "Skriv fakturor i ärendet. user_id tas ur sessionen och case_id ur sökvägen.",
+        "x-status": "beta",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "rows"
+                ],
+                "properties": {
+                  "rows": {
+                    "type": "array",
+                    "maxItems": 200,
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "label",
+                        "amount",
+                        "direction",
+                        "status",
+                        "issueDate",
+                        "dueDate"
+                      ],
+                      "properties": {
+                        "label": {
+                          "type": "string",
+                          "maxLength": 300
+                        },
+                        "amount": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "direction": {
+                          "type": "string",
+                          "enum": [
+                            "in",
+                            "out"
+                          ]
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "unpaid",
+                            "paid",
+                            "overdue"
+                          ]
+                        },
+                        "issueDate": {
+                          "type": "string",
+                          "format": "date",
+                          "description": "yyyy-MM-dd. Ett DATUM, inte en tidsstämpel."
+                        },
+                        "dueDate": {
+                          "type": "string",
+                          "format": "date",
+                          "description": "yyyy-MM-dd. Ett DATUM, inte en tidsstämpel."
+                        },
+                        "counterpart": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "maxLength": 200
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Fakturorna",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "invoices"
+                  ],
+                  "properties": {
+                    "invoices": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/cases/{caseId}/journal": {
       "get": {
         "operationId": "listJournal",
@@ -1101,6 +1251,105 @@
         "responses": {
           "200": {
             "description": "OK"
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "createKbrAssessment",
+        "summary": "Spara en kontrollbalansbedömning PÅ ärendet. Ärendet står i sökvägen: radskyddet är can_write_case(case_id), och en bedömning utan ärende går inte att skriva.",
+        "x-status": "beta",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "shareCapital",
+                  "totalAssets",
+                  "totalLiabilities",
+                  "status"
+                ],
+                "properties": {
+                  "orgNumber": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "maxLength": 20
+                  },
+                  "companyName": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "maxLength": 200
+                  },
+                  "ambitionLevel": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "maxLength": 40
+                  },
+                  "hasRelatedCompanies": {
+                    "type": [
+                      "boolean",
+                      "null"
+                    ]
+                  },
+                  "isPartOfLargerStructure": {
+                    "type": [
+                      "boolean",
+                      "null"
+                    ]
+                  },
+                  "shareCapital": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "totalAssets": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "totalLiabilities": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "not_required",
+                      "warning",
+                      "required",
+                      "critical"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Bedömningen sparad",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
           },
           "default": {
             "description": "Fel",
@@ -1332,6 +1581,111 @@
         "responses": {
           "200": {
             "description": "OK"
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "createPayments",
+        "summary": "Skriv betalningar i ärendet. user_id tas ur sessionen och case_id ur sökvägen - inget av dem läses ur kroppen.",
+        "x-status": "beta",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "rows"
+                ],
+                "properties": {
+                  "rows": {
+                    "type": "array",
+                    "maxItems": 200,
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "label",
+                        "amount",
+                        "category",
+                        "status",
+                        "dueDate"
+                      ],
+                      "properties": {
+                        "label": {
+                          "type": "string",
+                          "maxLength": 300
+                        },
+                        "amount": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "category": {
+                          "type": "string",
+                          "enum": [
+                            "salary",
+                            "tax",
+                            "rent",
+                            "supplier",
+                            "loan",
+                            "other"
+                          ]
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "pending",
+                            "paid",
+                            "overdue"
+                          ]
+                        },
+                        "dueDate": {
+                          "type": "string",
+                          "format": "date",
+                          "description": "yyyy-MM-dd. Ett DATUM, inte en tidsstämpel."
+                        },
+                        "recurring": {
+                          "type": "boolean",
+                          "default": false
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Betalningarna",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "payments"
+                  ],
+                  "properties": {
+                    "payments": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    }
+                  }
+                }
+              }
+            }
           },
           "default": {
             "description": "Fel",
@@ -2476,6 +2830,58 @@
         }
       }
     },
+    "/invoices/{invoiceId}": {
+      "patch": {
+        "operationId": "updateInvoiceStatus",
+        "summary": "Ändra en fakturas status.",
+        "x-status": "beta",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "status"
+                ],
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "unpaid",
+                      "paid",
+                      "overdue"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Fakturan",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/mentions": {
       "get": {
         "operationId": "listMyOpenMentions",
@@ -3541,6 +3947,58 @@
                       "type": "boolean"
                     }
                   }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/payments/{paymentId}": {
+      "patch": {
+        "operationId": "updatePaymentStatus",
+        "summary": "Ändra en betalnings status. Radskyddet avgör om raden får ändras; en rad man inte når ger 404.",
+        "x-status": "beta",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "status"
+                ],
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "pending",
+                      "paid",
+                      "overdue"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Betalningen",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
                 }
               }
             }
