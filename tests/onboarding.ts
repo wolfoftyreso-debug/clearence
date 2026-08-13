@@ -150,6 +150,54 @@ check(
   );
 }
 
+// Kundrecensionerna: tre lägen, och de får inte slås ihop. "Inga omdömen"
+// och "gick inte att matcha" är olika svar, och båda är svar - till
+// skillnad från "ingen hämtning gjordes".
+{
+  const utan = allDone.find((t) => t.id === "recensioner")!;
+  check(`"recensioner" utan hämtning påstår ingenting`, utan.state === "ingen-kalla", utan.state);
+
+  const med = backgroundTasks({ ...ctx, reviewCount: 34 }, BACKGROUND_STEPS)
+    .find((t) => t.id === "recensioner")!;
+  check(`"recensioner" blir klar när Google svarat`, med.state === "klar", med.state);
+  check(`"recensioner" räknar omdömena`, /34 omdömen/.test(med.note), med.note);
+  check(`"recensioner" lovar inte recensenternas identitet`, /aldrig/.test(med.note), med.note);
+
+  const noll = backgroundTasks({ ...ctx, reviewCount: 0 }, BACKGROUND_STEPS)
+    .find((t) => t.id === "recensioner")!;
+  check(`inga omdömen är ett svar`, noll.state === "klar" && /inga omdömen/.test(noll.note), noll.note);
+
+  const omatchat = backgroundTasks({ ...ctx, reviewCount: null }, BACKGROUND_STEPS)
+    .find((t) => t.id === "recensioner")!;
+  check(
+    `omatchat bolag sägs rakt ut i stället för att bli noll omdömen`,
+    /inte att matcha entydigt/.test(omatchat.note),
+    omatchat.note,
+  );
+}
+
+/*
+ * VAKTEN MOT ATT KÄLLAN BYGGS OCH INTE KOPPLAS IN.
+ *
+ * Precis det hände: /v1/sources/website fanns i månader utan att någon
+ * anropade den, och panelen sa "blir live i drift" för att ingen hämtning
+ * gjordes - inte för att hämtningen var omöjlig. Kontrollerna nedan läser
+ * samtalet och kräver att kedjan faktiskt startas.
+ */
+{
+  const intro = readFileSync("src/components/advisor/ClaraIntro.tsx", "utf8");
+  for (const kalla of ["google", "website", "news"]) {
+    check(`samtalet anropar data.sources.${kalla}`, new RegExp(`data\\.sources\\s*\\.?\\s*${kalla}\\(|sources\\n\\s*\\.${kalla}\\(`).test(intro));
+  }
+  // Webbadressen ska komma FRÅN Google, aldrig gissas ur bolagsnamnet.
+  check(
+    "webbadressen gissas aldrig ur bolagsnamnet",
+    !/https?:\/\/\$\{|\.se`|toLowerCase\(\)\s*\+\s*"\.se"/.test(intro),
+  );
+  // Och en källa som inte svarar får inte fälla samtalet.
+  check("varje hämtning fångar sitt fel", (intro.match(/\.catch\(\(\) => null\)/g) ?? []).length >= 3);
+}
+
 // Kärnan i hela filen: momenten utan ansluten källa MÅSTE redovisas som
 // sådana. Blir något av dem "klar" har någon råkat lova en integration
 // som inte finns.

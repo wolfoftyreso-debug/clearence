@@ -69,6 +69,9 @@ import type {
   NotificationDeliveryRecord,
   SimulationRecord,
   SimulationRun,
+  GoogleFetchResult,
+  WebsiteFetchResult,
+  NewsFetchResult,
 } from "./types";
 import type { FinancialSnapshot } from "@/lib/financial/model";
 
@@ -774,6 +777,28 @@ export interface PrivacyPort {
   cancelErasure(): Promise<ErasureRequestRecord>;
 }
 
+/**
+ * DE YTTRE KÄLLORNA: registret, Google, webbplatsen och nyheterna.
+ *
+ * Hämtningarna bor på servern (api/server/{google,website,news}.ts) - dels
+ * för att webbläsaren inte får ringa tredje part, dels för att nycklar och
+ * SSRF-skydd hör hemma där. Porten är vägen dit.
+ *
+ * `null` BETYDER "INGEN HÄMTNING GJORDES", inte "inget hittades". Det är
+ * hela skillnaden: en backend utan serverdel (demoläget, PostgREST-bryggan)
+ * ska säga att den inte hämtade något, och panelen visar då "blir live i
+ * drift". Att i stället returnera ett tomt resultat hade läst som "vi
+ * kollade, det fanns inget" - ett påstående ingen av dem kan stå för.
+ */
+export interface SourcesPort {
+  /** Google Places: webbadress, omdömen och verksamhetsstatus. */
+  google(input: { companyName: string; ort?: string }): Promise<GoogleFetchResult | null>;
+  /** Bolagets egen webbplats. Adressen kommer från Google - aldrig gissad. */
+  website(url: string): Promise<WebsiteFetchResult | null>;
+  /** Nyheter ur driftens RSS-flöden. */
+  news(input: { companyName: string; orgNumber: string }): Promise<NewsFetchResult | null>;
+}
+
 export interface DataPort {
   auth: AuthPort;
   contact: ContactPort;
@@ -802,4 +827,5 @@ export interface DataPort {
   simulations: SimulationsPort;
   privacy: PrivacyPort;
   companyLookup: CompanyLookupPort;
+  sources: SourcesPort;
 }

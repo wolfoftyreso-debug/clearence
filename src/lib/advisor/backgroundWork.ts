@@ -114,6 +114,12 @@ export interface BackgroundContext {
    */
   websiteFetched?: boolean;
   /**
+   * Satt när Google faktiskt tillfrågades den här körningen: antalet
+   * omdömen, eller null när bolaget inte gick att matcha entydigt.
+   * `undefined` = ingen hämtning gjordes.
+   */
+  reviewCount?: number | null;
+  /**
    * Satt när nyhetsflödena faktiskt hämtades den här körningen: antalet
    * träffar. `undefined` betyder att ingen hämtning gjordes (demo- och
    * förhandsläge) - då redovisas raden som "i-drift", inte som saknad.
@@ -229,6 +235,35 @@ export const backgroundTasks = (ctx: BackgroundContext, upTo: number): Backgroun
     if (i >= upTo) {
       return { id: plan.id, label: plan.label, source: plan.source, state: "pagar", note: "" };
     }
+    /*
+     * ETT SVAR SLÅR REGISTRET. Google står som "inte ansluten" i registret
+     * eftersom det beror på en nyckel driften kan sakna - men om källan
+     * FAKTISKT svarat i den här körningen är den bevisligen ansluten här.
+     * Grenen ligger därför före !connected: registret beskriver det
+     * normala, körningen beskriver verkligheten.
+     */
+    /*
+     * Kundrecensionerna. Google har inget organisationsnummer att matcha
+     * på, så två bolag med samma namn går inte att skilja åt - och då
+     * hämtar vi hellre ingenting än fel bolags omdömen. Ett null-svar
+     * betyder alltså "vi frågade, bolaget gick inte att matcha", vilket
+     * är något helt annat än att källan saknas.
+     */
+    if (plan.source === "recensioner" && ctx.reviewCount !== undefined) {
+      return {
+        id: plan.id,
+        label: plan.label,
+        source: plan.source,
+        state: "klar",
+        note:
+          ctx.reviewCount === null
+            ? "Google tillfrågades. Bolaget gick inte att matcha entydigt – då hämtas ingenting hellre än fel bolags omdömen."
+            : ctx.reviewCount === 0
+              ? "Google svarade. Bolaget finns men har inga omdömen."
+              : `${ctx.reviewCount} omdömen hämtade från Google. Recensenternas namn och bilder hämtas aldrig.`,
+      };
+    }
+
     if (!connected) {
       return {
         id: plan.id,

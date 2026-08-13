@@ -39,6 +39,9 @@ import type {
   CustomerInvoiceRecord,
   CustomerOverview,
   ErasureRequestRecord,
+  GoogleFetchResult,
+  WebsiteFetchResult,
+  NewsFetchResult,
   DocumentRecord,
   InvitationPeek,
   InvoiceRecord,
@@ -164,6 +167,9 @@ export const MIGRATED_PORTS = [
   "kbr.getLatestByCase",
   "financial.getLatestSnapshot",
   "financial.importSie",
+  "sources.google",
+  "sources.website",
+  "sources.news",
   "privacy.getErasureRequest",
   "privacy.requestErasure",
   "privacy.cancelErasure",
@@ -825,6 +831,25 @@ const financial = {
  * raderat konto så fort nätet tappar - hela arbetet sker i en transaktion
  * i databasen, och API:et är bara vägen dit.
  */
+/**
+ * De yttre källorna mot det egna API:et.
+ *
+ * Tre anrop, ingen logik. Nycklarna, SSRF-skyddet och flödeslistan bor på
+ * servern - det är hela skälet till att de här rutterna finns i stället för
+ * att webbläsaren ringer Google och fyra tidningar själv.
+ */
+const sources = {
+  async google(input: { companyName: string; ort?: string }): Promise<GoogleFetchResult | null> {
+    return apiFetch<GoogleFetchResult>("/v1/sources/google", { method: "POST", body: input });
+  },
+  async website(url: string): Promise<WebsiteFetchResult | null> {
+    return apiFetch<WebsiteFetchResult>("/v1/sources/website", { method: "POST", body: { url } });
+  },
+  async news(input: { companyName: string; orgNumber: string }): Promise<NewsFetchResult | null> {
+    return apiFetch<NewsFetchResult>("/v1/sources/news", { method: "POST", body: input });
+  },
+};
+
 const privacy = {
   async getErasureRequest(): Promise<ErasureRequestRecord | null> {
     return apiFetch<ErasureRequestRecord | null>("/v1/me/erasure");
@@ -1017,6 +1042,7 @@ export const awsAdapter: DataPort = {
   financial: financial as DataPort["financial"],
   simulations: simulations as DataPort["simulations"],
   privacy: privacy as DataPort["privacy"],
+  sources: sources as DataPort["sources"],
   documents: documents as DataPort["documents"],
   messages: messages as DataPort["messages"],
   notificationSettings: notificationSettings as DataPort["notificationSettings"],

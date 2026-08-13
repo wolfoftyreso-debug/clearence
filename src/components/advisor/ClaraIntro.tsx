@@ -133,6 +133,19 @@ export const ClaraIntro = ({
   const [creating, setCreating] = useState(false);
   const [lookupStatus, setLookupStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [companyInfo, setCompanyInfo] = useState<CompanyInfo | null>(null);
+  /**
+   * BAKGRUNDSHÄMTNINGEN.
+   *
+   * `undefined` betyder "ingen hämtning gjordes" och `null`/siffra betyder
+   * "hämtat, det här blev det". Skillnaden styr panelen: utan hämtning står
+   * raden som "blir live i drift", med hämtning blir den klar - även när
+   * svaret är noll träffar. Noll är ett svar; ingen hämtning är det inte.
+   */
+  const [kallor, setKallor] = useState<{
+    reviews?: number | null;
+    websiteFetched?: boolean;
+    newsHits?: number;
+  }>({});
 
   const [situationId, setSituationId] = useState<string | null>(() => resumed?.situationId ?? null);
   const [answers, setAnswers] = useState<Record<string, string>>(() => resumed?.answers ?? {});
@@ -253,6 +266,44 @@ export const ClaraIntro = ({
       setCompanyInfo(info);
       setLookupStatus("success");
       if (!companyTouched.current) setCompany(info.name);
+
+      /*
+       * HÄR STARTAR BAKGRUNDSARBETET PÅ RIKTIGT.
+       *
+       * Kedjan är inte godtycklig: Google är det enda stället bolagets
+       * WEBBADRESS kommer ifrån, och webbplatsen kan därför inte hämtas
+       * förrän Google svarat. Att i stället gissa en domän ur bolagsnamnet
+       * hade varit precis den sortens uppgift som ser användbar ut och inte
+       * går att stå för (se sources/registry.ts).
+       *
+       * Nyheterna behöver bara namn och organisationsnummer och går därför
+       * parallellt.
+       *
+       * Ingen av hämtningarna får fälla samtalet: en källa som inte svarar
+       * ska bli en ärlig rad i panelen, inte ett avbrutet introduktions-
+       * samtal för någon som sitter i en kris.
+       */
+      void (async () => {
+        const svar = await data.sources.google({ companyName: info.name }).catch(() => null);
+        if (lookupRequest.current !== requestId) return;
+        if (svar === null) return; // Ingen serverdel i den här driften.
+        const traff = svar.status === "traff" ? svar.facts : undefined;
+        setKallor((f) => ({ ...f, reviews: traff?.reviews.count ?? null }));
+
+        const adress = traff?.website;
+        if (!adress) return;
+        const sida = await data.sources.website(adress).catch(() => null);
+        if (lookupRequest.current !== requestId || sida === null) return;
+        setKallor((f) => ({ ...f, websiteFetched: sida.status === "traff" }));
+      })();
+
+      void (async () => {
+        const svar = await data.sources
+          .news({ companyName: info.name, orgNumber })
+          .catch(() => null);
+        if (lookupRequest.current !== requestId || svar === null) return;
+        setKallor((f) => ({ ...f, newsHits: svar.hits.length }));
+      })();
       setEntries((prev) =>
         prev.some((e) => e.text === ONBOARDING.lookupDone)
           ? prev
@@ -606,6 +657,9 @@ export const ClaraIntro = ({
                   companyName: company.trim() || "Bolaget",
                   orgNumber: orgNumber.trim() || "utan nummer",
                   registryHit: lookupStatus === "success",
+                  reviewCount: kallor.reviews,
+                  websiteFetched: kallor.websiteFetched,
+                  newsHits: kallor.newsHits,
                   answered: Object.keys(answers).filter((k) => answers[k] !== "").length,
                   profileFields: profileFilled(profile),
                 }}

@@ -2426,6 +2426,25 @@ export const supabaseAdapter: DataPort = {
    * belastar då webbläsaren i stället för att köas.
    */
   /**
+   * De yttre källorna: PostgREST-bryggan har ingen plats att lägga hämtaren i.
+   *
+   * Hämtningarna kräver en serverdel med nycklar och SSRF-skydd. Den finns
+   * inte här, och därför hämtas ingenting - `null` säger just det. Att
+   * hitta på ett resultat hade varit att påstå att vi kollat.
+   */
+  sources: {
+    async google() {
+      return null;
+    },
+    async website() {
+      return null;
+    },
+    async news() {
+      return null;
+    },
+  },
+
+  /**
    * Radering via bryggan.
    *
    * Allt ligger i databasfunktionerna, och det är avsiktligt: en klient som

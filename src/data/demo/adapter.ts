@@ -2761,6 +2761,25 @@ export const demoAdapter: DataPort = {
   },
 
   /**
+   * De yttre källorna: demoläget har ingen server.
+   *
+   * Hämtningarna kräver en serverdel med nycklar och SSRF-skydd. Den finns
+   * inte här, och därför hämtas ingenting - `null` säger just det. Att
+   * hitta på ett resultat hade varit att påstå att vi kollat.
+   */
+  sources: {
+    async google() {
+      return null;
+    },
+    async website() {
+      return null;
+    },
+    async news() {
+      return null;
+    },
+  },
+
+  /**
    * Radering i demoläget.
    *
    * Demon har ingen databas och därmed ingen transaktion att radera i.

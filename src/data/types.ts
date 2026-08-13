@@ -979,3 +979,52 @@ export interface ErasureRequestRecord {
   cancelledAt: string | null;
   result: Record<string, number> | null;
 }
+
+/* --- De yttre källornas svar --------------------------------------------- */
+
+/**
+ * Formerna speglar api/server/{google,website,news}.ts.
+ *
+ * De är medvetet MINIMALA: klienten behöver veta om något hämtades och vad
+ * det blev, inte bära en kopia av serverns interna typer. Ett `status`-fält
+ * som skiljer träff, ingen träff och fel är gemensamt för alla tre - de tre
+ * får aldrig slås ihop till ett tomt resultat.
+ */
+export interface GoogleFetchResult {
+  status: "traff" | "ingen-traff" | "ingen-kalla" | "fel";
+  facts?: {
+    name: string | null;
+    website: string | null;
+    phone: string | null;
+    address: string | null;
+    status: string;
+    reviews: { rating: number | null; count: number; excerpts?: string[] };
+  };
+  reason?: string;
+}
+
+export interface WebsiteFetchResult {
+  status: "traff" | "forbjuden" | "ingen-traff" | "fel";
+  facts?: {
+    description: string | null;
+    name: string | null;
+    socials: { platform: string; url: string }[];
+    contact: { email: string | null; phone: string | null };
+    basis: string[];
+  };
+  note?: string;
+  reason?: string;
+}
+
+export interface NewsFetchResult {
+  status: "traff" | "ingen-traff" | "ingen-kalla";
+  hits: {
+    title: string;
+    link: string;
+    publishedAt: string | null;
+    source: string;
+    matchedOn: "namn" | "orgnr";
+  }[];
+  feeds: { name: string; status: "svarade" | "svarade-inte"; items: number }[];
+  note: string;
+}
