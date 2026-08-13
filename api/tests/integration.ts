@@ -2727,6 +2727,67 @@ check("Agnes kan logga in igen inför aviseringsproven", typeof agnesSession ===
   }
 }
 
+/* --- 8m11. Nyhetskällan över HTTP -------------------------------------- */
+
+/*
+ * Tolkningen och hämtningskedjan prövas i tests/nyheter.ts, med injicerad
+ * fetch. HÄR prövas det som bara går att pröva över HTTP: att flödena
+ * kommer ur driftparametern och inte ur anropet, att skrivningen kräver
+ * administratör, och att SSRF-skyddet gäller även när adressen kommer den
+ * vägen in.
+ *
+ * Flödet som sätts pekar med flit på en loopback-adress. Då görs inget
+ * nätanrop alls, provet går fort, och vi får svaret på den enda fråga som
+ * betyder något här: vägrar servern?
+ */
+{
+  const utan = await call("POST", "/v1/sources/news", { body: { companyName: "Nordisk Bygg AB" } });
+  check("nyhetsrutten kräver inloggning", utan.status === 401, utan.status);
+
+  const tomt = await call("POST", "/v1/sources/news", { token: agnesSession, body: {} });
+  check("utan bolagsnamn och orgnr blir det 400", tomt.status === 400, tomt.status);
+
+  // Bara administratör får ändra listan.
+  const nekad = await call("POST", "/v1/ops/news-feeds", {
+    token: bertilToken,
+    body: { feeds: [{ name: "Egen", url: "https://elak.example/rss" }] },
+  });
+  check("bara administratör får sätta flödena", nekad.status >= 400, nekad.status);
+
+  const satt = await call("POST", "/v1/ops/news-feeds", {
+    token: adminToken,
+    body: { feeds: [{ name: "Loopback", url: "https://127.0.0.1/rss" }] },
+  });
+  check("administratören får sätta flödena", satt.status === 200, satt.body);
+
+  const lista = await call("GET", "/v1/ops/news-feeds", { token: agnesSession });
+  check("listan är läsbar för den inloggade", lista.status === 200, lista.status);
+  check("och innehåller det som sattes", JSON.stringify(lista.body).includes("Loopback"), lista.body);
+  check("utgångslistan redovisas bredvid", Array.isArray((lista.body ?? {}).standard), lista.body);
+
+  const svar = await call("POST", "/v1/sources/news", {
+    token: agnesSession,
+    body: { companyName: "Nordisk Bygg AB", orgNumber: "556012-3456" },
+  });
+  check("hämtningen svarar 200", svar.status === 200, svar.body);
+  const kropp = (svar.body ?? {}) as { status?: string; hits?: unknown[]; feeds?: { name: string; status: string }[] };
+  check("loopback-flödet hämtades aldrig", kropp.feeds?.[0]?.status === "svarade-inte", kropp.feeds);
+  check("och det syns per flöde i svaret", kropp.feeds?.[0]?.name === "Loopback", kropp.feeds);
+  check("inga träffar hittades på", (kropp.hits ?? []).length === 0, kropp.hits);
+
+  // Anropet får inte kunna peka ut ett eget flöde.
+  const injicerat = await call("POST", "/v1/sources/news", {
+    token: agnesSession,
+    body: { companyName: "Nordisk Bygg AB", feeds: [{ name: "Min", url: "http://169.254.169.254/latest/meta-data/" }] },
+  });
+  const injKropp = (injicerat.body ?? {}) as { feeds?: { name: string }[] };
+  check(
+    "flöden i anropet ignoreras helt",
+    (injKropp.feeds ?? []).every((f) => f.name === "Loopback"),
+    injKropp.feeds,
+  );
+}
+
 /* --- 8n. Databasrollen prövas mot den RIKTIGA katalogen ----------------- */
 
 /*

@@ -113,6 +113,12 @@ export interface BackgroundContext {
    * redovisas som "i-drift" (blir live i drift), inte som klar eller saknad.
    */
   websiteFetched?: boolean;
+  /**
+   * Satt när nyhetsflödena faktiskt hämtades den här körningen: antalet
+   * träffar. `undefined` betyder att ingen hämtning gjordes (demo- och
+   * förhandsläge) - då redovisas raden som "i-drift", inte som saknad.
+   */
+  newsHits?: number;
   /** Antal besvarade intervjufrågor just nu. */
   answered: number;
   /** Antal ifyllda profilfält just nu. */
@@ -162,7 +168,12 @@ const PLAN: Plan[] = [
     id: "nyheter",
     label: "Nyhetsartiklar om bolaget",
     source: "nyheter",
-    done: () => "",
+    done: (c) =>
+      c.newsHits === undefined
+        ? ""
+        : c.newsHits === 0
+          ? "Flödena lästes. Ingen artikel nämnde bolaget vid namn eller organisationsnummer."
+          : `${c.newsHits} ${c.newsHits === 1 ? "artikel" : "artiklar"} nämner bolaget. Rubrik, datum och länk – aldrig artikeltexten.`,
   },
   {
     id: "bransch",
@@ -239,6 +250,20 @@ export const backgroundTasks = (ctx: BackgroundContext, upTo: number): Backgroun
         note:
           "Byggd och påslagen. Läser bolagets egen webbplats när tjänsten " +
           "körs skarpt mot ett riktigt bolag – robots.txt först, aldrig något gissat.",
+      };
+    }
+    // Nyhetsbevakningen: samma resonemang som webbplatsen. Flödena läses
+    // mot ett riktigt bolagsnamn först i skarp drift.
+    if (plan.source === "nyheter" && ctx.newsHits === undefined) {
+      return {
+        id: plan.id,
+        label: plan.label,
+        source: plan.source,
+        state: "i-drift",
+        note:
+          "Byggd och påslagen. Läser namngivna RSS-flöden när tjänsten körs " +
+          "skarpt mot ett riktigt bolag – rubrik, datum och länk, aldrig " +
+          "artikeltexten.",
       };
     }
     if (!answered) {

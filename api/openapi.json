@@ -5423,6 +5423,184 @@
           }
         }
       }
+    },
+    "/sources/news": {
+      "post": {
+        "operationId": "fetchCompanyNews",
+        "summary": "Nyheter om bolaget ur namngivna RSS-flöden",
+        "description": "Läser de RSS- eller Atom-flöden driften angett (driftparametern news_feeds) och plockar ut de artiklar som nämner bolaget vid namn eller organisationsnummer. BARA RUBRIK, DATUM, LÄNK OCH KÄLLA returneras - artikeltexten är upphovsrättsskyddad och hämtas aldrig. En träff kräver bolagsnamnet som sammanhängande fras med ordgränser, eller organisationsnumret; lösa ord räknas inte, och ett för allmänt bolagsnamn matchas inte alls utan förklaras i note. Flödena kommer ur driftparametern och ALDRIG ur anropet: en klient som fick peka ut adresser hade gjort rutten till en öppen proxy. Utfallet redovisas per flöde i feeds - ett flöde som inte svarade döljs aldrig, eftersom en bevakning som tyst blivit tunnare läses som att inget har hänt. status skiljer traff, ingen-traff (flödena svarade men ingen artikel nämnde bolaget) och ingen-kalla (inget flöde är angivet). De tre får inte slås ihop.",
+        "x-status": "beta",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "description": "Minst ett av fälten krävs.",
+                "properties": {
+                  "companyName": {
+                    "type": "string",
+                    "description": "Bolagsnamnet. Bolagsform (AB, HB, publ, holding) räknas bort före matchning."
+                  },
+                  "orgNumber": {
+                    "type": "string",
+                    "description": "Organisationsnummer, med eller utan bindestreck."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Träffar och utfall per flöde",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "traff",
+                        "ingen-traff",
+                        "ingen-kalla"
+                      ]
+                    },
+                    "hits": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/NewsHit"
+                      }
+                    },
+                    "feeds": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/NewsFeedOutcome"
+                      }
+                    },
+                    "note": {
+                      "type": "string",
+                      "description": "Klartext om hur många flöden som svarade, vilka som tystnade och varför resultatet blev som det blev."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ops/news-feeds": {
+      "get": {
+        "operationId": "getNewsFeeds",
+        "summary": "Driftens lista över nyhetsflöden",
+        "description": "Läsbar för varje inloggad: vilka källor en bevakning vilar på är inte en hemlighet, det är svaret på hur vi vet något. standard visar utgångslistan som gäller när inget satts.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Flödena",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "feeds": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/NewsFeed"
+                      }
+                    },
+                    "standard": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/NewsFeed"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "setNewsFeeds",
+        "summary": "Sätter nyhetsflödena",
+        "description": "Kräver administratör, vilket radskyddet på app_settings avgör. Rader utan namn eller utan http/https-adress sållas bort, och en tom lista faller tillbaka på utgångslistan - en felskriven parameter ska inte tysta bevakningen utan att någon märker det. Ändringen skrivs till driftens revisionsspår.",
+        "x-status": "beta",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "feeds"
+                ],
+                "properties": {
+                  "feeds": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/NewsFeed"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Listan som sparades",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "feeds": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/NewsFeed"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "webhooks": {
@@ -6165,6 +6343,75 @@
               }
             ],
             "description": "Antal berörda rader per kategori. Fylls först vid verkställandet."
+          }
+        }
+      },
+      "NewsHit": {
+        "type": "object",
+        "description": "En artikel som nämner bolaget. Bara rubrik, datum, länk och källa - artikeltexten är upphovsrättsskyddad och hämtas aldrig.",
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "link": {
+            "type": "string",
+            "format": "uri",
+            "description": "Länk till artikeln hos den som publicerade den."
+          },
+          "publishedAt": {
+            "oneOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source": {
+            "type": "string",
+            "description": "Flödets namn."
+          },
+          "matchedOn": {
+            "type": "string",
+            "enum": [
+              "namn",
+              "orgnr"
+            ],
+            "description": "Varför raden räknas som en träff."
+          }
+        }
+      },
+      "NewsFeedOutcome": {
+        "type": "object",
+        "description": "Utfallet för ETT flöde. Redovisas alltid - en källa som slutat svara ska synas, inte tigas ihjäl.",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "svarade",
+              "svarade-inte"
+            ]
+          },
+          "items": {
+            "type": "integer",
+            "description": "Antal poster i flödet, inte antal träffar."
+          }
+        }
+      },
+      "NewsFeed": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string",
+            "format": "uri"
           }
         }
       }

@@ -31,6 +31,7 @@ import {
 import { ALLMAN, klientNyckel, LOGIN, provaGrans, type Utfall } from "./rateLimit";
 import { googleConfigured, lookupCompany } from "./google";
 import { fetchWebsite, websiteConfigured } from "./website";
+import { DEFAULT_FEEDS, fetchNews, newsConfigured, parseFeedSetting } from "./news";
 import {
   DOCUMENT_URL_TTL_SECONDS,
   UPLOAD_URL_TTL_SECONDS,
@@ -652,7 +653,7 @@ router.get("/v1/health", async () => ({
   body: {
     status: "ok",
     version: "1.0",
-    sources: { google: googleConfigured(), website: websiteConfigured() },
+    sources: { google: googleConfigured(), website: websiteConfigured(), news: newsConfigured() },
     storage: storageConfigured(),
     advisor: anthropicConfigured(),
   },
@@ -698,6 +699,71 @@ router.post("/v1/sources/website", async (req) => {
   const url = typeof body.url === "string" ? body.url.trim() : "";
   if (url.length === 0) throw badRequest("url krävs.");
   return { status: 200, body: await fetchWebsite(url) };
+});
+
+/**
+ * Nyheter om bolaget, ur namngivna RSS-flöden.
+ *
+ * KRÄVER INLOGGNING, av samma skäl som webbplatsläsaren: en rutt som
+ * hämtar en lista med URL:er åt vem som helst är en öppen proxy, hur
+ * publika flödena än är.
+ *
+ * FLÖDENA KOMMER UR DRIFTPARAMETERN, aldrig ur anropet. En klient som
+ * fick peka ut flöden hade varit precis den öppna proxyn - och dessutom
+ * kunnat mata in en "nyhetskälla" som säger vad som helst om bolaget.
+ *
+ * Svaret bär utfallet PER FLÖDE. Ett flöde som inte svarade döljs aldrig:
+ * en bevakning som tyst blivit tunnare läses som "inget har hänt", och det
+ * är ett helt annat påstående.
+ */
+router.post("/v1/sources/news", async (req) => {
+  const caller = await authenticate(req);
+  const body = (req.body ?? {}) as { companyName?: unknown; orgNumber?: unknown };
+  const companyName = typeof body.companyName === "string" ? body.companyName.trim() : "";
+  const orgNumber = typeof body.orgNumber === "string" ? body.orgNumber.trim() : "";
+  if (companyName.length === 0 && orgNumber.length === 0) {
+    throw badRequest("companyName eller orgNumber krävs.");
+  }
+  const feeds = await withUser(caller.userId, async (tx) => {
+    const { rows } = await tx.query("select value from public.app_settings where key = 'news_feeds'");
+    return parseFeedSetting((rows[0]?.value as { feeds?: unknown } | undefined)?.feeds);
+  });
+  return { status: 200, body: await fetchNews({ companyName, orgNumber }, feeds) };
+});
+
+/**
+ * Driftens lista över nyhetsflöden.
+ *
+ * Läsbar för den inloggade - vilka källor en bevakning vilar på är inte en
+ * hemlighet, det är själva svaret på "hur vet ni det?". Skrivningen kräver
+ * administratör, vilket radskyddet på app_settings avgör; ingen egen
+ * kontroll behövs här, av samma skäl som gallringspolicyn ovan.
+ */
+router.get("/v1/ops/news-feeds", async (req) => {
+  const caller = await authenticate(req);
+  const feeds = await withUser(caller.userId, async (tx) => {
+    const { rows } = await tx.query("select value from public.app_settings where key = 'news_feeds'");
+    return parseFeedSetting((rows[0]?.value as { feeds?: unknown } | undefined)?.feeds);
+  });
+  return { status: 200, body: { feeds, standard: DEFAULT_FEEDS } };
+});
+
+router.post("/v1/ops/news-feeds", async (req) => {
+  const caller = await authenticate(req);
+  const raw = (req.body ?? {}) as Record<string, unknown>;
+  if (!Array.isArray(raw.feeds)) throw badRequest('Fältet "feeds" ska vara en lista.');
+  const feeds = parseFeedSetting(raw.feeds);
+  await withUser(caller.userId, async (tx) => {
+    await tx.query(
+      `insert into public.app_settings (key, value) values ('news_feeds', $1::jsonb)
+       on conflict (key) do update set value = excluded.value, updated_at = now()`,
+      [JSON.stringify({ feeds })],
+    );
+    await tx.query("select app.logga_driftatgard($1, $2, $3, $4::jsonb)", [
+      "drift.news_feeds.set", "app_settings", "news_feeds", JSON.stringify({ feeds }),
+    ]);
+  });
+  return { status: 200, body: { feeds } };
 });
 
 /**

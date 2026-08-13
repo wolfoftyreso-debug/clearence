@@ -195,16 +195,23 @@ export const SOURCES: SourceSpec[] = [
     id: "nyheter",
     label: "Nyhetsartiklar om bolaget",
     acquisition: "rss",
-    live: false,
+    live: true,
+    runtime: true,
     value: "Om något hänt utåt som ärendet behöver ta höjd för.",
-    needs:
-      "En namngiven nyhetskälla. RSS-flöden går att hämta utan avtal; " +
-      "svensk mediebevakning med djup (Retriever, Meltwater) kräver " +
-      "abonnemang.",
+    needs: "",
     basis:
       "Ett RSS-flöde publiceras för att prenumereras på - att hämta det är " +
-      "dess syfte. Fulltext bakom betalvägg är däremot upphovsrättsskyddad " +
-      "och får inte lagras; vi sparar rubrik, datum och länk.",
+      "dess syfte, och kräver inget avtal. Vilka flöden som läses är en " +
+      "driftparameter (app_settings, nyckeln news_feeds), och utfallet " +
+      "redovisas PER FLÖDE: en källa som slutat svara syns i stället för " +
+      "att bevakningen tyst blir tunnare. " +
+      "Fulltext är upphovsrättsskyddad och lagras aldrig - rubrik, datum, " +
+      "länk och källa, inget mer. " +
+      "En träff kräver bolagsnamnet som sammanhängande fras eller " +
+      "organisationsnumret; ett för allmänt namn matchas inte alls, och då " +
+      "säger panelen det i stället för att leverera brus. " +
+      "Djup mediebevakning (Retriever, Meltwater) kräver fortfarande " +
+      "abonnemang och ingår inte.",
   },
   {
     id: "branschdata",

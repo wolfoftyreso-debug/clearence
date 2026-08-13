@@ -123,10 +123,37 @@ check(
   check(`"webbplats" blir klar när sidan hämtats`, medHamtning.state === "klar", medHamtning.state);
 }
 
+// Nyhetsbevakningen: samma resonemang som webbplatsen, sedan RSS-källan
+// kopplades på. Flödena läses mot ett riktigt bolagsnamn först i skarp
+// drift, så utan hämtning är den i-drift - varken klar eller saknad.
+{
+  const nyheter = allDone.find((t) => t.id === "nyheter")!;
+  check(`"nyheter" påstår inte att det gjorts`, nyheter.state === "i-drift", nyheter.state);
+  check(`"nyheter" ramas som byggt, inte saknat`, /Byggd och påslagen/.test(nyheter.note), nyheter.note);
+  // Och den ska säga vad som INTE hämtas: artikeltexten är upphovsrättsskyddad.
+  check(`"nyheter" lovar inte artikeltexten`, /aldrig artikeltexten/.test(nyheter.note), nyheter.note);
+
+  const medTraffar = backgroundTasks({ ...ctx, newsHits: 2 }, BACKGROUND_STEPS)
+    .find((t) => t.id === "nyheter")!;
+  check(`"nyheter" blir klar när flödena hämtats`, medTraffar.state === "klar", medTraffar.state);
+  check(`"nyheter" räknar träffarna`, /2 artiklar/.test(medTraffar.note), medTraffar.note);
+
+  // Noll träffar är ett SVAR, inte ett uteblivet svar. Raden ska bli klar
+  // och säga att ingenting hittades - inte se ut som att källan saknas.
+  const utanTraffar = backgroundTasks({ ...ctx, newsHits: 0 }, BACKGROUND_STEPS)
+    .find((t) => t.id === "nyheter")!;
+  check(`noll träffar är ett svar, inte ett tomrum`, utanTraffar.state === "klar", utanTraffar.state);
+  check(
+    `och säger att ingen artikel nämnde bolaget`,
+    /Ingen artikel nämnde bolaget/.test(utanTraffar.note),
+    utanTraffar.note,
+  );
+}
+
 // Kärnan i hela filen: momenten utan ansluten källa MÅSTE redovisas som
 // sådana. Blir något av dem "klar" har någon råkat lova en integration
 // som inte finns.
-for (const id of ["sociala", "recensioner", "nyheter", "konkurrenter"]) {
+for (const id of ["sociala", "recensioner", "konkurrenter"]) {
   const task = allDone.find((t) => t.id === id)!;
   check(`"${id}" påstår inte att det gjorts`, task.state === "ingen-kalla", task.state);
   /*
