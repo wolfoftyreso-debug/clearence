@@ -749,5 +749,44 @@ for (const bucket of onboardingIntervall) {
 check("okänt intervall ger null", wizardEmployees("något helt annat") === null);
 check("tomt ger null", wizardEmployees("") === null && wizardEmployees(null) === null);
 
+/* --- Introduktionssamtalet ska GÅ ATT NÅ ---------------------------------- */
+
+/*
+ * DEMOT GÖMDE SIN EGEN FÖRSTA MINUT.
+ *
+ * DashboardSamtal visar ClaraIntro bara när det inte finns något ärende
+ * ("Första upplevelsen är ett samtal, inte ett dashboard"). Demoadapterns
+ * signUp sådde ett färdigt ärende, så den som skapade ett konto i demon
+ * landade mitt i Demobolagets pågående rekonstruktion. Situationsvalet,
+ * intervjun, den första analysen och erbjudandet efter den var alltså
+ * OMÖJLIGA att komma åt - inte trasiga, utan oåtkomliga, vilket är värre
+ * eftersom ingenting ser fel ut.
+ *
+ * Kontrollen kör adaptern på riktigt i stället för att läsa källan: det är
+ * villkoret vyn faktiskt frågar efter.
+ */
+{
+  const { demoAdapter, DEMO_ACCOUNTS } = await import("../src/data/demo/adapter");
+  await demoAdapter.auth.signUp("ny.anvandare@exempel.se", "hemligt123");
+  const arenden = await demoAdapter.cases.listMine();
+  check(
+    "ett nytt demokonto har inget ärende, så introduktionssamtalet visas",
+    arenden.length === 0,
+    `${arenden.length} ärenden: ${arenden.map((c) => c.companyName).join(", ")}`,
+  );
+  check(
+    "och inget senaste ärende heller - det är villkoret vyn läser",
+    (await demoAdapter.cases.getLatest()) === null,
+  );
+
+  // Rollkontona sår fortfarande sin färdiga värld. Demon ska både gå att
+  // visa upp och gå att prova från början; det är två olika vägar in.
+  await demoAdapter.auth.signIn(DEMO_ACCOUNTS.company, "hemligt123");
+  check(
+    "företagsrollens inloggning sår fortfarande demovärlden",
+    (await demoAdapter.cases.listMine()).length > 0,
+  );
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

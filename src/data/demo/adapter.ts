@@ -1064,8 +1064,32 @@ export const demoAdapter: DataPort = {
       // Not derived from the address: the id ends up printed as the case
       // reference in reports, and an email does not belong in a document
       // that gets forwarded.
-      state.user = { id: demoUserId(email), email };
-      seedForUser(state.user.id);
+      const user = { id: demoUserId(email), email };
+      /*
+       * ETT NYTT KONTO HAR INGET ÄRENDE - inte heller i demon.
+       *
+       * Här sådde registreringen ett färdigt ärende, och det gjorde
+       * introduktionssamtalet OMÖJLIGT att nå: DashboardSamtal visar
+       * ClaraIntro bara när det inte finns något ärende. Den som skapade
+       * ett konto i demon landade alltså mitt i Demobolagets pågående
+       * rekonstruktion och fick aldrig se produktens första minut - inte
+       * situationsvalet, inte intervjun, inte den första analysen, och
+       * inte erbjudandet som ligger efter den.
+       *
+       * De tre rollkontona sår fortfarande sin värld vid INLOGGNING; det
+       * är där den färdiga demon hör hemma. Registreringen visar i stället
+       * det en riktig ny användare möter, vilket är hela poängen med att
+       * kunna prova.
+       *
+       * Tillståndet nollställs, av samma skäl som vid ett rollbyte:
+       * ärendelistan är gemensam i demon, så utan nollställning hade det
+       * nya kontot ärvt föregående demoinloggnings ärenden - och landat i
+       * ärendevyn igen.
+       */
+      state = { ...emptyState(), user };
+      localStorage.removeItem("clearance-active-case");
+      localStorage.removeItem("clearance-kbr-draft");
+      localStorage.removeItem("clearance-liquidity-draft");
       save();
       notify();
       return { error: null, needsEmailConfirmation: false };
