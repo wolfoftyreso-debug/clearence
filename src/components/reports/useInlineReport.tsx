@@ -139,6 +139,9 @@ export const useInlineReport = (): {
     html === null && standalone === null ? null : (
       <div
         className="panel-reveal fixed inset-0 z-50 flex flex-col bg-background"
+        // Rapportvisaren täcker skärmen; verktygsraden och innehållet ska
+        // inte hamna under den fasta bannern.
+        style={{ paddingBottom: "var(--app-bottom-inset, 0px)" }}
         role="dialog"
         aria-modal="true"
         aria-label="Rapport"

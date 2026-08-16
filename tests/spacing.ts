@@ -84,6 +84,69 @@ for (const file of files) {
   }
 }
 
+/*
+ * DET FASTA FÅR INTE TÄCKA DET KLICKBARA.
+ *
+ * DemoBanner ligger fast längst ner och publicerar sin uppmätta höjd som
+ * --app-bottom-inset. Ett överlägg som centreras mot HELA fönstret hamnar
+ * då delvis under den - och det hände: knappen "Ja, aktivera" i
+ * erbjudandet gick inte att klicka, så erbjudandet gick inte att tacka ja
+ * till. Felet syns inte i en typkontroll och inte i ett bygge; det syns
+ * bara för den som försöker klicka.
+ *
+ * Varje fil som själv målar ett fast helskärmsöverlägg måste därför
+ * räkna med insetet. Undantagen är de som ligger ÖVER bannern med flit
+ * (bannern själv) eller som inte har något klickbart i botten.
+ */
+/**
+ * Källan utan kommentarer.
+ *
+ * Den första versionen av vakterna nedan läste hela filen - och blev
+ * gröna av att MIN EGEN KOMMENTAR nämnde --app-bottom-inset. Två mutanter
+ * som tog bort själva hänsynen gick rakt igenom. En vakt som prövar
+ * prosan i stället för koden är sämre än ingen vakt: den intygar något
+ * den inte kontrollerat.
+ */
+const utanKommentarer = (kalla: string): string =>
+  kalla.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/(^|[^:])\/\/[^\n]*/g, "$1 ");
+
+{
+  /*
+   * Skärmar och dimmare räknas inte: en genomskinlig ruta utan klickbart
+   * innehåll SKA täcka hela ytan, bannern inkluderad. Det som räknas är
+   * överlägg som själva lägger ut innehåll - de kan gömma en knapp.
+   */
+  const utan: string[] = [];
+  for (const file of files) {
+    const rel = file.slice(file.indexOf("src"));
+    if (rel === "src/components/DemoBanner.tsx") continue; // bannern ÄR elementet
+    const content = readFileSync(file, "utf8");
+    if (/--app-bottom-inset/.test(utanKommentarer(content))) continue;
+    for (const m of content.matchAll(/"[^"]*fixed inset-0[^"]*"/g)) {
+      const klasser = m[0];
+      // En dimmare släpper igenom klick; en skärm har ingen egen layout.
+      if (/pointer-events-none/.test(klasser)) continue;
+      if (!/\bflex\b|\bgrid\b/.test(klasser)) continue;
+      utan.push(`${rel}: ${klasser.slice(1, 60)}`);
+    }
+  }
+  check("fasta överlägg ger plats åt den fasta bannern", utan.length === 0, utan);
+}
+
+// De delade dialogprimitiverna ska bära samma hänsyn - en gång, för alla.
+for (const [fil, vad] of [
+  ["src/components/ui/dialog.tsx", "dialogen"],
+  ["src/components/ui/alert-dialog.tsx", "varningsdialogen"],
+  ["src/components/ui/sheet.tsx", "panelen"],
+] as const) {
+  const kalla = readFileSync(join(process.cwd(), fil), "utf8");
+  check(
+    `${vad} centreras ovanför den fasta bannern`,
+    /--app-bottom-inset/.test(utanKommentarer(kalla)),
+    fil,
+  );
+}
+
 check("inga frihandsvärden i spacing", offenders.freehand.length === 0, offenders.freehand);
 check("inga förbjudna steg (7/9/10/11/14)", offenders.banned.length === 0, offenders.banned);
 check("hörnradien är rounded-md utanför ui-biblioteket", offenders.radius.length === 0, offenders.radius);

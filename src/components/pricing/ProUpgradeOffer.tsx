@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Check, Clock, X, Zap } from "lucide-react";
-import { DEFAULT_COMPANY_PLAN, formatMonthly } from "@/lib/pricing";
+import { DEFAULT_COMPANY_PLAN, formatMonthly, nyttIniva, tierById } from "@/lib/pricing";
 import { OFFER_SECONDS, smsTier } from "@/lib/proOffer";
 
 /**
@@ -16,12 +16,15 @@ import { OFFER_SECONDS, smsTier } from "@/lib/proOffer";
 export const ProUpgradeOffer = ({
   open,
   monthlyExVatSek = DEFAULT_COMPANY_PLAN.businessExVatSek ?? null,
+  currentTierId = "standard",
   onAccept,
   onDismiss,
 }: {
   open: boolean;
   /** Månadspris efter provveckan, ur prisparametrarna. null = "kontakta oss". */
   monthlyExVatSek?: number | null;
+  /** Nivån användaren står på idag. Avgör vad som faktiskt TILLKOMMER. */
+  currentTierId?: string;
   onAccept: () => void;
   onDismiss: () => void;
 }) => {
@@ -52,25 +55,44 @@ export const ProUpgradeOffer = ({
   // Andelen kvar, för nedräkningsstapeln.
   const kvar = Math.max(0, Math.min(100, (left / OFFER_SECONDS) * 100));
 
-  // SMS överst - det var det klicket handlade om - sedan resten. Förut
-  // visades bara tre rader, och SMS låg fjärde och föll bort helt.
-  const smsRad = smsTier.includes.find((rad) => /SMS/i.test(rad));
-  const punkter = smsRad
-    ? [smsRad, ...smsTier.includes.filter((rad) => rad !== smsRad)]
-    : smsTier.includes;
+  /*
+   * VAD SOM FAKTISKT TILLKOMMER, inte hela innehållsförteckningen.
+   *
+   * Rutan listade förut allt i Business med SMS-raden fetstilt överst.
+   * Den lästes som "2 780 kr för SMS" - vilket är en orimlig affär, och
+   * inte vad som erbjuds. Det som ska stå är skillnaden mot nivån man står
+   * på; att man behåller resten sägs i en rad.
+   *
+   * SMS ligger ändå först bland det nya: det var den knappen som ledde hit,
+   * och att inte se den man klickade för är förvirrande.
+   */
+  const nuvarande = tierById(currentTierId);
+  const nytt = nyttIniva(currentTierId, smsTier.id);
+  const smsRad = nytt.find((rad) => /SMS/i.test(rad));
+  const punkter = smsRad ? [smsRad, ...nytt.filter((rad) => rad !== smsRad)] : nytt;
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-foreground/70 p-4"
+      /*
+       * DEMOBANNERN ÄR FAST OCH LIGGER LÄNGST NER. Utan utrymme för den
+       * hamnade knappen "Ja, aktivera" UNDER bannern och gick inte att
+       * klicka - erbjudandet gick alltså inte att tacka ja till.
+       *
+       * --app-bottom-inset publiceras av DemoBanner och är noll när ingen
+       * banner finns. Centreringen sker därför i den SYNLIGA ytan, och
+       * kortet rullar om det är högre än så.
+       */
+      className="fixed inset-0 z-[100] flex items-center justify-center overflow-y-auto bg-foreground/70 p-4"
+      style={{ paddingBottom: "calc(1rem + var(--app-bottom-inset, 0px))" }}
       role="dialog"
       aria-modal="true"
       aria-label="Erbjudande"
     >
-      <div className="w-full max-w-md overflow-hidden rounded-md bg-card shadow-2xl">
+      <div className="my-auto max-h-full w-full max-w-md overflow-y-auto rounded-md bg-card shadow-2xl">
         {/* BANDET: det som gör ögat stanna. Stark färg, stora versaler. */}
         <div className="relative bg-accent px-5 py-3 text-center">
           <p className="text-[11px] font-bold uppercase tracking-wide text-accent-foreground">
-            Endast nu · en enda gång
+            Provvecka · visas en gång
           </p>
           <button
             type="button"
@@ -98,6 +120,13 @@ export const ProUpgradeOffer = ({
                   style={{ width: `${kvar}%` }}
                 />
               </div>
+              {/* Vad klockan betyder, sagt innan den går ut. En nedräkning
+                  vars konsekvens man får veta först efteråt är en gissning. */}
+              <p className="mx-auto mt-2 max-w-xs text-xs leading-relaxed text-muted-foreground">
+                Klockan gäller den gratis provveckan, inget annat. Går den ut kan du välja{" "}
+                {smsTier.name} när du vill – då från ordinarie pris första dagen. Rutan visas bara
+                den här gången.
+              </p>
             </>
           ) : (
             <div className="rounded-md border border-dashed border-border bg-secondary/40 px-4 py-4">
@@ -114,15 +143,30 @@ export const ProUpgradeOffer = ({
             <br />
             på {smsTier.name}
           </h2>
+          {/*
+            VARFÖR RUTAN FINNS, sagt först. Ett erbjudande som dyker upp
+            utan förklaring läses som ett säljförsök; det här ÄR ett
+            säljförsök, men ett med ett rimligt skäl - och skälet tål att
+            skrivas ut.
+          */}
           <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
-            Du var på väg att slå på SMS-aviseringar. Det ingår i {smsTier.name} – och just nu
-            provar du hela nivån utan att betala första veckan.
+            Du klickade på SMS-aviseringar, som finns på {smsTier.name}. I stället för att bara
+            säga att det kostar extra bjuder vi på en veckas prov av hela nivån – du ska få se vad
+            den gör innan du bestämmer dig.
+          </p>
+          <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+            Det är inte SMS du betalar för. {smsTier.name} är nivån för flera användare, flera
+            bolag och kopplingen till ekonomisystemet.{" "}
+            <span className="font-medium text-foreground">
+              När provveckan är slut tar du ställning själv – ingenting dras och ingenting
+              förlängs automatiskt.
+            </span>
           </p>
 
           {/* Allt som ingår, med SMS överst - det var det klicket handlade
               om, och förut kapades just den raden bort. Varje rad sin bock. */}
           <p className="mt-4 text-left text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
-            Allt i {smsTier.name} ingår:
+            {nuvarande ? `Det här tillkommer mot ${nuvarande.name}:` : `Det här ingår i ${smsTier.name}:`}
           </p>
           <ul className="mt-1.5 space-y-1.5 text-left">
             {punkter.map((rad) => {
@@ -139,11 +183,28 @@ export const ProUpgradeOffer = ({
             })}
           </ul>
 
-          <p className="mt-4 text-xs text-muted-foreground">
-            {monthlyExVatSek !== null
-              ? `Efter provveckan ${formatMonthly(monthlyExVatSek)} exkl. moms. Ingen bindningstid – säg upp när du vill.`
-              : "Efter provveckan enligt offert. Ingen bindningstid – säg upp när du vill."}
-          </p>
+          {nuvarande && (
+            <p className="mt-2 text-left text-xs leading-relaxed text-muted-foreground">
+              Allt du redan har på {nuvarande.name} följer med – ingenting tas bort.
+            </p>
+          )}
+
+          {/*
+            PRISET SAGT EN GÅNG, RÄTT. formatMonthly skriver redan
+            "+ moms"; här stod dessutom "exkl. moms" efter, så rutan sa
+            "2 780 kr/mån + moms exkl. moms".
+          */}
+          <div className="mt-4 rounded-md border border-border bg-secondary/40 px-3 py-2.5 text-left">
+            <p className="text-sm font-semibold text-foreground">
+              {monthlyExVatSek !== null
+                ? `Första veckan 0 kr, därefter ${formatMonthly(monthlyExVatSek)}.`
+                : "Första veckan 0 kr, därefter enligt offert."}
+            </p>
+            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+              Provveckan övergår inte i något automatiskt: när den är slut väljer du själv om du
+              vill fortsätta. Ingen bindningstid, och gör du ingenting här händer ingenting alls.
+            </p>
+          </div>
 
           <div className="mt-5 space-y-2">
             {!expired ? (
@@ -162,7 +223,7 @@ export const ProUpgradeOffer = ({
                 onClick={onDismiss}
                 className="w-full py-1.5 text-sm font-medium text-muted-foreground underline underline-offset-2 transition-colors hover:text-foreground"
               >
-                Nej tack, fortsätt utan
+                Nej tack – jag fortsätter som jag är
               </button>
             )}
           </div>

@@ -156,6 +156,10 @@ const Hero = () => {
                     "fixed inset-0 z-[60] flex flex-col bg-secondary"
                   : "contents"
               }
+              /* Samtalet tar hela skärmen. Utan plats för den fasta
+                 demobannern hamnar svarsknapparna under den. Insetet är
+                 noll när ingen banner finns. */
+              style={laast ? { paddingBottom: "var(--app-bottom-inset, 0px)" } : undefined}
             >
               {laast && (
                 /* Avsändaren, och vägen ut. Ett samtal som tagit över

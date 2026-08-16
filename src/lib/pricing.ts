@@ -100,6 +100,28 @@ export const PLAN_TIERS = [
   },
 ] as const;
 
+/** Nivån med ett visst id. */
+export const tierById = (id: string) => PLAN_TIERS.find((t) => t.id === id);
+
+/**
+ * SKILLNADEN MELLAN TVÅ NIVÅER - det som faktiskt köps.
+ *
+ * Ett erbjudande som räknar upp allt i den högre nivån läses som att man
+ * betalar för alltihop, inklusive det man redan har. Den som står på
+ * Standard och ser "Obegränsad dialog" i listan för 2 780 kr tänker inte
+ * "det ingår också" utan "det där betalar jag ju redan för".
+ *
+ * Det som ska stå i ett erbjudande är alltså vad som TILLKOMMER. Resten
+ * sägs i en rad: du behåller det du har.
+ */
+export const nyttIniva = (franId: string, tillId: string): string[] => {
+  const fran = tierById(franId);
+  const till = tierById(tillId);
+  if (!till) return [];
+  const har = new Set<string>(fran?.includes ?? []);
+  return till.includes.filter((rad) => !har.has(rad));
+};
+
 /** "985 kr/mån + moms" - alltid exklusive moms mot aktiebolag. */
 export const formatMonthly = (sek: number): string =>
   `${String(Math.round(sek)).replace(/\B(?=(\d{3})+(?!\d))/g, " ")} kr/mån + moms`;

@@ -113,9 +113,75 @@ check(
 // Erbjudandet ska visa ALLT som ingår, med SMS-raden med. Förut kapade en
 // slice(0,3) bort just SMS - det användaren klickade för. Vaktas i källan.
 const offerSrc = readFileSync(join(process.cwd(), "src/components/pricing/ProUpgradeOffer.tsx"), "utf8");
-check("erbjudandet kapar inte listan till tre", !/\.slice\(0,\s*3\)/.test(offerSrc), "slice(0,3) tillbaka");
-check("erbjudandet lyfter SMS-raden överst", /find\(\(rad\) => \/SMS\/i\.test\(rad\)\)/.test(offerSrc));
-check("erbjudandet renderar varje ingående rad", /punkter\.map/.test(offerSrc));
+/**
+ * Källan utan kommentarer.
+ *
+ * Kontrollen "priset står inte dubbelt" blev röd på MIN EGEN KOMMENTAR som
+ * beskrev felet. En vakt som läser prosan intygar något den inte
+ * kontrollerat - och två gånger i den här sessionen har just det gjort en
+ * vakt verkningslös. Koden läses därför utan kommentarer.
+ */
+const utanKommentarer = (kalla: string): string =>
+  kalla.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/(^|[^:])\/\/[^\n]*/g, "$1 ");
+
+const offerKod = utanKommentarer(offerSrc);
+check("erbjudandet kapar inte listan till tre", !/\.slice\(0,\s*3\)/.test(offerKod), "slice(0,3) tillbaka");
+check("erbjudandet lyfter SMS-raden överst", /find\(\(rad\) => \/SMS\/i\.test\(rad\)\)/.test(offerKod));
+check("erbjudandet renderar varje ingående rad", /punkter\.map/.test(offerKod));
+
+/* --- Erbjudandet ska gå att förstå och att tacka nej till ---------------- */
+
+
+/*
+ * TRE FEL I SAMMA RUTA, alla hittade av någon som försökte använda den:
+ * knappen låg under den fasta demobannern, priset stod dubbelt
+ * ("2 780 kr/mån + moms exkl. moms"), och texten lät som att 2 780 kr var
+ * priset för SMS.
+ */
+
+// Priset skrivs av formatMonthly, som redan säger "+ moms". Rutan får inte
+// lägga på "exkl. moms" en gång till.
+check(
+  "priset står inte dubbelt",
+  !/exkl\. moms/.test(offerKod),
+  offerKod.match(/exkl\. moms/g),
+);
+
+// Det som visas är SKILLNADEN mot nivån man står på - inte hela
+// innehållsförteckningen, som läses som "jag betalar för det jag redan har".
+check("erbjudandet visar skillnaden mot nuvarande nivå", /nyttIniva\(/.test(offerKod));
+check(
+  "och säger att det man redan har följer med",
+  /följer med/.test(offerKod),
+);
+check(
+  "rutan säger rakt ut att det inte är SMS man betalar för",
+  /inte SMS du betalar för/.test(offerKod),
+);
+
+// Varför rutan dyker upp, och vem som bestämmer efteråt. Ett erbjudande
+// utan skäl läses som ett påhopp; ett utan utgång läses som en fälla.
+check("rutan förklarar varför den finns", /bjuder vi på en veckas prov/.test(offerKod));
+check(
+  "och att användaren tar ställning själv efteråt",
+  /tar du ställning själv/.test(offerKod),
+);
+check(
+  "och att ingenting förlängs automatiskt",
+  /övergår inte i något automatiskt|förlängs automatiskt/.test(offerKod),
+);
+
+// Nedräkningens innebörd ska stå INNAN den går ut.
+check(
+  "vad klockan betyder sägs innan den går ut",
+  /Klockan gäller den gratis provveckan/.test(offerKod),
+);
+
+// Och den fasta bannern får inte täcka knappen.
+check(
+  "erbjudandet ger plats åt den fasta bannern",
+  /paddingBottom: "calc\(1rem \+ var\(--app-bottom-inset/.test(offerKod),
+);
 
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);
