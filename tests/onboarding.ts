@@ -17,6 +17,7 @@
 
 import { ONBOARDING } from "../src/lib/advisor/dialog";
 import { sourceById } from "../src/lib/sources/registry";
+import { profilInnehaller } from "../src/lib/advisor/companyProfile";
 import {
   BACKGROUND_STEPS,
   backgroundSummary,
@@ -36,6 +37,11 @@ import {
   applicableQuestions,
   interviewProgress,
   INTERVIEW,
+  SVARSSKILJARE,
+  foldAnswers,
+  skrivSvar,
+  svarSomText,
+  valdaSvar,
   isAcute,
   isAnswered,
   nextQuestion,
@@ -174,6 +180,138 @@ check(
     /inte att matcha entydigt/.test(omatchat.note),
     omatchat.note,
   );
+}
+
+/* --- Flerval, och vägen tillbaka ----------------------------------------- */
+
+/*
+ * TVÅ BRISTER SOM HITTADES GENOM ATT ANVÄNDA PRODUKTEN.
+ *
+ *  1. Svaret var slutgiltigt. Frågan försvann vid klicket och det fanns
+ *     ingen ångra, ingen tillbaka - ett felklick följde med in i analysen.
+ *  2. Bara ETT svar gick att ge. En bilverkstad säljer arbete OCH
+ *     reservdelar; att tvinga fram ett av dem gör profilen fel.
+ *
+ * Det som gör den första möjlig att rätta är att profilen numera RÄKNAS
+ * FRAM ur svaren i stället för att ackumuleras. Kontrollerna nedan prövar
+ * just det - att ett ändrat svar inte lämnar kvar sitt gamla fält.
+ */
+{
+  // Skiljetecknet får aldrig förekomma i en etikett - då blir ett svar två.
+  const etiketter = INTERVIEW.flatMap((q) => q.options.map((o) => o.label));
+  check(
+    "inget svarsalternativ innehåller skiljetecknet",
+    !etiketter.some((l) => l.includes(SVARSSKILJARE.trim())),
+    etiketter.filter((l) => l.includes(SVARSSKILJARE.trim())),
+  );
+
+  check("ett val skrivs och läses tillbaka", valdaSvar(skrivSvar(["Varor"])).join() === "Varor");
+  check(
+    "flera val skrivs och läses tillbaka",
+    valdaSvar(skrivSvar(["Varor", "Tjänster"])).length === 2,
+    valdaSvar(skrivSvar(["Varor", "Tjänster"])),
+  );
+  check("överhoppat svar ger tom lista", valdaSvar("").length === 0);
+  // Läsbar form: lagringsformatet ska aldrig läcka ut i en mening.
+  check(
+    "flera val läses som en mening",
+    svarSomText(skrivSvar(["Varor", "Tjänster", "Abonnemang"])) === "Varor, Tjänster och Abonnemang",
+    svarSomText(skrivSvar(["Varor", "Tjänster", "Abonnemang"])),
+  );
+
+  // Katchall-alternativen är borta: de var lappar över att flerval saknades.
+  const erbjudande = INTERVIEW.find((q) => q.id === "erbjudande")!;
+  const kunder = INTERVIEW.find((q) => q.id === "kunder")!;
+  check("frågan om vad ni säljer är flerval", erbjudande.multi === true);
+  check("frågan om vem som köper är flerval", kunder.multi === true);
+  check('"Blandat" är borta', !erbjudande.options.some((o) => o.label === "Blandat"));
+  check(
+    '"Både företag och privatpersoner" är borta',
+    !kunder.options.some((o) => o.label.startsWith("Både")),
+  );
+
+  // Bilverkstaden: arbete OCH reservdelar. Blandningen ÄR uppgiften.
+  const verkstad = foldAnswers("orolig", {
+    erbjudande: skrivSvar(["Varor", "Tjänster"]),
+    kunder: skrivSvar(["Andra företag", "Privatpersoner"]),
+  });
+  check(
+    "flera val slås ihop i profilfältet",
+    verkstad.profile.businessModel === "Varuförsäljning och Tjänster",
+    verkstad.profile.businessModel,
+  );
+  check(
+    "och kunderna likaså",
+    verkstad.profile.customers === "B2B och B2C",
+    verkstad.profile.customers,
+  );
+
+  // KÄRNAN: ett ändrat svar lämnar inget kvar av det gamla.
+  const forst = foldAnswers("orolig", { erbjudande: skrivSvar(["Varor"]) });
+  check("ett svar ger sitt fält", forst.profile.businessModel === "Varuförsäljning");
+  const andrat = foldAnswers("orolig", { erbjudande: skrivSvar(["Tjänster"]) });
+  check(
+    "ett ändrat svar lämnar inget kvar av det gamla",
+    andrat.profile.businessModel === "Tjänster",
+    andrat.profile.businessModel,
+  );
+  const borttaget = foldAnswers("orolig", {});
+  check("ett borttaget svar tömmer fältet", borttaget.profile.businessModel === null);
+
+  // Signaler: bara när de valda är eniga. En signal styr risknivån, och två
+  // val som pekar åt olika håll är inget svar på vilken risk som gäller.
+  const enig = foldAnswers("orolig", { beroende: "Ungefär hälften" });
+  check("en entydig signal sätts", enig.signals.concentration === "hög", enig.signals);
+  const oenig = foldAnswers("orolig", {
+    beroende: skrivSvar(["Under en tiondel", "Mer än hälften"]),
+  });
+  check(
+    "två val som pekar åt olika håll ger ingen signal",
+    oenig.signals.concentration === null,
+    oenig.signals,
+  );
+
+  // Jämförelser nedströms måste tåla ett hopslaget fält.
+  check("profilInnehaller hittar en del", profilInnehaller("Varuförsäljning och Projekt", "Projekt"));
+  check("och tar inte en delsträng", !profilInnehaller("Varuförsäljning", "Varu"));
+  check("null är inget värde", !profilInnehaller(null, "Projekt"));
+
+  // Och analysen ska INTE tappa sin observation för att svaret var blandat.
+  const blandad = buildFirstAnalysis({
+    companyName: "Verkstaden AB",
+    profile: foldAnswers("orolig", {
+      erbjudande: skrivSvar(["Varor", "Projekt och uppdrag"]),
+    }).profile,
+    answers: { erbjudande: skrivSvar(["Varor", "Projekt och uppdrag"]) },
+    situationId: "orolig",
+    registryHit: true,
+  });
+  check(
+    "analysen ser projektaffären även när svaret var blandat",
+    JSON.stringify(blandad).includes("Projektaffärer binder pengar"),
+  );
+  check(
+    "och citerar svaret läsbart, inte med skiljetecknet",
+    !JSON.stringify(blandad).includes(SVARSSKILJARE.trim()),
+  );
+}
+
+/*
+ * VÄGEN TILLBAKA I YTAN.
+ *
+ * Motorn kan räkna om, men det hjälper ingen om knappen saknas. Att läsa
+ * källan är trubbigt men fångar just den regression som gjorde felet:
+ * knappen togs aldrig bort, den fanns aldrig.
+ */
+{
+  const intro = readFileSync("src/components/advisor/ClaraIntro.tsx", "utf8");
+  check("det går att ändra föregående svar", /Ändra föregående svar/.test(intro));
+  check("och att öppna vilket tidigare svar som helst", /Dina svar hittills/.test(intro));
+  check("och att backa ur en ändring utan att ändra", /Behåll mitt tidigare svar/.test(intro));
+  check("flervalssvaret bekräftas med en knapp", /lamnaSvar\(flerval\)/.test(intro));
+  // Profilen får inte ackumuleras igen - det var det som gjorde ändringen omöjlig.
+  check("profilen ackumuleras inte längre", !/setProfile\(/.test(intro), "setProfile finns kvar");
+  check("profilen räknas fram ur svaren", /foldAnswers\(situationId, answers\)/.test(intro));
 }
 
 /*

@@ -19,19 +19,22 @@ import { WAITS, waitText } from "@/lib/advisor/prepare";
 import { TransitionNotice } from "@/components/advisor/TransitionNotice";
 import { BackgroundPanel } from "@/components/advisor/BackgroundPanel";
 import { FirstAnalysisCard } from "@/components/advisor/FirstAnalysisCard";
+import { profileFilled, profileRows } from "@/lib/advisor/companyProfile";
 import {
-  applyAnswer,
-  deriveRiskLevel,
-  emptyProfile,
-  profileFilled,
-  profileRows,
-  type CompanyProfile,
-} from "@/lib/advisor/companyProfile";
-import { interviewProgress, nextQuestion } from "@/lib/advisor/interview";
+  applicableQuestions,
+  foldAnswers,
+  interviewProgress,
+  isAnswered,
+  nextQuestion,
+  questionById,
+  skrivSvar,
+  svarSomText,
+  valdaSvar,
+} from "@/lib/advisor/interview";
 import { buildFirstAnalysis } from "@/lib/advisor/firstAnalysis";
 import { DataMinimeringHint } from "@/components/privacy/DataMinimeringHint";
 import type { CompanyInfo } from "@/data/types";
-import { Check, ChevronDown } from "lucide-react";
+import { ArrowLeft, Check, ChevronDown } from "lucide-react";
 
 /**
  * Det första mötet med Clearance ÄR samtalet - men ett samtal som
@@ -149,14 +152,31 @@ export const ClaraIntro = ({
 
   const [situationId, setSituationId] = useState<string | null>(() => resumed?.situationId ?? null);
   const [answers, setAnswers] = useState<Record<string, string>>(() => resumed?.answers ?? {});
-  const [profile, setProfile] = useState<CompanyProfile>(() => resumed?.profile ?? emptyProfile());
-  const [signals, setSignals] = useState<{
-    concentration: "låg" | "medel" | "hög" | null;
-    trend: "upp" | "stabil" | "ner" | "kraftigt ner" | null;
-  }>(() => resumed?.signals ?? { concentration: null, trend: null });
+  /*
+   * PROFILEN ÄR HÄRLEDD, INTE SPARAD.
+   *
+   * Förut lades varje svars fält på profilen när svaret gavs. Det gjorde
+   * det omöjligt att ändra sig: ett ändrat svar hade lämnat kvar det gamla
+   * fältet, och profilen hade sagt en sak som inget svar längre stödde.
+   *
+   * Nu räknas profilen och signalerna fram ur svaren varje gång. Ett ändrat
+   * eller borttaget svar blir därmed rätt av konstruktion - det finns inget
+   * minne som kan glömmas bort. Det är hela grunden för att kunna gå
+   * tillbaka.
+   */
+  const { profile, signals } = useMemo(
+    () => foldAnswers(situationId, answers),
+    [situationId, answers],
+  );
+  /** Frågan användaren gått tillbaka till, eller null för nästa i ordningen. */
+  const [redigerar, setRedigerar] = useState<string | null>(null);
+  /** Påbörjat flervalssvar, innan det bekräftats. */
+  const [flerval, setFlerval] = useState<string[]>([]);
   /** Notisen om att samtalet återupptogs. Går att stänga - den har gjort sitt. */
   const [resumeNoticeOpen, setResumeNoticeOpen] = useState(resumed !== null);
   const [profileOpen, setProfileOpen] = useState(false);
+  /** Listan med alla svar hittills, öppen eller stängd. */
+  const [svarenOppna, setSvarenOppna] = useState(false);
   const [smsChoice, setSmsChoice] = useState<"none" | "yes" | "no">("none");
   const [proOfferOpen, setProOfferOpen] = useState(false);
   const navigate = useNavigate();
@@ -395,18 +415,25 @@ export const ClaraIntro = ({
       { who: "user", text: label },
       { who: "radgivare", text: ONBOARDING.interviewLead.body },
     ]);
-    setProfile((p) =>
-      applyAnswer(p, {
-        riskLevel: deriveRiskLevel({ situationId: id, concentration: null, trend: null }),
-      }),
-    );
+    // Risknivån sätts inte här: den räknas fram ur situationen och svaren i
+    // foldAnswers, och ett andra ställe som skriver samma fält är ett ställe
+    // för de två att glida isär på.
     setStage("intervju");
   };
 
   /* --- steg 4: intervjun ---------------------------------------------------- */
-  const question = useMemo(
-    () => (stage === "intervju" ? nextQuestion(profile, situationId, answers) : null),
-    [stage, profile, situationId, answers],
+  const question = useMemo(() => {
+    if (stage !== "intervju") return null;
+    // Har användaren gått tillbaka är DEN frågan den aktuella, även om den
+    // redan är besvarad. Annars nästa obesvarade i ordningen.
+    if (redigerar) return questionById(redigerar) ?? null;
+    return nextQuestion(profile, situationId, answers);
+  }, [stage, profile, situationId, answers, redigerar]);
+
+  /** Besvarade frågor i ordning - underlaget för att gå tillbaka. */
+  const besvarade = useMemo(
+    () => applicableQuestions(profile, situationId, answers).filter((q) => isAnswered(answers, q.id)),
+    [profile, situationId, answers],
   );
   const progress = useMemo(
     () => interviewProgress(profile, situationId, answers),
@@ -437,32 +464,66 @@ export const ClaraIntro = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stage, question]);
 
-  const answerQuestion = (label: string) => {
+  /**
+   * Ett svar lämnas.
+   *
+   * Profilen rörs inte här - den räknas fram ur `answers` (se foldAnswers).
+   * Det enda som händer är att svaret skrivs och samtalet får sin rad.
+   */
+  const lamnaSvar = (labels: string[]) => {
     if (!question) return;
-    const option = question.options.find((o) => o.label === label);
-    const nextAnswers = { ...answers, [question.id]: label };
-    const nextSignals = {
-      concentration: option?.signal?.concentration ?? signals.concentration,
-      trend: option?.signal?.trend ?? signals.trend,
-    };
-    setEntries((prev) => [...prev, { who: "user", text: label }]);
-    setSignals(nextSignals);
-    setAnswers(nextAnswers);
-    setProfile((p) =>
-      applyAnswer(applyAnswer(p, option?.fills ?? {}), {
-        riskLevel: deriveRiskLevel({
-          situationId,
-          concentration: nextSignals.concentration,
-          trend: nextSignals.trend,
-        }),
-      }),
-    );
+    const fragaId = question.id;
+    const ombytt = isAnswered(answers, fragaId);
+    setAnswers((prev) => ({ ...prev, [fragaId]: skrivSvar(labels) }));
+    setEntries((prev) => [
+      ...prev,
+      { who: "user", text: labels.length > 0 ? svarSomText(skrivSvar(labels)) : "(hoppade över)" },
+    ]);
+    if (ombytt) say("Ändrat. Jag räknar om det som byggde på det svaret.");
+    setRedigerar(null);
+    setFlerval([]);
   };
 
+  /** Enkelval: ett klick är svaret. */
+  const answerQuestion = (label: string) => lamnaSvar([label]);
+
+  /** Flerval: klicket lägger till eller tar bort, svaret lämnas med knappen. */
+  const vaxlaVal = (label: string) =>
+    setFlerval((prev) => (prev.includes(label) ? prev.filter((l) => l !== label) : [...prev, label]));
+
   /** Att hoppa över en fråga är ett svar: "inget svar" fyller inget fält. */
-  const skipQuestion = () => {
-    if (!question) return;
-    setAnswers((prev) => ({ ...prev, [question.id]: "" }));
+  const skipQuestion = () => lamnaSvar([]);
+
+  /** Öppnar en besvarad fråga igen, med det tidigare svaret förvalt. */
+  const oppnaFraga = (id: string) => {
+    const fraga = questionById(id);
+    if (!fraga) return;
+    setRedigerar(id);
+    setFlerval(fraga.multi ? valdaSvar(answers[id]) : []);
+    say(`Vi går tillbaka till frågan om ${fraga.text.toLowerCase().replace(/\?$/, "")}.`);
+  };
+
+  /**
+   * TILLBAKA TILL FÖREGÅENDE SVAR.
+   *
+   * Utan den här var varje klick slutgiltigt: frågan försvann och det fanns
+   * ingen väg tillbaka. För någon som svarar på femton frågor om sitt eget
+   * bolag mitt i en kris är det inte en petitess - ett felklick följde med
+   * in i analysen.
+   *
+   * Svaret tas INTE bort när man går tillbaka. Frågan öppnas igen med det
+   * tidigare valet förvalt, så att gå tillbaka och att ändra sig är två
+   * olika saker.
+   */
+  const gaTillbaka = () => {
+    const forra = besvarade[besvarade.length - 1];
+    if (forra) oppnaFraga(forra.id);
+  };
+
+  /** Lämnar redigeringen utan att ändra något. */
+  const avbrytRedigering = () => {
+    setRedigerar(null);
+    setFlerval([]);
   };
 
   const analysis = useMemo(
@@ -515,8 +576,8 @@ export const ClaraIntro = ({
     setStage("valkommen");
     setSituationId(null);
     setAnswers({});
-    setProfile(emptyProfile());
-    setSignals({ concentration: null, trend: null });
+    setRedigerar(null);
+    setFlerval([]);
     setResumeNoticeOpen(false);
   };
 
@@ -670,30 +731,137 @@ export const ClaraIntro = ({
           {stage === "intervju" && question && (
             <div className="mt-4">
               <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
-                {ONBOARDING.interviewLead.heading} · fråga {progress.current} av {progress.total}
+                {redigerar
+                  ? "Ändrar ett tidigare svar"
+                  : `${ONBOARDING.interviewLead.heading} · fråga ${progress.current} av ${progress.total}`}
               </p>
               <p className="mt-1 text-sm font-medium text-foreground">{question.text}</p>
               {/* Ingen ny fråga utan en kort introduktion om ämnet. */}
               <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">{question.why}</p>
+              {question.multi && (
+                <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                  Välj gärna flera. En bilverkstad säljer både arbete och reservdelar – då är båda
+                  svaret.
+                </p>
+              )}
+
               <div className="mt-2.5 flex flex-wrap gap-2">
-                {question.options.map((o) => (
-                  <button
-                    key={o.label}
-                    type="button"
-                    onClick={() => answerQuestion(o.label)}
-                    className="rounded-full border border-border bg-card px-3.5 py-1.5 text-left text-sm font-medium text-foreground transition-colors hover:border-accent"
-                  >
-                    {o.label}
-                  </button>
-                ))}
+                {question.options.map((o) => {
+                  const vald = question.multi
+                    ? flerval.includes(o.label)
+                    : valdaSvar(answers[question.id]).includes(o.label);
+                  return (
+                    <button
+                      key={o.label}
+                      type="button"
+                      aria-pressed={question.multi ? vald : undefined}
+                      onClick={() => (question.multi ? vaxlaVal(o.label) : answerQuestion(o.label))}
+                      className={`rounded-full border px-3.5 py-1.5 text-left text-sm font-medium transition-colors ${
+                        vald
+                          ? "border-accent bg-accent/10 text-foreground"
+                          : "border-border bg-card text-foreground hover:border-accent"
+                      }`}
+                    >
+                      {question.multi && vald && (
+                        <Check className="mr-1 inline h-3.5 w-3.5" aria-hidden="true" />
+                      )}
+                      {o.label}
+                    </button>
+                  );
+                })}
               </div>
+
+              {question.multi && (
+                <Button
+                  type="button"
+                  size="sm"
+                  className="mt-3"
+                  disabled={flerval.length === 0}
+                  onClick={() => lamnaSvar(flerval)}
+                >
+                  {flerval.length === 0
+                    ? "Välj minst ett"
+                    : flerval.length === 1
+                      ? "Svara"
+                      : `Svara med ${flerval.length} val`}
+                </Button>
+              )}
+
+              <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1">
+                <button
+                  type="button"
+                  onClick={skipQuestion}
+                  className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+                >
+                  {ONBOARDING.interviewLead.skipLabel}
+                </button>
+                {/*
+                  VÄGEN TILLBAKA. Utan den var varje klick slutgiltigt - frågan
+                  försvann och ett felklick följde med in i analysen.
+                */}
+                {redigerar ? (
+                  <button
+                    type="button"
+                    onClick={avbrytRedigering}
+                    className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+                  >
+                    Behåll mitt tidigare svar
+                  </button>
+                ) : (
+                  besvarade.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={gaTillbaka}
+                      className="inline-flex items-center gap-1 text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+                    >
+                      <ArrowLeft className="h-3 w-3" aria-hidden="true" />
+                      Ändra föregående svar
+                    </button>
+                  )
+                )}
+              </div>
+            </div>
+          )}
+
+          {/*
+            ALLA SVAR, ÖPPNA OCH ÄNDRINGSBARA.
+            Att bara kunna backa ett steg räcker inte: den som vid fråga tolv
+            kommer på att svar tre blev fel ska inte behöva klicka sig bakåt
+            genom nio frågor.
+          */}
+          {stage === "intervju" && besvarade.length > 0 && (
+            <div className="mt-3">
               <button
                 type="button"
-                onClick={skipQuestion}
-                className="mt-2 text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+                onClick={() => setSvarenOppna((v) => !v)}
+                aria-expanded={svarenOppna}
+                className="flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground"
               >
-                {ONBOARDING.interviewLead.skipLabel}
+                <ChevronDown
+                  className={`h-3.5 w-3.5 transition-transform ${svarenOppna ? "rotate-180" : ""}`}
+                  aria-hidden="true"
+                />
+                Dina svar hittills ({besvarade.length})
               </button>
+              {svarenOppna && (
+                <ul className="mt-2 space-y-1.5 border-l border-border pl-3">
+                  {besvarade.map((q) => (
+                    <li key={q.id} className="text-xs leading-relaxed">
+                      <span className="text-muted-foreground">{q.text}</span>{" "}
+                      <span className="font-medium text-foreground">
+                        {svarSomText(answers[q.id]) || "hoppade över"}
+                      </span>{" "}
+                      <button
+                        type="button"
+                        onClick={() => oppnaFraga(q.id)}
+                        className="text-accent underline underline-offset-2"
+                      >
+                        Ändra
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           )}
 

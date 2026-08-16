@@ -72,6 +72,21 @@ export const applyAnswer = (
   return next;
 };
 
+/**
+ * ETT PROFILFÄLT KAN BÄRA FLERA VÄRDEN.
+ *
+ * Sedan intervjun tillåter flerval kan ett fält vara "Varuförsäljning och
+ * Projekt" - en bilverkstad säljer arbete och reservdelar, och den
+ * blandningen ÄR uppgiften. Varje `profile.businessModel === "Projekt"`
+ * blev då tyst falsk, och analysen tappade sina observationer utan att
+ * något gick sönder.
+ *
+ * Jämförelser mot profilfält som kan slås ihop ska därför gå genom den
+ * här funktionen. tests/onboarding.ts vaktar att de gör det.
+ */
+export const profilInnehaller = (varde: string | null | undefined, del: string): boolean =>
+  typeof varde === "string" && varde.split(" och ").some((d) => d.trim() === del);
+
 /** Profilen som rader, med okända fält utskrivna som okända. */
 export const profileRows = (profile: CompanyProfile): { label: string; value: string }[] =>
   PROFILE_LABELS.map(({ key, label }) => ({ label, value: profile[key] ?? "okänd" }));

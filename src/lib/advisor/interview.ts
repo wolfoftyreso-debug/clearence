@@ -20,6 +20,7 @@
  */
 
 import type { CompanyProfile } from "./companyProfile";
+import { applyAnswer, deriveRiskLevel, emptyProfile } from "./companyProfile";
 
 export interface InterviewOption {
   /** Det användaren klickar på. */
@@ -43,6 +44,16 @@ export interface InterviewQuestion {
    */
   why: string;
   options: InterviewOption[];
+  /**
+   * Flera svar får väljas.
+   *
+   * Sätts BARA där verkligheten är blandad. En bilverkstad säljer halva
+   * omsättningen i arbete och halva i reservdelar; att tvinga fram ett av
+   * dem gör profilen fel, och att lägga till ett "Blandat"-alternativ
+   * döljer VAD blandningen består av. Frågor där ett svar utesluter ett
+   * annat ("Kan ni betala lönerna på fredag?") ska aldrig vara flerval.
+   */
+  multi?: boolean;
   /** Faller bort när läget är akut - se filhuvudet. */
   skipWhenAcute?: boolean;
   /** Villkor mot profilen så här långt. Utelämnat = ställs alltid. */
@@ -116,25 +127,36 @@ export const INTERVIEW: InterviewQuestion[] = [
   },
   {
     id: "erbjudande",
-    text: "Vad säljer ni främst?",
+    text: "Vad säljer ni?",
     why: "Varor binder kapital i lager, tjänster binder det i tid. Det syns direkt i likviditeten.",
+    /*
+     * FLERVAL, och alternativet "Blandat" är borta. En bilverkstad säljer
+     * arbete OCH reservdelar; "Blandat" sa att det var blandat men inte av
+     * vad, och just den blandningen är hela skillnaden mellan lagerbindning
+     * och tidsbindning.
+     */
+    multi: true,
     options: [
       { label: "Varor", fills: { businessModel: "Varuförsäljning" } },
       { label: "Tjänster", fills: { businessModel: "Tjänster" } },
       { label: "Projekt och uppdrag", fills: { businessModel: "Projekt" } },
       { label: "Abonnemang", fills: { businessModel: "Abonnemang" } },
-      { label: "Blandat", fills: { businessModel: "Blandat" } },
     ],
   },
   {
     id: "kunder",
     text: "Vem köper av er?",
     why: "Vem som är kund styr betalningstiderna och vilka verktyg som finns om de inte betalar.",
+    /*
+     * FLERVAL. Det hopslagna alternativet "Både företag och privatpersoner"
+     * är borta: det var en lapp över att flerval saknades, och det gick
+     * inte att uttrycka "företag och offentlig sektor" med det.
+     */
+    multi: true,
     options: [
       { label: "Andra företag", fills: { customers: "B2B" } },
       { label: "Privatpersoner", fills: { customers: "B2C" } },
       { label: "Offentlig sektor", fills: { customers: "Offentlig sektor" } },
-      { label: "Både företag och privatpersoner", fills: { customers: "Blandat" } },
     ],
   },
   {
@@ -199,6 +221,8 @@ export const INTERVIEW: InterviewQuestion[] = [
     id: "system",
     text: "Har ni ekonomisystem eller affärssystem idag?",
     why: "Det avgör hur snabbt vi kan få fram siffrorna – och om underlaget kan hämtas eller måste skrivas in.",
+    // Flerval: bokföringsprogram OCH redovisningsbyrå är det vanligaste av allt.
+    multi: true,
     options: [
       { label: "Ja, ett affärssystem", fills: { digitalMaturity: "Hög" } },
       { label: "Ja, ett bokföringsprogram", fills: { digitalMaturity: "Medel" } },
@@ -235,6 +259,8 @@ export const INTERVIEW: InterviewQuestion[] = [
     id: "nya-kunder",
     text: "Hur hittar ni nya kunder idag?",
     why: "Om intäkterna behöver upp är det här den enda knappen som finns att vrida på kort sikt.",
+    // Flerval: nästan alla bolag har mer än en väg in.
+    multi: true,
     skipWhenAcute: true,
     options: [
       { label: "På rekommendation", fills: {} },
@@ -269,6 +295,119 @@ export const INTERVIEW: InterviewQuestion[] = [
     ],
   },
 ];
+
+/* -------------------------------------------------------------------------- */
+/* Flera svar på samma fråga                                                  */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Skiljetecknet mellan valda svar.
+ *
+ * Ett svar är fortfarande EN STRÄNG. Det är inte lathet: hela
+ * återupptagningen (onboardingResume) och dess prov vilar på att svaren är
+ * text, och att byta till en lista hade gjort varje sparad post från i går
+ * oläsbar mitt i ett pågående samtal.
+ *
+ * Tecknet är valt för att det inte förekommer i något alternativ - och
+ * tests/onboarding.ts kräver att det förblir så.
+ */
+export const SVARSSKILJARE = " | ";
+
+/** De valda alternativen. Tom lista för överhoppad eller obesvarad fråga. */
+export const valdaSvar = (answer: string | undefined | null): string[] =>
+  !answer ? [] : answer.split(SVARSSKILJARE).map((s) => s.trim()).filter(Boolean);
+
+/** Flera val till ett lagrat svar. */
+export const skrivSvar = (labels: string[]): string => labels.join(SVARSSKILJARE);
+
+/**
+ * Svaret som en människa läser det: "Varor, Tjänster och Abonnemang".
+ *
+ * Behövs för att analysen citerar svaren i löpande text. `Du svarade
+ * "Varor | Tjänster"` hade avslöjat lagringsformatet i en mening som ska
+ * låta som ett samtal.
+ */
+export const svarSomText = (answer: string | undefined | null): string => {
+  const valda = valdaSvar(answer);
+  if (valda.length === 0) return "";
+  if (valda.length === 1) return valda[0];
+  return `${valda.slice(0, -1).join(", ")} och ${valda[valda.length - 1]}`;
+};
+
+/** Frågan med ett visst id, oavsett var i katalogen den står. */
+export const questionById = (id: string): InterviewQuestion | undefined =>
+  INTERVIEW.find((q) => q.id === id);
+
+/**
+ * PROFILEN RÄKNAS FRAM UR SVAREN. Den ackumuleras inte.
+ *
+ * Det här är skillnaden mellan att kunna ändra ett svar och att bara se ut
+ * att kunna det. Förut lades varje svars fält på profilen när det gavs, och
+ * ett ändrat svar hade lämnat kvar det gamla fältet - profilen hade sagt
+ * "Varuförsäljning" om ett bolag som just ändrat till "Tjänster", utan att
+ * någon kunde se varför.
+ *
+ * Med en ren omräkning är ett ändrat svar korrekt av konstruktion: det
+ * finns inget minne att glömma att rensa.
+ *
+ * TVÅ REGLER FÖR FLERVAL:
+ *
+ *  1. FÄLT SLÅS IHOP. Varor + Tjänster ger "Varuförsäljning och Tjänster",
+ *     inte det ena eller det andra. Blandningen ÄR uppgiften.
+ *  2. SIGNALER SÄTTS BARA NÄR DE VALDA ÄR ENIGA. En signal styr risknivån,
+ *     och två valda alternativ som pekar åt olika håll är inte ett svar på
+ *     vilken risknivå som gäller. Då förblir den okänd, vilket är sant.
+ */
+export interface Signals {
+  concentration: "låg" | "medel" | "hög" | null;
+  trend: "upp" | "stabil" | "ner" | "kraftigt ner" | null;
+}
+
+export const foldAnswers = (
+  situationId: string | null,
+  answers: Record<string, string>,
+): { profile: CompanyProfile; signals: Signals } => {
+  let profile = emptyProfile();
+  const signals: Signals = { concentration: null, trend: null };
+
+  for (const q of INTERVIEW) {
+    if (!isAnswered(answers, q.id)) continue;
+    const valda = valdaSvar(answers[q.id]);
+    const options = valda
+      .map((label) => q.options.find((o) => o.label === label))
+      .filter((o): o is InterviewOption => o !== undefined);
+    if (options.length === 0) continue;
+
+    const fills: Record<string, string> = {};
+    for (const option of options) {
+      for (const [key, value] of Object.entries(option.fills)) {
+        if (typeof value !== "string" || value === "") continue;
+        const redan = fills[key];
+        fills[key] = redan && redan !== value ? `${redan} och ${value}` : value;
+      }
+    }
+    profile = applyAnswer(profile, fills as Partial<CompanyProfile>);
+
+    for (const nyckel of ["concentration", "trend"] as const) {
+      const varden = options
+        .map((o) => o.signal?.[nyckel])
+        .filter((v): v is NonNullable<typeof v> => v !== undefined);
+      // Eniga eller inget alls. Se regel 2 ovan.
+      if (varden.length > 0 && varden.every((v) => v === varden[0])) {
+        (signals[nyckel] as unknown) = varden[0];
+      }
+    }
+  }
+
+  profile = applyAnswer(profile, {
+    riskLevel: deriveRiskLevel({
+      situationId,
+      concentration: signals.concentration,
+      trend: signals.trend,
+    }),
+  });
+  return { profile, signals };
+};
 
 /**
  * SVARAD är inte samma sak som SVARAD MED NÅGOT.
