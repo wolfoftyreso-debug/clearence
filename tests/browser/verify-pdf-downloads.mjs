@@ -35,6 +35,21 @@ const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 1280, height: 1000 } });
 page.setDefaultTimeout(30000);
 
+/*
+ * NEDLADDNINGEN ÄR IBLAND EN LÄNK, INTE EN KNAPP.
+ *
+ * I rapportvisaren förgenereras PDF:en och "Ladda ner PDF" är en RIKTIG
+ * länk till den (<a download>) - ett klick, ingen vybytesdans. Provet
+ * letade bara efter en knapp, hittade ingen, och stannade i en
+ * 30-sekunders väntan på en nedladdning som aldrig kunde komma. Sex
+ * kontroller hann köras; resten av filen kördes aldrig, och det gällde
+ * även mallarna, akten och kvittona längre ned.
+ *
+ * Väljaren tar därför båda formerna. Vilket element det är får ändras;
+ * att filen kommer får det inte.
+ */
+const NEDLADDNING = 'button:has-text("Ladda ner PDF"), a:has-text("Ladda ner PDF")';
+
 const download = async (trigger) => {
   const [dl] = await Promise.all([page.waitForEvent("download"), trigger()]);
   const path = await dl.path();
@@ -49,7 +64,7 @@ await page.waitForTimeout(1500);
 /* 1. Krisanalysen: direktknappen på startsidan. */
 await page.goto(`${BASE}/dashboard`, { waitUntil: "domcontentloaded" });
 await page.waitForTimeout(1200);
-let dl = await download(() => page.click('button:has-text("Ladda ner PDF")'));
+let dl = await download(() => page.locator(NEDLADDNING).first().click());
 check("krisanalys: filnamnet", /krisanalys.*\.pdf$/.test(dl.name), dl.name);
 validatePdfFile("krisanalys (direkt)", dl.path);
 
@@ -57,7 +72,18 @@ validatePdfFile("krisanalys (direkt)", dl.path);
 await page.click('button:has-text("Skapa rapport")');
 await page.waitForTimeout(800);
 const viewer = page.locator('[role="dialog"], .fixed.inset-0').last();
-dl = await download(() => viewer.locator('button:has-text("Ladda ner PDF")').first().click());
+/*
+ * Och att den ÄR en länk med ett filnamn är själva löftet från den
+ * omgången: en förgenererad PDF, inte en knapp som skapar en ny vy.
+ */
+const visarLank = viewer.locator('a:has-text("Ladda ner PDF")');
+check("visaren laddar ner via en riktig länk", (await visarLank.count()) === 1);
+check(
+  "och länken bär filnamnet",
+  /\.pdf$/.test((await visarLank.first().getAttribute("download")) ?? ""),
+  (await visarLank.first().getAttribute("download")) ?? "(inget)",
+);
+dl = await download(() => viewer.locator(NEDLADDNING).first().click());
 validatePdfFile("krisanalys (visaren)", dl.path);
 await page.keyboard.press("Escape");
 await page.locator('button:has-text("Stäng")').last().click().catch(() => {});
@@ -74,7 +100,7 @@ await templates.first().click();
 await page.waitForTimeout(400);
 await page.click('button:has-text("Skapa dokumentet")');
 await page.waitForTimeout(600);
-dl = await download(() => page.click('button:has-text("Ladda ner PDF")'));
+dl = await download(() => page.locator(NEDLADDNING).first().click());
 check("mall: filnamnet är .pdf", dl.name.endsWith(".pdf"), dl.name);
 const mallBytes = validatePdfFile("styrelseprotokoll", dl.path);
 check("mall: utkastmarkeringen med", mallBytes.includes("UTKAST"));
@@ -93,7 +119,7 @@ await page.fill("#cd-amount", "750000");
 await page.fill("#cd-purpose", "Överbrygga ackordsförhandlingen under rekonstruktionens första tre månader.");
 await page.click('button:has-text("Öppna underlaget")');
 await page.waitForTimeout(1000);
-const dossierViewer = page.locator('button:has-text("Ladda ner PDF")');
+const dossierViewer = page.locator(NEDLADDNING);
 if ((await dossierViewer.count()) > 0) {
   dl = await download(() => dossierViewer.first().click());
   check("kreditunderlag: filnamnet är .pdf", dl.name.endsWith(".pdf"), dl.name);

@@ -31,8 +31,26 @@ let body = await page.innerText("body");
 check("sektionen finns med engångslöftet", /API-nycklar/i.test(body) && /visas en enda gång/i.test(body));
 check("utvecklarsidan länkas", (await page.locator('a[href*="/api"]:has-text("utvecklarsidan")').count()) > 0);
 
-// 1. Skapa nyckeln.
+// 1. Skapa nyckeln - lösenordet krävs.
+//
+// Nyckeln överlever sessionen som skapade den, så myntningen är en av de
+// två åtgärder i produkten som kräver att den som klickar visar att hen
+// kan lösenordet. Att bara vara inloggad räcker inte, och det ska synas
+// direkt: knappen är död tills fältet är ifyllt.
 await page.fill("#api-key-label", "Byråsystemet");
+check(
+  "knappen är död utan lösenord",
+  await page.locator('button:has-text("Skapa nyckel")').isDisabled(),
+);
+check(
+  "och skälet står skrivet vid formuläret",
+  /nyckeln överlever inloggningen/i.test(await page.innerText("body")),
+);
+await page.fill("#api-key-losenord", "hemligt123");
+check(
+  "med lösenordet ifyllt går knappen att trycka",
+  await page.locator('button:has-text("Skapa nyckel")').isEnabled(),
+);
 await page.click('button:has-text("Skapa nyckel")');
 await page.waitForTimeout(1000);
 const secret = (await page.locator("[data-fresh-secret]").innerText()).trim();

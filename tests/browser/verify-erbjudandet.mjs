@@ -25,20 +25,44 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 const { chromium } = pw;
-const ARTEFAKT = path.resolve(process.argv[2] ?? "clearance-artifact.html");
-const ARBETE = path.join(path.dirname(ARTEFAKT), "wrapped-test.html");
-const BILDER = path.join(process.cwd(), "shots");
-mkdirSync(BILDER, { recursive: true });
 
 /*
- * Artefakten är kroppsinnehåll, inte ett dokument (se scripts/bygg-artefakt.mjs).
- * Här sätts skalet tillbaka, precis som publiceringen gör.
+ * PROVET KÖRS PÅ TVÅ SÄTT, för det finns två sätt produkten visas på.
+ *
+ *   node tests/browser/verify-erbjudandet.mjs http://127.0.0.1:4310
+ *   node tests/browser/verify-erbjudandet.mjs clearance-artifact.html
+ *
+ * Förhandsservern använder vanliga sökvägar; artefakten är EN fil och
+ * använder därför HashRouter (se scripts/bygg-artefakt.mjs). Skillnaden är
+ * en radrutin här, och alternativet - ett prov som bara kan köras på ett
+ * av sätten - blev genast ett prov som ingen körde: den vanliga
+ * körningen skickar en adress, och filen fanns inte.
  */
-writeFileSync(
-  ARBETE,
-  `<!doctype html><html><head><meta charset="utf-8"></head><body>${readFileSync(ARTEFAKT, "utf8")}</body></html>`,
-);
-const base = `file://${ARBETE}`;
+const MAL = process.argv[2] ?? "http://127.0.0.1:4310";
+const arSpelplats = /^https?:\/\//i.test(MAL);
+
+let base;
+if (arSpelplats) {
+  base = MAL.replace(/\/$/, "");
+} else {
+  const artefakt = path.resolve(MAL);
+  const arbete = path.join(path.dirname(artefakt), "wrapped-test.html");
+  /*
+   * Artefakten är kroppsinnehåll, inte ett dokument (se
+   * scripts/bygg-artefakt.mjs). Här sätts skalet tillbaka, precis som
+   * publiceringen gör.
+   */
+  writeFileSync(
+    arbete,
+    `<!doctype html><html><head><meta charset="utf-8"></head><body>${readFileSync(artefakt, "utf8")}</body></html>`,
+  );
+  base = `file://${arbete}`;
+}
+/** Adressen till en vy, oavsett vilket av de två sätten som gäller. */
+const vy = (rutt) => (arSpelplats ? `${base}${rutt}` : `${base}#${rutt}`);
+
+const BILDER = path.join(process.cwd(), "shots");
+mkdirSync(BILDER, { recursive: true });
 
 let passed = 0;
 let failed = 0;
@@ -60,7 +84,7 @@ p.on("pageerror", (e) => fel.push(e.message));
 
 /* --- Ett nytt konto ------------------------------------------------------- */
 
-await p.goto(`${base}#/login`, { waitUntil: "load" });
+await p.goto(vy("/login"), { waitUntil: "load" });
 await p.waitForTimeout(1200);
 await p.click('button:has-text("Skapa ett")');
 await p.waitForTimeout(600);
@@ -71,7 +95,7 @@ await p.click('button:has-text("Skapa konto")');
 await p.waitForTimeout(2500);
 
 await p.evaluate(() => localStorage.removeItem("clearance-pro-offer-seen"));
-await p.goto(`${base}#/dashboard/samtal`, { waitUntil: "load" });
+await p.goto(vy("/dashboard/samtal"), { waitUntil: "load" });
 await p.waitForTimeout(2000);
 
 /* --- Genom samtalet, som en människa -------------------------------------- */

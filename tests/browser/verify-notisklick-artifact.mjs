@@ -20,14 +20,27 @@ const artifactPath = join(
   dirname(fileURLToPath(import.meta.url)),
   "..", "..", "..", "..", "clearance-artifact.html",
 );
-const html = await readFile(artifactPath).catch(() => null);
+const html = await readFile(artifactPath, "utf8").catch(() => null);
 if (!html) {
   console.log(`SKIPPAD: ingen byggd artefakt på ${artifactPath} - bygg enfilsdemon först.`);
   process.exit(0);
 }
+/*
+ * ARTEFAKTEN ÄR KROPPSINNEHÅLL, INTE ETT DOKUMENT.
+ *
+ * Publiceringen bäddar in filen i ett eget dokumentskal, så bygget lämnar
+ * doctype, <html>, <head> och <body> därhän (se scripts/bygg-artefakt.mjs).
+ * Den här servern skickade innehållet rått: webbläsaren fick en fil utan
+ * skal, ingenting renderades, och provet stod och väntade i trettio
+ * sekunder på en knapp som aldrig kunde dyka upp. Skalet sätts därför på
+ * här, precis som publiceringen gör.
+ */
+const SKAL = (kropp) =>
+  `<!doctype html><html lang="sv"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head><body>${kropp}</body></html>`;
+
 const server = createServer((req, res) => {
   res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
-  res.end(html);
+  res.end(SKAL(html));
 });
 await new Promise((resolve) => server.listen(4322, "127.0.0.1", resolve));
 const BASE = "http://127.0.0.1:4322/demo.html";

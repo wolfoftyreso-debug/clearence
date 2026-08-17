@@ -76,13 +76,18 @@ for (const width of WIDTHS) {
     await page.waitForTimeout(900);
     checks += 1;
 
-    // En 404-sida spiller aldrig. Utan den här kontrollen godkänns en rutt
-    // som inte finns - och en gammal dist i preview-servern ger då grönt för
-    // sidor som inte ens är byggda. Det hände.
-    const notFound = await page.evaluate(() =>
-      document.body.innerText.includes("Sidan finns inte") ||
-      document.body.innerText.includes("404"),
-    );
+    /*
+     * En 404-sida spiller aldrig. Utan den här kontrollen godkänns en rutt
+     * som inte finns - och en gammal dist i preview-servern ger då grönt
+     * för sidor som inte ens är byggda. Det hände.
+     *
+     * MARKÖREN, INTE TEXTEN. Kontrollen letade efter strängen "404" var
+     * som helst i innehållet, och utvecklarsidan /api beskriver API:ets
+     * 404-svar i löpande text. Den sidan flaggades alltså som en 404-sida
+     * och hoppades över - "inget testat" - vid varje bredd, tyst, sedan
+     * den texten skrevs. En sida som handlar OM ett fel är inte felet.
+     */
+    const notFound = await page.evaluate(() => !!document.querySelector("[data-not-found]"));
     if (notFound) {
       failures += 1;
       console.log(`FAIL ${width}px ${route} — rutten renderar 404, inget testat`);

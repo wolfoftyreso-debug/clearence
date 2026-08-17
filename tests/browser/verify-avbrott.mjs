@@ -65,12 +65,29 @@ const tillIntervjun = async (p) => {
   await p.waitForTimeout(1000);
 };
 
-/** Svara på n frågor. Returnerar hur många som faktiskt besvarades. */
+/**
+ * Svara på n frågor. Returnerar hur många som faktiskt BESVARADES.
+ *
+ * Skillnaden mellan klick och svar är hela poängen med räknaren. Flera
+ * svar får vara sanna samtidigt - en bilverkstad säljer ofta halva arbete
+ * och halva reservdelar - och ett flerval bekräftas med en egen knapp. Ett
+ * klick på alternativet växlar bara valet.
+ *
+ * Utan bekräftelsen räknade den här hjälparen fem KLICK som fem svar,
+ * medan posten bara innehöll två. Provet blev grönt på "fem frågor
+ * besvarade" och rött först på siffran användaren får se efter
+ * omladdningen - alltså rätt larm, men på fel rad.
+ */
 const svara = async (p, n) => {
   let given = 0;
   for (let i = 0; i < n; i++) {
     if (!(await alternativ(p).count())) break;
     await alternativ(p).first().click();
+    await p.waitForTimeout(300);
+    const bekrafta = samtalet(p).locator('button:has-text("Svara")');
+    if (await bekrafta.count()) {
+      await bekrafta.first().click();
+    }
     await p.waitForTimeout(700);
     given++;
   }

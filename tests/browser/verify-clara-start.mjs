@@ -169,8 +169,21 @@ const questionNow = async () => {
   );
 }
 
-// Två frågor är överhoppade; nu står vi på den tredje.
+/*
+ * Två frågor är överhoppade; nu står vi på den tredje.
+ *
+ * FLERA SVAR FÅR VARA SANNA SAMTIDIGT. Frågan om vad bolaget säljer är
+ * ett flerval - en bilverkstad säljer ofta halva arbete och halva
+ * reservdelar - och ett flerval bekräftas med en egen knapp. Ett klick på
+ * alternativet växlar bara valet; utan bekräftelsen står samtalet still.
+ */
 await page.click('button:has-text("Varor")');
+await page.waitForTimeout(250);
+check(
+  "flervalsfrågan väntar på en bekräftelse",
+  (await page.locator('button:has-text("Svara")').count()) >= 1,
+);
+await page.click('button:has-text("Svara")');
 await page.waitForTimeout(400);
 body = await page.innerText("body");
 check("nästa fråga kommer", /fråga 4 av/i.test(body), (body.match(/fråga \d+ av \d+/i) ?? [""])[0]);
@@ -181,10 +194,17 @@ body = await page.innerText("body");
 check("profilen visar de nio fälten", /Bransch/.test(body) && /Digital mognad/.test(body) && /Tillväxtfas/.test(body));
 check("okända fält står som okända", /okänd/.test(body));
 
-// Svara resten: klicka första alternativet tills frågorna tar slut.
-for (let i = 0; i < 20; i++) {
+// Svara resten: första alternativet, och bekräfta där frågan är ett flerval.
+for (let i = 0; i < 30; i++) {
   const remaining = await page.locator("text=/fråga \\d+ av \\d+/").count();
   if (remaining === 0) break;
+  // Bekräftelsen först. Annars växlar loopen samma alternativ av och på.
+  const svara = page.locator('button:has-text("Svara")');
+  if ((await svara.count()) > 0) {
+    await svara.first().click();
+    await page.waitForTimeout(250);
+    continue;
+  }
   const chips = page.locator('section[aria-label="Samtal med CLEARANCE"] .flex.flex-wrap.gap-2 > button');
   if ((await chips.count()) === 0) break;
   await chips.first().click();
@@ -204,11 +224,30 @@ check(
   "den lovar ingen bedömning av betalningsförmågan",
   /inte en bedömning av betalningsförmågan/.test(first),
 );
-check("den leder vidare", (await page.locator('a:has-text("Gör nulägesanalysen")').count()) >= 1);
+/*
+ * Vägen vidare är en KNAPP under kortet, inte en länk i det. Kortet fick
+ * showNextStep={false} när nästa steg flyttades ut till en enda knapp
+ * ("En knapp, ett budskap"). Kontrollen letade efter den gamla länken och
+ * hade varit röd sedan dess.
+ */
+check(
+  "den leder vidare",
+  (await page.locator('button:has-text("nulägesanalysen"), a:has-text("nulägesanalysen")').count()) >= 1,
+);
 
 // 3e. Premium sist. Numret efterfrågades aldrig under intervjun.
 check("SMS-erbjudandet kommer efter analysen", /SMS-aviseringar/.test(body));
-check("det säger vilka nivåer det ingår i", /Professional och Enterprise/.test(body));
+/*
+ * Nivåerna heter Start/Standard/Business/Enterprise sedan prissättningen
+ * gjordes om; "Professional" finns inte längre. Kontrollen läser samma
+ * driftparameter som ytan gör, i stället för en hårdkodad nivålista som
+ * åldras varje gång priserna rörs.
+ */
+check(
+  "det säger vilka nivåer det ingår i",
+  /ingår i Clearance \w+/.test(body),
+  (body.match(/Det ingår i[^.]*\./) ?? [""])[0],
+);
 check("det går att tacka nej", /Inte nu/.test(body));
 await page.click('button:has-text("Inte nu")');
 await page.waitForTimeout(300);

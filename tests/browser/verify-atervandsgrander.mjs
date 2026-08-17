@@ -90,7 +90,24 @@ check(
   /ingen bild|inga av frågorna/i.test(bare) || /9 av 9 fält/.test(bare),
   bare.slice(0, 200),
 );
-check("och den leder vidare ändå", (await page.locator('a:has-text("Gör nulägesanalysen")').count()) >= 1);
+/*
+ * VÄGEN VIDARE ÄR EN KNAPP, INTE EN LÄNK.
+ *
+ * Kontrollen letade efter en länk med texten "Gör nulägesanalysen" inne i
+ * analyskortet. Kortet fick sedan showNextStep={false} och nästa steg
+ * flyttades ut till EN knapp under kortet ("En knapp, ett budskap") -
+ * märkt "Gå vidare till nulägesanalysen". Påståendet som betyder något är
+ * att det finns en väg vidare och att den går att trycka på, inte vilket
+ * element den råkar vara.
+ */
+const vidare = page.locator(
+  'button:has-text("nulägesanalysen"), a:has-text("nulägesanalysen")',
+);
+check("och den leder vidare ändå", (await vidare.count()) >= 1);
+check(
+  "och vägen vidare går att trycka på",
+  (await vidare.count()) >= 1 && (await vidare.first().isEnabled()),
+);
 check(
   "det går att gå vidare till nulägesanalysen",
   (await page.locator('button:has-text("Gå vidare till nulägesanalysen")').count()) === 1,
@@ -107,10 +124,22 @@ await page.waitForTimeout(2500);
 await page.click('[data-guide="flode-sa-hittar-du-tillbaka"]');
 await page.waitForTimeout(3200);
 
+/*
+ * KNAPPEN HETER "Nästa".
+ *
+ * Loopen letade efter "Hoppa över steget", som guiden inte har längre.
+ * Den hittade noll, bröt direkt, och guideSkips blev 0 - alltså rött på
+ * "genomgången tar slut" utan att en enda ruta hade prövats. En vakt som
+ * letar efter en knapp som inte finns prövar ingenting alls; den bara
+ * ser ut att göra det.
+ *
+ * Det som ska bevisas är oförändrat: varje steg går att lämna, räknaren
+ * rör sig, och genomgången tar slut.
+ */
 let guideSkips = 0;
 let guideStuck = null;
 for (let i = 0; i < 8; i += 1) {
-  const skip = page.locator('button:has-text("Hoppa över steget")');
+  const skip = page.locator('button:has-text("Nästa")');
   if ((await skip.count()) === 0) break;
   /*
    * RÄKNAREN, inte texten.
@@ -132,12 +161,19 @@ for (let i = 0; i < 8; i += 1) {
 }
 check("varje steg i genomgången går att hoppa över", guideStuck === null, String(guideStuck));
 check("och genomgången tar slut", guideSkips >= 3, String(guideSkips));
+// Sista steget har ingen "Nästa" - det är där utgången ska stå i stället.
+check(
+  "sista steget erbjuder utgången",
+  (await page.locator('button:has-text("Avsluta genomgången")').count()) >= 1,
+);
+await page.locator('button:has-text("Avsluta genomgången")').first().click();
+await page.waitForTimeout(1200);
 // När allt är överhoppat ska guiden SLÄPPA skärmen - inte lämna en ring
 // kvar som väntar på ett klick som aldrig kommer.
 await page.waitForTimeout(1500);
 check(
   "guiden lämnar inte skärmen i väntläge",
-  (await page.locator('button:has-text("Hoppa över steget")').count()) === 0,
+  (await page.locator("[data-guide-callout]").count()) === 0,
 );
 
 /* --- 3. Ut ur guiden när som helst ---------------------------------------- */

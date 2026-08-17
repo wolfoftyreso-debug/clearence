@@ -125,34 +125,50 @@ check("och erbjuder alternativ i stället för en återvändsgränd", /Kontroll�
 
 /* --- 4. Guidat arbetsläge: guiden väntar på användaren -------------------- */
 
-await page.click('[data-guide="flode-sa-hittar-du-tillbaka"]');
-await page.waitForTimeout(3000);
-check("flödet öppnade första vyn", page.url().includes("/dashboard"), page.url());
+/*
+ * RUNDTUR OCH ARBETSLÄGE ÄR TVÅ SAKER, OCH DET ÄR AVSIKTLIGT.
+ *
+ * Det här avsnittet drev rundturen "Så hittar du tillbaka" och krävde att
+ * den väntade på ett klick på den inringade ytan. Rundturerna flyttades
+ * sedan till en egen lista (TOURS i src/lib/guide/actions.ts) just för att
+ * de två inte skulle blandas ihop: en rundtur PEKAR och bläddras med
+ * Nästa, ett guidat arbetsläge VÄNTAR på användarens hand, för man minns
+ * det man gjort själv.
+ *
+ * Kontrollerna följde inte med. De pekade fortfarande på rundturen och
+ * letade efter "jag väntar" och "Hoppa över steget" - som rundturen inte
+ * har - så de var röda, och principen de handlade om prövades inte alls.
+ * Nu drivs de mot ett guidat arbetsläge, där principen faktiskt bor.
+ */
+await page.click('[data-guide="flode-forsta-analysen"]');
+await page.waitForTimeout(3500);
+check("flödet öppnade första vyn", page.url().includes("/wizard"), page.url());
 const flowBox = await page.locator("[data-guide-callout]").first().innerText();
 check("guiden säger att den väntar", /jag väntar/i.test(flowBox), flowBox.slice(0, 200));
-check("och varför just den här ytan", /håller uppsikt/.test(flowBox), flowBox.slice(0, 200));
+check(
+  "och varför just den här ytan",
+  /avgör vilka alternativ som finns kvar/.test(flowBox),
+  flowBox.slice(0, 200),
+);
 check(
   "guiden klickar inte åt användaren",
-  (await page.locator('[data-guide-ring="kontrollomrade"]').count()) === 1,
+  (await page.locator('[data-guide-ring="wizard-start"]').count()) === 1,
 );
 
 // TYDLIGHETEN, punkt för punkt. Den första versionen lade rutan ovanpå
 // markeringen och sa "klicka på det markerade" - alltså en instruktion
 // som dolde sitt eget föremål.
-check("genomgången presenterar sig", /Genomgång: Så hittar du tillbaka/i.test(flowBox), flowBox.slice(0, 120));
-check("saken namnges, inte bara 'det markerade'", /Kontrolläge/.test(flowBox), flowBox.slice(0, 200));
+check("arbetsläget presenterar sig", /Genomgång: Gör din första analys/i.test(flowBox), flowBox.slice(0, 120));
+check("saken namnges, inte bara 'det markerade'", /Nulägesanalysen/.test(flowBox), flowBox.slice(0, 200));
 check("det går att hoppa över steget", /Hoppa över steget/.test(flowBox));
 check("och att avsluta genomgången", /Avsluta genomgången/.test(flowBox));
-// Räknaren ska räkna KLICK, inte guidens interna moment: fyra stopp är
-// fyra, inte tolv.
+// Räknaren ska räkna KLICK, inte guidens interna moment: tre stopp är
+// tre, inte nio.
 check(
   "räknaren räknar klicken",
-  /Steg 1 av 4/i.test(flowBox),
+  /Steg 1 av 3/i.test(flowBox),
   (flowBox.match(/Steg \d+ av \d+/i) ?? [""])[0],
 );
-// Hela genomgången ska synas på en gång, inte ett steg i taget: den som
-// inte vet vad som återstår vet inte om det är värt att stanna kvar.
-check("alla hållplatser visas samtidigt", /Likviditet/.test(flowBox) && /Dokument/.test(flowBox) && /Händelselogg/.test(flowBox), flowBox.slice(0, 200));
 check("tangentbordsgenvägarna visas", /Esc/.test(flowBox), flowBox.slice(-120));
 
 // Rutan får ALDRIG överlappa ringen.
@@ -174,10 +190,74 @@ const dimmed = await page.evaluate(() =>
 check("resten av skärmen dimmas när ett klick väntas", dimmed);
 
 // Användaren klickar själv - då, och först då, går flödet vidare.
-await page.click('[data-guide="kontrollomrade"]');
+await page.click('[data-guide="wizard-start"]');
 await page.waitForTimeout(3500);
-check("flödet gick vidare efter användarens klick", page.url().includes("/dashboard/liquidity"), page.url());
+check(
+  "flödet gick vidare efter användarens klick",
+  /Steg 2 av 3/.test(await page.locator("[data-guide-callout]").first().innerText().catch(() => "")),
+  page.url(),
+);
 await page.keyboard.press("Escape");
+await page.waitForTimeout(800);
+
+/* --- 4b. Rundturen: pekar, väntar inte ----------------------------------- */
+
+/*
+ * Och den andra halvan av samma beslut, prövad för sig. En rundtur ska
+ * INTE hålla användaren gisslan tills hen prickat rätt ruta - den
+ * bläddras. Utan den här kontrollen kan någon "harmonisera" tillbaka
+ * väntandet in i rundturen utan att något blir rött.
+ */
+await page.goto(`${BASE}/dashboard/samtal`, { waitUntil: "domcontentloaded" });
+await page.waitForTimeout(2000);
+await page.click('[data-guide="flode-sa-hittar-du-tillbaka"]');
+await page.waitForTimeout(3200);
+const turBox = await page.locator("[data-guide-callout]").first().innerText();
+check("rundturen bläddras med Nästa", /Nästa/.test(turBox), turBox.slice(0, 200));
+check("rundturen håller ingen gisslan", !/jag väntar/i.test(turBox), turBox.slice(0, 200));
+check(
+  "och den pekar ut ytan den beskriver",
+  (await page.locator('[data-guide-ring="kontrollomrade"]').count()) === 1,
+);
+const turSteg = () =>
+  page
+    .locator("[data-guide-callout]")
+    .first()
+    .innerText()
+    .then((t) => (t.match(/Steg\s+(\d+)\s+av/i) ?? [])[1] ?? "");
+const turFore = await turSteg();
+await page.click('button:has-text("Nästa")');
+await page.waitForTimeout(2600);
+check("och Nästa för den framåt", turFore !== (await turSteg()), `${turFore} -> ${await turSteg()}`);
+check(
+  "rundturen går att avsluta",
+  (await page.locator('button:has-text("Avsluta genomgången")').count()) >= 1,
+);
+/*
+ * TYDLIGHETEN, punkt för punkt. Den första versionen lade rutan ovanpå
+ * markeringen och sa "klicka på det markerade" - en instruktion som dolde
+ * sitt eget föremål. De här tre påståendena handlar om RUNDTURENS ruta och
+ * stod tidigare i avsnittet ovan; de följde inte med när avsnittet
+ * flyttades till arbetsläget, och läste då fel ruta.
+ */
+check("rundturen presenterar sig", /Genomgång: Så hittar du tillbaka/i.test(turBox), turBox.slice(0, 120));
+check("saken namnges, inte bara 'det markerade'", /Kontrolläge/.test(turBox), turBox.slice(0, 200));
+// Räknaren räknar HÅLLPLATSER, inte guidens interna moment: fyra stopp är
+// fyra, inte tolv.
+check(
+  "räknaren räknar hållplatserna",
+  /Steg 1 av 4/i.test(turBox),
+  (turBox.match(/Steg \d+ av \d+/i) ?? [""])[0],
+);
+// Hela genomgången ska synas på en gång, inte ett steg i taget: den som
+// inte vet vad som återstår vet inte om det är värt att stanna kvar.
+check(
+  "alla hållplatser visas samtidigt",
+  /Likviditet/.test(turBox) && /Dokument/.test(turBox) && /Händelselogg/.test(turBox),
+  turBox.slice(0, 200),
+);
+await page.keyboard.press("Escape");
+await page.waitForTimeout(800);
 
 /* --- 5. Mikroutbildningen: TYST NÄR DET BRINNER --------------------------- */
 

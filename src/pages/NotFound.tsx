@@ -27,7 +27,21 @@ const NotFound = () => {
   const location = useLocation();
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-secondary/30 px-4 py-12">
+    /*
+     * data-not-found är sidans EGEN markör, och den finns för proven.
+     *
+     * Mobilprovet letade efter texten "404" i sidans innehåll för att
+     * upptäcka en rutt som inte finns. Utvecklarsidan /api BESKRIVER
+     * API:ets 404-svar i löpande text - och flaggades därför som en
+     * 404-sida och hoppades över. Den sidan hade alltså aldrig prövats
+     * mot horisontell spill, tyst, sedan den texten skrevs.
+     *
+     * En markör i markup kan inte förväxlas med prosa om ämnet.
+     */
+    <main
+      data-not-found
+      className="flex min-h-screen items-center justify-center bg-secondary/30 px-4 py-12"
+    >
       <div className="w-full max-w-md">
         <h1 className="text-xl font-semibold text-foreground">Sidan finns inte</h1>
         <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
