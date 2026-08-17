@@ -3,6 +3,8 @@ import { Link } from "react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Check, ChevronDown, Loader2, Undo2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { data } from "@/data";
 import {
   ERASURE_ACTION_LABEL,
@@ -118,6 +120,14 @@ const Rattelse = () => (
 export const ErasureSection = () => {
   const queryClient = useQueryClient();
   const [bekraftar, setBekraftar] = useState(false);
+  /*
+   * Lösenordet skrivs här och prövas PÅ SERVERN, aldrig i webbläsaren.
+   * Karenstiden på sju dagar skyddar mot ånger, inte mot en angripare:
+   * den som har kapat sessionen kan återkalla begäran lika lätt som hen
+   * gjorde den. Det som stoppar en kapad session är att den inte kan
+   * svara på frågan "vad är lösenordet".
+   */
+  const [losenord, setLosenord] = useState("");
   const [fel, setFel] = useState<string | null>(null);
 
   const { data: begaran, isLoading } = useQuery({
@@ -128,13 +138,14 @@ export const ErasureSection = () => {
   const uppdatera = () => {
     setFel(null);
     setBekraftar(false);
+    setLosenord("");
     void queryClient.invalidateQueries({ queryKey: ["erasure-request"] });
   };
   const misslyckades = (e: unknown) =>
     setFel(e instanceof Error ? e.message : "Något gick fel. Försök igen.");
 
   const begar = useMutation({
-    mutationFn: () => data.privacy.requestErasure(),
+    mutationFn: () => data.privacy.requestErasure(losenord),
     onSuccess: uppdatera,
     onError: misslyckades,
   });
@@ -189,13 +200,31 @@ export const ErasureSection = () => {
                   Ladda ner dina uppgifter först om du vill ha kvar dem.
                 </p>
               </div>
+              <div className="mt-3">
+                <Label htmlFor="erasure-losenord" className="text-sm font-medium text-foreground">
+                  Skriv ditt lösenord för att bekräfta
+                </Label>
+                <Input
+                  id="erasure-losenord"
+                  type="password"
+                  autoComplete="current-password"
+                  value={losenord}
+                  onChange={(e) => setLosenord(e.target.value)}
+                  className="mt-1.5 max-w-xs"
+                />
+                <p className="mt-1.5 text-sm text-muted-foreground">
+                  En inloggning bevisar att någon loggade in en gång, inte att det är du som
+                  sitter här nu. Därför frågar vi en gång till innan något som inte går att
+                  ångra.
+                </p>
+              </div>
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 <Button
                   type="button"
                   variant="destructive"
                   size="sm"
                   onClick={() => begar.mutate()}
-                  disabled={begar.isPending}
+                  disabled={begar.isPending || losenord.trim().length === 0}
                 >
                   {begar.isPending && (
                     <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />

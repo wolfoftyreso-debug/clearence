@@ -55,6 +55,14 @@ const ApiKeysSection = () => {
   const queryClient = useQueryClient();
   const { ready, exportAndSharing } = useEntitlements();
   const [label, setLabel] = useState("");
+  /*
+   * Lösenordet prövas PÅ SERVERN, aldrig här. Nyckeln överlever sessionen
+   * som skapade den: den som loggar ut och återkallar sina sessioner har
+   * ändå en giltig nyckel liggande hos den som hann mynta den. Därför är
+   * skapandet farligare än det ser ut som, och kräver lösenordet.
+   */
+  const [losenord, setLosenord] = useState("");
+  const [nyckelFel, setNyckelFel] = useState<string | null>(null);
   const [freshSecret, setFreshSecret] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
@@ -65,13 +73,17 @@ const ApiKeysSection = () => {
   });
 
   const create = useMutation({
-    mutationFn: (l: string) => data.apiKeys.create(l),
+    mutationFn: (l: string) => data.apiKeys.create(l, losenord),
     onSuccess: (result) => {
       setLabel("");
+      setLosenord("");
+      setNyckelFel(null);
       setFreshSecret(result.secret);
       setCopied(false);
       queryClient.invalidateQueries({ queryKey: ["my-api-keys"] });
     },
+    onError: (e: unknown) =>
+      setNyckelFel(e instanceof Error ? e.message : "Nyckeln kunde inte skapas."),
   });
   const revoke = useMutation({
     mutationFn: (id: string) => data.apiKeys.revoke(id),
@@ -132,7 +144,7 @@ const ApiKeysSection = () => {
         onSubmit={(e) => {
           e.preventDefault();
           const l = label.trim();
-          if (l.length >= 3) create.mutate(l);
+          if (l.length >= 3 && losenord.trim().length > 0) create.mutate(l);
         }}
       >
         <label htmlFor="api-key-label" className="sr-only">
@@ -145,11 +157,38 @@ const ApiKeysSection = () => {
           placeholder="T.ex. Byråsystemet eller Ekonomisystemet"
           className="min-w-0 flex-1"
         />
-        <Button type="submit" variant="accent" disabled={label.trim().length < 3 || create.isPending}>
+        <label htmlFor="api-key-losenord" className="sr-only">
+          Ditt lösenord
+        </label>
+        <Input
+          id="api-key-losenord"
+          type="password"
+          autoComplete="current-password"
+          value={losenord}
+          onChange={(e) => setLosenord(e.target.value)}
+          placeholder="Ditt lösenord"
+          className="min-w-0 flex-1"
+        />
+        <Button
+          type="submit"
+          variant="accent"
+          disabled={label.trim().length < 3 || losenord.trim().length === 0 || create.isPending}
+        >
           <KeyRound className="h-4 w-4" aria-hidden="true" />
           Skapa nyckel
         </Button>
       </form>
+
+      <p className="mt-2 text-sm text-muted-foreground">
+        Lösenordet frågas för att nyckeln överlever inloggningen: den fortsätter fungera efter att
+        du loggat ut. Det är därför vi vill veta att det är du som skapar den, inte bara att någon
+        är inloggad på din dator.
+      </p>
+      {nyckelFel && (
+        <p role="alert" className="mt-2 text-sm font-medium text-destructive">
+          {nyckelFel}
+        </p>
+      )}
 
       {(keys ?? []).length > 0 && (
         <ul className="mt-4 divide-y divide-border/60">

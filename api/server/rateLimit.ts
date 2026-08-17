@@ -49,6 +49,19 @@ export const LOGIN: Gransvarde = { tak: 10, fonsterSek: 300 };
 /** Övriga anrop. Satt så att normal användning aldrig märker det. */
 export const ALLMAN: Gransvarde = { tak: 600, fonsterSek: 60 };
 
+/**
+ * Lösenordsbekräftelsen före det som inte går att ångra.
+ *
+ * Inloggningens tak räknas per klientadress. Det duger inte här: den som
+ * bekräftar sitter redan innanför med en giltig session, och en angripare
+ * som har kapat den kan byta utgående adress mellan försöken. Räkningen
+ * ligger därför på KONTOT.
+ *
+ * Fem försök på en kvart. En människa som stavar fel på sitt eget
+ * lösenord får flera chanser; en som gissar kommer ingen vart.
+ */
+export const BEKRAFTELSE: Gransvarde = { tak: 5, fonsterSek: 900 };
+
 export interface Utfall {
   tillaten: boolean;
   /** Sekunder tills klienten får försöka igen. Bara vid avslag. */

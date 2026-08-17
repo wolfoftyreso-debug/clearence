@@ -250,7 +250,25 @@ for (const [metod, rutt] of metodPar) {
    * kropp (en kvittens, en återkallelse) för att sakna en beskrivning av
    * något den aldrig läser.
    */
-  const start = serverKod.indexOf(`"${rutt}"`);
+  /*
+   * FÖNSTRET SÖKS PER METOD, INTE PER SÖKVÄG.
+   *
+   * Här stod indexOf(`"${rutt}"`) - alltså FÖRSTA rutten med den
+   * sökvägen. På en sökväg som har både en GET och en POST är det GET:en,
+   * och POST:ens kropp prövades då mot GET:ens handler. GET-handlern
+   * läser ingen kropp, så `laserKropp` blev falskt och kontrollen hoppade
+   * över - tyst.
+   *
+   * Två skrivvägar i produkten hade den luckan: POST /v1/api-keys och
+   * POST /v1/me/erasure läser båda fält ur kroppen och saknade
+   * requestBody i kontraktet, med sviten grön. Det är exakt samma sorts
+   * hål som metodkontrollen ovan finns för att täppa till, en nivå ned.
+   */
+  const verbKalla = Object.entries(VERB).find(([, v]) => v === metod)?.[0] ?? metod;
+  const start = serverKod.search(
+    new RegExp(`router\\.${verbKalla}\\(\\s*"${rutt.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"`),
+  );
+  if (start === -1) continue;
   const nasta = serverKod.slice(start + 1).search(/\n(?:router\.[a-z]+\(|caseScoped\()/);
   const handler = serverKod.slice(start, nasta === -1 ? undefined : start + 1 + nasta);
   const laserKropp = /req\.body/.test(handler);

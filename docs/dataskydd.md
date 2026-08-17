@@ -35,6 +35,7 @@ Särskilda kategorier (art. 9) samlas inte in avsiktligt; fritextfält kan dock 
 - **Innehållet loggas aldrig** server-sidan — bara statuskoder. (Vaktat i test.)
 - **`storage_path` lämnar aldrig servern** — dokument nås via signerad URL efter `app.may_read_document()`.
 - **API-nycklar lagras endast som SHA-256**; sessionstokens aldrig i klartext.
+- **Lösenordet krävs igen före det som inte går att ångra.** En session bevisar att någon loggade in en gång, inte att det är samma människa som sitter där nu. `POST /v1/me/erasure` (radering) och `POST /v1/api-keys` (mynta en nyckel som överlever sessionen) prövar lösenordet mot hashen i databasen, per anrop, med ett eget tak räknat på **kontot** och inte på klientadressen. Att återkalla en nyckel kräver det däremot inte - bekräftelser hör hemma före det som ökar en angripares räckvidd, inte före det som minskar den. (`confirmPassword` i `api/server/index.ts`, vaktat i `tests/sakerhet.ts`.)
 - **Transaktionslokal identitet** + **RLS** i databasen; API kör som `authenticated`, aldrig ägare/BYPASSRLS.
 - Hemligheter (`ANTHROPIC_API_KEY`, `GOOGLE_MAPS_API_KEY`, `DATABASE_URL`) i **Secrets Manager**, aldrig i frontend-bunten.
 - **Dataminimering vid fritext:** en kort påminnelse står intill fritextfälten (samtalet, onboardingen) om att inte dela fler personuppgifter än läget kräver — motmedel mot art. 9-uppgifter i fritext. (`src/lib/dataMinimering.ts`, vaktat i `tests/dataskydd.ts`.)
@@ -61,7 +62,7 @@ En dataskyddssektion under Inställningar (`src/pages/DashboardSettings.tsx`, `s
 - **Kontoraden raderas aldrig.** `cases.user_id` har `on delete cascade`; en borttagen rad hade tagit med sig delade ärenden och därmed rekonstruktörens underlag mitt i ett pågående ärende. E-post och lösenord byts mot en död platshållare (`@borttaget.invalid`) och kontot stängs. Ett ärende där ingen annan har behörighet raderas däremot i sin helhet.
 - **Händelseloggen städas inte i efterhand — den maskeras vid skrivning.** Revisionstriggern lade en ögonblicksbild av hela den ändrade raden i `before`/`after`, och identifikatorer följde med; en radering loggade dessutom sin egen före-bild och skrev tillbaka adressen den nyss tagit bort. Loggen är append-only med en trigger som vägrar UPDATE för **varje** roll inklusive ägaren, och den garantin lämnades orörd. I stället maskerar `app.maska_personuppgifter()` kända identifikatorfält innan de skrivs. Rader skrivna före migrationen skrivs inte om — i en miljö som redan har sådana rader är det en kvarvarande brist och ska hanteras som en.
 
-**[ÖPPET: fastställ svarstid (en månad enligt art. 12.3), utpekad ansvarig och en rutin för identitetskontroll av den som begär utdrag. För radering sker identitetskontrollen genom inloggningen — begäran kan bara göras för det egna kontot.]**
+**[ÖPPET: fastställ svarstid (en månad enligt art. 12.3), utpekad ansvarig och en rutin för identitetskontroll av den som begär utdrag genom annan kanal än inloggningen.]** För radering genom produkten sker identitetskontrollen i två led: begäran kan bara göras för det egna kontot, och lösenordet krävs på nytt i samma anrop. Karenstiden på sju dagar skyddar mot ånger, inte mot en kapad session - den som har sessionen kan återkalla begäran lika lätt som hen gjorde den.
 
 ## 8. Öppna punkter före deploy (sammanfattning)
 

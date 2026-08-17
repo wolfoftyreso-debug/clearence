@@ -567,6 +567,22 @@ const seedInvoices = (caseId: string): InvoiceRecord[] => [
 ];
 
 /** Populates a fresh account so the signed-in pages have something to show. */
+/**
+ * LÖSENORDSBEKRÄFTELSEN I DEMON: FORMEN, INTE SKYDDET.
+ *
+ * Demon har inga lösenord alls - inloggningen kontrollerar inget (se
+ * requestPasswordReset). Att här låtsas pröva ett lösenord vore att låta
+ * demon ljuga om en säkerhetsregel, och det är den värsta sortens
+ * demonstration: den som ser rutan gå igenom tror att kontrollen finns.
+ *
+ * Kravet som PRÖVAS är därför bara att fältet är ifyllt. Det räcker för
+ * att yta och portanrop ska gå att gå igenom på riktigt; det riktiga
+ * skyddet ligger i api/server (confirmPassword) och prövas där.
+ */
+const kravLosenord = (password: string) => {
+  if (!password.trim()) throw new Error("Lösenordet krävs för den här åtgärden.");
+};
+
 const seedForUser = (userId: string) => {
   const demoCase = seedCase(userId);
   state.cases = [demoCase];
@@ -1744,8 +1760,9 @@ export const demoAdapter: DataPort = {
     async listMine() {
       return [...state.apiKeys].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
     },
-    async create(label: string) {
+    async create(label: string, password: string) {
       if (!state.user) throw new Error("Inte inloggad");
+      kravLosenord(password);
       // Hemligheten genereras, visas en gang och lagras ALDRIG - demon
       // foljer valvets regler: bara prefix och metadata blir kvar.
       const bytes = new Uint8Array(24);
@@ -2817,7 +2834,8 @@ export const demoAdapter: DataPort = {
     async getErasureRequest() {
       return state.erasureRequest ? { ...state.erasureRequest } : null;
     },
-    async requestErasure() {
+    async requestErasure(password: string) {
+      kravLosenord(password);
       if (state.erasureRequest?.status === "begard") return { ...state.erasureRequest };
       const nu = new Date();
       const effektiv = new Date(nu.getTime() + KARENSDAGAR * 24 * 60 * 60 * 1000);

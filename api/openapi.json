@@ -214,6 +214,33 @@
               }
             }
           }
+        },
+        "requestBody": {
+          "required": true,
+          "description": "Nyckeln överlever sessionen som skapade den, så skapandet kräver lösenordet.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "label",
+                  "password"
+                ],
+                "properties": {
+                  "label": {
+                    "type": "string",
+                    "minLength": 3,
+                    "maxLength": 80
+                  },
+                  "password": {
+                    "type": "string",
+                    "maxLength": 400,
+                    "description": "Kontots lösenord. Krävs för åtgärder som inte går att ångra: en session bevisar att någon loggade in en gång, inte att det är samma människa som sitter där nu."
+                  }
+                }
+              }
+            }
+          }
         }
       }
     },
@@ -912,6 +939,64 @@
               }
             }
           }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "title",
+                  "rationale"
+                ],
+                "properties": {
+                  "title": {
+                    "type": "string",
+                    "maxLength": 200
+                  },
+                  "rationale": {
+                    "type": "string",
+                    "maxLength": 4000
+                  },
+                  "premise": {
+                    "type": "string",
+                    "maxLength": 2000,
+                    "nullable": true,
+                    "description": "Antagandet beslutet vilar på, i klartext."
+                  },
+                  "watch": {
+                    "type": "object",
+                    "nullable": true,
+                    "description": "Mätbart villkor som bevakas. Prövas både här och i databasen.",
+                    "required": [
+                      "signal",
+                      "comparator"
+                    ],
+                    "properties": {
+                      "signal": {
+                        "type": "string"
+                      },
+                      "comparator": {
+                        "type": "string",
+                        "enum": [
+                          "minst",
+                          "hogst",
+                          "sant",
+                          "falskt"
+                        ]
+                      },
+                      "threshold": {
+                        "type": "number",
+                        "nullable": true,
+                        "description": "Krävs för minst/högst, får inte finnas för ja/nej-villkor."
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
         }
       }
     },
@@ -969,6 +1054,36 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "fileName",
+                  "fileSize"
+                ],
+                "properties": {
+                  "fileName": {
+                    "type": "string",
+                    "maxLength": 300
+                  },
+                  "fileSize": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Uppgiven storlek i byte. Den riktiga prövningen sker när filen bekräftas."
+                  },
+                  "mimeType": {
+                    "type": "string",
+                    "maxLength": 200,
+                    "description": "Utelämnad blir den application/octet-stream."
+                  }
                 }
               }
             }
@@ -1161,6 +1276,31 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "email",
+                  "role"
+                ],
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "format": "email",
+                    "maxLength": 320
+                  },
+                  "role": {
+                    "type": "string",
+                    "maxLength": 40
+                  }
                 }
               }
             }
@@ -1685,6 +1825,25 @@
               }
             }
           }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "body"
+                ],
+                "properties": {
+                  "body": {
+                    "type": "string",
+                    "maxLength": 4000
+                  }
+                }
+              }
+            }
+          }
         }
       }
     },
@@ -2014,6 +2173,42 @@
               }
             }
           }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "flowId",
+                  "flowTitle",
+                  "startedAt"
+                ],
+                "properties": {
+                  "flowId": {
+                    "type": "string",
+                    "maxLength": 40
+                  },
+                  "flowTitle": {
+                    "type": "string",
+                    "maxLength": 120
+                  },
+                  "startedAt": {
+                    "type": "string",
+                    "format": "date-time",
+                    "maxLength": 40
+                  },
+                  "closedAt": {
+                    "type": "string",
+                    "format": "date-time",
+                    "maxLength": 40,
+                    "nullable": true
+                  }
+                }
+              }
+            }
+          }
         }
       }
     },
@@ -2052,6 +2247,38 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "scope",
+                  "validDays"
+                ],
+                "properties": {
+                  "scope": {
+                    "type": "string",
+                    "enum": [
+                      "overview",
+                      "full"
+                    ]
+                  },
+                  "validDays": {
+                    "type": "number",
+                    "description": "Kläms till 1-365 dagar. En länk utan bortre gräns är en läcka ingen minns."
+                  },
+                  "label": {
+                    "type": "string",
+                    "maxLength": 120,
+                    "nullable": true
+                  }
                 }
               }
             }
@@ -2513,6 +2740,37 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "minutes"
+                ],
+                "properties": {
+                  "minutes": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 1440
+                  },
+                  "note": {
+                    "type": "string",
+                    "maxLength": 500,
+                    "nullable": true
+                  },
+                  "occurredOn": {
+                    "type": "string",
+                    "format": "date",
+                    "nullable": true,
+                    "description": "ÅÅÅÅ-MM-DD. Utelämnat bokförs posten på idag."
+                  }
                 }
               }
             }
@@ -3825,6 +4083,40 @@
               }
             }
           }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "professionalId",
+                  "planKind"
+                ],
+                "properties": {
+                  "professionalId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "planKind": {
+                    "type": "string",
+                    "maxLength": 20
+                  },
+                  "unlockFeeSek": {
+                    "type": "number",
+                    "minimum": 0,
+                    "nullable": true
+                  },
+                  "monthlyFeeSek": {
+                    "type": "number",
+                    "minimum": 0,
+                    "nullable": true
+                  }
+                }
+              }
+            }
+          }
         }
       }
     },
@@ -4208,6 +4500,28 @@
               }
             }
           }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "overrides"
+                ],
+                "properties": {
+                  "overrides": {
+                    "type": "array",
+                    "items": {
+                      "type": "object"
+                    },
+                    "description": "Avvikelser från grundpolicyn, per kategori. Skrivningen kräver plattformsadmin."
+                  }
+                }
+              }
+            }
+          }
         }
       }
     },
@@ -4273,6 +4587,31 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "provider",
+                  "secret"
+                ],
+                "properties": {
+                  "provider": {
+                    "type": "string",
+                    "maxLength": 60
+                  },
+                  "secret": {
+                    "type": "string",
+                    "maxLength": 4000,
+                    "description": "Skrivs till Secrets Manager. Läses aldrig tillbaka genom API:et."
+                  }
                 }
               }
             }
@@ -5389,6 +5728,27 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "description": "Radering går inte att ångra efter karenstiden, så begäran kräver lösenordet.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "password"
+                ],
+                "properties": {
+                  "password": {
+                    "type": "string",
+                    "maxLength": 400,
+                    "description": "Kontots lösenord. Krävs för åtgärder som inte går att ångra: en session bevisar att någon loggade in en gång, inte att det är samma människa som sitter där nu."
+                  }
                 }
               }
             }

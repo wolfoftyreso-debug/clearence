@@ -689,7 +689,22 @@ export interface SharesPort {
  */
 export interface ApiKeysPort {
   listMine(): Promise<ApiKeyRecord[]>;
-  create(label: string): Promise<{ record: ApiKeyRecord; secret: string }>;
+  /**
+   * Skapar en nyckel. Lösenordet krävs och prövas på servern.
+   *
+   * Nyckeln överlever sessionen som skapade den: den som loggar ut och
+   * återkallar sina sessioner har ändå en giltig nyckel liggande hos den
+   * som hann mynta den. Därför är skapandet en av de två åtgärder i
+   * produkten som kräver att anroparen visar att hen kan lösenordet -
+   * inte bara att hen sitter på en session. Se PrivacyPort.requestErasure.
+   */
+  create(label: string, password: string): Promise<{ record: ApiKeyRecord; secret: string }>;
+  /**
+   * Återkallar en nyckel. Kräver INTE lösenordet, med flit: bekräftelser
+   * hör hemma före det som ökar en angripares räckvidd, inte före det som
+   * minskar den. Den som misstänker en läcka ska kunna stänga nyckeln
+   * direkt.
+   */
   revoke(id: string): Promise<void>;
 }
 
@@ -771,8 +786,14 @@ export interface PrivacyPort {
    * Begär radering av det egna kontot. Verkställs tidigast efter
    * karenstiden. En andra begäran ger tillbaka den befintliga - att
    * förlänga karenstiden vid varje klick hade gjort raderingen omöjlig.
+   *
+   * LÖSENORDET KRÄVS och prövas på servern, inte i webbläsaren.
+   * Karenstiden skyddar mot ånger, inte mot en angripare: den som har
+   * kapat sessionen kan återkalla begäran lika lätt som hen gjorde den,
+   * och begära om den dagen efter. Det som stoppar en kapad session är
+   * att den inte kan svara på frågan "vad är lösenordet".
    */
-  requestErasure(): Promise<ErasureRequestRecord>;
+  requestErasure(password: string): Promise<ErasureRequestRecord>;
   /** Återkallar begäran. Går bara innan den verkställts. */
   cancelErasure(): Promise<ErasureRequestRecord>;
 }

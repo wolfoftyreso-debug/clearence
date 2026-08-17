@@ -463,6 +463,28 @@ const toInvoice = (row: {
   counterpart: row.counterpart,
 });
 
+/**
+ * LÖSENORDET IGEN, FÖRE DET SOM INTE GÅR ATT ÅNGRA.
+ *
+ * Bryggan har ingen egen server att pröva lösenordet i - RPC:erna anropas
+ * direkt från webbläsaren. Prövningen läggs därför där lösenorden faktiskt
+ * bor: Supabase egen inloggning, med den inloggades egen adress. Fel
+ * lösenord ger ett fel därifrån och åtgärden blir aldrig av.
+ *
+ * Det är ett svagare skydd än det egna API:et ger, och skillnaden är värd
+ * att veta: här är kontrollen och åtgärden två anrop från samma webbläsare,
+ * medan servern gör dem till ett enda anrop den själv avgör. Bryggan är
+ * övergångsläget; den skarpa vägen är api/server.
+ */
+const bekraftaLosenord = async (password: string): Promise<void> => {
+  if (!password) throw new Error("Lösenordet krävs för den här åtgärden.");
+  const { data: auth } = await supabase.auth.getUser();
+  const email = auth.user?.email;
+  if (!email) throw new Error("Inte inloggad.");
+  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error) throw new Error("Fel lösenord.");
+};
+
 export const supabaseAdapter: DataPort = {
   auth: {
     async getCurrentUser() {
@@ -828,7 +850,8 @@ export const supabaseAdapter: DataPort = {
         revokedAt: r.revoked_at,
       }));
     },
-    async create(label: string) {
+    async create(label: string, password: string) {
+      await bekraftaLosenord(password);
       // RPC:n genererar och hashar i databasen - hemligheten passerar
       // aldrig nagon annan lagring och returneras EN gang.
       const { data: rows, error } = await supabase.rpc("create_api_key", { p_label: label });
@@ -2462,7 +2485,8 @@ export const supabaseAdapter: DataPort = {
       if (error) throw error;
       return data ? toErasureRequest(data) : null;
     },
-    async requestErasure() {
+    async requestErasure(password: string) {
+      await bekraftaLosenord(password);
       const { data, error } = await supabase.rpc("request_account_erasure");
       if (error) throw error;
       return toErasureRequest(data);

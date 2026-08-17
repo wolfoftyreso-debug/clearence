@@ -28,7 +28,7 @@ import {
   unauthorized,
   type ApiRequest,
 } from "./http";
-import { ALLMAN, klientNyckel, LOGIN, provaGrans, type Utfall } from "./rateLimit";
+import { ALLMAN, BEKRAFTELSE, klientNyckel, LOGIN, provaGrans, type Utfall } from "./rateLimit";
 import { googleConfigured, lookupCompany } from "./google";
 import { fetchWebsite, websiteConfigured } from "./website";
 import { DEFAULT_FEEDS, fetchNews, newsConfigured, parseFeedSetting } from "./news";
@@ -839,6 +839,61 @@ router.post("/v1/auth/login", async (req) => {
     body: { token, expiresAt: iso(session.expires_at), userId: user.id },
   };
 });
+
+/**
+ * LÖSENORDET IGEN, FÖRE DET SOM INTE GÅR ATT ÅNGRA.
+ *
+ * En session är ett bevis på att någon loggade in en gång - inte på att
+ * det är samma människa som sitter där nu. En olåst dator, en glömd
+ * utloggning på en delad maskin, en stulen token: alla ger en angripare
+ * exakt de rättigheter kontot har. Fram till den här funktionen räckte
+ * det för att RADERA kontot och för att MYNTA en API-nyckel som gäller
+ * långt efter att sessionen återkallats.
+ *
+ * Kravet är därför inte "var inloggad" utan "visa att du kan lösenordet,
+ * nu". Två saker följer av det:
+ *
+ *  - Bekräftelsen gäller ETT anrop. Ett tidsfönster ("bekräftat för nio
+ *    minuter sedan") hade låtit en angripare som råkar titta på när
+ *    ägaren bekräftar en åtgärd åka snålskjuts på den andra. Det är
+ *    också en regel som är svårare att pröva än den här: det finns inget
+ *    tillstånd att komma i otakt med.
+ *  - Räkningen ligger på kontot, inte på adressen. Se BEKRAFTELSE.
+ *
+ * Att svara "fel lösenord" är säkert HÄR, till skillnad från vid
+ * inloggningen: anroparen har redan en giltig session för kontot, så
+ * svaret röjer ingenting den inte redan visste.
+ */
+const confirmPassword = async (caller: Caller, req: ApiRequest): Promise<void> => {
+  const password = str(req.body, "password", { max: 400 });
+
+  const grans = await provaGrans(`bekraftelse:${caller.userId}`, BEKRAFTELSE);
+  if (!grans.tillaten) {
+    throw new ApiError(
+      429,
+      "rate_limited",
+      `För många felaktiga försök. Försök igen om ${grans.retryAfter} sekunder.`,
+    );
+  }
+
+  /*
+   * Uppslaget körs som anslutningens roll och inte som användaren:
+   * auth.users är inte nåbar för klientrollerna alls, och identiteten är
+   * redan känd ur sessionen. En rad utan hash kan inte hända för ett
+   * inloggat konto, men jämförelsen görs ändå mot attrappen - koden ska
+   * inte ha en gren som hoppar över kontrollen.
+   */
+  const stored = await withAnon(async (tx) => {
+    const { rows } = await tx.query(
+      "select password_hash from auth.users where id = $1 and disabled_at is null",
+      [caller.userId],
+    );
+    return (rows[0]?.password_hash as string | undefined) ?? null;
+  });
+
+  const ok = await verifyPassword(password, stored ?? (await DUMMY_HASH_PROMISE));
+  if (!stored || !ok) throw forbidden("Fel lösenord.");
+};
 
 router.post("/v1/auth/logout", async (req) => {
   const caller = await authenticate(req);
@@ -2678,8 +2733,15 @@ router.get("/v1/api-keys", async (req) => {
   return { status: 200, body: { keys: rows.map(toApiKey) } };
 });
 
+/*
+ * Att mynta en nyckel kräver lösenordet. Nyckeln överlever sessionen:
+ * den som loggar ut, byter lösenord och återkallar sina sessioner har
+ * fortfarande en giltig nyckel liggande hos den som hann skapa den.
+ * Skapandet är därför en farligare åtgärd än det ser ut som.
+ */
 router.post("/v1/api-keys", async (req) => {
   const caller = await authenticate(req);
+  await confirmPassword(caller, req);
   const label = str(req.body, "label", { max: 80 });
   if (label.length < 3) throw badRequest('Fältet "label" ska vara minst 3 tecken.');
   const created = await withUser(caller.userId, async (tx) => {
@@ -2705,6 +2767,15 @@ router.post("/v1/api-keys", async (req) => {
   };
 });
 
+/*
+ * Återkallandet kräver INTE lösenordet, med flit. Bekräftelser hör hemma
+ * före det som ökar en angripares räckvidd, inte före det som minskar
+ * den. Den som misstänker att en nyckel läckt ska kunna stänga den på en
+ * sekund, även från en telefon där lösenordet ligger i en lösenordsapp
+ * hen inte kommer åt just då. Skadan en angripare kan göra här är att
+ * stänga av kontots egna integrationer - obehagligt, men reparerbart, och
+ * hen kan ändå göra det genom att låta bli att skydda nyckeln.
+ */
 router.post("/v1/api-keys/:keyId/revoke", async (req) => {
   const caller = await authenticate(req);
   const keyId = uuidParam(req, "keyId");
@@ -3389,8 +3460,16 @@ router.get("/v1/me/erasure", async (req) => {
   return { status: 200, body: row ? toErasureRequest(row) : null };
 });
 
+/*
+ * Begäran kräver lösenordet. Karenstiden på sju dagar är ett skydd mot
+ * ånger, inte mot en angripare: den som har sessionen kan återkalla
+ * begäran lika lätt som hen gjorde den, och kan begära om den dagen efter.
+ * Det som stoppar en kapad session är att den inte kan svara på frågan
+ * "vad är lösenordet".
+ */
 router.post("/v1/me/erasure", async (req) => {
   const caller = await authenticate(req);
+  await confirmPassword(caller, req);
   const row = await withUser(caller.userId, async (tx) => {
     const { rows } = await tx.query("select * from public.request_account_erasure()");
     return rows[0];

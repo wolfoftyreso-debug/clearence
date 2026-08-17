@@ -525,12 +525,16 @@ const apiKeys = {
     const res = await apiFetch<{ keys: ApiKeyRecord[] }>("/v1/api-keys");
     return res.keys;
   },
-  async create(label: string): Promise<{ record: ApiKeyRecord; secret: string }> {
+  async create(label: string, password: string): Promise<{ record: ApiKeyRecord; secret: string }> {
     // Hemligheten kommer tillbaka EN gång. Den lagras aldrig - visas för
     // användaren i skapandeögonblicket och kan sedan bara bytas ut.
+    //
+    // Lösenordet skickas med och prövas PÅ SERVERN. Nyckeln överlever
+    // sessionen som skapade den, så en kapad session ska inte kunna
+    // mynta en credential som gäller efter att sessionen återkallats.
     return apiFetch<{ record: ApiKeyRecord; secret: string }>("/v1/api-keys", {
       method: "POST",
-      body: { label },
+      body: { label, password },
     });
   },
   async revoke(id: string): Promise<void> {
@@ -854,8 +858,13 @@ const privacy = {
   async getErasureRequest(): Promise<ErasureRequestRecord | null> {
     return apiFetch<ErasureRequestRecord | null>("/v1/me/erasure");
   },
-  async requestErasure(): Promise<ErasureRequestRecord> {
-    return apiFetch<ErasureRequestRecord>("/v1/me/erasure", { method: "POST" });
+  async requestErasure(password: string): Promise<ErasureRequestRecord> {
+    // Lösenordet prövas på servern. Se PrivacyPort.requestErasure för
+    // varför karenstiden inte räcker som skydd mot en kapad session.
+    return apiFetch<ErasureRequestRecord>("/v1/me/erasure", {
+      method: "POST",
+      body: { password },
+    });
   },
   async cancelErasure(): Promise<ErasureRequestRecord> {
     return apiFetch<ErasureRequestRecord>("/v1/me/erasure", { method: "DELETE" });

@@ -15,6 +15,7 @@ Legend: 🟢 klart · 🟡 påbörjat/underlag finns · 🔴 ej gjort
 | P0-3 | DPIA genomförd och dokumenterad före skarp pilot | [EXTERNT] | 🟡 | Underlag klart i `docs/dataskydd.md` §2–7. DPO slutför. |
 | P0-4 | Rättslig grund för behandlingen fastställd per kategori | [EXTERNT] | 🟡 | Förslag i behandlingsregistret, `docs/dataskydd.md` §3. |
 | P0-5 | Säkerhetsinvarianter verifierade i skarp miljö (RLS, roller, signerade URL:er, SHA-256-nycklar) | [KOD] | 🟡 | Byggt och testat i demo/self-hosted; ska köras om i produktionsmiljön. RLS-tester: `supabase/tests`, `db/tests`. |
+| P0-8 | Omautentisering före oåterkalleliga åtgärder (radering, myntning av API-nyckel) | [KOD] | 🟢 | `confirmPassword` i `api/server/index.ts`; lösenordet prövas mot hashen per anrop, taket räknas på kontot (`BEKRAFTELSE` i `api/server/rateLimit.ts`). Porten kräver det i alla tre adaptrar. Vaktat i `tests/sakerhet.ts` - sju mutationer, sju fångade. |
 | P0-6 | Dataminimering mot modell-leverantören (inget user_id/metadata, inget innehåll loggas) | [KOD] | 🟢 | `api/server/anthropic.ts`, vaktat i `tests/anthropic.ts`. |
 | P0-7 | Ansvarsgräns: eskalering på höga insatser, aldrig säkert juridiskt besked, regelaktualitet | [KOD] | 🟢 | Systemprompt-konstitutionen, vaktat i `tests/anthropic.ts`. |
 

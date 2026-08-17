@@ -552,5 +552,88 @@ check(
 );
 
 
+/* --- 9. Lösenordet igen, före det som inte går att ångra ----------------- */
+
+/*
+ * EN SESSION ÄR INGET BEVIS PÅ ATT DET ÄR SAMMA MÄNNISKA SOM SITTER DÄR.
+ *
+ * En olåst dator, en glömd utloggning på en delad maskin, en stulen token:
+ * alla ger exakt de rättigheter kontot har. Fram till bekräftelsen räckte
+ * det för att RADERA kontot och för att MYNTA en API-nyckel som gäller
+ * långt efter att sessionen återkallats.
+ *
+ * Karenstiden på sju dagar räcker inte som skydd mot det: den som har
+ * sessionen kan återkalla begäran lika lätt som hen gjorde den, och begära
+ * om den dagen efter. Det enda som stoppar en kapad session är en fråga
+ * den inte kan svara på.
+ *
+ * Vakten läser KODEN, inte kommentarerna - och den prövar handlern för
+ * RÄTT METOD. En sökvägsträff hade läst GET-handlern på samma sökväg och
+ * gått grön på en POST utan bekräftelse.
+ */
+const serverUtanPrat = utanKommentarer(indexKod);
+
+const handlareFor = (metod: string, rutt: string): string => {
+  const start = serverUtanPrat.search(
+    new RegExp(`router\\.${metod}\\(\\s*"${rutt.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"`),
+  );
+  if (start === -1) return "";
+  const nasta = serverUtanPrat.slice(start + 1).search(/\n(?:router\.[a-z]+\(|caseScoped\()/);
+  return serverUtanPrat.slice(start, nasta === -1 ? undefined : start + 1 + nasta);
+};
+
+// De två åtgärderna som ökar en angripares räckvidd bortom sessionen.
+for (const [metod, rutt, varfor] of [
+  ["post", "/v1/me/erasure", "raderingen går inte att ångra efter karenstiden"],
+  ["post", "/v1/api-keys", "nyckeln överlever sessionen som skapade den"],
+] as const) {
+  const kropp = handlareFor(metod, rutt);
+  check(`${metod.toUpperCase()} ${rutt} hittades i servern`, kropp.length > 0);
+  check(
+    `${metod.toUpperCase()} ${rutt} kräver lösenordet - ${varfor}`,
+    /await confirmPassword\(caller, req\)/.test(kropp),
+    kropp.slice(0, 200),
+  );
+}
+
+// Och bekräftelsen ska faktiskt PRÖVA lösenordet, inte bara ta emot det.
+const bekraftelsen = serverUtanPrat.slice(
+  serverUtanPrat.indexOf("const confirmPassword"),
+  serverUtanPrat.indexOf("router.post(\"/v1/auth/logout\""),
+);
+check("bekräftelsen finns", bekraftelsen.length > 0);
+check(
+  "bekräftelsen jämför mot lösenordshashen i databasen",
+  /verifyPassword\(password, stored/.test(bekraftelsen),
+);
+check(
+  "bekräftelsen avvisar när hashen saknas - ingen gren hoppar över kontrollen",
+  /if \(!stored \|\| !ok\) throw forbidden/.test(bekraftelsen),
+);
+check(
+  "bekräftelsen räknas på KONTOT, inte på klientadressen",
+  /provaGrans\(`bekraftelse:\$\{caller\.userId\}`, BEKRAFTELSE\)/.test(bekraftelsen),
+  bekraftelsen.match(/provaGrans\([^\n]*/)?.[0],
+);
+check(
+  "och ett överskridet tak stoppar anropet i stället för att bara noteras",
+  /if \(!grans\.tillaten\) \{[\s\S]{0,200}throw new ApiError\(\s*429/.test(bekraftelsen),
+);
+
+// Återkallandet av en nyckel ska INTE kräva lösenordet: den som misstänker
+// en läcka ska kunna stänga nyckeln direkt. Vakten låser fast det valet så
+// att ingen "harmoniserar" bort det i en städrunda.
+check(
+  "att återkalla en nyckel kräver INTE lösenordet",
+  !/await confirmPassword/.test(handlareFor("post", "/v1/api-keys/:keyId/revoke")),
+);
+
+// Lösenordet får aldrig ta vägen genom en logg.
+check(
+  "lösenordsfältet maskeras i loggen",
+  /"password"/.test(utanKommentarer(readFileSync(join(process.cwd(), "api/server/logg.ts"), "utf8"))),
+);
+
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);
