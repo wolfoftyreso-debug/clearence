@@ -150,15 +150,41 @@ export const useInlineReport = (): {
           <p className="min-w-0 flex-1 truncate font-medium text-foreground">{title}</p>
 
           {/* HTML-vyn: nedladdningen är en RIKTIG LÄNK till den redan
-              skapade PDF:en. Ett klick, ingen andra vy. */}
+              skapade PDF:en. Ett klick, ingen andra vy.
+
+              INBÄDDAT ÄR DET INTE EN LÄNK, och det är inte en detalj.
+              En sida i en iframe får som regel inte starta en nedladdning
+              själv - artefaktvisaren tillåter det aldrig - så ett <a
+              download> där gör ingenting alls. Knappen såg levande ut och
+              var död, vilket är precis det den här filen finns för att
+              inte göra ("Aldrig en död knapp").
+
+              Produkten HAR ett svar för det läget: openPdf lägger fram
+              PDF:en i ett eget lager med "PDF:en är skapad" och en
+              Spara filen-knapp. Länken gick förbi det svaret. Nu väljs
+              vägen efter var vi står. */}
           {html !== null && pdf !== null && (
             <>
-              <Button asChild variant="accent" size="sm">
-                <a href={pdf.url} download={pdf.fileName} target="_blank" rel="noopener noreferrer">
+              {isEmbedded() ? (
+                <Button
+                  type="button"
+                  variant="accent"
+                  size="sm"
+                  onClick={() => {
+                    if (model) openPdf(model);
+                  }}
+                >
                   <Download className="h-4 w-4" aria-hidden="true" />
                   Ladda ner PDF
-                </a>
-              </Button>
+                </Button>
+              ) : (
+                <Button asChild variant="accent" size="sm">
+                  <a href={pdf.url} download={pdf.fileName} target="_blank" rel="noopener noreferrer">
+                    <Download className="h-4 w-4" aria-hidden="true" />
+                    Ladda ner PDF
+                  </a>
+                </Button>
+              )}
               <Button
                 type="button"
                 variant="outline"

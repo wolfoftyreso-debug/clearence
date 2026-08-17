@@ -363,8 +363,31 @@ check("situationsvalen visas", /Steg 2 av 6/.test(body) && /orolig för ekonomin
 await page.click('button:has-text("Jag kan inte betala vissa fakturor")');
 await page.waitForTimeout(800);
 
-// Intervjun: svara på allt genom att välja första alternativet.
-for (let i = 0; i < 20; i++) {
+/*
+ * Intervjun: första alternativet på varje fråga.
+ *
+ * BEKRÄFTELSEN FÖRST. Flera svar får vara sanna samtidigt - en bilverkstad
+ * säljer ofta halva arbete och halva reservdelar - och ett flerval
+ * bekräftas med en egen knapp. Ett klick på alternativet växlar bara
+ * valet, så en loop som bara klickar chips växlar samma alternativ av och
+ * på tills varven tar slut. Samtalet stod kvar på fråga fem, analysen kom
+ * aldrig, och provet föll på en knapp längre ned.
+ */
+for (let i = 0; i < 30; i++) {
+  /*
+   * ...OCH BARA INTERVJUN. Utan den här raden klickade loopen vidare på
+   * SMS-kortets "Ja, visa hur" - chipsen och kortets knappar sitter i
+   * samma sorts rad - så engångserbjudandet öppnades, lade sig över
+   * skärmen och tog emot klicket på nästa steg. Provet stod och väntade
+   * på en knapp som fanns men var täckt.
+   */
+  if ((await page.locator("text=/fråga \\d+ av \\d+/").count()) === 0) break;
+  const svara = page.locator('section[aria-label="Samtal med CLEARANCE"] button:has-text("Svara")');
+  if ((await svara.count()) > 0) {
+    await svara.first().click();
+    await page.waitForTimeout(220);
+    continue;
+  }
   const chips = page.locator('section[aria-label="Samtal med CLEARANCE"] .flex.flex-wrap.gap-2 > button');
   if ((await chips.count()) === 0) break;
   await chips.first().click();
@@ -374,7 +397,20 @@ await page.waitForTimeout(600);
 body = await page.innerText("body");
 check("första analysen presenteras", (await page.locator('section[aria-label="Första analysen"]').count()) === 1);
 check("premiumerbjudandet kommer efter analysen", /SMS-aviseringar/.test(body));
-await page.click('button:has-text("Gå vidare till nulägesanalysen")');
+/*
+ * SAMTALET RÖR PÅ SIG MEDAN DET LADDAR.
+ *
+ * Bakgrundsarbetet (registret, webbplatsen, nyheterna) fyller på panelen
+ * medan analysen redan står där, och varje påfyllning flyttar knappen
+ * några bildpunkter. Playwright vägrar klicka på ett mål som glider, så
+ * ett rakt page.click stod och väntade i trettio sekunder på att sidan
+ * skulle stå still. En människa gör det som står här i stället: väntar
+ * tills det slutat hoppa, rullar fram knappen och trycker.
+ */
+const tillNulaget = page.locator('button:has-text("Gå vidare till nulägesanalysen")');
+await tillNulaget.scrollIntoViewIfNeeded();
+await page.waitForTimeout(1200);
+await tillNulaget.click();
 await page.waitForTimeout(700);
 body = await page.innerText("body");
 check("CLEARANCE navigerar själv", /Jag öppnar nu nulägesanalysen/i.test(body));
