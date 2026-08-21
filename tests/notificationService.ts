@@ -59,6 +59,7 @@ import {
   verificationSms,
 } from "../src/lib/notifications/phone";
 import { AVISERINGAR_HAR_PRODUCENT, AVISERINGAR_INTE_LIVE } from "../src/lib/notifications/status";
+import { escHtml, trygLank } from "../src/lib/notifications/mailHtml";
 import { emptyPraiseIn, sentimentalIn } from "../src/lib/advisor/tone";
 
 let passed = 0;
@@ -424,6 +425,40 @@ const providerHits = files.filter((f) => {
   return true;
 });
 check("leverantörens namn är inkapslat", providerHits.length === 0, providerHits);
+
+/* --- 10b. Mejlet som arbetaren bygger själv -------------------------------- */
+
+/**
+ * Aviseringsmejlet är den ENDA vägen ut ur systemet som bygger sin HTML på
+ * egen hand; allt annat går via src/lib/email/messages.ts, där varje värde
+ * flyktas. Titel, brödtext och länk kommer att komma ur notification_events,
+ * och den tabellen kommer att fyllas med ärendenamn och dokumenttitlar - text
+ * en användare skrivit. Två vägar ut ska inte ha två regler.
+ */
+const avisMejl = readFileSync(join(process.cwd(), "db/worker/notification-worker.ts"), "utf8");
+const sendEmailBlock = avisMejl.slice(
+  avisMejl.indexOf("const sendEmail ="),
+  avisMejl.indexOf("const runVerificationQueue"),
+);
+check("aviseringsmejlet flyktar brödtexten", /escHtml\(row\.body\)/.test(sendEmailBlock), sendEmailBlock);
+check("aviseringsmejlet flyktar länken", /escHtml\(href\)/.test(sendEmailBlock), sendEmailBlock);
+check("arbetaren bygger inte länkregeln själv", /trygLank\(row\.href\)/.test(sendEmailBlock), sendEmailBlock);
+check(
+  "ingen oflyktad interpolation blir kvar i HTML:en",
+  !/<[^>]*\$\{(?!escHtml\()/.test(sendEmailBlock),
+  sendEmailBlock,
+);
+
+// Reglerna prövas som KOD, inte som avskrift. Första försöket skrev av
+// trygLank i provet, och en mutation som tog bort kontrollen i arbetaren
+// lämnade provet grönt - provet prövade sin egen kopia.
+check("flykten tar hand om de fem tecknen",
+  escHtml(`<a href="x" title='y'>&</a>`) === "&lt;a href=&quot;x&quot; title=&#39;y&#39;&gt;&amp;&lt;/a&gt;",
+  escHtml(`<a href="x" title='y'>&</a>`));
+check("en vanlig sökväg passerar", trygLank("/dashboard/arende/1") === "/dashboard/arende/1");
+for (const ond of ["javascript:alert(1)", "data:text/html,x", "//evil.example/x", "https://evil.example", "\\\\evil", ""]) {
+  check(`länken byts ut: ${ond || "(tom)"}`, trygLank(ond) === "/dashboard", trygLank(ond));
+}
 
 /* --- 11. KEDJAN: finns det någon som skapar en avisering? ------------------ */
 

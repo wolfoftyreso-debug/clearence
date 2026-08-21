@@ -42,6 +42,7 @@ import {
   type PlanId,
 } from "../../src/lib/notifications/events";
 import { buildMessage } from "../../src/lib/notifications/messages";
+import { escHtml, trygLank } from "../../src/lib/notifications/mailHtml";
 import { SMS_SECRET_PROVIDER, providerFromSecret, type SmsProvider } from "./sms";
 
 const DATABASE_URL = process.env.DATABASE_URL;
@@ -107,11 +108,12 @@ const sendEmail = async (db: Client, row: ClaimedRow): Promise<void> => {
   const to = await emailFor(db, row.user_id);
   if (!to) throw new Error("Mottagaren saknar e-postadress.");
   const sender = await getMailSender();
+  const href = trygLank(row.href);
   await sender({
     recipient: to,
     subject: `CLEARANCE: ${row.title}`,
-    bodyText: `${row.body}\n\n${row.href}`,
-    bodyHtml: `<p>${row.body}</p><p><a href="${row.href}">Öppna i CLEARANCE</a></p>`,
+    bodyText: `${row.body}\n\n${href}`,
+    bodyHtml: `<p>${escHtml(row.body)}</p><p><a href="${escHtml(href)}">Öppna i CLEARANCE</a></p>`,
   });
 };
 
