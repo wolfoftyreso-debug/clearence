@@ -45,6 +45,7 @@ import {
 import { MAX_FILSTORLEK, provaFil, provaMetadata, sakerLagringsvag } from "./filtyper";
 import { anthropicConfigured, clearanceReply, type AdvisorMessage } from "./anthropic";
 import { deriveAuditDetail } from "../../src/lib/auditDetail";
+import { DEFAULT_COMPANY_PLAN } from "../../src/lib/pricing";
 import { parseSie } from "../../src/lib/financial/sie";
 import { snapshotFromSie } from "../../src/lib/financial/fromSie";
 import {
@@ -3308,21 +3309,45 @@ router.get("/v1/billing/invoices", async (req) => {
   return { status: 200, body: { invoices: rows.map(toCustomerInvoice) } };
 });
 
-router.get("/v1/billing/company-plan", async (req) => {
-  const caller = await authenticate(req);
-  const raw = await withUser(caller.userId, async (tx) => {
+/*
+ * PRISLISTAN ÄR PUBLICERAD, OCH MÅSTE NÅ DEN SOM INTE ÄR INLOGGAD.
+ *
+ * Den här rutten krävde en session. Landningssidan visar priset för
+ * utloggade besökare (src/components/landing/Pricing.tsx), så på
+ * AWS-vägen fick de 401 och sidan föll tillbaka på DEFAULT_COMPANY_PLAN -
+ * det inkompilerade betabeslutet. Driften kunde alltså ändra priset i
+ * /admin utan att en enda utloggad besökare såg ändringen, tyst, och
+ * regeln "priset är en driftparameter" gällde bara innanför inloggningen.
+ *
+ * Frågan är låst till EN nyckel, och det är avsiktligt. withAnon är inte
+ * anonym i databasen: den kör som API:ets egen roll, som ärver
+ * `authenticated` och därför ser hela app_settings. Det som avgränsar
+ * svaret här är alltså frågans text, inte radskyddet - så den ska vara
+ * smal och stå kvar smal.
+ */
+router.get("/v1/billing/company-plan", async () => {
+  const raw = await withAnon(async (tx) => {
     const { rows } = await tx.query("select value from public.app_settings where key = 'company_plan'");
     return rows[0]?.value as
       | { monthly_ex_vat_sek?: number; business_ex_vat_sek?: number | null; enterprise_ex_vat_sek?: number | null }
       | undefined;
   });
-  // Reserven är betabeslutet - samma som klientens gamla default.
+  /*
+   * RESERVEN KOMMER UR DEN ENDA KÄLLAN, inte ur tre kopior.
+   *
+   * Här stod 985/2780/4500 skrivna rakt av - och samma tre tal stod i
+   * demoadaptern och i supabase-adaptern. DEFAULT_COMPANY_PLAN i
+   * src/lib/pricing.ts var alltså kanonisk bara för ytan; datavägen hade
+   * sina egna siffror. Ändrades betabeslutet på ett ställe fortsatte de
+   * andra två leverera det gamla priset, tyst, och regeln "inga
+   * hårdkodade priser" var uppfylld på pappret men inte i praktiken.
+   */
   return {
     status: 200,
     body: {
-      monthlyExVatSek: raw?.monthly_ex_vat_sek ?? 985,
-      businessExVatSek: raw?.business_ex_vat_sek ?? 2780,
-      enterpriseExVatSek: raw?.enterprise_ex_vat_sek ?? 4500,
+      monthlyExVatSek: raw?.monthly_ex_vat_sek ?? DEFAULT_COMPANY_PLAN.monthlyExVatSek,
+      businessExVatSek: raw?.business_ex_vat_sek ?? DEFAULT_COMPANY_PLAN.businessExVatSek ?? null,
+      enterpriseExVatSek: raw?.enterprise_ex_vat_sek ?? DEFAULT_COMPANY_PLAN.enterpriseExVatSek ?? null,
     },
   };
 });

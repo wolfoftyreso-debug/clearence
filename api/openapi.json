@@ -453,7 +453,9 @@
               }
             }
           }
-        }
+        },
+        "security": [],
+        "description": "Den publicerade prislistan. Öppen utan token: priset står på landningssidan, som möter utloggade besökare. Svaret bär bara prisfälten - rutten är ingen väg in i driftparametrarna i övrigt."
       }
     },
     "/billing/customers": {

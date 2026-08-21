@@ -296,6 +296,21 @@ check(
   );
 }
 
+/**
+ * KÄLLAN UTAN KOMMENTARER.
+ *
+ * Vakterna nedan läser ClaraIntro.tsx och kräver att knapparnas TEXT står
+ * där. Kommentarerna i den filen beskriver samma knappar med samma ord -
+ * så en muterad version där etiketterna var borta ur gränssnittet men
+ * kvar i en kommentar gick RAKT IGENOM. Vakten intygade en väg tillbaka
+ * som användaren inte hade.
+ *
+ * Samma fälla har slagit till fyra gånger i det här projektet. Koden
+ * läses därför utan kommentarer.
+ */
+const utanKommentarer = (kalla: string): string =>
+  kalla.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/(^|[^:])\/\/[^\n]*/g, "$1 ");
+
 /*
  * VÄGEN TILLBAKA I YTAN.
  *
@@ -304,7 +319,7 @@ check(
  * knappen togs aldrig bort, den fanns aldrig.
  */
 {
-  const intro = readFileSync("src/components/advisor/ClaraIntro.tsx", "utf8");
+  const intro = utanKommentarer(readFileSync("src/components/advisor/ClaraIntro.tsx", "utf8"));
   check("det går att ändra föregående svar", /Ändra föregående svar/.test(intro));
   check("och att öppna vilket tidigare svar som helst", /Dina svar hittills/.test(intro));
   check("och att backa ur en ändring utan att ändra", /Behåll mitt tidigare svar/.test(intro));
@@ -323,7 +338,7 @@ check(
  * samtalet och kräver att kedjan faktiskt startas.
  */
 {
-  const intro = readFileSync("src/components/advisor/ClaraIntro.tsx", "utf8");
+  const intro = utanKommentarer(readFileSync("src/components/advisor/ClaraIntro.tsx", "utf8"));
   for (const kalla of ["google", "website", "news"]) {
     check(`samtalet anropar data.sources.${kalla}`, new RegExp(`data\\.sources\\s*\\.?\\s*${kalla}\\(|sources\\n\\s*\\.${kalla}\\(`).test(intro));
   }

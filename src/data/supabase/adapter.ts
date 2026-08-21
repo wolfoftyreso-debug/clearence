@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { DEFAULT_COMPANY_PLAN } from "@/lib/pricing";
 import type { Json } from "@/integrations/supabase/types";
 import { parsePremiseWatch } from "../premise";
 import { parseSie } from "@/lib/financial/sie";
@@ -1346,9 +1347,9 @@ export const supabaseAdapter: DataPort = {
         enterprise_ex_vat_sek?: number | null;
       } | null) ?? null;
       return {
-        monthlyExVatSek: raw?.monthly_ex_vat_sek ?? 985,
-        businessExVatSek: raw?.business_ex_vat_sek ?? 2780,
-        enterpriseExVatSek: raw?.enterprise_ex_vat_sek ?? 4500,
+        monthlyExVatSek: raw?.monthly_ex_vat_sek ?? DEFAULT_COMPANY_PLAN.monthlyExVatSek,
+        businessExVatSek: raw?.business_ex_vat_sek ?? DEFAULT_COMPANY_PLAN.businessExVatSek ?? null,
+        enterpriseExVatSek: raw?.enterprise_ex_vat_sek ?? DEFAULT_COMPANY_PLAN.enterpriseExVatSek ?? null,
       };
     },
     async listCustomers() {

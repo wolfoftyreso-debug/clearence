@@ -183,5 +183,55 @@ check(
   /paddingBottom: "calc\(1rem \+ var\(--app-bottom-inset/.test(offerKod),
 );
 
+/* --- Priset står på ETT ställe ------------------------------------------- */
+
+/*
+ * "INGA HÅRDKODADE PRISER" VAR UPPFYLLT PÅ PAPPRET, INTE I PRAKTIKEN.
+ *
+ * Priserna är driftparametrar (app_settings), och när parametern saknas
+ * faller koden tillbaka på betabeslutet. Reserven stod skriven rakt av -
+ * 985/2780/4500 - på TRE ställen: demoadaptern, supabase-adaptern och
+ * api/server/index.ts. DEFAULT_COMPANY_PLAN i src/lib/pricing.ts var
+ * alltså kanonisk bara för ytan; datavägen hade sina egna siffror, och
+ * ett ändrat betabeslut hade lämnat två av dem kvar på det gamla priset
+ * utan att något sa ifrån.
+ *
+ * Kontrollen läser koden utan kommentarer: de tre talen FÅR nämnas i en
+ * förklaring (den ovan gör det), men inte stå som värden utanför
+ * prislistan.
+ */
+{
+  const TALEN = [
+    DEFAULT_COMPANY_PLAN.monthlyExVatSek,
+    DEFAULT_COMPANY_PLAN.businessExVatSek,
+    DEFAULT_COMPANY_PLAN.enterpriseExVatSek,
+  ].filter((n): n is number => typeof n === "number");
+
+  const FILER = [
+    "src/data/demo/adapter.ts",
+    "src/data/supabase/adapter.ts",
+    "src/data/aws/adapter.ts",
+    "api/server/index.ts",
+  ];
+
+  for (const fil of FILER) {
+    const kod = utanKommentarer(readFileSync(join(process.cwd(), fil), "utf8"));
+    const funna = TALEN.filter((n) => new RegExp(`\\b${n}\\b`).test(kod));
+    check(
+      `${fil} skriver inte prissiffrorna själv`,
+      funna.length === 0,
+      funna.join(", "),
+    );
+  }
+
+  // Och prislistan ÄR den enda som får bära dem.
+  const prislistan = utanKommentarer(readFileSync(join(process.cwd(), "src/lib/pricing.ts"), "utf8"));
+  check(
+    "prislistan bär betabeslutets tal",
+    TALEN.every((n) => new RegExp(`\\b${n}\\b`).test(prislistan)),
+    TALEN.join(", "),
+  );
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);

@@ -1268,6 +1268,38 @@ check(
   plan.body,
 );
 
+/*
+ * OCH DEN SOM INTE ÄR INLOGGAD SKA SE SAMMA PRIS.
+ *
+ * Prislistan står på landningssidan, som möter utloggade besökare. Rutten
+ * krävde en session, så på AWS-vägen fick de 401 och sidan föll tillbaka
+ * på det inkompilerade betabeslutet - driften kunde ändra priset utan att
+ * en enda utloggad besökare såg det. Felet var osynligt just för att
+ * reservvärdet råkade vara samma som parametern.
+ *
+ * Provet sätter därför ett pris som INTE är reservvärdet, och kräver att
+ * det syns utan token.
+ */
+const publiktPris = await call("GET", "/v1/billing/company-plan", {});
+check(
+  "prislistan når den som inte är inloggad",
+  publiktPris.status === 200,
+  publiktPris,
+);
+check(
+  "och det är driftens pris, inte kodens reservvärde",
+  publiktPris.body?.monthlyExVatSek === 985 && publiktPris.body?.businessExVatSek === 2400,
+  publiktPris.body,
+);
+
+// Men bara prislistan. Rutten får inte bli en väg in i app_settings.
+check(
+  "svaret bär bara prisfälten",
+  Object.keys(publiktPris.body ?? {}).sort().join(",") ===
+    "businessExVatSek,enterpriseExVatSek,monthlyExVatSek",
+  Object.keys(publiktPris.body ?? {}),
+);
+
 const bertilFakturor = await call("GET", "/v1/billing/invoices", { token: bertilToken });
 check("kunden kan lista sina fakturor", bertilFakturor.status === 200 && Array.isArray(bertilFakturor.body.invoices), bertilFakturor.body);
 

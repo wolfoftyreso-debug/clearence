@@ -16,6 +16,7 @@
  */
 
 import type { DataPort } from "../ports";
+import { DEFAULT_COMPANY_PLAN } from "@/lib/pricing";
 import type { SimulationRecord, SimulationRun } from "../types";
 import { parseSie } from "@/lib/financial/sie";
 import {
@@ -1459,9 +1460,9 @@ export const demoAdapter: DataPort = {
       // Driftparametern, med beslutat betapris som reserv - aldrig ett
       // belopp i en vy.
       return {
-        monthlyExVatSek: state.companyPlanMonthlyExVatSek ?? 985,
-        businessExVatSek: state.companyPlanBusinessExVatSek ?? 2780,
-        enterpriseExVatSek: state.companyPlanEnterpriseExVatSek ?? 4500,
+        monthlyExVatSek: state.companyPlanMonthlyExVatSek ?? DEFAULT_COMPANY_PLAN.monthlyExVatSek,
+        businessExVatSek: state.companyPlanBusinessExVatSek ?? DEFAULT_COMPANY_PLAN.businessExVatSek ?? null,
+        enterpriseExVatSek: state.companyPlanEnterpriseExVatSek ?? DEFAULT_COMPANY_PLAN.enterpriseExVatSek ?? null,
       };
     },
     async listCustomers() {

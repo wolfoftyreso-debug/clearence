@@ -318,5 +318,82 @@ check(
   { hittade: oimplementerade, forvantade: ANNU_INTE_I_EGNA_SERVERN },
 );
 
+/* --- Publikt i kontraktet ska vara publikt i servern -------------------- */
+
+/*
+ * KONTRAKTET HADE RÄTT OCH KODEN FEL, OCH INGENTING JÄMFÖRDE DEM.
+ *
+ * GET /billing/company-plan stod beskriven som "Driftparameter, publikt
+ * läsbar" - men handlern anropade authenticate(req) och svarade 401 utan
+ * token. Landningssidan, som möter utloggade besökare, fick alltså aldrig
+ * driftens pris och föll tillbaka på det inkompilerade betabeslutet.
+ * Felet var osynligt i åratal av en enda anledning: reservvärdet råkade
+ * vara samma som parametern.
+ *
+ * Drift-vakterna ovan jämför sökväg, metod och kropp. Ingen jämförde
+ * BEHÖRIGHETEN. Det gör den här.
+ *
+ * Åt andra hållet gäller det också: en rutt som kontraktet inte märker
+ * som publik ska kräva en identitet. Annars kan en skrivväg öppnas av
+ * misstag utan att kontraktet säger något om det.
+ */
+{
+  const paths = spec.paths as Record<string, Record<string, { security?: unknown[] }>>;
+  const publikaIKontraktet = new Set<string>();
+  for (const [sokvag, ops] of Object.entries(paths)) {
+    for (const [metod, op] of Object.entries(ops)) {
+      if (Array.isArray(op?.security) && op.security.length === 0) {
+        publikaIKontraktet.add(`${metod} ${sokvag}`);
+      }
+    }
+  }
+  check("kontraktet pekar ut några publika rutter", publikaIKontraktet.size > 0, publikaIKontraktet.size);
+
+  /*
+   * Handlern för EN metod och EN sökväg. Fönstret söks per metod - en
+   * sökvägsträff hade läst GET-handlern på en sökväg som också har POST,
+   * vilket är exakt det hål som dolde elva odeklarerade kroppar.
+   */
+  const handlarenFor = (metod: string, rutt: string): string => {
+    const verbKalla = Object.entries(VERB).find(([, v]) => v === metod)?.[0] ?? metod;
+    const start = serverKod.search(
+      new RegExp(`router\\.${verbKalla}\\(\\s*"${rutt.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"`),
+    );
+    if (start === -1) return "";
+    const nasta = serverKod.slice(start + 1).search(/\n(?:router\.[a-z]+\(|caseScoped\()/);
+    return serverKod.slice(start, nasta === -1 ? undefined : start + 1 + nasta);
+  };
+
+  for (const [metod, rutt] of metodPar) {
+    const kropp = handlarenFor(metod, rutt);
+    if (!kropp) continue;
+    const kraverIdentitet = /await authenticate\(req\)|apiNyckelAnropare|authenticateApiKey/.test(kropp);
+    const nyckel = `${metod} ${somKontraktet(rutt)}`;
+    const deklareradPublik = publikaIKontraktet.has(nyckel);
+
+    if (deklareradPublik) {
+      check(
+        `${metod.toUpperCase()} ${rutt} är publik i BÅDE kontraktet och koden`,
+        !kraverIdentitet,
+        "kontraktet säger security: [], men handlern kräver en identitet",
+      );
+    } else if (!kraverIdentitet) {
+      /*
+       * Undantagen: rutter som medvetet saknar identitetskrav men inte är
+       * märkta publika. Var och en ska ha ett skäl, annars är det en öppen
+       * yta ingen beslutat om.
+       */
+      const MEDVETET_UTAN_IDENTITET: Record<string, string> = {
+        "post /v1/contact": "Kontaktformuläret ska fungera oinloggat - ett bolag på väg omkull ska inte behöva ett konto för att ställa en fråga.",
+      };
+      check(
+        `${metod.toUpperCase()} ${rutt} kräver en identitet, eller står som medvetet undantag`,
+        `${metod} ${rutt}` in MEDVETET_UTAN_IDENTITET,
+        "handlern kräver ingen identitet och kontraktet märker den inte som publik",
+      );
+    }
+  }
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);
