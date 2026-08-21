@@ -33,3 +33,7 @@ $PSQL -d "$DB" -f supabase/tests/notifications.sql 2>&1 | grep -E "^(NOTICE|ERRO
 # den enda kontroll som inte bygger på att den som skrev den kom ihåg alla
 # tabeller.
 $PSQL -d "$DB" -f supabase/tests/radering.sql 2>&1 | grep -E "^(NOTICE|ERROR|psql:)|ALL ERASURE" | sed 's/^NOTICE:  //'
+
+# Den skarpa gallringen, gren för gren (art. 5.1 e). radering.sql prövar en
+# av sex grenar; den här prövar resten - och att de inte tar för mycket.
+$PSQL -d "$DB" -f supabase/tests/gallring.sql 2>&1 | grep -E "^(NOTICE|ERROR|psql:)|ALL RETENTION" | sed 's/^NOTICE:  //'

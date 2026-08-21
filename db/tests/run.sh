@@ -47,6 +47,11 @@ $PSQL -d "$DB" -f supabase/tests/notifications.sql 2>&1 \
 $PSQL -d "$DB" -f supabase/tests/radering.sql 2>&1 \
   | grep -E "^(NOTICE|ERROR|psql:)|ALL ERASURE" | sed 's/^NOTICE:  //'
 
+# Gallringen körs självhostat av samma skäl som allt annat här: en gren som
+# beter sig olika i de två miljöerna ska falla här, inte i produktion.
+$PSQL -d "$DB" -f supabase/tests/gallring.sql 2>&1 \
+  | grep -E "^(NOTICE|ERROR|psql:)|ALL RETENTION" | sed 's/^NOTICE:  //'
+
 # Den självhostade rollmodellen: app_worker (betrodd batch-roll) och att
 # API-rollen aldrig går förbi radskyddet. Roles-filen skapar rollerna,
 # roles.sql prövar dem. Körs sist så insert i utkorgen inte stör de andra.

@@ -59,6 +59,7 @@ import {
 import {
   DEFAULT_RETENTION,
   mergeRetentionPolicy,
+  retentionOverrideProblems,
   type RetentionOverride,
 } from "../../src/lib/retention";
 import { withAnon, withUser, type Tx } from "./db";
@@ -3203,6 +3204,16 @@ router.post("/v1/ops/retention-policy", async (req) => {
   const caller = await authenticate(req);
   const raw = (req.body ?? {}) as Record<string, unknown>;
   if (!Array.isArray(raw.overrides)) throw badRequest('Fältet "overrides" ska vara en lista.');
+  // EN TRASIG GALLRINGSPOLICY SPARAS INTE. Negativa månader ger ett brytdatum
+  // i framtiden, och ett brytdatum i framtiden gallrar allt; ett felstavat id
+  // sparas i dag som "saved: true" utan att någonsin göra något. Båda avvisas
+  // med skäl, så drift ser vad som var fel i stället för att tro att det gick.
+  const problem = retentionOverrideProblems(DEFAULT_RETENTION, raw.overrides as RetentionOverride[]);
+  if (problem.length > 0) {
+    throw new ApiError(400, "bad_request", `Gallringspolicyn avvisades: ${problem
+      .map((p) => `${p.id}.${p.falt} - ${p.skal}`)
+      .join("; ")}`);
+  }
   // Skrivningen kräver is_platform_admin (app_settings RLS). Att slå på skarp
   // gallring är ett medvetet beslut - därför en admin-gatad skrivväg.
   await withUser(caller.userId, async (tx) => {

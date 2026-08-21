@@ -43,6 +43,7 @@ import {
   DEFAULT_RETENTION,
   mergeRetentionPolicy,
   retentionCutoff,
+  retentionOverrideProblems,
   retentionSummary,
   type RetentionOverride,
 } from "../../src/lib/retention";
@@ -188,15 +189,28 @@ const runGallring = async (): Promise<void> => {
   const policy = mergeRetentionPolicy(DEFAULT_RETENTION, override);
   const nu = new Date();
 
+  // Sammanslagningen faller tillbaka på standarden för varje fält den inte
+  // godtar. Det gör körningen säker, men tyst - och en gallringstid som drift
+  // tror är satt medan standarden gäller är värre än ett fel. Därför skrivs
+  // det som avvisades ut, och körningen slutar grön.
+  const avvisade = retentionOverrideProblems(DEFAULT_RETENTION, override);
+  for (const p of avvisade) {
+    console.error(`  driftparametern avvisad: ${p.id}.${p.falt} - ${p.skal} (standarden gäller)`);
+    process.exitCode = 1;
+  }
+
   console.log(`gallring: ${retentionSummary(policy)}`);
   for (const cat of policy) {
     if (cat.action === "behall") {
       console.log(`  ${cat.id}: behålls för spårbarhet, gallras inte på tid.`);
       continue;
     }
-    const brytdatum = retentionCutoff(cat, nu);
     const torrkorning = !cat.aktiv;
     try {
+      // Innanför try: ett omöjligt datum ska stoppa kategorin, inte hela
+      // nattjobbet. Efter gallringen kommer raderingarna (art. 17), och de
+      // får inte utebli för att en inställning var trasig.
+      const brytdatum = retentionCutoff(cat, nu);
       const { rows: res } = await db.query(
         "select app.gallra($1, $2::timestamptz, $3) as antal",
         [cat.id, brytdatum, torrkorning],

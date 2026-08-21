@@ -1202,6 +1202,33 @@ check("drift kan sätta gallringens override", sattPolicy.status === 200, sattPo
 const policy1 = await call("GET", "/v1/ops/retention-policy", { token: adminToken });
 const ovKat = arr(policy1.body.policy).find((c) => c.id === forstaKat) as Json | undefined;
 check("overriden lades ovanpå standarden", ovKat?.months === 99 && ovKat?.aktiv === true, ovKat);
+// EN TRASIG GALLRINGSPOLICY SPARAS INTE. -6 månader ger ett brytdatum i
+// framtiden, och ett brytdatum i framtiden gallrar allt. Provet kräver både
+// avslaget OCH att det tidigare värdet står kvar orört efteråt: ett 400 som
+// ändå hann skriva är inget skydd.
+const negativ = await call("POST", "/v1/ops/retention-policy", {
+  token: adminToken,
+  body: { overrides: [{ id: forstaKat, months: -6, aktiv: true }] },
+});
+check("negativa gallringsmånader avvisas (400)", negativ.status === 400, negativ);
+check("avslaget säger varför", /framtiden/.test(JSON.stringify(negativ.body)), negativ.body);
+
+const felstavad = await call("POST", "/v1/ops/retention-policy", {
+  token: adminToken,
+  body: { overrides: [{ id: "notiser_last", months: 12 }] },
+});
+check("ett felstavat kategori-id avvisas (400)", felstavad.status === 400, felstavad);
+
+const utanTid = await call("POST", "/v1/ops/retention-policy", {
+  token: adminToken,
+  body: { overrides: [{ id: "notiser_lasta", months: null, action: "radera" }] },
+});
+check("radera utan tidsgräns avvisas (400)", utanTid.status === 400, utanTid);
+
+const policy2 = await call("GET", "/v1/ops/retention-policy", { token: adminToken });
+const ovKat2 = arr(policy2.body.policy).find((c) => c.id === forstaKat) as Json | undefined;
+check("den avvisade policyn skrev ingenting", ovKat2?.months === 99 && ovKat2?.aktiv === true, ovKat2);
+
 const bertilPolicy = await call("POST", "/v1/ops/retention-policy", { token: bertilToken, body: { overrides: [] } });
 check("en icke-admin kan inte skriva gallringspolicyn (403)", bertilPolicy.status === 403, bertilPolicy);
 

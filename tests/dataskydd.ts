@@ -26,7 +26,9 @@ import {
   isExpired,
   mergeRetentionPolicy,
   retentionCutoff,
+  retentionOverrideProblems,
   retentionSummary,
+  type RetentionOverride,
 } from "../src/lib/retention";
 import { buildMyDataExport } from "../src/lib/dataExport";
 import {
@@ -121,6 +123,105 @@ check("gallringsblocket hittades", gallringBlock.length > 100);
 check(
   "gallringen är skuggläge, inte destruktiv ännu",
   /skuggläge/i.test(gallringBlock) && !/\bdelete\b|\bupdate .*\bset\b/i.test(gallringBlock),
+);
+
+/* --- 2b. Driftparametern får inte kunna göra gallringen farlig -------- */
+
+// VARFÖR AVSNITTET FINNS. Policyn är JSON i app_settings, skriven av en
+// människa. Skriver den -6 i stället för 6 pekar brytdatumet FRAMÅT, och ett
+// brytdatum i framtiden matchar allt: gallringen slutar vara gallring och
+// blir en tömning. Skriver den "6" som sträng blir datumet ogiltigt och
+// kastar mitt i nattjobbet, före raderingarna (art. 17). Ingetdera fick
+// tidigare något motstånd - overriden lästes rakt in.
+const fientliga: { namn: string; over: RetentionOverride[]; falt: string }[] = [
+  { namn: "negativa månader", over: [{ id: "notiser_lasta", months: -6 }], falt: "months" },
+  { namn: "månader som sträng", over: [{ id: "notiser_lasta", months: "6" as unknown as number }], falt: "months" },
+  { namn: "decimalmånader", over: [{ id: "notiser_lasta", months: 1.5 }], falt: "months" },
+  { namn: "orimligt många månader", over: [{ id: "notiser_lasta", months: 100000 }], falt: "months" },
+  { namn: "ingen tidsgräns på en raderande kategori", over: [{ id: "notiser_lasta", months: null }], falt: "months" },
+  { namn: "okänd åtgärd", over: [{ id: "notiser_lasta", action: "nuke" as never }], falt: "action" },
+  { namn: "aktiv som sträng", over: [{ id: "notiser_lasta", aktiv: "ja" as unknown as boolean }], falt: "aktiv" },
+  { namn: "okänt id", over: [{ id: "notiser_last", months: 12 }], falt: "id" },
+  { namn: "samma kategori två gånger", over: [{ id: "notiser_lasta", months: 12 }, { id: "notiser_lasta", months: 1 }], falt: "id" },
+  { namn: "posten är inte ett objekt", over: ["notiser_lasta" as unknown as RetentionOverride], falt: "post" },
+];
+
+for (const f of fientliga) {
+  const problem = retentionOverrideProblems(DEFAULT_RETENTION, f.over);
+  check(`avvisas: ${f.namn}`, problem.some((p) => p.falt === f.falt), JSON.stringify(problem));
+  check(
+    `avvisandet har ett skäl: ${f.namn}`,
+    problem.every((p) => p.skal.trim().length > 10),
+    JSON.stringify(problem),
+  );
+}
+
+// Att avvisa räcker inte: sammanslagningen måste också vägra släppa igenom
+// värdet, för app_settings går att skriva direkt i databasen.
+const giftig = mergeRetentionPolicy(DEFAULT_RETENTION, [{ id: "notiser_lasta", months: -6, aktiv: true }]);
+const giftigNotiser = giftig.find((c) => c.id === "notiser_lasta")!;
+check("negativa månader slår inte igenom", giftigNotiser.months === 6, String(giftigNotiser.months));
+check(
+  "resten av samma post slår igenom",
+  giftigNotiser.aktiv === true,
+  "aktiv sattes inte, trots att bara months var trasigt",
+);
+
+// Det som ska hålla: inget brytdatum ur en sammanslagen policy får peka
+// framåt, oavsett vad någon skrivit i inställningen.
+const nuKontroll = new Date("2026-08-08T00:00:00.000Z");
+const framatDatum = fientliga
+  .flatMap((f) => mergeRetentionPolicy(DEFAULT_RETENTION, f.over))
+  .map((c) => retentionCutoff(c, nuKontroll))
+  .filter((d): d is string => d !== null)
+  .filter((d) => new Date(d).getTime() > nuKontroll.getTime());
+check("ingen fientlig override ger ett brytdatum i framtiden", framatDatum.length === 0, framatDatum.join(","));
+
+const ogiltigaDatum = fientliga
+  .flatMap((f) => mergeRetentionPolicy(DEFAULT_RETENTION, f.over))
+  .map((c) => retentionCutoff(c, nuKontroll))
+  .filter((d) => d !== null && Number.isNaN(new Date(d).getTime()));
+check("ingen fientlig override ger ett ogiltigt datum", ogiltigaDatum.length === 0, String(ogiltigaDatum.length));
+
+// Och spärren får inte vara så bred att den stoppar en riktig ändring.
+check("en giltig policy passerar utan anmärkning",
+  retentionOverrideProblems(DEFAULT_RETENTION, [
+    { id: "notiser_lasta", months: 12, aktiv: true },
+    { id: "handelselogg", months: null, action: "behall" },
+    { id: "delningslankar_utgangna", months: 0 },
+  ]).length === 0);
+
+// API:et ska avvisa den trasiga policyn, inte spara den.
+const apiKalla = read("api/server/index.ts");
+const policyBlock = apiKalla.slice(
+  apiKalla.indexOf('router.post("/v1/ops/retention-policy"'),
+  apiKalla.indexOf('router.get("/v1/ops/audit"'),
+);
+check("skrivvägen prövar policyn", /retentionOverrideProblems/.test(policyBlock));
+check(
+  "en avvisad policy sparas inte",
+  policyBlock.indexOf("retentionOverrideProblems") < policyBlock.indexOf("insert into public.app_settings"),
+);
+
+// Och workern ska säga till när standarden gäller i stället för det drift tror.
+check(
+  "workern skriver ut en avvisad driftparameter",
+  /retentionOverrideProblems/.test(worker) && /avvisad/.test(worker),
+);
+
+// Och den skarpa gallringen prövas gren för gren mot en riktig databas.
+const gallringsprov = read("supabase/tests/gallring.sql");
+for (const kategori of DEFAULT_RETENTION.filter((c) => c.action !== "behall").map((c) => c.id)) {
+  // Skarpt = tredje argumentet false, med ett brytdatum (inte null): det är
+  // den körning som faktiskt rör rader. now() innehåller parenteser, så
+  // mönstret får inte stanna vid första ")".
+  const skarpt = new RegExp(`app\\.gallra\\('${kategori}',(?![^,]*null)[\\s\\S]{0,80}?false\\s*\\)`);
+  const provad = skarpt.test(gallringsprov) || skarpt.test(read("supabase/tests/radering.sql"));
+  check(`gallringsgrenen körs skarpt i ett prov: ${kategori}`, provad);
+}
+check(
+  "gallringsprovet körs i båda databasmiljöerna",
+  /gallring\.sql/.test(read("supabase/tests/run.sh")) && /gallring\.sql/.test(read("db/tests/run.sh")),
 );
 
 // Och driftpanelen visar policyn ärligt.
