@@ -104,5 +104,100 @@ check("aviseringsarbetaren använder mejltransporten", /makeMailSender/.test(not
 check("aviseringsarbetaren har ingen hårdkodad SES-klient", !/new SESClient/.test(notif));
 check("aviseringsarbetaren har en egen avbild", read("deploy/notification/Dockerfile").includes("notification-worker.ts"));
 
+/* --- 4. Varje svit ska vara KÖRD eller MEDVETET undantagen -------------- */
+
+/*
+ * DET SOM INTE STÅR I KEDJAN KÖRS INTE, OCH DÅ RUTTNAR DET.
+ *
+ * `npm test` kör 51 sviter. Sex ligger utanför - de kräver ett
+ * Postgres-kluster, en webbläsare eller en server, och skulle göra en
+ * sekundlång körning till en flerminuterskörning. Det är ett rimligt val.
+ *
+ * Priset betalades i tysthet: när de utanförliggande sviterna till slut
+ * kördes var NIO webbläsarsviter röda, de flesta sedan länge, och den
+ * levande API-sviten var röd av en dagsfärsk ändring. De letade efter
+ * knappar och fält som bytts ut - och ett prov som letar efter något som
+ * inte finns prövar ingenting alls.
+ *
+ * Kontrollen nedan gör orphan-status till ett BESLUT: varje test:*-skript
+ * ska antingen stå i kedjan eller i listan här, med ett skäl. Den som
+ * lägger till en svit måste ta ställning; den som glömmer får rött.
+ *
+ * Jämförelsen görs på HELA skriptnamnet. Ett delsträngstest hade sagt att
+ * test:api körs, eftersom test:apispec står i kedjan - och då hade den här
+ * vakten haft exakt det fel den finns för att hitta.
+ */
+const KORS_SEPARAT: Record<string, string> = {
+  "test:api": "Reser en databas och kör API:t över HTTP. Kräver Postgres.",
+  "test:rls": "Radskyddet mot Supabase-skalet. Kräver Postgres.",
+  "test:selfhosted": "Radskyddet och rollerna självhostat. Kräver Postgres.",
+  "test:webblasare": "Alla webbläsarprov. Kräver bygge, server och webbläsare.",
+  "test:mobile": "Ingår i test:webblasare; kvar som genväg till enbart mobilsvepet.",
+  "test:external": "Ingår i test:webblasare; kvar som genväg till enbart nätkontrollen.",
+};
+
+{
+  const pkg = JSON.parse(read("package.json")) as { scripts: Record<string, string> };
+  const kedjan = pkg.scripts.test ?? "";
+  const kordaIKedjan = new Set(
+    [...kedjan.matchAll(/npm run (test:[A-Za-z0-9:_-]+)/g)].map((m) => m[1]),
+  );
+  const alla = Object.keys(pkg.scripts).filter((k) => k.startsWith("test:"));
+
+  /*
+   * JÄMFÖRELSEN SJÄLV, PRÖVAD.
+   *
+   * Kollisionen finns på riktigt i repot: test:api är en strikt förkortning
+   * av test:apispec, som DÅ står i kedjan. Skrivs jämförelsen om till ett
+   * delsträngstest ser test:api körd ut, och vakten intygar att en svit
+   * körs som inte körs - det fel den finns för att hitta, i den själv.
+   *
+   * Den här raden är därför inte en dubblett av kontrollen nedan: den
+   * prövar MEKANISMEN, inte innehållet.
+   */
+  /*
+   * EN ENDA PREDIKATFUNKTION, som både självprovet och kontrollen nedan
+   * använder. Skrevs de var för sig kunde självprovet pröva en mekanism
+   * och kontrollen använda en annan - och då bevisar självprovet ingenting
+   * om det som faktiskt körs. Det var precis vad som hände i första
+   * utkastet av den här vakten.
+   */
+  const korsAvKedjan = (namn: string): boolean => kordaIKedjan.has(namn);
+
+  check(
+    "kedjan läses på hela namn: test:apispec gör inte test:api körd",
+    korsAvKedjan("test:apispec") && !korsAvKedjan("test:api"),
+    alla.filter((k) => k.startsWith("test:api") && korsAvKedjan(k)).join(", "),
+  );
+
+  const foraldralosa = alla.filter((k) => !korsAvKedjan(k) && !(k in KORS_SEPARAT));
+  check(
+    "varje test:*-skript körs av npm test eller står som medvetet undantag",
+    foraldralosa.length === 0,
+    foraldralosa.join(", "),
+  );
+
+  // Och åt andra hållet: en post i undantagslistan som INTE finns kvar som
+  // skript är en kvarlämnad ursäkt för en svit som inte längre existerar.
+  const spoken = Object.keys(KORS_SEPARAT).filter((k) => !alla.includes(k));
+  check("undantagslistan innehåller inga spöken", spoken.length === 0, spoken.join(", "));
+
+  // Ett undantag utan skäl är ingen förklaring.
+  const utanSkal = Object.entries(KORS_SEPARAT).filter(([, skal]) => skal.trim().length < 20);
+  check("varje undantag bär ett skäl", utanSkal.length === 0, utanSkal.map(([k]) => k).join(", "));
+
+  // De separata sviterna ska stå skrivna där någon letar efter dem.
+  const readme = read("README.md");
+  check(
+    "README namnger kommandot som kör webbläsarproven",
+    /npm run test:webblasare/.test(readme),
+  );
+  const checklista = read("docs/deploy-compliance.md");
+  check(
+    "deploy-checklistan räknar upp de tre lagren",
+    /npm run test:webblasare/.test(checklista) && /db\/tests\/run\.sh/.test(checklista),
+  );
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);
