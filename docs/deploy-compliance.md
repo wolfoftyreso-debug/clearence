@@ -38,6 +38,25 @@ Legend: 🟢 klart · 🟡 påbörjat/underlag finns · 🔴 ej gjort
 | P2-2 | Marknadsföringsetik: engångserbjudandet som äkta tidsfönster (grundaren har beslutat behålla mekaniken) | [KOD] | 🟢 | `src/components/pricing/ProUpgradeOffer.tsx` – visas en gång, äkta 60 s. |
 | P2-3 | GTM-plan och pilotmätning | [EXTERNT] | 🟡 | Pilotprogram v1.0 dokumenterat i `docs/`. |
 
+## Innan release: de tre lagren ska ha körts
+
+Ett grönt `npm test` är inte hela sanningen om produkten. Tre lager
+prövar tre olika saker, och de körs på tre olika sätt:
+
+| Lager | Kommando | Vad det bevisar |
+|---|---|---|
+| Nodbatteriet | `npm test` | Lint, typer och ~50 sviter över logik, kontrakt, texter och källvakter. Sekunder. |
+| Databasen | `bash db/tests/run.sh` och `bash supabase/tests/run.sh` | Radskyddet, rollerna, jobben och raderingen - i BÅDA miljöerna. En skillnad mellan dem ska synas här, inte i produktion. |
+| Webbläsaren | `npm run test:webblasare` | Att ytorna går att använda: att knappen går att träffa, att flödet tar slut, att filen kommer. Minuter. |
+
+**Webbläsarlagret är det som glöms.** Det ligger utanför `npm test` med
+flit (det kräver ett bygge, en server och en webbläsare), och priset för
+det var att ingen körde det: när det till slut kördes var nio sviter röda,
+de flesta sedan länge. De letade efter knappar och texter som bytts ut -
+och ett prov som letar efter något som inte finns prövar ingenting alls.
+Det döljer dessutom riktiga fel: en av de nio dolde att "Ladda ner PDF"
+var en död knapp i inbäddat läge.
+
 ## Det kod inte kan göra
 
 DPA-underskrifter, val av dataregion, aktivering av ZDR på leverantörskonto, DPIA-beslut, avtal med Bolagsverket/kreditupplysare och prissättningens marknadsvalidering är **affärs- och juridikbeslut**. Produkten är byggd så att den *förbereder* dem (dataminimering, ärlig källmärkning, driftparametrar i stället för hårdkodning, underlag i `docs/`), men den kan inte fatta besluten. De raderna ovan förblir 🔴/🟡 tills en människa stänger dem.

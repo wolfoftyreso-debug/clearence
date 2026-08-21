@@ -18,7 +18,7 @@
  *     uppgifter.
  */
 
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { DATA_MINIMERING_HINT } from "../src/lib/dataMinimering";
 import {
@@ -162,7 +162,34 @@ check("radering och rättelse har en egen sektion", /ErasureSection/.test(settin
 
 /* --- 4. Radering och rättelse (art. 16-17) -------------------------------- */
 
-const sql = read("supabase/migrations/20260825100000_rattigheterna_radering_och_gallring.sql");
+/**
+ * Den GÄLLANDE migrationen för en funktion - inte den som råkar heta rätt.
+ *
+ * Här stod filnamnet. Det höll så länge app.erase_user bara definierades
+ * en gång, men det är inte ett villkor någon har lovat: en senare
+ * migration som gör om raderingen skulle lämna vakten kvar på den GAMLA
+ * texten, och den skulle intyga ett löfte databasen inte längre håller.
+ * Samma fälla fanns i säkerhetssviten för start_phone_verification, och
+ * den upptäcktes bara för att någon råkade läsa filen.
+ *
+ * Migrationerna körs i namnordning, så den sista som definierar
+ * funktionen är den som gäller.
+ */
+const gallandeMigration = (funktion: string): string => {
+  const katalog = join(process.cwd(), "supabase/migrations");
+  const monster = new RegExp(
+    `create or replace function ${funktion.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`,
+  );
+  let senast = "";
+  for (const fil of readdirSync(katalog).filter((f) => f.endsWith(".sql")).sort()) {
+    const text = readFileSync(join(katalog, fil), "utf8");
+    if (monster.test(text)) senast = text;
+  }
+  return senast;
+};
+
+const sql = gallandeMigration("app.erase_user");
+check("den gällande raderingsmigrationen hittades", sql.length > 0);
 // Bara kroppen i app.erase_user(): det är DEN som utför löftet. Övriga
 // funktioner i filen rör begäran och gallringen, och ska inte räknas in.
 const eraseKropp = sql.slice(

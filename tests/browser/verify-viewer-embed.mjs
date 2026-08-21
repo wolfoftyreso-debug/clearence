@@ -108,6 +108,11 @@ check(
   (await sparaLank.first().getAttribute("download")) ?? "(inget)",
 );
 check(
+  "inbäddat: kortet säger vad som händer om ramen stoppar nedladdningen",
+  /ramen sidan visas i som stoppar/i.test(dialogText) && /egen flik/i.test(dialogText),
+  dialogText.slice(0, 250),
+);
+check(
   "inbäddat: länken pekar på en blob, inte på en adress som kan försvinna",
   ((await sparaLank.first().getAttribute("href")) ?? "").startsWith("blob:"),
   ((await sparaLank.first().getAttribute("href")) ?? "").slice(0, 40),

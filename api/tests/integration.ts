@@ -985,11 +985,47 @@ check("ägaren kan ta bort sin tidspost", raderaTid.status === 200, raderaTid);
  * radskyddet gör dem till ägarens ensak.
  */
 
-const skapaNyckel = await call("POST", "/v1/api-keys", {
+/*
+ * MYNTNINGEN KRÄVER LÖSENORDET, och det prövas här - inte i en källvakt.
+ *
+ * En session bevisar att någon loggade in en gång, inte att det är samma
+ * människa som sitter där nu. Nyckeln överlever dessutom sessionen: den
+ * som loggar ut och återkallar allt har ändå en giltig nyckel liggande
+ * hos den som hann skapa den. Därför är skapandet en av de två åtgärder
+ * som frågar en gång till.
+ */
+const nycklarInnan = await withAnon(async (tx) => {
+  const { rows } = await tx.query("select count(*)::int as n from public.api_keys");
+  return rows[0].n as number;
+});
+
+const utanLosen = await call("POST", "/v1/api-keys", {
   token: adminToken,
   body: { label: "Integrationsnyckel" },
 });
-check("en nyckel skapas", skapaNyckel.status === 201, skapaNyckel.body);
+check("nyckel utan lösenord avvisas", utanLosen.status === 400, utanLosen);
+
+const felLosen = await call("POST", "/v1/api-keys", {
+  token: adminToken,
+  body: { label: "Integrationsnyckel", password: "inte-agnes-losenord" },
+});
+check("nyckel med FEL lösenord avvisas", felLosen.status === 403, felLosen);
+
+const antalEfterFel = await withAnon(async (tx) => {
+  const { rows } = await tx.query("select count(*)::int as n from public.api_keys");
+  return rows[0].n as number;
+});
+check(
+  "och ingen nyckel myntades av de avvisade försöken",
+  antalEfterFel === nycklarInnan,
+  `${nycklarInnan} -> ${antalEfterFel}`,
+);
+
+const skapaNyckel = await call("POST", "/v1/api-keys", {
+  token: adminToken,
+  body: { label: "Integrationsnyckel", password: "hemligt-losen-agnes" },
+});
+check("en nyckel skapas med rätt lösenord", skapaNyckel.status === 201, skapaNyckel.body);
 const nyckelSecret = skapaNyckel.body.secret as string;
 const nyckelRecord = skapaNyckel.body.record as Json;
 const nyckelId = nyckelRecord.id as string;
@@ -1018,11 +1054,19 @@ check(
   bertilNycklar.body,
 );
 
-const kortEtikett = await call("POST", "/v1/api-keys", { token: adminToken, body: { label: "ab" } });
+const kortEtikett = await call("POST", "/v1/api-keys", {
+  token: adminToken,
+  body: { label: "ab", password: "hemligt-losen-agnes" },
+});
 check("för kort etikett ger 400", kortEtikett.status === 400, kortEtikett);
 
+/*
+ * Återkallandet kräver INTE lösenordet, med flit: bekräftelser hör hemma
+ * före det som ökar en angripares räckvidd, inte före det som minskar den.
+ * Den som misstänker en läcka ska kunna stänga nyckeln direkt.
+ */
 const aterkalla2 = await call("POST", `/v1/api-keys/${nyckelId}/revoke`, { token: adminToken });
-check("nyckeln kan återkallas", aterkalla2.status === 200, aterkalla2);
+check("nyckeln kan återkallas UTAN lösenord", aterkalla2.status === 200, aterkalla2);
 const efterAterkall = await call("GET", "/v1/api-keys", { token: adminToken });
 const aterkalladNyckel = arr(efterAterkall.body.keys).find((k) => k.id === nyckelId);
 check("den återkallade nyckeln bär revokedAt", (aterkalladNyckel as Json | undefined)?.revokedAt != null, aterkalladNyckel);
@@ -2687,7 +2731,30 @@ check("Agnes kan logga in igen inför aviseringsproven", typeof agnesSession ===
   const innan = await call("GET", "/v1/me/erasure", { token: bertilToken });
   check("utan begäran svarar API:et null, inte 404", innan.status === 200 && innan.body === null, innan.body);
 
-  const begard = await call("POST", "/v1/me/erasure", { token: bertilToken });
+  /*
+   * LÖSENORDET KRÄVS, och karenstiden är inte skyddet mot en kapad session.
+   *
+   * Den som har sessionen kan återkalla begäran lika lätt som hen gjorde
+   * den, och begära om den dagen efter - sju dagars karens hindrar en
+   * ångrande människa från att förlora något, inte en angripare. Det enda
+   * som stoppar en kapad session är en fråga den inte kan svara på.
+   */
+  const utanLosenord = await call("POST", "/v1/me/erasure", { token: bertilToken });
+  check("radering utan lösenord avvisas", utanLosenord.status === 400, utanLosenord);
+
+  const felLosenord = await call("POST", "/v1/me/erasure", {
+    token: bertilToken,
+    body: { password: "inte-bertils-losenord" },
+  });
+  check("radering med FEL lösenord avvisas", felLosenord.status === 403, felLosenord);
+
+  const ingenBegaran = await call("GET", "/v1/me/erasure", { token: bertilToken });
+  check("och försöken lämnade ingen begäran efter sig", ingenBegaran.body === null, ingenBegaran.body);
+
+  const begard = await call("POST", "/v1/me/erasure", {
+    token: bertilToken,
+    body: { password: "hemligt-losen-bertil" },
+  });
   const b = (begard.body ?? {}) as Record<string, unknown>;
   check("begäran registreras", begard.status === 200 && b.status === "begard", begard.body);
   check("karenstiden ligger framåt i tiden", new Date(String(b.effectiveAt)).getTime() > Date.now(), b.effectiveAt);
@@ -2695,7 +2762,10 @@ check("Agnes kan logga in igen inför aviseringsproven", typeof agnesSession ===
 
   // Ett andra klick får inte flytta karenstiden - då hade raderingen aldrig
   // gått att nå för den som är osäker och trycker två gånger.
-  const igen = await call("POST", "/v1/me/erasure", { token: bertilToken });
+  const igen = await call("POST", "/v1/me/erasure", {
+    token: bertilToken,
+    body: { password: "hemligt-losen-bertil" },
+  });
   check(
     "en andra begäran ger samma rad och samma karenstid",
     (igen.body ?? {}).id === b.id && (igen.body ?? {}).effectiveAt === b.effectiveAt,
@@ -2719,6 +2789,37 @@ check("Agnes kan logga in igen inför aviseringsproven", typeof agnesSession ===
 
   const efter = await call("DELETE", "/v1/me/erasure", { token: bertilToken });
   check("men bara en gång", efter.status >= 400, efter.status);
+
+  /*
+   * TAKET LIGGER PÅ KONTOT, inte på adressen. Den som redan har sessionen
+   * sitter per definition innanför och kan byta utgående adress mellan
+   * försöken; en IP-räknare hade alltså inte hindrat någonting. Fem försök
+   * på en kvart räcker för en människa som stavar fel och stoppar en
+   * maskin som gissar.
+   *
+   * Två felaktiga försök är redan gjorda ovan; här fylls resten på.
+   */
+  let sparr = { status: 0 } as { status: number };
+  for (let i = 0; i < 6; i += 1) {
+    sparr = await call("POST", "/v1/me/erasure", {
+      token: bertilToken,
+      body: { password: "fortfarande-fel" },
+    });
+    if (sparr.status === 429) break;
+  }
+  check("upprepade gissningar möter ett tak", sparr.status === 429, sparr);
+
+  // Och taket gäller kontot, inte bara den ruttten: samma spärr ska möta
+  // myntningen av en API-nyckel för samma användare.
+  const nyckelUnderSparr = await call("POST", "/v1/api-keys", {
+    token: bertilToken,
+    body: { label: "Under spärren", password: "hemligt-losen-bertil" },
+  });
+  check(
+    "spärren gäller kontot, inte den enskilda ytan",
+    nyckelUnderSparr.status === 429,
+    nyckelUnderSparr,
+  );
 
   // Utan session ska ingenting av detta gå.
   for (const metod of ["GET", "POST", "DELETE"] as const) {

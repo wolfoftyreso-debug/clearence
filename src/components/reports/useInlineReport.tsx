@@ -232,6 +232,21 @@ export const useInlineReport = (): {
                   Öppna eller spara PDF
                 </a>
               </Button>
+              {/*
+                OCH SANNINGEN OM VAD SOM KAN HÄNDA HÄRNÄST.
+                
+                Kortet finns för att en inbäddad sida inte får starta en
+                nedladdning själv. Men vissa sandlådor - artefaktvisaren är
+                en - stoppar också länken. Då händer ingenting när man
+                trycker, och ett kort som lovar en fil utan förbehåll blir
+                lika oärligt som den döda knappen det ersatte. Filen är
+                skapad; det är bara vägen ut ur ramen som kan vara stängd,
+                och då finns en väg som alltid fungerar.
+              */}
+              <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+                Händer ingenting när du trycker är det ramen sidan visas i som stoppar
+                nedladdningen. Öppna Clearance i en egen flik, så fungerar den.
+              </p>
             </div>
           </div>
         ) : null}

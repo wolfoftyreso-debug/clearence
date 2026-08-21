@@ -41,6 +41,19 @@ npm run dev
 | `npm run build:dev` | Development-mode build |
 | `npm run preview` | Preview a production build locally |
 | `npm run lint` | Run ESLint |
+| `npm test` | Hela nodbatteriet: lint, typecheck och ~50 sviter. Sekunder. |
+| `npm run test:webblasare` | De fyrtio webbläsarproven i `tests/browser/`. Bygger i demoläge, startar en förhandsserver och kör alla. Minuter. |
+
+**Webbläsarproven ingår INTE i `npm test`**, och det är ett medvetet val:
+de kräver ett bygge, en server och en webbläsare. Priset för det valet var
+att ingen körde dem - när de till slut kördes var nio sviter röda, de
+flesta sedan länge, för att de letade efter knappar och texter som bytts
+ut. Kör dem före en release, och efter varje ändring i en yta de rör.
+
+Databasproven kräver ett Postgres-kluster och körs för sig:
+`bash db/tests/run.sh` (självhostat) och `bash supabase/tests/run.sh`
+(Supabase-skalet). Samma påståenden ska gälla i båda - en skillnad mellan
+miljöerna ska synas där och inte i produktion.
 
 ## Project structure
 
