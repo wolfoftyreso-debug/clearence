@@ -10,7 +10,7 @@
 
 import { apiBaseUrl } from "../src/data/aws/client";
 import { resolveMailConfig } from "../db/worker/mail";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 let passed = 0;
@@ -196,6 +196,97 @@ const KORS_SEPARAT: Record<string, string> = {
   check(
     "deploy-checklistan räknar upp de tre lagren",
     /npm run test:webblasare/.test(checklista) && /db\/tests\/run\.sh/.test(checklista),
+  );
+}
+
+/* --- Arbetarnas SQL mot databasens verkliga funktioner -------------------- */
+
+/**
+ * INGEN AV ARBETARNA KÖRS AV NÅGOT PROV.
+ *
+ * De tre arbetarna (utkorgen, aviseringarna, simuleringarna) körs av cron i
+ * driftmiljön och av ingenting annat. Byter en migration namn på en funktion,
+ * eller lägger till ett argument, märks det klockan tre på natten - och
+ * misslyckandet är tyst, för arbetaren loggar till stderr i en container som
+ * ingen läser förrän någon undrar var fakturorna tog vägen.
+ *
+ * Den här vakten läser vad arbetarna FAKTISKT anropar (utan kommentarer) och
+ * kräver att varje funktion finns i migrationerna med ett antal argument som
+ * passar anropet. Den ersätter inte en körning, men den fångar den vanligaste
+ * driften mellan kod och schema utan att behöva en databas.
+ */
+{
+  const utanKommentarer = (kod: string): string =>
+    kod.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+
+  /** Antal argument på toppnivå mellan parenteserna som börjar vid `start`. */
+  const argumenten = (text: string, start: number): { antal: number; slut: number; inne: string } => {
+    let djup = 1;
+    let i = start;
+    while (i < text.length && djup > 0) {
+      if (text[i] === "(") djup += 1;
+      else if (text[i] === ")") djup -= 1;
+      i += 1;
+    }
+    const inne = text.slice(start, i - 1);
+    let d = 0;
+    let antal = inne.trim() === "" ? 0 : 1;
+    for (const c of inne) {
+      if (c === "(") d += 1;
+      else if (c === ")") d -= 1;
+      else if (c === "," && d === 0) antal += 1;
+    }
+    return { antal, slut: i, inne };
+  };
+
+  const sql = readdirSync(join(process.cwd(), "supabase/migrations"))
+    .filter((f) => f.endsWith(".sql"))
+    .sort()
+    .map((f) => readFileSync(join(process.cwd(), "supabase/migrations", f), "utf8"))
+    .join("\n");
+
+  const anrop: { namn: string; argc: number; fil: string }[] = [];
+  for (const fil of readdirSync(join(process.cwd(), "db/worker")).filter((f) => f.endsWith(".ts"))) {
+    const kod = utanKommentarer(readFileSync(join(process.cwd(), "db/worker", fil), "utf8"));
+    for (const m of kod.matchAll(/\b(public|app)\.([a-z_]+)\s*\(/g)) {
+      const start = (m.index ?? 0) + m[0].length;
+      anrop.push({ namn: `${m[1]}.${m[2]}`, argc: argumenten(kod, start).antal, fil });
+    }
+  }
+
+  check("vakten hittar arbetarnas anrop", anrop.length >= 15, String(anrop.length));
+
+  const saknade: string[] = [];
+  const felAntal: string[] = [];
+  for (const a of anrop) {
+    const [schema, fn] = a.namn.split(".");
+    // En insert mot en tabell ser ut som ett anrop: "insert into public.x (...)".
+    if (new RegExp(`create table ${schema}\\.${fn}\\b`).test(sql)) continue;
+    const def = [...sql.matchAll(new RegExp(`create\\s+(?:or replace\\s+)?function\\s+${schema}\\.${fn}\\s*\\(`, "g"))];
+    if (def.length === 0) {
+      saknade.push(`${a.namn} (${a.fil})`);
+      continue;
+    }
+    // Den SISTA definitionen gäller: en senare migration kan ha ändrat den.
+    const sist = def[def.length - 1];
+    const { inne } = argumenten(sql, (sist.index ?? 0) + sist[0].length);
+    const delar = inne.trim() === "" ? [] : inne.split(/,(?![^(]*\))/);
+    const max = delar.length;
+    const min = delar.filter((d) => !/\bdefault\b/i.test(d)).length;
+    if (a.argc < min || a.argc > max) {
+      felAntal.push(`${a.namn} anropas med ${a.argc}, definierad ${min}-${max} (${a.fil})`);
+    }
+  }
+
+  check("varje funktion arbetarna anropar finns i migrationerna", saknade.length === 0, saknade.join("; "));
+  check("antalet argument stämmer med definitionen", felAntal.length === 0, felAntal.join("; "));
+
+  // Vakten ska kunna se ett fel. Ett påhittat anrop måste falla igenom.
+  const påhittat = "select public.finns_inte_alls($1)";
+  check(
+    "vakten skulle märka en funktion som inte finns",
+    !new RegExp("create\\s+(?:or replace\\s+)?function\\s+public\\.finns_inte_alls\\s*\\(").test(sql) &&
+      /public\.finns_inte_alls\s*\(/.test(påhittat),
   );
 }
 
