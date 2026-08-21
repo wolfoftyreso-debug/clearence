@@ -196,6 +196,15 @@ plockas om, och då får mottagaren samma SMS två gånger.
   levererar; `enqueue_notification()` är oanropad från produktionskod. Nästa
   steg är att koppla den till fristbevakningen, dokumentgranskningen och
   meddelandena.
+
+  Den här punkten är inte längre bara en anteckning. `AVISERINGAR_HAR_PRODUCENT`
+  i `src/lib/notifications/status.ts` säger samma sak i kod, och avsnitt 11 i
+  `tests/notificationService.ts` läser produktionskoden — utan kommentarer, för
+  både porten och arbetaren *nämner* funktionen — och kräver att flaggan stämmer.
+  Så länge den är false måste kanalvalet och uppgraderingsrutan skriva ut
+  förbehållet: valen sparas, men ingenting skickas än. Den dag någon kopplar in
+  en producent blir provet rött tills flaggan och texterna följer med. Att ta
+  betalt för en SMS-kanal utan att säga det vore att sälja en tystnad.
 * Push, när mobilappen finns.
 * Tidszon per användare, när vi säljer utanför Sverige.
 * En takgräns per mottagare och dygn. Engångsgarantin skyddar mot att *samma*

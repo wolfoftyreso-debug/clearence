@@ -14,6 +14,7 @@ import {
   type Level,
 } from "@/lib/notifications/events";
 import { VERIFICATION_CODE_LENGTH, isVerificationCode } from "@/lib/notifications/phone";
+import { AVISERINGAR_HAR_PRODUCENT, AVISERINGAR_INTE_LIVE } from "@/lib/notifications/status";
 import { Lock, MessageSquare, ShieldCheck } from "lucide-react";
 import { DEMO_VERIFICATION_CODE } from "@/data/demo/adapter";
 import type { NotificationPrefsRecord } from "@/data/types";
@@ -83,8 +84,25 @@ export const AlertChannelSection = () => {
     <WizardCard data-guide="aviseringskanaler">
       <WizardCardHeader
         title="Aviseringar"
-        description="Klockan i appen visar alltid allt. Här väljer du vad som dessutom ska nå dig när du inte är inloggad."
+        description="Här väljer du vad som ska nå dig när du inte är inloggad, och hur mycket."
       />
+
+      {/*
+        ATT SÄGA DET HÖGT. Tjänsten är byggd hel utom ett led: ingenting
+        skapar händelser än. Att låta någon välja kanaler, verifiera sitt
+        nummer och betala för SMS utan att säga det vore att sälja en
+        tystnad. Raden försvinner av sig själv den dag flaggan stämmer -
+        provet i tests/aviseringar.ts läser koden, inte den här filen.
+      */}
+      {!AVISERINGAR_HAR_PRODUCENT ? (
+        <p
+          data-aviseringar-inte-live
+          className="mb-4 rounded-md border border-border bg-muted/40 p-3 text-xs leading-relaxed text-muted-foreground"
+        >
+          {AVISERINGAR_INTE_LIVE}
+          {IS_DEMO ? " I demon visas exempel på hur de kommer att se ut." : ""}
+        </p>
+      ) : null}
 
       {/* Nivån */}
       <fieldset className="space-y-1.5">

@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Check, Clock, X, Zap } from "lucide-react";
 import { DEFAULT_COMPANY_PLAN, formatMonthly, nyttIniva, tierById } from "@/lib/pricing";
 import { OFFER_SECONDS, smsTier } from "@/lib/proOffer";
+import { AVISERINGAR_HAR_PRODUCENT, AVISERINGAR_INTE_LIVE } from "@/lib/notifications/status";
 
 /**
  * ENGÅNGSERBJUDANDET, presenterat: högt, tydligt, Vista Print i tonen -
@@ -154,6 +155,23 @@ export const ProUpgradeOffer = ({
             säga att det kostar extra bjuder vi på en veckas prov av hela nivån – du ska få se vad
             den gör innan du bestämmer dig.
           </p>
+          {/*
+            DEN VIKTIGASTE MENINGEN I HELA RUTAN. SMS-kanalen är byggd men
+            ingen händelse skapas än, och att be om betalt för en kanal som
+            ännu inte kan skicka något vore att sälja en tystnad. Raden
+            försvinner när flaggan stämmer med koden - se
+            src/lib/notifications/status.ts och tests/aviseringar.ts.
+          */}
+          {!AVISERINGAR_HAR_PRODUCENT ? (
+            <p
+              data-aviseringar-inte-live
+              className="mt-3 rounded-md border border-border bg-muted/40 p-3 text-xs leading-relaxed text-foreground"
+            >
+              Att vara ärlig om vad du får i dag: {AVISERINGAR_INTE_LIVE.charAt(0).toLowerCase()}
+              {AVISERINGAR_INTE_LIVE.slice(1)} Uppgraderar du nu är det för det andra {smsTier.name}
+              {" "}ger.
+            </p>
+          ) : null}
           <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
             Det är inte SMS du betalar för. {smsTier.name} är nivån för flera användare, flera
             bolag och kopplingen till ekonomisystemet.{" "}

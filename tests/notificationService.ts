@@ -58,6 +58,7 @@ import {
   normalisePhone,
   verificationSms,
 } from "../src/lib/notifications/phone";
+import { AVISERINGAR_HAR_PRODUCENT, AVISERINGAR_INTE_LIVE } from "../src/lib/notifications/status";
 import { emptyPraiseIn, sentimentalIn } from "../src/lib/advisor/tone";
 
 let passed = 0;
@@ -423,6 +424,74 @@ const providerHits = files.filter((f) => {
   return true;
 });
 check("leverantörens namn är inkapslat", providerHits.length === 0, providerHits);
+
+/* --- 11. KEDJAN: finns det någon som skapar en avisering? ------------------ */
+
+/**
+ * DET HÄR AVSNITTET FINNS FÖR ATT ALLA ANDRA VAR GRÖNA.
+ *
+ * enqueue_notification() är enda vägen in i kön. Den är oanropad från
+ * produktionskod, så klockan är tom, inget mejl går ut och inget SMS
+ * skickas - i en produkt som tar betalt för SMS-kanalen. Varje lager är
+ * prövat för sig: SQL-provet anropar funktionen själv, beslutsreglerna
+ * prövas som ren funktion, och webbläsarproven kör demoläget som hittar på
+ * händelser. Ingen ställde frågan om leden hänger ihop.
+ *
+ * Vakten läser koden UTAN KOMMENTARER. Både ports.ts och arbetaren nämner
+ * funktionen i sin dokumentation, och en vakt som räknar omnämnanden hade
+ * sagt att producenten redan finns.
+ */
+const utanKommentarer = (kod: string): string =>
+  kod.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+
+const produktionsfiler: string[] = [];
+const gaIgenom = (dir: string) => {
+  for (const entry of readdirSync(dir)) {
+    const full = join(dir, entry);
+    if (statSync(full).isDirectory()) gaIgenom(full);
+    else if (/\.(ts|tsx)$/.test(entry)) produktionsfiler.push(full);
+  }
+};
+gaIgenom(join(process.cwd(), "src"));
+gaIgenom(join(process.cwd(), "db", "worker"));
+gaIgenom(join(process.cwd(), "api", "server"));
+
+const producenter = produktionsfiler.filter((f) =>
+  /enqueue_notification\s*\(/.test(utanKommentarer(readFileSync(f, "utf8"))),
+);
+
+check(
+  "flaggan säger samma sak som koden om aviseringarna är påslagna",
+  AVISERINGAR_HAR_PRODUCENT === (producenter.length > 0),
+  producenter.length > 0
+    ? `producent finns (${producenter.join(", ")}) - sätt AVISERINGAR_HAR_PRODUCENT = true och ta bort förbehållen`
+    : "ingen producent i produktionskoden, men flaggan påstår att tjänsten är påslagen",
+);
+
+// Vakten får inte luras av att funktionen NÄMNS i en kommentar.
+check(
+  "en kommentar räknas inte som en producent",
+  !/enqueue_notification\s*\(/.test(
+    utanKommentarer(readFileSync(join(process.cwd(), "src/data/ports.ts"), "utf8")),
+  ),
+  "ports.ts beskriver funktionen i en kommentar - den läses som ett anrop",
+);
+
+// Så länge den inte är påslagen ska det STÅ, där valet görs och där
+// betalningen begärs. Ett förbehåll som bara finns i docs/ når ingen kund.
+if (!AVISERINGAR_HAR_PRODUCENT) {
+  const kanaler = readFileSync(join(process.cwd(), "src/components/settings/AlertChannels.tsx"), "utf8");
+  const erbjudande = readFileSync(join(process.cwd(), "src/components/pricing/ProUpgradeOffer.tsx"), "utf8");
+  check("kanalvalet säger att aviseringarna inte är påslagna",
+    /AVISERINGAR_INTE_LIVE/.test(kanaler) && /data-aviseringar-inte-live/.test(kanaler));
+  check("uppgraderingsrutan säger det också, före prislappen",
+    /AVISERINGAR_INTE_LIVE/.test(erbjudande) && /data-aviseringar-inte-live/.test(erbjudande));
+  check("förbehållet är konkret, inte en brasklapp",
+    /ingen händelse skapas/.test(AVISERINGAR_INTE_LIVE) && AVISERINGAR_INTE_LIVE.length > 80,
+    AVISERINGAR_INTE_LIVE);
+  const dok = readFileSync(join(process.cwd(), "docs/aviseringar.md"), "utf8");
+  check("dokumentationen säger samma sak", /oanropad från produktionskod/.test(dok));
+}
 
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);
