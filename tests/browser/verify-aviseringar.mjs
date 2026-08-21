@@ -46,9 +46,19 @@ check("push visas som inte släppt", /Push[\s\S]{0,120}(finns inte|inte släppt)
 
 /* --- 2. Klockan i appen är aldrig en betald kanal ------------------------- */
 
+// Löftet ska stå på skärmen som en RAD, inte som en mening någon råkade
+// skriva i en ingress. Den gamla kontrollen godtog ingressen, och när den
+// meningen togs bort (den påstod att klockan visar något innan någon skapar
+// händelser) föll provet - vilket var rätt av det. Nu prövas raden.
+const klockraden = await page.locator('[data-kanal="inapp"]').count();
+check("klockan i appen har en egen rad", klockraden === 1, String(klockraden));
 check(
   "klockan i appen står som alltid på",
-  /Klockan i appen visar alltid allt|Alltid på, för alla nivåer/i.test(body),
+  /Alltid på, för alla nivåer/i.test(body) && /Aldrig en betald kanal/i.test(body),
+);
+check(
+  "förbehållet om att inget skickas än står framme",
+  /inte påslagna än/i.test(body),
 );
 
 /* --- 3. Undantaget från tyst tid står framme ------------------------------ */

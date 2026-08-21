@@ -363,13 +363,27 @@ for (const t of TOURS) {
 }
 
 // Motorn måste faktiskt köra rundturen med Nästa, annars är listan ovan en
-// oanvänd datastruktur. Vaktas som text i källan.
+// oanvänd datastruktur. Vaktas som text i källan - MEN UTAN KOMMENTARER.
+// Kontrollerna nedan letade förut i hela filen, och den här filens egna
+// kommentarer nämner både "Nästa" och "onNext": prosa hade räckt för att
+// göra dem gröna. Samma fälla har fällt fyra andra vakter i det här
+// projektet, och den är alltid tyst.
 {
-  const provider = readFileSync(join(process.cwd(), "src/components/guide/GuideProvider.tsx"), "utf8");
+  const utanKommentarer = (kod: string): string =>
+    kod.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "").replace(/\{\/\*[\s\S]*?\*\/\}/g, "");
+  const provider = utanKommentarer(
+    readFileSync(join(process.cwd(), "src/components/guide/GuideProvider.tsx"), "utf8"),
+  );
   check("motorn har ett rundtursläge", provider.includes("awaitingNext"));
-  check("motorn kan starta en rundtur", provider.includes("runTour"));
-  const spotlight = readFileSync(join(process.cwd(), "src/components/guide/Spotlight.tsx"), "utf8");
-  check("panelen har en Nästa-väg", spotlight.includes("onNext") && spotlight.includes("Nästa"));
+  check("motorn kan starta en rundtur", /\brunTour\s*[,(:=]/.test(provider), "runTour används inte, den bara nämns");
+  const spotlight = utanKommentarer(
+    readFileSync(join(process.cwd(), "src/components/guide/Spotlight.tsx"), "utf8"),
+  );
+  check(
+    "panelen har en Nästa-väg",
+    /onNext\s*[?)}&|]/.test(spotlight) && />\s*Nästa|Nästa\s*</.test(spotlight),
+    "onNext anropas inte, eller så står Nästa bara i prosa",
+  );
   const bar = readFileSync(join(process.cwd(), "src/components/guide/ShowMeBar.tsx"), "utf8");
   check("rundturen går att starta från ytan", bar.includes("runTour"));
 }

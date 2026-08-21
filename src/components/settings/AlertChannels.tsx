@@ -136,6 +136,32 @@ export const AlertChannelSection = () => {
         <legend className="mb-2 text-xs font-bold uppercase tracking-wide text-muted-foreground">
           Var de ska nå dig
         </legend>
+        {/*
+          KLOCKAN VISAS, ALLTID PÅ. Den låg förut bara i kortets ingress
+          ("Klockan i appen visar alltid allt"), och den meningen var
+          dubbelt olycklig: den påstod dels att klockan visar något - vilket
+          den inte gör förrän någon skapar händelser - dels bar den ensam
+          löftet om att klockan aldrig är en betald kanal. Löftet står kvar,
+          nu som en rad byggd av CHANNELS i stället för en handskriven
+          mening, och med samma synlighet som den låsta kanalen får.
+        */}
+        {CHANNELS.filter((c) => c.id === "inapp").map((channel) => (
+          <div
+            key={channel.id}
+            data-kanal="inapp"
+            className="flex items-start gap-3 rounded-md border border-border bg-muted/30 p-3"
+          >
+            <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-accent" aria-hidden="true" />
+            <span className="min-w-0">
+              <span className="block text-sm font-medium text-foreground">
+                {channel.label} – ingår alltid
+              </span>
+              <span className="block text-xs leading-relaxed text-muted-foreground">
+                {channel.description} Aldrig en betald kanal, oavsett prisnivå.
+              </span>
+            </span>
+          </div>
+        ))}
         {CHANNELS.filter((c) => c.id !== "inapp").map((channel) => {
           const locked = planGateReason(channel.id, plan);
           const checked =
