@@ -1,5 +1,5 @@
 // Swedish organization number validation and formatting
-import { data } from "@/data";
+import type { CompanyLookupPort } from "@/data/ports";
 import type { CompanyInfo } from "@/data/types";
 
 export const formatOrgNumber = (input: string): string => {
@@ -38,7 +38,19 @@ export const validateOrgNumber = (orgNumber: string): boolean => {
 
 export type { CompanyInfo };
 
-export const lookupCompany = async (orgNumber: string): Promise<CompanyInfo | null> => {
+/**
+ * Slår upp bolaget - men tar emot porten i stället för att hämta den.
+ *
+ * Förut importerades den konkreta adaptern (`data`) rakt in hit. Det gjorde
+ * en annars ren domänmodul beroende av vilken backend som råkade vara
+ * inkopplad, och det är precis den kopplingen ports-and-adapters finns för
+ * att slippa: modulen ska gå att använda i ett annat verktyg, mot en annan
+ * adapter, utan att någonting följer med på köpet.
+ */
+export const lookupCompany = async (
+  orgNumber: string,
+  port: CompanyLookupPort,
+): Promise<CompanyInfo | null> => {
   if (!validateOrgNumber(orgNumber)) return null;
-  return data.companyLookup.lookup(orgNumber);
+  return port.lookup(orgNumber);
 };

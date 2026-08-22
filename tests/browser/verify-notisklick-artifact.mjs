@@ -79,7 +79,13 @@ await page.goto(`${BASE}#/dashboard/handelser`, { waitUntil: "domcontentloaded" 
 await page.waitForTimeout(1200);
 await page.click("button[aria-label^='Notiser']");
 await page.waitForTimeout(500);
-await page.click("button:has-text('Nästa frist'), button:has-text('frist')");
+// Samma sak som i verify-notisklick: VILKEN fristrad klockan visar beror på
+// datumen. Ordet "frist" finns bara i informationsraden, och den visas bara
+// när ingen frist är nära - raden plockas därför på vad den handlar om, inte
+// på ett ord som försvinner när demons datum rör sig.
+const fristRad = page.locator("ul li button").filter({ hasText: /frist|om \d+ dag|i dag|i morgon|sedan/i }).first();
+check("klockan har en rad som pekar på en frist", (await fristRad.count()) > 0);
+await fristRad.click();
 await page.waitForTimeout(1500);
 const fristTop = await page.evaluate(
   () => document.getElementById("frister")?.getBoundingClientRect().top ?? 9999,

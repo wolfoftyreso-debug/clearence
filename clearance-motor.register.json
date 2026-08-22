@@ -1,0 +1,1228 @@
+{
+  "genererad": "2026-08-22",
+  "fil": "clearance-motor.ts",
+  "moduler": [
+    {
+      "modul": "src/lib/caseRoles.ts",
+      "exporterar": {
+        "CaseRole": "CaseRole",
+        "CASE_ROLE_LABELS": "CASE_ROLE_LABELS",
+        "CASE_ROLE_DESCRIPTIONS": "CASE_ROLE_DESCRIPTIONS",
+        "INVITABLE_ROLES": "INVITABLE_ROLES"
+      }
+    },
+    {
+      "modul": "src/data/types.ts",
+      "exporterar": {
+        "RecommendationType": "RecommendationType",
+        "KbrStatus": "KbrStatus",
+        "PaymentStatus": "PaymentStatus",
+        "PaymentCategory": "PaymentCategory",
+        "InvoiceDirection": "InvoiceDirection",
+        "InvoiceStatus": "InvoiceStatus",
+        "ProfessionalCategory": "ProfessionalCategory",
+        "ApplicationStatus": "ApplicationStatus",
+        "ReferralChannel": "ReferralChannel",
+        "ReferralStatus": "ReferralStatus",
+        "AuthUser": "AuthUser",
+        "CaseExitReason": "CaseExitReason",
+        "CaseRecord": "CaseRecord",
+        "NewCase": "NewCase",
+        "KbrAssessmentInput": "KbrAssessmentInput",
+        "PaymentRecord": "PaymentRecord",
+        "NewPayment": "NewPayment",
+        "InvoiceRecord": "InvoiceRecord",
+        "NewInvoice": "NewInvoice",
+        "FixedPrice": "FixedPrice",
+        "ProfessionalSource": "ProfessionalSource",
+        "ProfessionalRecord": "ProfessionalRecord",
+        "MyProfessionalProfile": "MyProfessionalProfile",
+        "ProfessionalProfileUpdate": "ProfessionalProfileUpdate",
+        "ProfileClaimStatus": "ProfileClaimStatus",
+        "ProfileClaimRecord": "ProfileClaimRecord",
+        "ProfileClaimForReview": "ProfileClaimForReview",
+        "ContactRequestStatus": "ContactRequestStatus",
+        "ContactRequestRecord": "ContactRequestRecord",
+        "LeadPreviewRecord": "LeadPreviewRecord",
+        "UsageChargeRecord": "UsageChargeRecord",
+        "RatingRecord": "RatingRecord",
+        "ApplicationRecord": "ApplicationRecord",
+        "ApplicationForReview": "ApplicationForReview",
+        "NewApplication": "NewApplication",
+        "ReferralRecord": "ReferralRecord",
+        "NewReferral": "NewReferral",
+        "CompanyInfo": "CompanyInfo",
+        "DocumentKind": "DocumentKind",
+        "DocumentSource": "DocumentSource",
+        "DocumentRecord": "DocumentRecord",
+        "NewDocument": "NewDocument",
+        "ContactTopic": "ContactTopic",
+        "ContactStatus": "ContactStatus",
+        "NewContactMessage": "NewContactMessage",
+        "ContactMessageRecord": "ContactMessageRecord",
+        "UserRole": "UserRole",
+        "UserProfile": "UserProfile",
+        "MessageAck": "MessageAck",
+        "CaseMessage": "CaseMessage",
+        "ConversationRecord": "ConversationRecord",
+        "OpenMention": "OpenMention",
+        "AccountBillingRecord": "AccountBillingRecord",
+        "CustomerInvoiceStatus": "CustomerInvoiceStatus",
+        "CustomerInvoiceRecord": "CustomerInvoiceRecord",
+        "CustomerOverview": "CustomerOverview",
+        "OutboundEmailRecord": "OutboundEmailRecord",
+        "CaseTask": "CaseTask",
+        "CaseNoteRecord": "CaseNoteRecord",
+        "FirmMemberRecord": "FirmMemberRecord",
+        "FirmInvitationRecord": "FirmInvitationRecord",
+        "MyFirmInvitation": "MyFirmInvitation",
+        "TimeEntryRecord": "TimeEntryRecord",
+        "AdvisorSessionRecord": "AdvisorSessionRecord",
+        "DecisionStatus": "DecisionStatus",
+        "PremiseSignal": "PremiseSignal",
+        "PremiseComparator": "PremiseComparator",
+        "PremiseWatch": "PremiseWatch",
+        "CaseDecisionRecord": "CaseDecisionRecord",
+        "SecretInfo": "SecretInfo",
+        "CaseMemberRecord": "CaseMemberRecord",
+        "CaseInvitationRecord": "CaseInvitationRecord",
+        "InvitationPeek": "InvitationPeek",
+        "ProfessionalTerms": "ProfessionalTerms",
+        "CaseShareLinkRecord": "CaseShareLinkRecord",
+        "SharedCaseView": "SharedCaseView",
+        "AuditEventRecord": "AuditEventRecord",
+        "ApiKeyRecord": "ApiKeyRecord",
+        "DocumentSignature": "DocumentSignature",
+        "NotificationPrefsRecord": "NotificationPrefsRecord",
+        "NotificationPrefsInput": "NotificationPrefsInput",
+        "VerifiedPhoneRecord": "VerifiedPhoneRecord",
+        "NotificationDeliveryRecord": "NotificationDeliveryRecord",
+        "SimulationRecord": "SimulationRecord",
+        "SimulationStatus": "SimulationStatus",
+        "SimulationRun": "SimulationRun",
+        "ErasureRequestRecord": "ErasureRequestRecord",
+        "GoogleFetchResult": "GoogleFetchResult",
+        "WebsiteFetchResult": "WebsiteFetchResult",
+        "NewsFetchResult": "NewsFetchResult"
+      }
+    },
+    {
+      "modul": "src/lib/financial/model.ts",
+      "exporterar": {
+        "ProviderId": "ProviderId",
+        "DataOrigin": "DataOrigin",
+        "Provenance": "Provenance",
+        "Sourced": "Sourced",
+        "AccountType": "AccountType",
+        "Account": "Account",
+        "VoucherRow": "VoucherRow",
+        "Voucher": "Voucher",
+        "AccountBalance": "AccountBalance",
+        "BalanceSheet": "BalanceSheet",
+        "IncomeStatement": "IncomeStatement",
+        "Counterparty": "Counterparty",
+        "OpenItemKind": "OpenItemKind",
+        "OpenItem": "OpenItem",
+        "BankAccountBalance": "BankAccountBalance",
+        "TaxAccountPosition": "TaxAccountPosition",
+        "PayrollSummary": "PayrollSummary",
+        "CostCenter": "CostCenter",
+        "Project": "Project",
+        "BudgetLine": "BudgetLine",
+        "FinancialSnapshot": "FinancialSnapshot",
+        "FinancialDataset": "FinancialDataset",
+        "FinancialCapabilities": "FinancialCapabilities",
+        "NO_CAPABILITIES": "NO_CAPABILITIES",
+        "totalOutstanding": "totalOutstanding",
+        "totalCash": "totalCash",
+        "daysBetween": "daysBetween",
+        "isOverdue": "isOverdue"
+      }
+    },
+    {
+      "modul": "src/lib/retention.ts",
+      "exporterar": {
+        "RetentionAction": "RetentionAction",
+        "RetentionCategory": "RetentionCategory",
+        "DEFAULT_RETENTION": "DEFAULT_RETENTION",
+        "RetentionOverride": "RetentionOverride",
+        "MAX_RETENTION_MONTHS": "MAX_RETENTION_MONTHS",
+        "RetentionProblem": "RetentionProblem",
+        "retentionOverrideProblems": "retentionOverrideProblems",
+        "mergeRetentionPolicy": "mergeRetentionPolicy",
+        "retentionCutoff": "retentionCutoff",
+        "isExpired": "isExpired",
+        "ACTION_LABEL": "ACTION_LABEL",
+        "retentionSummary": "retentionSummary",
+        "SKUGGLAGE_NOTE": "SKUGGLAGE_NOTE"
+      }
+    },
+    {
+      "modul": "src/data/ports.ts",
+      "exporterar": {
+        "AuthPort": "AuthPort",
+        "CasesPort": "CasesPort",
+        "KbrPort": "KbrPort",
+        "PaymentsPort": "PaymentsPort",
+        "InvoicesPort": "InvoicesPort",
+        "ProfessionalsPort": "ProfessionalsPort",
+        "LeadsPort": "LeadsPort",
+        "ApplicationsPort": "ApplicationsPort",
+        "ReferralsPort": "ReferralsPort",
+        "CompanyLookupPort": "CompanyLookupPort",
+        "DocumentsPort": "DocumentsPort",
+        "SimulationsPort": "SimulationsPort",
+        "FinancialPort": "FinancialPort",
+        "ContactPort": "ContactPort",
+        "ProfilePort": "ProfilePort",
+        "TasksPort": "TasksPort",
+        "AdvisorToolsPort": "AdvisorToolsPort",
+        "DialoguePort": "DialoguePort",
+        "MessagesPort": "MessagesPort",
+        "BillingPort": "BillingPort",
+        "OpsPort": "OpsPort",
+        "SharesPort": "SharesPort",
+        "ApiKeysPort": "ApiKeysPort",
+        "NotificationSettingsPort": "NotificationSettingsPort",
+        "AuditPort": "AuditPort",
+        "MembersPort": "MembersPort",
+        "PrivacyPort": "PrivacyPort",
+        "SourcesPort": "SourcesPort",
+        "DataPort": "DataPort"
+      }
+    },
+    {
+      "modul": "src/lib/actionPlan.ts",
+      "exporterar": {
+        "Countdown": "Countdown",
+        "countdownTo": "countdownTo",
+        "compareByUrgency": "compareByUrgency"
+      }
+    },
+    {
+      "modul": "src/lib/sources/registry.ts",
+      "exporterar": {
+        "Acquisition": "Acquisition",
+        "SourceSpec": "SourceSpec",
+        "SOURCES": "SOURCES",
+        "sourceById": "sourceById",
+        "liveSources": "liveSources",
+        "forbiddenSources": "forbiddenSources"
+      }
+    },
+    {
+      "modul": "src/lib/advisor/backgroundWork.ts",
+      "exporterar": {
+        "BackgroundSource": "BackgroundSource",
+        "BackgroundState": "BackgroundState",
+        "BackgroundTask": "BackgroundTask",
+        "DISCLOSURE": "DISCLOSURE",
+        "BackgroundContext": "BackgroundContext",
+        "backgroundTasks": "backgroundTasks",
+        "BACKGROUND_STEPS": "BACKGROUND_STEPS",
+        "backgroundSummary": "backgroundSummary"
+      }
+    },
+    {
+      "modul": "src/lib/advisor/companyProfile.ts",
+      "exporterar": {
+        "CompanyProfile": "CompanyProfile",
+        "PROFILE_LABELS": "PROFILE_LABELS",
+        "emptyProfile": "emptyProfile",
+        "applyAnswer": "applyAnswer",
+        "profilInnehaller": "profilInnehaller",
+        "profileRows": "profileRows",
+        "profileFilled": "profileFilled",
+        "deriveRiskLevel": "deriveRiskLevel"
+      }
+    },
+    {
+      "modul": "src/lib/officialFigures.ts",
+      "exporterar": {
+        "REVIEWED_ON": "REVIEWED_ON",
+        "FIGURES_YEAR": "FIGURES_YEAR",
+        "PRICE_BASE_AMOUNT": "PRICE_BASE_AMOUNT",
+        "EMPLOYER_CONTRIBUTION_RATE": "EMPLOYER_CONTRIBUTION_RATE",
+        "WAGE_GUARANTEE_CEILING": "WAGE_GUARANTEE_CEILING",
+        "WAGE_GUARANTEE_MAX_MONTHS": "WAGE_GUARANTEE_MAX_MONTHS",
+        "MIN_SHARE_CAPITAL": "MIN_SHARE_CAPITAL",
+        "MIN_SHARE_CAPITAL_PRE_2020": "MIN_SHARE_CAPITAL_PRE_2020",
+        "BANKRUPTCY_STATS": "BANKRUPTCY_STATS",
+        "LEGAL_REFS": "LEGAL_REFS",
+        "formatSek": "formatSek"
+      }
+    },
+    {
+      "modul": "src/lib/crisisAnalysis.ts",
+      "exporterar": {
+        "RecommendationType": "RecommendationType__crisisAnalysis",
+        "Urgency": "Urgency",
+        "Severity": "Severity",
+        "AnalysisInput": "AnalysisInput",
+        "RiskFlag": "RiskFlag",
+        "TimelineEvent": "TimelineEvent",
+        "NextStep": "NextStep",
+        "CrisisAnalysis": "CrisisAnalysis",
+        "KBR_COVERAGE_THRESHOLD": "KBR_COVERAGE_THRESHOLD",
+        "nextOccurrence": "nextOccurrence",
+        "formatSwedishDate": "formatSwedishDate",
+        "analyseCrisis": "analyseCrisis"
+      }
+    },
+    {
+      "modul": "src/lib/caseAnalysis.ts",
+      "exporterar": {
+        "parseAmount": "parseAmount",
+        "analysisInputFromCase": "analysisInputFromCase",
+        "timelineForCase": "timelineForCase",
+        "slugName": "slugName"
+      }
+    },
+    {
+      "modul": "src/lib/advisor/dialog.ts",
+      "exporterar": {
+        "DialogStepKind": "DialogStepKind",
+        "DialogStep": "DialogStep",
+        "DialogAction": "DialogAction",
+        "SnapshotRow": "SnapshotRow",
+        "DialogMeter": "DialogMeter",
+        "PlanRow": "PlanRow",
+        "DialogAssessment": "DialogAssessment",
+        "DialogFlow": "DialogFlow",
+        "DIALOG_FLOWS": "DIALOG_FLOWS",
+        "matchFlow": "matchFlow",
+        "FALLBACK_REPLY": "FALLBACK_REPLY",
+        "CLARA": "CLARA",
+        "ONBOARDING": "ONBOARDING",
+        "buildCaseSnapshot": "buildCaseSnapshot",
+        "buildPriorities": "buildPriorities",
+        "decisionCheckIn": "decisionCheckIn",
+        "InviteRole": "InviteRole",
+        "inviteIntent": "inviteIntent",
+        "INVITE_CONTRACT": "INVITE_CONTRACT",
+        "EMAIL_SHAPE": "EMAIL_SHAPE",
+        "invoiceIntent": "invoiceIntent",
+        "answerLabel": "answerLabel"
+      }
+    },
+    {
+      "modul": "src/lib/advisor/interview.ts",
+      "exporterar": {
+        "InterviewOption": "InterviewOption",
+        "InterviewQuestion": "InterviewQuestion",
+        "INTERVIEW": "INTERVIEW",
+        "SVARSSKILJARE": "SVARSSKILJARE",
+        "valdaSvar": "valdaSvar",
+        "skrivSvar": "skrivSvar",
+        "svarSomText": "svarSomText",
+        "questionById": "questionById",
+        "Signals": "Signals",
+        "foldAnswers": "foldAnswers",
+        "isAnswered": "isAnswered",
+        "isAcute": "isAcute",
+        "applicableQuestions": "applicableQuestions",
+        "nextQuestion": "nextQuestion",
+        "interviewProgress": "interviewProgress"
+      }
+    },
+    {
+      "modul": "src/lib/advisor/firstAnalysis.ts",
+      "exporterar": {
+        "Observation": "Observation",
+        "FirstAnalysis": "FirstAnalysis",
+        "FirstAnalysisInput": "FirstAnalysisInput",
+        "buildFirstAnalysis": "buildFirstAnalysis"
+      }
+    },
+    {
+      "modul": "src/lib/advisor/memory.ts",
+      "exporterar": {
+        "WorkingModelRow": "WorkingModelRow",
+        "WorkingModelSection": "WorkingModelSection",
+        "buildWorkingModel": "buildWorkingModel",
+        "sinceLastVisit": "sinceLastVisit"
+      }
+    },
+    {
+      "modul": "src/lib/advisor/onboardingHandoff.ts",
+      "exporterar": {
+        "OnboardingHandoff": "OnboardingHandoff",
+        "saveOnboarding": "saveOnboarding",
+        "readOnboarding": "readOnboarding",
+        "clearOnboarding": "clearOnboarding",
+        "wizardEmployees": "wizardEmployees"
+      }
+    },
+    {
+      "modul": "src/lib/advisor/onboardingResume.ts",
+      "exporterar": {
+        "ResumableStage": "ResumableStage",
+        "ResumeEntry": "ResumeEntry",
+        "OnboardingResume": "OnboardingResume",
+        "resumeAnswerCount": "resumeAnswerCount",
+        "saveResume": "saveResume",
+        "readResume": "readResume",
+        "clearResume": "clearResume",
+        "hasResume": "hasResume"
+      }
+    },
+    {
+      "modul": "src/lib/advisor/options.ts",
+      "exporterar": {
+        "PathStatus": "PathStatus",
+        "OptionsInput": "OptionsInput",
+        "ActionPath": "ActionPath",
+        "PATH_STATUS_LABELS": "PATH_STATUS_LABELS",
+        "buildActionPaths": "buildActionPaths",
+        "ActionCategory": "ActionCategory",
+        "ACTION_CATALOG": "ACTION_CATALOG",
+        "OPTIONS_STANCE": "OPTIONS_STANCE"
+      }
+    },
+    {
+      "modul": "src/lib/advisor/premiseWatch.ts",
+      "exporterar": {
+        "PremiseFacts": "PremiseFacts",
+        "PREMISE_SIGNALS": "PREMISE_SIGNALS",
+        "signalSpec": "signalSpec",
+        "formatSignalValue": "formatSignalValue",
+        "describeWatch": "describeWatch",
+        "PremiseState": "PremiseState",
+        "PremiseEvaluation": "PremiseEvaluation",
+        "evaluatePremise": "evaluatePremise",
+        "proposeWatches": "proposeWatches",
+        "swedishDay": "swedishDay",
+        "premiseAlert": "premiseAlert",
+        "WatchedDecision": "WatchedDecision",
+        "PremiseFlag": "PremiseFlag",
+        "premiseFlags": "premiseFlags",
+        "WATCH_STATE_LABEL": "WATCH_STATE_LABEL",
+        "NO_WATCH_LABEL": "NO_WATCH_LABEL",
+        "isValidWatch": "isValidWatch"
+      }
+    },
+    {
+      "modul": "src/lib/advisor/prepare.ts",
+      "exporterar": {
+        "Transition": "Transition",
+        "PREPARE_HEADINGS": "PREPARE_HEADINGS",
+        "prepareLines": "prepareLines",
+        "TransitionId": "TransitionId",
+        "TRANSITIONS": "TRANSITIONS",
+        "PREPARE_RULES": "PREPARE_RULES",
+        "WaitNotice": "WaitNotice",
+        "waitText": "waitText",
+        "WAITS": "WAITS",
+        "isComplete": "isComplete",
+        "hasConcreteEffort": "hasConcreteEffort",
+        "explainsPurpose": "explainsPurpose"
+      }
+    },
+    {
+      "modul": "src/lib/advisor/tone.ts",
+      "exporterar": {
+        "PERSONALITY": "PERSONALITY",
+        "Contribution": "Contribution",
+        "GROUNDED_CONFIRMATION": "GROUNDED_CONFIRMATION",
+        "confirmContribution": "confirmContribution",
+        "GROUNDING_ANCHORS": "GROUNDING_ANCHORS",
+        "isGrounded": "isGrounded",
+        "EMPTY_PRAISE": "EMPTY_PRAISE",
+        "emptyPraiseIn": "emptyPraiseIn",
+        "insteadOf": "insteadOf",
+        "SENTIMENTAL": "SENTIMENTAL",
+        "sentimentalIn": "sentimentalIn"
+      }
+    },
+    {
+      "modul": "src/lib/auditDetail.ts",
+      "exporterar": {
+        "deriveAuditDetail": "deriveAuditDetail",
+        "summarizeAuditTrail": "summarizeAuditTrail"
+      }
+    },
+    {
+      "modul": "src/lib/authErrors.ts",
+      "exporterar": {
+        "translateAuthError": "translateAuthError"
+      }
+    },
+    {
+      "modul": "src/lib/bankStatement.ts",
+      "exporterar": {
+        "StatementDirection": "StatementDirection",
+        "BankTransaction": "BankTransaction",
+        "SkippedRow": "SkippedRow",
+        "ColumnMapping": "ColumnMapping",
+        "ParsedStatement": "ParsedStatement",
+        "ParseOutcome": "ParseOutcome",
+        "decodeStatementBytes": "decodeStatementBytes",
+        "splitCsvLine": "splitCsvLine",
+        "parseAmount": "parseAmount__bankStatement",
+        "parseStatementDate": "parseStatementDate",
+        "parseBankStatement": "parseBankStatement",
+        "SuggestedCategory": "SuggestedCategory",
+        "RecurringSuggestion": "RecurringSuggestion",
+        "StatementSummary": "StatementSummary",
+        "summariseStatement": "summariseStatement"
+      }
+    },
+    {
+      "modul": "src/lib/billing.ts",
+      "exporterar": {
+        "AccountStatus": "AccountStatus",
+        "TRIAL_DAYS": "TRIAL_DAYS",
+        "WARNING_DAYS": "WARNING_DAYS",
+        "AccountBilling": "AccountBilling",
+        "daysBetween": "daysBetween__billing",
+        "trialEndsAt": "trialEndsAt",
+        "BillingState": "BillingState",
+        "billingState": "billingState",
+        "billingMessage": "billingMessage"
+      }
+    },
+    {
+      "modul": "src/lib/company.ts",
+      "exporterar": {
+        "CompanyIdentity": "CompanyIdentity",
+        "COMPANY": "COMPANY",
+        "missingLegalIdentityFields": "missingLegalIdentityFields",
+        "legalIdentityIsComplete": "legalIdentityIsComplete",
+        "missingCompanyFields": "missingCompanyFields",
+        "companyInfoIsComplete": "companyInfoIsComplete",
+        "missingInvoiceFields": "missingInvoiceFields",
+        "formatAddress": "formatAddress",
+        "paymentAccounts": "paymentAccounts",
+        "paymentAccountsSentence": "paymentAccountsSentence"
+      }
+    },
+    {
+      "modul": "src/lib/dataExport.ts",
+      "exporterar": {
+        "MyDataParts": "MyDataParts",
+        "MyDataExport": "MyDataExport",
+        "buildMyDataExport": "buildMyDataExport"
+      }
+    },
+    {
+      "modul": "src/lib/dataMinimering.ts",
+      "exporterar": {
+        "DATA_MINIMERING_HINT": "DATA_MINIMERING_HINT"
+      }
+    },
+    {
+      "modul": "src/lib/pdf.ts",
+      "exporterar": {
+        "PdfFont": "PdfFont",
+        "measure": "measure",
+        "wrapText": "wrapText",
+        "PdfLineOptions": "PdfLineOptions",
+        "PdfWriter": "PdfWriter"
+      }
+    },
+    {
+      "modul": "src/lib/documentTemplates.ts",
+      "exporterar": {
+        "TemplatePerson": "TemplatePerson",
+        "TemplateInput": "TemplateInput",
+        "GeneratedDocument": "GeneratedDocument",
+        "boardMinutesKbr": "boardMinutesKbr",
+        "noticeControlMeeting": "noticeControlMeeting",
+        "boardMinutesReconstruction": "boardMinutesReconstruction",
+        "templateToPdf": "templateToPdf",
+        "TEMPLATES": "TEMPLATES"
+      }
+    },
+    {
+      "modul": "src/lib/invoice.ts",
+      "exporterar": {
+        "VAT_RATE": "VAT_RATE",
+        "PAYMENT_TERMS_DAYS": "PAYMENT_TERMS_DAYS",
+        "InvoiceLine": "InvoiceLine",
+        "InvoiceInput": "InvoiceInput",
+        "InvoiceTotals": "InvoiceTotals",
+        "Invoice": "Invoice",
+        "formatOre": "formatOre",
+        "lineTotalOre": "lineTotalOre",
+        "invoiceTotals": "invoiceTotals",
+        "InvoiceResult": "InvoiceResult",
+        "missingBuyerFields": "missingBuyerFields",
+        "buildInvoice": "buildInvoice",
+        "nextInvoiceNumber": "nextInvoiceNumber"
+      }
+    },
+    {
+      "modul": "src/lib/email/messages.ts",
+      "exporterar": {
+        "EmailMessage": "EmailMessage",
+        "invoiceEmail": "invoiceEmail",
+        "receiptEmail": "receiptEmail",
+        "paymentReminderEmail": "paymentReminderEmail",
+        "accountClosedEmail": "accountClosedEmail",
+        "caseInvitationEmail": "caseInvitationEmail"
+      }
+    },
+    {
+      "modul": "src/lib/erasure.ts",
+      "exporterar": {
+        "ErasureAction": "ErasureAction",
+        "ErasurePost": "ErasurePost",
+        "KARENSDAGAR": "KARENSDAGAR",
+        "ERASURE_MANIFEST": "ERASURE_MANIFEST",
+        "manifestTables": "manifestTables",
+        "ERASURE_ACTION_LABEL": "ERASURE_ACTION_LABEL",
+        "erasureSummary": "erasureSummary",
+        "RectificationEntry": "RectificationEntry",
+        "RECTIFICATION_MAP": "RECTIFICATION_MAP"
+      }
+    },
+    {
+      "modul": "src/lib/executiveSummary.ts",
+      "exporterar": {
+        "Severity": "Severity__executiveSummary",
+        "ActionHorizon": "ActionHorizon",
+        "SummaryAction": "SummaryAction",
+        "SummarySection": "SummarySection",
+        "ExecutiveSummary": "ExecutiveSummary",
+        "SummaryInput": "SummaryInput",
+        "buildExecutiveSummary": "buildExecutiveSummary"
+      }
+    },
+    {
+      "modul": "src/lib/financial/sie.ts",
+      "exporterar": {
+        "SieAccount": "SieAccount",
+        "SieVerification": "SieVerification",
+        "ParsedSie": "ParsedSie",
+        "SieOutcome": "SieOutcome",
+        "decodeSieBytes": "decodeSieBytes",
+        "tokenizeSieLine": "tokenizeSieLine",
+        "parseSie": "parseSie",
+        "SieSummary": "SieSummary",
+        "summariseSie": "summariseSie"
+      }
+    },
+    {
+      "modul": "src/lib/financial/fromSie.ts",
+      "exporterar": {
+        "SieSnapshotInput": "SieSnapshotInput",
+        "snapshotFromSie": "snapshotFromSie"
+      }
+    },
+    {
+      "modul": "src/lib/financial/insights.ts",
+      "exporterar": {
+        "InsightSeverity": "InsightSeverity",
+        "Insight": "Insight",
+        "Concentration": "Concentration",
+        "concentration": "concentration",
+        "AgeingBucket": "AgeingBucket",
+        "ageing": "ageing",
+        "CostOutlier": "CostOutlier",
+        "costOutliers": "costOutliers",
+        "PriorityReason": "PriorityReason",
+        "PrioritisedPayment": "PrioritisedPayment",
+        "PRIORITY_WARNING": "PRIORITY_WARNING",
+        "prioritisePayments": "prioritisePayments",
+        "AssistantOptions": "AssistantOptions",
+        "analyseSnapshot": "analyseSnapshot"
+      }
+    },
+    {
+      "modul": "src/lib/financial/ports.ts",
+      "exporterar": {
+        "ProviderDescriptor": "ProviderDescriptor",
+        "ConnectionStatus": "ConnectionStatus",
+        "FetchOptions": "FetchOptions",
+        "FetchResult": "FetchResult",
+        "AccountingPort": "AccountingPort",
+        "PROVIDER_REGISTRY": "PROVIDER_REGISTRY",
+        "providerLabel": "providerLabel",
+        "manualDatasets": "manualDatasets"
+      }
+    },
+    {
+      "modul": "src/lib/guide/catalogue.ts",
+      "exporterar": {
+        "GuideAudience": "GuideAudience",
+        "GuideEntry": "GuideEntry",
+        "GUIDE_CATALOGUE": "GUIDE_CATALOGUE",
+        "guideEntry": "guideEntry",
+        "entryBriefing": "entryBriefing"
+      }
+    },
+    {
+      "modul": "src/lib/guide/actions.ts",
+      "exporterar": {
+        "GuideAction": "GuideAction",
+        "STEP_MS": "STEP_MS",
+        "showMeSteps": "showMeSteps",
+        "savedSteps": "savedSteps",
+        "FlowStep": "FlowStep",
+        "GuidedFlow": "GuidedFlow",
+        "GUIDED_FLOWS": "GUIDED_FLOWS",
+        "guidedFlow": "guidedFlow",
+        "flowSteps": "flowSteps",
+        "TOURS": "TOURS",
+        "tour": "tour",
+        "tourGroups": "tourGroups"
+      }
+    },
+    {
+      "modul": "src/lib/guide/microLessons.ts",
+      "exporterar": {
+        "MicroLesson": "MicroLesson",
+        "MICRO_LESSONS": "MICRO_LESSONS",
+        "readMemory": "readMemory",
+        "rememberShown": "rememberShown",
+        "rememberReminded": "rememberReminded",
+        "LessonDue": "LessonDue",
+        "dueLesson": "dueLesson",
+        "forgetLessons": "forgetLessons"
+      }
+    },
+    {
+      "modul": "src/lib/guide/showMe.ts",
+      "exporterar": {
+        "ShowMeResult": "ShowMeResult",
+        "resolveShowMe": "resolveShowMe",
+        "noMatchMessage": "noMatchMessage"
+      }
+    },
+    {
+      "modul": "src/lib/taskIntelligence.ts",
+      "exporterar": {
+        "TaskContext": "TaskContext",
+        "ProcessStep": "ProcessStep",
+        "TaskPlaybook": "TaskPlaybook",
+        "playbookForTask": "playbookForTask",
+        "ProfessionalMatch": "ProfessionalMatch",
+        "matchProfessionals": "matchProfessionals"
+      }
+    },
+    {
+      "modul": "src/lib/guidedArrival.ts",
+      "exporterar": {
+        "ORIGIN_PARAM": "ORIGIN_PARAM",
+        "Destination": "Destination",
+        "withOrigin": "withOrigin",
+        "readOrigin": "readOrigin",
+        "destinationFor": "destinationFor",
+        "Arrival": "Arrival",
+        "doneMeansFor": "doneMeansFor",
+        "buildArrival": "buildArrival"
+      }
+    },
+    {
+      "modul": "src/lib/integrations/caseBundle.ts",
+      "exporterar": {
+        "BUNDLE_FORMAT_VERSION": "BUNDLE_FORMAT_VERSION",
+        "CaseBundle": "CaseBundle",
+        "buildCaseBundle": "buildCaseBundle",
+        "timelineToIcs": "timelineToIcs"
+      }
+    },
+    {
+      "modul": "src/lib/reports/types.ts",
+      "exporterar": {
+        "Tone": "Tone",
+        "ReportMeta": "ReportMeta",
+        "KeyValue": "KeyValue",
+        "TableColumn": "TableColumn",
+        "TableRow": "TableRow",
+        "ListItem": "ListItem",
+        "ReportBlock": "ReportBlock",
+        "ReportSection": "ReportSection",
+        "ReportModel": "ReportModel"
+      }
+    },
+    {
+      "modul": "src/lib/integrations/creditDossier.ts",
+      "exporterar": {
+        "CreditDossierInput": "CreditDossierInput",
+        "CreditDossierResult": "CreditDossierResult",
+        "CreditPackage": "CreditPackage",
+        "buildCreditDossier": "buildCreditDossier",
+        "dossierLiquidityFromPayments": "dossierLiquidityFromPayments"
+      }
+    },
+    {
+      "modul": "src/lib/integrations/download.ts",
+      "exporterar": {
+        "downloadTextFile": "downloadTextFile",
+        "openFileUrl": "openFileUrl"
+      }
+    },
+    {
+      "modul": "src/lib/integrations/registry.ts",
+      "exporterar": {
+        "IntegrationStatus": "IntegrationStatus",
+        "IntegrationCategory": "IntegrationCategory",
+        "IntegrationTarget": "IntegrationTarget",
+        "INTEGRATION_REGISTRY": "INTEGRATION_REGISTRY",
+        "availableNow": "availableNow",
+        "blocked": "blocked"
+      }
+    },
+    {
+      "modul": "src/lib/integrations/skattekonto.ts",
+      "exporterar": {
+        "TaxAccountEntry": "TaxAccountEntry",
+        "ParsedTaxAccount": "ParsedTaxAccount",
+        "TaxAccountOutcome": "TaxAccountOutcome",
+        "parseSwedishAmount": "parseSwedishAmount",
+        "parseSwedishDate": "parseSwedishDate",
+        "parseTaxAccount": "parseTaxAccount"
+      }
+    },
+    {
+      "modul": "src/lib/invoiceSpecification.ts",
+      "exporterar": {
+        "SpecLine": "SpecLine",
+        "VatBand": "VatBand",
+        "InvoiceSpecification": "InvoiceSpecification",
+        "buildInvoiceSpecification": "buildInvoiceSpecification",
+        "invoiceFileName": "invoiceFileName",
+        "forwardMessage": "forwardMessage"
+      }
+    },
+    {
+      "modul": "src/lib/knowledge.ts",
+      "exporterar": {
+        "KnowledgeSection": "KnowledgeSection",
+        "KnowledgeArticle": "KnowledgeArticle",
+        "KNOWLEDGE_DISCLAIMER": "KNOWLEDGE_DISCLAIMER",
+        "KNOWLEDGE_ARTICLES": "KNOWLEDGE_ARTICLES",
+        "findArticle": "findArticle"
+      }
+    },
+    {
+      "modul": "src/lib/language.ts",
+      "exporterar": {
+        "LanguageLevel": "LanguageLevel",
+        "LANGUAGE_LEVELS": "LANGUAGE_LEVELS",
+        "LANGUAGE_EVENT": "LANGUAGE_EVENT",
+        "getLanguageLevel": "getLanguageLevel",
+        "setLanguageLevel": "setLanguageLevel",
+        "GlossaryEntry": "GlossaryEntry",
+        "GLOSSARY": "GLOSSARY",
+        "findGlossaryEntry": "findGlossaryEntry",
+        "segmentText": "segmentText",
+        "adaptText": "adaptText",
+        "recordGlossaryClick": "recordGlossaryClick",
+        "shouldSuggestSimpler": "shouldSuggestSimpler",
+        "dismissSimplerSuggestion": "dismissSimplerSuggestion",
+        "acceptSimplerSuggestion": "acceptSimplerSuggestion"
+      }
+    },
+    {
+      "modul": "src/lib/leadSummary.ts",
+      "exporterar": {
+        "LeadPreview": "LeadPreview",
+        "LeadKeyFigure": "LeadKeyFigure",
+        "LeadSummary": "LeadSummary",
+        "buildLeadPreview": "buildLeadPreview",
+        "kindOfDocument": "kindOfDocument",
+        "buildLeadSummary": "buildLeadSummary"
+      }
+    },
+    {
+      "modul": "src/lib/legalPages.ts",
+      "exporterar": {
+        "LegalSection": "LegalSection",
+        "DRAFT_NOTICE": "DRAFT_NOTICE__legalPages",
+        "PRIVACY_SECTIONS": "PRIVACY_SECTIONS",
+        "TERMS_SECTIONS": "TERMS_SECTIONS"
+      }
+    },
+    {
+      "modul": "src/lib/liquidityKeyFigures.ts",
+      "exporterar": {
+        "FigureId": "FigureId",
+        "FigureRow": "FigureRow",
+        "KeyFigure": "KeyFigure",
+        "kr": "kr__liquidityKeyFigures",
+        "KeyFigureInput": "KeyFigureInput",
+        "buildKeyFigures": "buildKeyFigures",
+        "figureById": "figureById"
+      }
+    },
+    {
+      "modul": "src/lib/liquidityPlan.ts",
+      "exporterar": {
+        "PlanOutflow": "PlanOutflow",
+        "PlanInflow": "PlanInflow",
+        "LiquidityPlan": "LiquidityPlan",
+        "ProjectionDay": "ProjectionDay",
+        "ProjectionResult": "ProjectionResult",
+        "projectLiquidity": "projectLiquidity",
+        "employerContribution": "employerContribution",
+        "emptyPlan": "emptyPlan"
+      }
+    },
+    {
+      "modul": "src/lib/localTraces.ts",
+      "exporterar": {
+        "WORK_KEYS": "WORK_KEYS",
+        "PREFERENCE_KEYS": "PREFERENCE_KEYS",
+        "clearWorkTraces": "clearWorkTraces"
+      }
+    },
+    {
+      "modul": "src/lib/montecarlo/slump.ts",
+      "exporterar": {
+        "Slumpstrom": "Slumpstrom",
+        "nyttFro": "nyttFro"
+      }
+    },
+    {
+      "modul": "src/lib/montecarlo/fordelningar.ts",
+      "exporterar": {
+        "FordelningsTyp": "FordelningsTyp",
+        "Fordelning": "Fordelning",
+        "Moment": "Moment",
+        "FordelningsFel": "FordelningsFel",
+        "FORDELNINGAR": "FORDELNINGAR",
+        "fordelningsDefinition": "fordelningsDefinition",
+        "validera": "validera",
+        "sampla": "sampla",
+        "moment": "moment"
+      }
+    },
+    {
+      "modul": "src/lib/montecarlo/format.ts",
+      "exporterar": {
+        "beloppMedEnhet": "beloppMedEnhet",
+        "procentAv": "procentAv",
+        "beloppKort": "beloppKort"
+      }
+    },
+    {
+      "modul": "src/lib/montecarlo/statistik.ts",
+      "exporterar": {
+        "Percentiler": "Percentiler",
+        "Statistik": "Statistik",
+        "Histogram": "Histogram",
+        "percentil": "percentil",
+        "sammanfatta": "sammanfatta",
+        "sannolikhetMinst": "sannolikhetMinst",
+        "sannolikhetUnder": "sannolikhetUnder",
+        "histogram": "histogram",
+        "rangkorrelation": "rangkorrelation"
+      }
+    },
+    {
+      "modul": "src/lib/montecarlo/uttryck.ts",
+      "exporterar": {
+        "Nod": "Nod",
+        "UttrycksFel": "UttrycksFel",
+        "FUNKTIONSNAMN": "FUNKTIONSNAMN",
+        "tolka": "tolka",
+        "berakna": "berakna",
+        "variablerI": "variablerI"
+      }
+    },
+    {
+      "modul": "src/lib/montecarlo/motor.ts",
+      "exporterar": {
+        "MOTORVERSION": "MOTORVERSION",
+        "URVAL_FOR_KANSLIGHET": "URVAL_FOR_KANSLIGHET",
+        "Inputvariabel": "Inputvariabel",
+        "Outputdefinition": "Outputdefinition",
+        "Simuleringsspec": "Simuleringsspec",
+        "Sannolikheter": "Sannolikheter",
+        "Kanslighet": "Kanslighet",
+        "Konvergenspunkt": "Konvergenspunkt",
+        "Outputresultat": "Outputresultat",
+        "Kvalitetsanmarkning": "Kvalitetsanmarkning",
+        "Simuleringsresultat": "Simuleringsresultat",
+        "Korningsval": "Korningsval",
+        "Avbruten": "Avbruten",
+        "Specfel": "Specfel",
+        "valideraSpec": "valideraSpec",
+        "kor": "kor",
+        "TROSKEL_FOR_KO": "TROSKEL_FOR_KO",
+        "korDirekt": "korDirekt"
+      }
+    },
+    {
+      "modul": "src/lib/notifications.ts",
+      "exporterar": {
+        "NotificationItem": "NotificationItem",
+        "signatureOf": "signatureOf",
+        "NotificationInput": "NotificationInput",
+        "buildNotifications": "buildNotifications",
+        "NotificationCategory": "NotificationCategory",
+        "OPTIONAL_CATEGORIES": "OPTIONAL_CATEGORIES",
+        "categoryOf": "categoryOf",
+        "getNotificationPrefs": "getNotificationPrefs",
+        "setNotificationPref": "setNotificationPref",
+        "filterNotifications": "filterNotifications"
+      }
+    },
+    {
+      "modul": "src/lib/notifications/events.ts",
+      "exporterar": {
+        "SMS_SECRET_PROVIDER": "SMS_SECRET_PROVIDER",
+        "Channel": "Channel",
+        "ChannelSpec": "ChannelSpec",
+        "CHANNELS": "CHANNELS",
+        "channelSpec": "channelSpec",
+        "Severity": "Severity__notifications_events",
+        "EventKind": "EventKind",
+        "EventSpec": "EventSpec",
+        "EVENTS": "EVENTS",
+        "eventSpec": "eventSpec",
+        "severityOf": "severityOf",
+        "Level": "Level",
+        "LEVELS": "LEVELS",
+        "levelAllows": "levelAllows",
+        "PlanId": "PlanId",
+        "channelInPlan": "channelInPlan",
+        "planGateReason": "planGateReason",
+        "QuietHours": "QuietHours",
+        "DEFAULT_QUIET_HOURS": "DEFAULT_QUIET_HOURS",
+        "inQuietHours": "inQuietHours",
+        "localHour": "localHour",
+        "nextQuietEnd": "nextQuietEnd",
+        "DeliveryDecision": "DeliveryDecision",
+        "DeliveryContext": "DeliveryContext",
+        "decideDelivery": "decideDelivery",
+        "REASON_TEXT": "REASON_TEXT"
+      }
+    },
+    {
+      "modul": "src/lib/notifications/mailHtml.ts",
+      "exporterar": {
+        "escHtml": "escHtml",
+        "SAKER_LANK": "SAKER_LANK",
+        "trygLank": "trygLank"
+      }
+    },
+    {
+      "modul": "src/lib/notifications/messages.ts",
+      "exporterar": {
+        "SMS_SEGMENT_LIMIT": "SMS_SEGMENT_LIMIT",
+        "NotificationMessage": "NotificationMessage",
+        "MessageInput": "MessageInput",
+        "daysLeftPhrase": "daysLeftPhrase",
+        "buildMessage": "buildMessage",
+        "DedupeInput": "DedupeInput",
+        "dedupeKey": "dedupeKey",
+        "DEADLINE_THRESHOLDS": "DEADLINE_THRESHOLDS",
+        "thresholdFor": "thresholdFor"
+      }
+    },
+    {
+      "modul": "src/lib/notifications/phone.ts",
+      "exporterar": {
+        "normalisePhone": "normalisePhone",
+        "isMobileNumber": "isMobileNumber",
+        "formatPhone": "formatPhone",
+        "maskPhone": "maskPhone",
+        "VERIFICATION_CODE_LENGTH": "VERIFICATION_CODE_LENGTH",
+        "VERIFICATION_TTL_MINUTES": "VERIFICATION_TTL_MINUTES",
+        "VERIFICATION_MAX_ATTEMPTS": "VERIFICATION_MAX_ATTEMPTS",
+        "isVerificationCode": "isVerificationCode",
+        "verificationSms": "verificationSms"
+      }
+    },
+    {
+      "modul": "src/lib/notifications/status.ts",
+      "exporterar": {
+        "AVISERINGAR_HAR_PRODUCENT": "AVISERINGAR_HAR_PRODUCENT",
+        "AVISERINGAR_INTE_LIVE": "AVISERINGAR_INTE_LIVE"
+      }
+    },
+    {
+      "modul": "src/lib/notificationsRead.ts",
+      "exporterar": {
+        "READ_EVENT": "READ_EVENT",
+        "readSignatures": "readSignatures",
+        "markRead": "markRead",
+        "markAllRead": "markAllRead",
+        "forgetRead": "forgetRead",
+        "isRead": "isRead",
+        "badgeCount": "badgeCount",
+        "bellLabel": "bellLabel"
+      }
+    },
+    {
+      "modul": "src/lib/orgNumber.ts",
+      "exporterar": {
+        "formatOrgNumber": "formatOrgNumber",
+        "validateOrgNumber": "validateOrgNumber",
+        "lookupCompany": "lookupCompany"
+      }
+    },
+    {
+      "modul": "src/lib/portfolioSummary.ts",
+      "exporterar": {
+        "PortfolioCase": "PortfolioCase",
+        "PortfolioSummary": "PortfolioSummary",
+        "buildPortfolioSummary": "buildPortfolioSummary"
+      }
+    },
+    {
+      "modul": "src/lib/presentation.ts",
+      "exporterar": {
+        "PresentationMode": "PresentationMode",
+        "PRESENTATION_MODES": "PRESENTATION_MODES",
+        "getPresentationMode": "getPresentationMode",
+        "setPresentationMode": "setPresentationMode",
+        "getCompactScope": "getCompactScope",
+        "setCompactScope": "setCompactScope",
+        "BulletSection": "BulletSection",
+        "toBullets": "toBullets",
+        "TimelineRow": "TimelineRow",
+        "toTimelineRows": "toTimelineRows",
+        "CompactSummary": "CompactSummary",
+        "toCompact": "toCompact"
+      }
+    },
+    {
+      "modul": "src/lib/pricing.ts",
+      "exporterar": {
+        "CompanyPlan": "CompanyPlan",
+        "DEFAULT_COMPANY_PLAN": "DEFAULT_COMPANY_PLAN",
+        "PLAN_TIERS": "PLAN_TIERS",
+        "tierById": "tierById",
+        "nyttIniva": "nyttIniva",
+        "formatMonthly": "formatMonthly",
+        "formatPlanPrice": "formatPlanPrice",
+        "PLAN_TERMS": "PLAN_TERMS",
+        "firstPaymentDone": "firstPaymentDone",
+        "LOCKED_UNTIL_FIRST_PAYMENT": "LOCKED_UNTIL_FIRST_PAYMENT",
+        "lockMessage": "lockMessage"
+      }
+    },
+    {
+      "modul": "src/lib/proOffer.ts",
+      "exporterar": {
+        "proOfferSeen": "proOfferSeen",
+        "markProOfferSeen": "markProOfferSeen",
+        "smsTier": "smsTier",
+        "OFFER_SECONDS": "OFFER_SECONDS"
+      }
+    },
+    {
+      "modul": "src/lib/reports/builders.ts",
+      "exporterar": {
+        "CrisisReportInput": "CrisisReportInput",
+        "buildCrisisReport": "buildCrisisReport",
+        "KbrReportInput": "KbrReportInput",
+        "buildKbrReport": "buildKbrReport",
+        "LiquidityReportInput": "LiquidityReportInput",
+        "buildLiquidityReport": "buildLiquidityReport"
+      }
+    },
+    {
+      "modul": "src/lib/reports/pdf.ts",
+      "exporterar": {
+        "renderReportPdf": "renderReportPdf"
+      }
+    },
+    {
+      "modul": "src/lib/reports/render.ts",
+      "exporterar": {
+        "escapeHtml": "escapeHtml",
+        "renderReport": "renderReport"
+      }
+    },
+    {
+      "modul": "src/lib/reports/deliver.ts",
+      "exporterar": {
+        "DeliveryResult": "DeliveryResult",
+        "reportFileName": "reportFileName",
+        "downloadReportPdf": "downloadReportPdf",
+        "downloadReport": "downloadReport"
+      }
+    },
+    {
+      "modul": "src/lib/reports/invoiceDocuments.ts",
+      "exporterar": {
+        "invoiceFromCustomerRecord": "invoiceFromCustomerRecord",
+        "buildInvoiceDocument": "buildInvoiceDocument",
+        "buildReceiptDocument": "buildReceiptDocument"
+      }
+    },
+    {
+      "modul": "src/lib/signing.ts",
+      "exporterar": {
+        "SIGNATURE_STATEMENT": "SIGNATURE_STATEMENT",
+        "SIGNATURE_LIMITS": "SIGNATURE_LIMITS",
+        "SIGNATURE_STRENGTHS": "SIGNATURE_STRENGTHS",
+        "sha256Hex": "sha256Hex",
+        "formatFingerprint": "formatFingerprint",
+        "SignatureIntegrity": "SignatureIntegrity",
+        "checkIntegrity": "checkIntegrity",
+        "INTEGRITY_LABEL": "INTEGRITY_LABEL",
+        "isValidSignerName": "isValidSignerName",
+        "SignatureEvidence": "SignatureEvidence",
+        "signatureRecordHash": "signatureRecordHash",
+        "ChainStatus": "ChainStatus",
+        "verifyChain": "verifyChain",
+        "CHAIN_LABEL": "CHAIN_LABEL",
+        "formatSignedAt": "formatSignedAt"
+      }
+    },
+    {
+      "modul": "src/lib/reports/signatureDocument.ts",
+      "exporterar": {
+        "buildSignatureCertificate": "buildSignatureCertificate"
+      }
+    },
+    {
+      "modul": "src/lib/reports/timeBasis.ts",
+      "exporterar": {
+        "TimeBasisInput": "TimeBasisInput",
+        "buildTimeBasisReport": "buildTimeBasisReport"
+      }
+    },
+    {
+      "modul": "src/lib/sources/google.ts",
+      "exporterar": {
+        "GoogleBasis": "GoogleBasis",
+        "GoogleReviewSummary": "GoogleReviewSummary",
+        "GoogleStatus": "GoogleStatus",
+        "GoogleFacts": "GoogleFacts",
+        "CACHE_MAX_DAYS": "CACHE_MAX_DAYS",
+        "ATTRIBUTION": "ATTRIBUTION",
+        "normalizeName": "normalizeName",
+        "placeQuery": "placeQuery",
+        "PlaceCandidate": "PlaceCandidate",
+        "MatchResult": "MatchResult",
+        "matchPlace": "matchPlace",
+        "extractGoogleFacts": "extractGoogleFacts",
+        "reviewSignal": "reviewSignal",
+        "statusNote": "statusNote",
+        "googleNote": "googleNote"
+      }
+    },
+    {
+      "modul": "src/lib/sources/news.ts",
+      "exporterar": {
+        "NewsItem": "NewsItem",
+        "NewsHit": "NewsHit",
+        "parseFeed": "parseFeed",
+        "normaliseraNamn": "normaliseraNamn",
+        "namnGarAttMatcha": "namnGarAttMatcha",
+        "matchaPost": "matchaPost",
+        "sammanstall": "sammanstall",
+        "FeedOutcome": "FeedOutcome",
+        "newsNote": "newsNote"
+      }
+    },
+    {
+      "modul": "src/lib/sources/website.ts",
+      "exporterar": {
+        "RobotsRules": "RobotsRules",
+        "parseRobots": "parseRobots",
+        "mayFetch": "mayFetch",
+        "WebsiteFacts": "WebsiteFacts",
+        "extractWebsiteFacts": "extractWebsiteFacts",
+        "websiteNote": "websiteNote"
+      }
+    }
+  ]
+}

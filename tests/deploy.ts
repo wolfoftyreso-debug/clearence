@@ -134,6 +134,7 @@ const KORS_SEPARAT: Record<string, string> = {
   "test:webblasare": "Alla webbläsarprov. Kräver bygge, server och webbläsare.",
   "test:mobile": "Ingår i test:webblasare; kvar som genväg till enbart mobilsvepet.",
   "test:external": "Ingår i test:webblasare; kvar som genväg till enbart nätkontrollen.",
+  "test:motor": "Bygger om clearance-motor.ts och kör 28 sviter mot den extraherade filen. Tar minuter och rör inte produkten - den prövar att motorn går att lyfta ut hel.",
 };
 
 {

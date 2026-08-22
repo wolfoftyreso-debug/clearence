@@ -193,7 +193,7 @@ const KBRModule = () => {
     if (digits.length === 10 && validateOrgNumber(formatted)) {
       const requestId = ++lookupRequestId.current;
       updateField('companyLookupStatus', 'loading');
-      lookupCompany(formatted).then(info => {
+      lookupCompany(formatted, data.companyLookup).then(info => {
         if (lookupRequestId.current !== requestId) return;
         if (info) {
           updateField('companyInfo', info);

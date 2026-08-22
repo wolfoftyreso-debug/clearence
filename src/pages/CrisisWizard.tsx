@@ -197,7 +197,7 @@ const CrisisWizard = () => {
     if (digits.length === 10 && validateOrgNumber(formData.orgNumber)) {
       const requestId = ++lookupRequestId.current;
       updateField('companyLookupStatus', 'loading');
-      lookupCompany(formData.orgNumber).then(info => {
+      lookupCompany(formData.orgNumber, data.companyLookup).then(info => {
         if (lookupRequestId.current !== requestId) return;
         if (info) {
           updateField('companyInfo', info);

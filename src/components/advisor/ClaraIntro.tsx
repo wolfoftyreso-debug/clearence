@@ -272,7 +272,7 @@ export const ClaraIntro = ({
     }
     const requestId = ++lookupRequest.current;
     setLookupStatus("loading");
-    void lookupCompany(orgNumber).then((info) => {
+    void lookupCompany(orgNumber, data.companyLookup).then((info) => {
       if (lookupRequest.current !== requestId) return;
       if (!info) {
         setLookupStatus("error");

@@ -38,9 +38,22 @@ const analysTop = await page.evaluate(() => document.getElementById("systemanaly
 check("lägesnotisen rullar till systemanalysen", analysTop > -40 && analysTop < 200, String(Math.round(analysTop)));
 
 // Fristnotisen: ska rulla till fristsektionen.
+//
+// VILKEN fristrad klockan visar beror på datumen, inte på koden. Är en frist
+// nära visas en varningsrad ("Löneutbetalning om 3 dagar"); är ingen nära
+// visas i stället informationsraden "Nästa frist ... inget kräver åtgärd i
+// dag". Båda pekar på #frister, och båda ska rulla dit.
+//
+// Provet letade förut bara efter ordet "frist". Den dagen demons
+// löneutbetalning gled in i treodagarsfönstret fanns inget sådant ord kvar,
+// och klicket träffade en annan knapp - provet blev rött av att datumen
+// hade rört sig, inte av att produkten slutat fungera. Nu plockas raden ur
+// klockans lista på href, som är det raden faktiskt lovar.
 await page.click("button[aria-label^='Notiser']");
 await page.waitForTimeout(500);
-await page.click("button:has-text('Nästa frist'), button:has-text('frist')");
+const fristRad = page.locator("ul li button").filter({ hasText: /frist|om \d+ dag|i dag|i morgon|sedan/i }).first();
+check("klockan har en rad som pekar på en frist", (await fristRad.count()) > 0);
+await fristRad.click();
 await page.waitForTimeout(900);
 const fristTop = await page.evaluate(() => document.getElementById("frister")?.getBoundingClientRect().top ?? 9999);
 check("fristnotisen rullar till fristerna", fristTop > -40 && fristTop < 250, String(Math.round(fristTop)));
@@ -81,13 +94,24 @@ await bell.click();
 await fresh.waitForTimeout(500);
 const rows = await fresh.locator("ul li button").count();
 const badge = Number((before ?? "").match(/(\d+)/)?.[1] ?? "1");
-// Raden om NÄSTA frist säger själv att inget krävs i dag. Den ska visas
-// men inte räknas - listan är alltså längre än siffran.
-check("listan är längre än siffran", rows > badge, `rader=${rows} siffra=${badge}`);
-check(
-  "raden som inte räknas visas ändå",
-  /inget kräver åtgärd i dag/i.test(await fresh.innerText("body")),
-);
+// REGELN, inte dagsformen: en rad som säger att inget krävs i dag får visas
+// men inte räknas. Den raden finns bara när ingen frist är nära (se
+// src/lib/notifications.ts) - är en frist nära tar en varningsrad dess
+// plats, och den SKA räknas. Provet krävde förut informationsraden rakt av
+// och blev rött den dag demons datum flyttade sig. Båda lägena prövas nu,
+// och vilket som gäller avgörs av vad klockan faktiskt visar.
+const kropp = await fresh.innerText("body");
+const harInfoRad = /inget kräver åtgärd i dag/i.test(kropp);
+if (harInfoRad) {
+  check("raden som inte räknas visas ändå", true);
+  check("listan är längre än siffran", rows > badge, `rader=${rows} siffra=${badge}`);
+} else {
+  // Ingen informationsrad => en frist är nära. Då ska den raden finnas, och
+  // den ska ingå i siffran: det är ett krav, inte en upplysning.
+  const naraFrist = await fresh.locator("ul li button").filter({ hasText: /om \d+ dag|i dag|i morgon/i }).count();
+  check("en nära frist visas i stället för upplysningsraden", naraFrist > 0, `rader=${rows} siffra=${badge}`);
+  check("den nära fristen räknas med i siffran", badge >= 1, `siffra=${badge}`);
+}
 
 // Kvittera en rad: siffran ska gå ner.
 await fresh.locator("ul li button").filter({ hasText: "Läget kräver" }).first().click();

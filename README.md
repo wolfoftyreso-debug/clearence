@@ -43,6 +43,8 @@ npm run dev
 | `npm run lint` | Run ESLint |
 | `npm test` | Hela nodbatteriet: lint, typecheck och ~50 sviter. Sekunder. |
 | `npm run test:webblasare` | De fyrtio webbläsarproven i `tests/browser/`. Bygger i demoläge, startar en förhandsserver och kör alla. Minuter. |
+| `npm run motor` | Bygger `clearance-motor.ts` – hela domänlagret i en fil, för ett verktyg som ska byggas vid sidan av. |
+| `npm run test:motor` | Bygger om motorfilen, kräver att den var färsk, och kör 28 av produktens egna sviter MOT den extraherade filen. |
 
 **Webbläsarproven ingår INTE i `npm test`**, och det är ett medvetet val:
 de kräver ett bygge, en server och en webbläsare. Priset för det valet var
@@ -84,3 +86,30 @@ built-in demo data if the external lookup fails or is unavailable.
 
 To develop against your own Supabase project, run the migration in
 `supabase/migrations/` against it and point `.env` at its URL and anon key.
+
+## Motorn i en fil
+
+`npm run motor` skriver `clearance-motor.ts`: hela domänlagret – samtalsmotorn
+som vägleder, analyserna, guiderna, verktygen, rapportbyggarna, källorna,
+simuleringen och gallringen – plus kontraktet (`types.ts`, `ports.ts`) som
+säger vad en värd måste tillhandahålla. 88 moduler, ett enda yttre beroende,
+ingen React och ingen kunskap om vilken databas som ligger under.
+
+Den finns för att ett annat verktyg ska kunna byggas på samma motor utan att
+kopiera den för hand. `clearance-motor.register.json` säger vilken modul varje
+exporterat namn kom ur, och vad det heter i den platta filen – 33 namn
+deklarerades i mer än en modul (det finns fyra olika `daysBetween`, med olika
+signaturer) och de senare fick modulsuffix.
+
+TVÅ SAKER GÖR FILEN TROVÄRDIG, och de är hela poängen:
+
+* `npm run test:motor` bygger om filen och **avbryter om den inte var färsk** –
+  en genererad fil som ligger kvar medan källan ändras är värre än ingen alls,
+  för den ser aktuell ut.
+* Samma kommando kör sedan 28 av produktens egna sviter mot den extraherade
+  filen i stället för mot originalmodulerna, via en skuggmodul per importerad
+  sökväg. Går de gröna kommer varje funktion de rör ur den platta filen. Att
+  den kompilerar bevisar bara att den är syntaktiskt hel.
+
+Sju sviter körs inte den vägen och står uppräknade med skäl i skriptet – de
+prövar webbläsarlagret, API-kontraktet eller bygget, inte motorn.
