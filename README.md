@@ -114,9 +114,21 @@ TVÅ SAKER GÖR FILEN TROVÄRDIG, och de är hela poängen:
 Sju sviter körs inte den vägen och står uppräknade med skäl i skriptet – de
 prövar webbläsarlagret, API-kontraktet eller bygget, inte motorn.
 
-`exempel/proffsverktyg.ts` är startpunkten för verktyget vid sidan av: ett
-körbart praktikerexempel som bygger ENBART på den platta filen – egen lagring,
-egen `CompanyLookupPort`, och `analyseCrisis` → praktikerrapport → spelbok ut.
+`exempel/` är verktyget vid sidan av, i miniatyr men på riktigt:
+
+* `exempel/lager.ts` – verktygets EGEN lagringsport med två adaptrar: minne
+  för prov och en JSON-ärendemapp för byrån (en fil per akt, ingen databas).
+  Postgres den dag byrån vill är EN adapter till, inte en omskrivning. En akt
+  som inte går att läsa är ett fel med filnamn i – aldrig en tyst överhoppning.
+* `exempel/proffsverktyg.ts` – bygger ENBART på den platta filen. Utan
+  argument: demonstrationen med alla kontroller (disk-varv, egen
+  `CompanyLookupPort`, `analyseCrisis` → praktikerrapport → spelbok →
+  portfölj). Med en katalog som argument: byråns ärendemapp – portföljens
+  arbetsledarrader, rangordningen och en praktikerrapport per akt.
+
 `npm run exempel:proffsverktyg` kör det; `npm run test:motor` kräver att det
-fortsätter fungera. Exemplet kräver dessutom att praktikerns vy skiljer sig
-från bolagets – rollanpassningen är ett löfte, och löften testas.
+fortsätter fungera. Kontrollerna är krav, inte utskrifter: praktikerns vy
+måste skilja sig från bolagets (rollanpassningen är ett löfte), det akuta
+ärendet måste rankas före det stabila (severity räknas ur samma rapportbygge
+som ärendevyn, så siffrorna aldrig kan säga olika saker), och ett lager som
+tappar en akt tyst fälls av tre kontroller.
