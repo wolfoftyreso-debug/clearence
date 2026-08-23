@@ -1,0 +1,158 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&display=swap">
+  <style>
+    body { margin: 0; font-family: "DM Sans", system-ui, sans-serif; background: hsl(40 30% 98%); color: hsl(220 30% 15%); }
+    a { color: hsl(211 72% 27%); text-underline-offset: 2px; }
+    a:hover { color: hsl(220 45% 20%); }
+    .disp { font-family: "Archivo", "DM Sans", system-ui, sans-serif; }
+    .num { font-variant-numeric: tabular-nums; }
+  </style>
+</helmet>
+
+<div style="display: flex; flex-direction: column; gap: 20px; padding: 28px 32px 32px; background: hsl(40 30% 98%); box-sizing: border-box;">
+
+  <div style="border: 1px solid hsl(220 15% 88%); border-radius: 6px; background: #ffffff; padding: 24px; box-shadow: 0 1px 2px hsl(220 30% 15% / 0.05);">
+    <h2 class="disp" style="margin: 0 0 4px; font-size: 20px; font-weight: 600;">Handlingsplan</h2>
+    <p style="margin: 0; font-size: 14px; line-height: 1.65; color: hsl(220 15% 45%);">
+      Nordvik Bygg AB · uppdaterad i dag 09:14. Fristerna räknas ur ärendets uppgifter varje gång sidan öppnas.
+    </p>
+
+    <!-- DATUM SOM RÄKNAS NED -->
+    <div style="margin-top: 20px;">
+      <h3 style="display: flex; align-items: center; gap: 8px; margin: 0; font-size: 14px; font-weight: 700;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="hsl(211 72% 27%)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"></rect><path d="M8 2v4M16 2v4M3 10h18"></path><path d="M12 14v3l2 1"></path></svg>
+        Datum som räknas ned
+      </h3>
+
+      <ul style="display: flex; flex-direction: column; gap: 8px; margin: 10px 0 0; padding: 0; list-style: none;">
+
+        <!-- PASSERAD: fristfärg -->
+        <li style="border: 1px solid hsl(8 74% 36% / 0.4); border-left: 4px solid hsl(8 74% 36%); border-radius: 6px; background: hsl(8 74% 36% / 0.1); padding: 14px;">
+          <div style="display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 4px 12px;">
+            <span style="min-width: 0;">
+              <span style="display: block; font-size: 14px; font-weight: 600;">Arbetsgivaravgifter och skatt, förfallodag</span>
+              <span class="disp num" style="display: block; margin-top: 2px; font-size: 18px; font-weight: 600; white-space: nowrap;">418 000 kr</span>
+            </span>
+            <span style="text-align: right;">
+              <span class="num" style="display: block; font-size: 16px; font-weight: 700; white-space: nowrap; color: hsl(8 74% 36%);">6 dagar sedan</span>
+              <span style="display: block; font-size: 12px; white-space: nowrap; color: hsl(220 15% 45%);">12 mars</span>
+            </span>
+          </div>
+          <p style="margin: 6px 0 0; font-size: 12px; line-height: 1.6; color: hsl(220 15% 45%);">Ligger kvar tills betalning eller anstånd är på plats. Anstånd går fortfarande att söka.</p>
+        </li>
+
+        <!-- NÄRMAST, men inte akut: registerblå markering -->
+        <li style="border: 1px solid hsl(211 72% 27% / 0.4); border-left: 4px solid hsl(211 72% 27%); border-radius: 6px; background: hsl(211 72% 27% / 0.05); padding: 14px;">
+          <div style="display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 4px 12px;">
+            <span style="min-width: 0;">
+              <span style="display: block; font-size: 14px; font-weight: 600;">Första kontrollstämman, ABL 25 kap. 15 §</span>
+            </span>
+            <span style="text-align: right;">
+              <span class="num" style="display: block; font-size: 16px; font-weight: 700; white-space: nowrap; color: hsl(211 72% 27%);">om 24 dagar</span>
+              <span style="display: block; font-size: 12px; white-space: nowrap; color: hsl(220 15% 45%);">11 apr
+                <span style="margin-left: 6px; border-radius: 3px; background: hsl(211 72% 27%); padding: 2px 5px; font-size: 10px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: #ffffff;">Närmast</span>
+              </span>
+            </span>
+          </div>
+          <p style="margin: 6px 0 0; font-size: 12px; line-height: 1.6; color: hsl(220 15% 45%);">Kallelsen måste gå ut senast 28 mars. Beslutar stämman inte om likvidation löper åtta månader därifrån till en andra kontrollstämma (25 kap. 16 §).</p>
+        </li>
+
+        <!-- SNART: varningsfärg -->
+        <li style="border: 1px solid hsl(38 92% 50% / 0.5); border-left: 4px solid hsl(38 92% 50%); border-radius: 6px; background: hsl(38 92% 50% / 0.1); padding: 14px;">
+          <div style="display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 4px 12px;">
+            <span style="min-width: 0;">
+              <span style="display: block; font-size: 14px; font-weight: 600;">Banken vill ha besked om checkkrediten</span>
+              <span class="disp num" style="display: block; margin-top: 2px; font-size: 18px; font-weight: 600; white-space: nowrap;">1 500 000 kr</span>
+            </span>
+            <span style="text-align: right;">
+              <span class="num" style="display: block; font-size: 16px; font-weight: 700; white-space: nowrap; color: hsl(220 30% 15%);">om 9 dagar</span>
+              <span style="display: block; font-size: 12px; white-space: nowrap; color: hsl(220 15% 45%);">27 mars</span>
+            </span>
+          </div>
+          <p style="margin: 6px 0 0; font-size: 12px; line-height: 1.6; color: hsl(220 15% 45%);">Avtalad tid med handläggaren. Inte en lagstadgad frist — men den styr vad som är möjligt efter den.</p>
+        </li>
+
+        <!-- SENARE: neutral -->
+        <li style="border: 1px solid hsl(220 15% 88%); border-left: 4px solid hsl(220 15% 88%); border-radius: 6px; background: hsl(40 20% 94% / 0.3); padding: 14px;">
+          <div style="display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 4px 12px;">
+            <span style="min-width: 0;">
+              <span style="display: block; font-size: 14px; font-weight: 600;">Återvinningsfrist, betalning till närstående</span>
+            </span>
+            <span style="text-align: right;">
+              <span class="num" style="display: block; font-size: 16px; font-weight: 700; white-space: nowrap;">om 4 månader</span>
+              <span style="display: block; font-size: 12px; white-space: nowrap; color: hsl(220 15% 45%);">18 juli</span>
+            </span>
+          </div>
+        </li>
+      </ul>
+
+      <p style="margin: 10px 0 0; font-size: 12px; line-height: 1.6; color: hsl(220 15% 45%);">
+        Fristerna går inte att bocka av – en lagstadgad frist försvinner inte för att man känner sig klar med den. Passerade datum ligger kvar tills uppgifterna bakom dem är lösta.
+      </p>
+    </div>
+  </div>
+
+  <!-- UPPGIFTERNA -->
+  <div style="border: 1px solid hsl(220 15% 88%); border-radius: 6px; background: #ffffff; padding: 24px; box-shadow: 0 1px 2px hsl(220 30% 15% / 0.05);">
+    <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 16px;">
+      <div>
+        <h3 class="disp" style="margin: 0 0 2px; font-size: 18px; font-weight: 600;">Att göra</h3>
+        <p style="margin: 0; font-size: 14px; color: hsl(220 15% 45%);">En av fyra klar. Avbockningen loggas med vem och när.</p>
+      </div>
+      <button style="height: 36px; padding: 0 12px; border: 1px solid hsl(220 15% 88%); border-radius: 6px; background: #ffffff; font-family: inherit; font-size: 14px; font-weight: 500; color: hsl(220 30% 25%); cursor: pointer;">Lägg till uppgift</button>
+    </div>
+
+    <ul style="display: flex; flex-direction: column; gap: 0; margin: 16px 0 0; padding: 0; list-style: none;">
+      <li style="display: flex; align-items: flex-start; gap: 12px; border-bottom: 1px solid hsl(220 15% 88%); padding: 12px 0;">
+        <span style="display: flex; height: 18px; width: 18px; flex-shrink: 0; align-items: center; justify-content: center; border-radius: 3px; background: hsl(160 60% 40%); margin-top: 2px;">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg>
+        </span>
+        <span style="flex-grow: 1; min-width: 0;">
+          <span style="display: block; font-size: 14px; color: hsl(220 15% 45%); text-decoration: line-through;">Upprätta kontrollbalansräkning</span>
+          <span style="display: block; margin-top: 2px; font-size: 12px; color: hsl(220 15% 45%);">Bockad av Per Ohlsson · 3 mars 16:20</span>
+        </span>
+      </li>
+      <li style="display: flex; align-items: flex-start; gap: 12px; border-bottom: 1px solid hsl(220 15% 88%); padding: 12px 0;">
+        <span style="display: block; height: 18px; width: 18px; flex-shrink: 0; border: 1.5px solid hsl(220 15% 88%); border-radius: 3px; margin-top: 2px;"></span>
+        <span style="flex-grow: 1; min-width: 0;">
+          <span style="display: block; font-size: 14px; font-weight: 500;">Skicka kallelse till kontrollstämma</span>
+          <span style="display: block; margin-top: 2px; font-size: 12px; line-height: 1.5; color: hsl(220 15% 45%);">Utkastet är förberett i dokumenten. Senast 28 mars.</span>
+        </span>
+        <span style="display: flex; flex-shrink: 0; align-items: center; gap: 8px;">
+          <span style="border: 1px solid hsl(220 15% 88%); border-radius: 9999px; padding: 3px 9px; font-size: 11px; color: hsl(220 15% 45%);">Anna Lind</span>
+          <button style="height: 32px; padding: 0 12px; border: none; border-radius: 6px; background: hsl(211 72% 27%); font-family: inherit; font-size: 13px; font-weight: 500; color: #ffffff; cursor: pointer;">Öppna utkastet</button>
+        </span>
+      </li>
+      <li style="display: flex; align-items: flex-start; gap: 12px; border-bottom: 1px solid hsl(220 15% 88%); padding: 12px 0;">
+        <span style="display: block; height: 18px; width: 18px; flex-shrink: 0; border: 1.5px solid hsl(220 15% 88%); border-radius: 3px; margin-top: 2px;"></span>
+        <span style="flex-grow: 1; min-width: 0;">
+          <span style="display: block; font-size: 14px; font-weight: 500;">Ansök om anstånd med skatten</span>
+          <span style="display: block; margin-top: 2px; font-size: 12px; line-height: 1.5; color: hsl(220 15% 45%);">Underlaget hämtas ur skattekontot när kopplingen är på plats.</span>
+        </span>
+        <span style="display: flex; flex-shrink: 0; align-items: center; gap: 8px;">
+          <span style="border: 1px solid hsl(220 15% 88%); border-radius: 9999px; padding: 3px 9px; font-size: 11px; color: hsl(220 15% 45%);">Ingen ansvarig</span>
+        </span>
+      </li>
+      <li style="display: flex; align-items: flex-start; gap: 12px; padding: 12px 0 0;">
+        <span style="display: block; height: 18px; width: 18px; flex-shrink: 0; border: 1.5px solid hsl(220 15% 88%); border-radius: 3px; margin-top: 2px;"></span>
+        <span style="flex-grow: 1; min-width: 0;">
+          <span style="display: block; font-size: 14px; font-weight: 500;">Boka möte med banken före den 27 mars</span>
+        </span>
+        <span style="display: flex; flex-shrink: 0; align-items: center; gap: 8px;">
+          <span style="border: 1px solid hsl(220 15% 88%); border-radius: 9999px; padding: 3px 9px; font-size: 11px; color: hsl(220 15% 45%);">Anna Lind</span>
+        </span>
+      </li>
+    </ul>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

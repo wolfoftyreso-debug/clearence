@@ -1,0 +1,183 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&display=swap">
+  <style>
+    body { margin: 0; font-family: "DM Sans", system-ui, sans-serif; background: hsl(40 30% 98%); color: hsl(220 30% 15%); }
+    a { color: hsl(211 72% 27%); text-underline-offset: 2px; }
+    a:hover { color: hsl(220 45% 20%); }
+    .disp { font-family: "Archivo", "DM Sans", system-ui, sans-serif; }
+    .rubrik { margin: 0 0 12px; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: hsl(220 15% 45%); }
+    .ruta { border: 1px solid hsl(220 15% 88%); border-radius: 6px; background: #ffffff; padding: 22px; box-shadow: 0 1px 2px hsl(220 30% 15% / 0.05); }
+    .kod { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; color: hsl(220 15% 45%); }
+  </style>
+</helmet>
+
+<div style="display: flex; flex-direction: column; gap: 20px; padding: 32px; background: hsl(40 30% 98%); box-sizing: border-box;">
+
+  <div>
+    <h2 class="disp" style="margin: 0 0 4px; font-size: 22px; font-weight: 600;">Byggstenar</h2>
+    <p style="margin: 0; max-width: 760px; font-size: 14px; line-height: 1.65; color: hsl(220 15% 45%);">
+      Värdena är hämtade ur produktens egna tokens, inte avrundade. Platta ytor och tunna linjer: strukturen kommer ur linjer och luft, inte ur djupeffekter.
+    </p>
+  </div>
+
+  <!-- FÄRG -->
+  <div class="ruta">
+    <p class="rubrik">Färg – en färg, en betydelse</p>
+    <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px;">
+
+      <div>
+        <div style="height: 56px; border-radius: 6px; background: {{accent}};"></div>
+        <p style="margin: 8px 0 0; font-size: 13px; font-weight: 600;">Accent · registerblå</p>
+        <p class="kod" style="margin: 2px 0 0;">produktvärde 211 72% 27% · rutan följer reglaget</p>
+        <p style="margin: 4px 0 0; font-size: 12px; line-height: 1.5; color: hsl(220 15% 45%);">Handling och fokus. Hämtad ur ämnets värld: registerutdraget, domstolens sigill.</p>
+      </div>
+
+      <div>
+        <div style="height: 56px; border-radius: 6px; background: hsl(8 74% 36%);"></div>
+        <p style="margin: 8px 0 0; font-size: 13px; font-weight: 600;">Frist</p>
+        <p class="kod" style="margin: 2px 0 0;">8 74% 36%</p>
+        <p style="margin: 4px 0 0; font-size: 12px; line-height: 1.5; color: hsl(220 15% 45%);">Endast lagstadgade datum och löpande frister. Aldrig knappfyllnad, aldrig dekoration.</p>
+      </div>
+
+      <div>
+        <div style="height: 56px; border-radius: 6px; background: hsl(38 92% 50%);"></div>
+        <p style="margin: 8px 0 0; font-size: 13px; font-weight: 600;">Varning</p>
+        <p class="kod" style="margin: 2px 0 0;">38 92% 50%</p>
+        <p style="margin: 4px 0 0; font-size: 12px; line-height: 1.5; color: hsl(220 15% 45%);">Något närmar sig, men klockan är inte lagstadgad.</p>
+      </div>
+
+      <div>
+        <div style="height: 56px; border-radius: 6px; background: hsl(160 60% 40%);"></div>
+        <p style="margin: 8px 0 0; font-size: 13px; font-weight: 600;">Klart</p>
+        <p class="kod" style="margin: 2px 0 0;">160 60% 40%</p>
+        <p style="margin: 4px 0 0; font-size: 12px; line-height: 1.5; color: hsl(220 15% 45%);">Bekräftelse på något som faktiskt är gjort.</p>
+      </div>
+
+      <div>
+        <div style="height: 56px; border-radius: 6px; background: hsl(220 45% 20%);"></div>
+        <p style="margin: 8px 0 0; font-size: 13px; font-weight: 600;">Primär</p>
+        <p class="kod" style="margin: 2px 0 0;">220 45% 20%</p>
+      </div>
+      <div>
+        <div style="height: 56px; border-radius: 6px; background: hsl(40 30% 98%); border: 1px solid hsl(220 15% 88%);"></div>
+        <p style="margin: 8px 0 0; font-size: 13px; font-weight: 600;">Bakgrund</p>
+        <p class="kod" style="margin: 2px 0 0;">40 30% 98%</p>
+      </div>
+      <div>
+        <div style="height: 56px; border-radius: 6px; background: hsl(40 20% 94%);"></div>
+        <p style="margin: 8px 0 0; font-size: 13px; font-weight: 600;">Sekundär yta</p>
+        <p class="kod" style="margin: 2px 0 0;">40 20% 94%</p>
+      </div>
+      <div>
+        <div style="height: 56px; border-radius: 6px; background: hsl(220 15% 88%);"></div>
+        <p style="margin: 8px 0 0; font-size: 13px; font-weight: 600;">Linje</p>
+        <p class="kod" style="margin: 2px 0 0;">220 15% 88%</p>
+      </div>
+    </div>
+  </div>
+
+  <div style="display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 20px; align-items: start;">
+
+    <!-- TYPOGRAFI -->
+    <div class="ruta">
+      <p class="rubrik">Typografi – två röster</p>
+      <p class="disp" style="margin: 0; font-size: 28px; font-weight: 600; line-height: 1.25;">Archivo bär rubrikerna</p>
+      <p class="kod" style="margin: 4px 0 18px;">Archivo 600 · smalare, närmare ett myndighetstryck än en produktsajt</p>
+
+      <p style="margin: 0; font-size: 16px; line-height: 1.65;">DM Sans bär brödtexten och sifferkolumnerna. Öppnare i formen, och den läser bättre i långa tal.</p>
+      <p class="kod" style="margin: 4px 0 18px;">DM Sans 400 · 16/1.65</p>
+
+      <div style="display: flex; flex-wrap: wrap; gap: 22px; border-top: 1px solid hsl(220 15% 88%); padding-top: 16px;">
+        <span>
+          <span class="disp" style="display: block; font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums;">418 000 kr</span>
+          <span class="kod" style="display: block;">Belopp · tabellsiffror</span>
+        </span>
+        <span>
+          <span style="display: block; font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; color: hsl(8 74% 36%);">6 dagar sedan</span>
+          <span class="kod" style="display: block;">Nedräkning · fristfärg</span>
+        </span>
+        <span>
+          <span style="display: block; font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: hsl(220 15% 45%);">Därför frågar vi</span>
+          <span class="kod" style="display: block;">Etikett · 11/0.06em</span>
+        </span>
+      </div>
+    </div>
+
+    <!-- KNAPPAR -->
+    <div class="ruta">
+      <p class="rubrik">Knappar – 6 px radie, 40 px hög</p>
+      <div style="display: flex; flex-wrap: wrap; gap: 10px;">
+        <button style="height: 40px; padding: 0 16px; border: none; border-radius: 6px; background: hsl(220 45% 20%); font-family: inherit; font-size: 14px; font-weight: 500; color: hsl(40 30% 98%); cursor: pointer;">Primär</button>
+        <button style="height: 40px; padding: 0 16px; border: none; border-radius: 6px; background: {{accent}}; font-family: inherit; font-size: 14px; font-weight: 500; color: #ffffff; cursor: pointer;">Accent</button>
+        <button style="height: 40px; padding: 0 16px; border: 1px solid hsl(220 15% 88%); border-radius: 6px; background: hsl(40 30% 98%); font-family: inherit; font-size: 14px; font-weight: 500; color: hsl(220 30% 25%); cursor: pointer;">Kantad</button>
+        <button style="height: 40px; padding: 0 16px; border: none; border-radius: 6px; background: hsl(40 20% 94%); font-family: inherit; font-size: 14px; font-weight: 500; color: hsl(220 30% 25%); cursor: pointer;">Sekundär</button>
+      </div>
+      <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 12px;">
+        <button style="height: 36px; padding: 0 12px; border: 1px solid hsl(220 15% 88%); border-radius: 6px; background: #ffffff; font-family: inherit; font-size: 14px; font-weight: 500; color: hsl(220 30% 25%); cursor: pointer;">Liten · 36</button>
+        <button style="height: 48px; padding: 0 24px; border: none; border-radius: 6px; background: {{accent}}; font-family: inherit; font-size: 16px; font-weight: 500; color: #ffffff; cursor: pointer;">Stor · 48</button>
+        <button style="height: 40px; padding: 0 16px; border: none; border-radius: 6px; background: hsl(40 15% 92%); font-family: inherit; font-size: 14px; font-weight: 500; color: hsl(220 15% 45%); cursor: not-allowed;">Avstängd</button>
+      </div>
+      <p style="margin: 12px 0 0; font-size: 12px; line-height: 1.6; color: hsl(220 15% 45%);">
+        Den avstängda knappen byter fyllning i stället för att tona ut. En vit etikett som bleknar mot accentfärgen mäter 2,1:1; grå fyllning håller etiketten på 10:1 och läses som inaktiv för att den tappat sin färg.
+      </p>
+    </div>
+  </div>
+
+  <!-- FRISTRADEN I FYRA LÄGEN -->
+  <div class="ruta">
+    <p class="rubrik">Fristraden – fyra lägen, samma anatomi</p>
+    <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px;">
+
+      <div style="border: 1px solid hsl(8 74% 36% / 0.4); border-left: 4px solid hsl(8 74% 36%); border-radius: 6px; background: hsl(8 74% 36% / 0.1); padding: 14px;">
+        <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;">
+          <span style="font-size: 14px; font-weight: 600;">Passerad</span>
+          <span style="font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; color: hsl(8 74% 36%);">6 dagar sedan</span>
+        </div>
+        <p style="margin: 4px 0 0; font-size: 12px; color: hsl(220 15% 45%);">Ligger kvar överst. Ett olöst problem, inte historia.</p>
+      </div>
+
+      <div style="border: 1px solid hsl(211 72% 27% / 0.4); border-left: 4px solid hsl(211 72% 27%); border-radius: 6px; background: hsl(211 72% 27% / 0.05); padding: 14px;">
+        <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;">
+          <span style="font-size: 14px; font-weight: 600;">Närmast</span>
+          <span style="font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; color: hsl(211 72% 27%);">om 24 dagar</span>
+        </div>
+        <p style="margin: 4px 0 0; font-size: 12px; color: hsl(220 15% 45%);">Markeras även när inget är akut – blicken ska veta var den börjar.</p>
+      </div>
+
+      <div style="border: 1px solid hsl(38 92% 50% / 0.5); border-left: 4px solid hsl(38 92% 50%); border-radius: 6px; background: hsl(38 92% 50% / 0.1); padding: 14px;">
+        <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;">
+          <span style="font-size: 14px; font-weight: 600;">Snart</span>
+          <span style="font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums;">om 9 dagar</span>
+        </div>
+        <p style="margin: 4px 0 0; font-size: 12px; color: hsl(220 15% 45%);">Brådskar, men klockan är inte lagstadgad.</p>
+      </div>
+
+      <div style="border: 1px solid hsl(220 15% 88%); border-left: 4px solid hsl(220 15% 88%); border-radius: 6px; background: hsl(40 20% 94% / 0.3); padding: 14px;">
+        <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;">
+          <span style="font-size: 14px; font-weight: 600;">Senare</span>
+          <span style="font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums;">om 4 månader</span>
+        </div>
+        <p style="margin: 4px 0 0; font-size: 12px; color: hsl(220 15% 45%);">Neutral tills den närmar sig.</p>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script data-dc-script data-props='{"accent":{"editor":"color","default":"#134376","options":["#134376","#1d3557","#5b3a1e","#264d3b"],"section":"Färg"}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const accent = this.props.accent ?? "#134376";
+    return { accent };
+  }
+}
+</script>
+</body>
+</html>

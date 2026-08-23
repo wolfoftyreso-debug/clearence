@@ -1,0 +1,125 @@
+{
+  "artboards": [
+    {
+      "file": "Landningssida.dc.html",
+      "title": "Landningssida",
+      "x": 0,
+      "y": 0,
+      "w": 1200,
+      "h": 1560,
+      "page": "page-1",
+      "print": "flow"
+    },
+    {
+      "file": "Main.dc.html",
+      "title": "Samtalet",
+      "x": 1320,
+      "y": 0,
+      "w": 1180,
+      "h": 940,
+      "page": "page-1"
+    },
+    {
+      "file": "Handlingsplan.dc.html",
+      "title": "Handlingsplan",
+      "x": 1320,
+      "y": 1060,
+      "w": 1180,
+      "h": 1180,
+      "page": "page-1"
+    },
+    {
+      "file": "Aviseringar.dc.html",
+      "title": "Aviseringar",
+      "x": 2620,
+      "y": 0,
+      "w": 760,
+      "h": 1300,
+      "page": "page-1"
+    },
+    {
+      "file": "Driftpanel.dc.html",
+      "title": "Drift · Gallring",
+      "x": 2620,
+      "y": 1420,
+      "w": 1180,
+      "h": 1220,
+      "page": "page-1"
+    },
+    {
+      "file": "Priser.dc.html",
+      "title": "Priser",
+      "x": 0,
+      "y": 1700,
+      "w": 1200,
+      "h": 1020,
+      "page": "page-1"
+    },
+    {
+      "file": "HandlingsplanMobil.dc.html",
+      "title": "Handlingsplan · mobil",
+      "x": 0,
+      "y": 2860,
+      "w": 390,
+      "h": 844,
+      "page": "page-1"
+    },
+    {
+      "file": "Byggstenar.dc.html",
+      "title": "Byggstenar",
+      "x": 0,
+      "y": 0,
+      "w": 1240,
+      "h": 1080,
+      "page": "page-2"
+    }
+  ],
+  "annotations": [
+    {
+      "id": "fristfargen",
+      "x": 1320,
+      "y": -190,
+      "w": 420,
+      "page": "page-1",
+      "text": "Fristfärgen (8 74% 36%) bär BARA lagstadgade datum och löpande frister.\nAldrig knappfyllnad, aldrig dekoration – en färg ska betyda exakt en sak, annars slutar den betyda något."
+    },
+    {
+      "id": "priser-drift",
+      "x": -500,
+      "y": 1700,
+      "w": 420,
+      "page": "page-1",
+      "text": "[PRIS] är avsiktligt oifyllt. Priser är driftparametrar och står aldrig i koden; 985 kr är dagens värde för Standard."
+    },
+    {
+      "id": "aviseringar-status",
+      "x": 2620,
+      "y": -190,
+      "w": 420,
+      "page": "page-1",
+      "text": "Förbehållet överst är inte en brasklapp: ingen produktionskod skapar aviseringar än, så varken klockan, mejlen eller SMS:en går i gång. Raden försvinner när det ändras."
+    },
+    {
+      "id": "byggstenar-not",
+      "x": 0,
+      "y": -150,
+      "w": 460,
+      "page": "page-2",
+      "text": "Värden lyfta ur produktens tokens, inte avrundade: 6 px radie, Archivo för rubrik, DM Sans för brödtext och siffror, platta ytor utan gradienter.\nAccentfärgen är en reglage-tweak här – ändra den och hela arket följer med."
+    }
+  ],
+  "launch": {
+    "view": "canvas",
+    "page": "page-1"
+  },
+  "pages": [
+    {
+      "id": "page-1",
+      "name": "Produktytor"
+    },
+    {
+      "id": "page-2",
+      "name": "Byggstenar"
+    }
+  ]
+}

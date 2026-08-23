@@ -1,0 +1,154 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&display=swap">
+  <style>
+    body { margin: 0; font-family: "DM Sans", system-ui, sans-serif; background: hsl(40 30% 98%); color: hsl(220 30% 15%); }
+    a { color: hsl(211 72% 27%); text-underline-offset: 2px; }
+    a:hover { color: hsl(220 45% 20%); }
+    .disp { font-family: "Archivo", "DM Sans", system-ui, sans-serif; }
+    .num { font-variant-numeric: tabular-nums; }
+    th { text-align: left; font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: hsl(220 15% 45%); padding: 0 12px 8px 0; }
+    td { font-size: 13px; padding: 11px 12px 11px 0; border-top: 1px solid hsl(220 15% 88%); vertical-align: top; }
+  </style>
+</helmet>
+
+<div style="display: flex; flex-direction: column; gap: 20px; padding: 28px 32px 32px; background: hsl(40 30% 98%); box-sizing: border-box;">
+
+  <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 16px;">
+    <div>
+      <h2 class="disp" style="margin: 0 0 2px; font-size: 20px; font-weight: 600;">Drift · Gallring</h2>
+      <p style="margin: 0; font-size: 14px; color: hsl(220 15% 45%);">GDPR art. 5.1 e. Tiderna är driftparametrar, inte kodrader.</p>
+    </div>
+    <span style="display: inline-flex; align-items: center; gap: 6px; border: 1px solid hsl(220 15% 88%); border-radius: 4px; background: #ffffff; padding: 5px 9px; font-size: 12px; color: hsl(220 15% 45%);">Senaste körning i natt 03:15</span>
+  </div>
+
+  <!-- POLICYN -->
+  <div style="border: 1px solid hsl(220 15% 88%); border-radius: 6px; background: #ffffff; padding: 24px; box-shadow: 0 1px 2px hsl(220 30% 15% / 0.05);">
+    <h3 class="disp" style="margin: 0 0 4px; font-size: 17px; font-weight: 600;">Gallringspolicy</h3>
+    <p style="margin: 0 0 4px; font-size: 14px; line-height: 1.65; color: hsl(220 15% 45%);">
+      1 kategori gallrar skarpt, 4 i skuggläge (räknas, gallras inte), 1 behålls för spårbarhet.
+    </p>
+    <p style="margin: 0 0 16px; font-size: 12px; line-height: 1.65; color: hsl(220 15% 45%);">
+      Gallring slås på per kategori av en människa, inte automatiskt. I skuggläge körs samma fråga och raderna räknas utan att något raderas – siffran nedan är alltså den siffra som faktiskt gallras den dag kategorin slås på.
+    </p>
+
+    <table style="width: 100%; border-collapse: collapse;">
+      <thead>
+        <tr>
+          <th style="width: 34%;">Kategori</th>
+          <th style="width: 13%;">Sparas</th>
+          <th style="width: 18%;">Åtgärd när påslaget</th>
+          <th style="width: 20%;">Läge</th>
+          <th style="width: 15%; text-align: right; padding-right: 0;">Rader</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>
+            <span style="display: block; font-weight: 600;">Hastighetsgränsens loggrader</span>
+            <span style="display: block; margin-top: 2px; font-size: 12px; line-height: 1.5; color: hsl(220 15% 45%);">IP-adress är en personuppgift. Behövs bara en kort stund för att räkna anrop.</span>
+          </td>
+          <td class="num">0 mån</td>
+          <td>Raderas</td>
+          <td><span style="border-radius: 3px; background: hsl(160 60% 40% / 0.12); padding: 3px 8px; font-size: 11px; font-weight: 600; color: hsl(160 60% 25%);">Skarpt</span></td>
+          <td class="num" style="text-align: right; padding-right: 0;">12 480</td>
+        </tr>
+        <tr>
+          <td>
+            <span style="display: block; font-weight: 600;">Lästa notiser</span>
+            <span style="display: block; margin-top: 2px; font-size: 12px; line-height: 1.5; color: hsl(220 15% 45%);">En läst och kvitterad notis behöver inte sparas i åratal.</span>
+          </td>
+          <td class="num">6 mån</td>
+          <td>Raderas</td>
+          <td><span style="border-radius: 3px; background: hsl(40 15% 92%); padding: 3px 8px; font-size: 11px; font-weight: 600; color: hsl(220 15% 45%);">Skuggläge</span></td>
+          <td class="num" style="text-align: right; padding-right: 0;">341</td>
+        </tr>
+        <tr>
+          <td>
+            <span style="display: block; font-weight: 600;">Utgångna delningslänkar</span>
+            <span style="display: block; margin-top: 2px; font-size: 12px; line-height: 1.5; color: hsl(220 15% 45%);">Åtkomstloggen som hör till länken behålls – se händelseloggen.</span>
+          </td>
+          <td class="num">3 mån</td>
+          <td>Raderas</td>
+          <td><span style="border-radius: 3px; background: hsl(40 15% 92%); padding: 3px 8px; font-size: 11px; font-weight: 600; color: hsl(220 15% 45%);">Skuggläge</span></td>
+          <td class="num" style="text-align: right; padding-right: 0;">27</td>
+        </tr>
+        <tr>
+          <td>
+            <span style="display: block; font-weight: 600;">Samtalsfritext i avslutade ärenden</span>
+            <span style="display: block; margin-top: 2px; font-size: 12px; line-height: 1.5; color: hsl(220 15% 45%);">Posten och tidslinjen står kvar; innehållet som kan peka ut en person tas bort.</span>
+          </td>
+          <td class="num">24 mån</td>
+          <td>Anonymiseras</td>
+          <td><span style="border-radius: 3px; background: hsl(40 15% 92%); padding: 3px 8px; font-size: 11px; font-weight: 600; color: hsl(220 15% 45%);">Skuggläge</span></td>
+          <td class="num" style="text-align: right; padding-right: 0;">8</td>
+        </tr>
+        <tr>
+          <td>
+            <span style="display: block; font-weight: 600;">Kontaktuppgifter på stängda konton</span>
+            <span style="display: block; margin-top: 2px; font-size: 12px; line-height: 1.5; color: hsl(220 15% 45%);">Fakturor och bokföringsunderlag berörs inte – de har egna lagringskrav.</span>
+          </td>
+          <td class="num">24 mån</td>
+          <td>Anonymiseras</td>
+          <td><span style="border-radius: 3px; background: hsl(40 15% 92%); padding: 3px 8px; font-size: 11px; font-weight: 600; color: hsl(220 15% 45%);">Skuggläge</span></td>
+          <td class="num" style="text-align: right; padding-right: 0;">3</td>
+        </tr>
+        <tr>
+          <td>
+            <span style="display: block; font-weight: 600;">Händelseloggen</span>
+            <span style="display: block; margin-top: 2px; font-size: 12px; line-height: 1.5; color: hsl(220 15% 45%);">Ärendets svarta låda. Spårbarheten väger tyngre än gallringen.</span>
+          </td>
+          <td style="color: hsl(220 15% 45%);">Ingen gräns</td>
+          <td>Behålls</td>
+          <td><span style="border: 1px solid hsl(220 15% 88%); border-radius: 3px; padding: 3px 8px; font-size: 11px; font-weight: 600; color: hsl(220 15% 45%);">Gallras aldrig</span></td>
+          <td class="num" style="text-align: right; padding-right: 0; color: hsl(220 15% 45%);">—</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- AVVISAD DRIFTPARAMETER -->
+  <div style="border: 1px solid hsl(0 65% 55% / 0.45); border-left: 4px solid hsl(0 65% 55%); border-radius: 6px; background: hsl(0 65% 55% / 0.08); padding: 18px 20px;">
+    <p style="margin: 0; display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600;">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="hsl(0 65% 45%)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0;"><path d="M12 9v4M12 17h.01"></path><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path></svg>
+      Ändringen sparades inte
+    </p>
+    <p style="margin: 6px 0 0; font-size: 13px; line-height: 1.65;">
+      <span style="font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px;">notiser_lasta.months</span> – negativa månader ger ett brytdatum i framtiden, och ett brytdatum i framtiden hade gallrat allt.
+    </p>
+    <p style="margin: 6px 0 0; font-size: 12px; line-height: 1.6; color: hsl(220 15% 45%);">
+      Den tidigare policyn gäller fortfarande. Rätta värdet och spara om.
+    </p>
+  </div>
+
+  <!-- KÖRNINGEN -->
+  <div style="border: 1px solid hsl(220 15% 88%); border-radius: 6px; background: #ffffff; padding: 24px; box-shadow: 0 1px 2px hsl(220 30% 15% / 0.05);">
+    <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 16px;">
+      <div>
+        <h3 class="disp" style="margin: 0 0 2px; font-size: 17px; font-weight: 600;">Nattens körning</h3>
+        <p style="margin: 0; font-size: 13px; color: hsl(220 15% 45%);">Gallring, sedan raderingar på begäran (art. 17).</p>
+      </div>
+      <button style="height: 36px; padding: 0 12px; border: 1px solid hsl(220 15% 88%); border-radius: 6px; background: #ffffff; font-family: inherit; font-size: 14px; font-weight: 500; color: hsl(220 30% 25%); cursor: pointer;">Visa hela loggen</button>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 0; margin-top: 14px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; line-height: 1.9; color: hsl(220 30% 25%);">
+      <span>gallring: 1 kategori gallrar skarpt, 4 i skuggläge, 1 behålls för spårbarhet.</span>
+      <span>&nbsp;&nbsp;hastighetsgrans: 12 480 rad(er) raderade efter 0 mån</span>
+      <span>&nbsp;&nbsp;notiser_lasta: skuggläge – 341 rad(er) SKULLE raderas efter 6 mån</span>
+      <span>&nbsp;&nbsp;delningslankar_utgangna: skuggläge – 27 rad(er) SKULLE raderas efter 3 mån</span>
+      <span>&nbsp;&nbsp;samtalsjournal_avslutad: skuggläge – 8 rad(er) SKULLE anonymiseras efter 24 mån</span>
+      <span>&nbsp;&nbsp;kontakt_avslutade_konton: skuggläge – 3 rad(er) SKULLE anonymiseras efter 24 mån</span>
+      <span>&nbsp;&nbsp;handelselogg: behålls för spårbarhet, gallras inte på tid.</span>
+      <span>radering: ingen begäran har passerat sin karenstid.</span>
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>
