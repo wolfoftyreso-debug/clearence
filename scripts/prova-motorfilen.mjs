@@ -50,10 +50,14 @@ const HOPPAS_OVER = {
  * eller ändrat direkt i den genererade filen; båda ska stoppa här.
  */
 {
+  // Datumstämpeln undantas från jämförelsen. Utan det blev filen "gammal"
+  // vid varje dygnsskifte utan att en rad kod ändrats - och en
+  // färskhetskontroll som skriker varje midnatt lär folk att ignorera den.
+  const utanStampel = (t) => t.replace(/Genererad \d{4}-\d{2}-\d{2}/, "Genererad");
   const fore = existsSync(join(rot, "clearance-motor.ts")) ? readFileSync(join(rot, "clearance-motor.ts"), "utf8") : "";
   execFileSync("node", [join(rot, "scripts/extrahera-motor.mjs")], { stdio: "ignore" });
   const efter = readFileSync(join(rot, "clearance-motor.ts"), "utf8");
-  if (fore !== efter) {
+  if (utanStampel(fore) !== utanStampel(efter)) {
     console.error("AVBRYTER: clearance-motor.ts var inte färsk. Den är nu ombyggd ur modulerna –");
     console.error("granska diffen och kör om provet.");
     process.exit(1);
@@ -130,6 +134,29 @@ for (const svit of SVITER) {
     const fel = utdata.split("\n").filter((r) => /^FAIL|Error|passed/.test(r)).slice(0, 2).join(" | ");
     console.log(`  ${svit.padEnd(22)} RÖD     ${fel.slice(0, 110)}`);
     rott.push(svit); roda++;
+  }
+}
+
+/*
+ * PROFFSVERKTYGET. Sviterna ovan bevisar att motorn fungerar ur filen;
+ * exemplet bevisar att den går att BYGGA PÅ - att en utomstående med egen
+ * lagring och egen port får ut analys, praktikerrapport och spelbok. Det är
+ * det löfte filen finns för, så det prövas här och inte bara i en README.
+ */
+{
+  const ut = join(rot, "node_modules/.cache", "motorprov-exempel.cjs");
+  try {
+    await esbuild.build({
+      entryPoints: [join(rot, "exempel/proffsverktyg.ts")], bundle: true,
+      platform: "node", format: "cjs", outfile: ut, logLevel: "silent",
+    });
+    execFileSync("node", [ut], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+    console.log(`  ${"exempel/proffsverktyg".padEnd(22)} ok      bygger på filen med egen lagring och egen port`);
+    gronna++;
+  } catch (e) {
+    const utdata = `${e.stdout ?? ""}${e.stderr ?? ""}${e.message ?? ""}`;
+    console.log(`  ${"exempel/proffsverktyg".padEnd(22)} RÖD     ${utdata.split("\n").filter(Boolean).slice(0, 2).join(" | ").slice(0, 110)}`);
+    rott.push("exempel/proffsverktyg"); roda++;
   }
 }
 

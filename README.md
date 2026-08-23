@@ -113,3 +113,10 @@ TVÅ SAKER GÖR FILEN TROVÄRDIG, och de är hela poängen:
 
 Sju sviter körs inte den vägen och står uppräknade med skäl i skriptet – de
 prövar webbläsarlagret, API-kontraktet eller bygget, inte motorn.
+
+`exempel/proffsverktyg.ts` är startpunkten för verktyget vid sidan av: ett
+körbart praktikerexempel som bygger ENBART på den platta filen – egen lagring,
+egen `CompanyLookupPort`, och `analyseCrisis` → praktikerrapport → spelbok ut.
+`npm run exempel:proffsverktyg` kör det; `npm run test:motor` kräver att det
+fortsätter fungera. Exemplet kräver dessutom att praktikerns vy skiljer sig
+från bolagets – rollanpassningen är ett löfte, och löften testas.

@@ -1,7 +1,7 @@
 /**
  * CLEARANCE - MOTORN, I EN FIL.
  *
- * Genererad 2026-08-22 av scripts/extrahera-motor.mjs ur arbetsträdet.
+ * Genererad 2026-08-23 av scripts/extrahera-motor.mjs ur arbetsträdet.
  * REDIGERA INTE HÄR. Ändringar hör hemma i modulerna filen byggs av;
  * annars glider originalet och kopian isär, och kopian vinner aldrig.
  *
