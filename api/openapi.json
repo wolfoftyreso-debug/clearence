@@ -682,6 +682,167 @@
             }
           }
         }
+      },
+      "post": {
+        "operationId": "issueCustomerInvoice",
+        "summary": "Ställ ut en kundfaktura",
+        "description": "FAKTURANUMRET SÄTTS I DATABASEN. Förut räknades max + 1 fram i webbläsaren; två samtidiga utställanden läste samma max, och den obrutna serie Skatteverket kräver låg i händerna på en klient. Databasfunktionen tar seriens lås, prövar formkraven i 17 kap. 24 § mervärdesskattelagen och behörigheten.",
+        "x-status": "beta",
+        "responses": {
+          "201": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "userId",
+                  "description",
+                  "netOre",
+                  "vatOre",
+                  "vatRate",
+                  "dueAt",
+                  "customerName",
+                  "customerAddress"
+                ],
+                "properties": {
+                  "userId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "description": {
+                    "type": "string",
+                    "maxLength": 500
+                  },
+                  "netOre": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "vatOre": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "vatRate": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  "dueAt": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "customerName": {
+                    "type": "string",
+                    "maxLength": 300
+                  },
+                  "customerOrgNumber": {
+                    "type": "string",
+                    "maxLength": 20,
+                    "nullable": true
+                  },
+                  "customerAddress": {
+                    "type": "string",
+                    "maxLength": 500
+                  },
+                  "periodStart": {
+                    "type": "string",
+                    "format": "date",
+                    "nullable": true
+                  },
+                  "periodEnd": {
+                    "type": "string",
+                    "format": "date",
+                    "nullable": true
+                  },
+                  "recipientEmail": {
+                    "type": "string",
+                    "format": "email",
+                    "nullable": true
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/billing/invoices/{invoiceId}/payment": {
+      "post": {
+        "operationId": "registerInvoicePayment",
+        "summary": "Registrera en inbetalning",
+        "description": "Skapar kvittonumret och ÖPPNAR KONTOT IGEN. Lämnas closed_at kvar hålls en betalande kund utelåst - det värsta felet i kedjan, eftersom den som betalat har all anledning att tro att saken är utagerad.",
+        "x-status": "beta",
+        "parameters": [
+          {
+            "name": "invoiceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Fakturans id."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "paidAt"
+                ],
+                "properties": {
+                  "paidAt": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "reference": {
+                    "type": "string",
+                    "maxLength": 200,
+                    "nullable": true
+                  },
+                  "recipientEmail": {
+                    "type": "string",
+                    "format": "email",
+                    "nullable": true,
+                    "description": "Vart kvittot mejlas. Null = ingen adress känd; kvittot finns ändå i inloggningen."
+                  }
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/billing/mine": {
@@ -812,8 +973,131 @@
       },
       "post": {
         "operationId": "createCase",
-        "summary": "Skapa ärende (motsvarar nulägesanalysens registrering)",
-        "x-status": "planerad",
+        "summary": "Skapa ett ärende",
+        "description": "user_id sätts av SERVERN ur sessionen, aldrig ur kroppen - annars kunde en inloggad skapa ett ärende i någon annans namn. Ett TOMT anrop ger ett minimalt ärende: handlingsplanen behöver någonstans att bo redan innan användaren fyllt i något.",
+        "x-status": "beta",
+        "responses": {
+          "201": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [],
+                "properties": {
+                  "orgNumber": {
+                    "type": "string",
+                    "maxLength": 20
+                  },
+                  "companyName": {
+                    "type": "string",
+                    "maxLength": 200
+                  },
+                  "employees": {
+                    "type": "integer",
+                    "nullable": true
+                  },
+                  "canPaySalary": {
+                    "type": "boolean",
+                    "nullable": true
+                  },
+                  "salaryAmount": {
+                    "type": "number",
+                    "nullable": true
+                  },
+                  "salaryDay": {
+                    "type": "integer",
+                    "nullable": true
+                  },
+                  "canPayTax": {
+                    "type": "boolean",
+                    "nullable": true
+                  },
+                  "taxAmount": {
+                    "type": "number",
+                    "nullable": true
+                  },
+                  "taxDay": {
+                    "type": "integer",
+                    "nullable": true
+                  },
+                  "canPayRent": {
+                    "type": "boolean",
+                    "nullable": true
+                  },
+                  "rentAmount": {
+                    "type": "number",
+                    "nullable": true
+                  },
+                  "rentDay": {
+                    "type": "integer",
+                    "nullable": true
+                  },
+                  "canPaySuppliers": {
+                    "type": "boolean",
+                    "nullable": true
+                  },
+                  "totalDebt": {
+                    "type": "number",
+                    "nullable": true
+                  },
+                  "quickLiquidationValue": {
+                    "type": "number",
+                    "nullable": true
+                  },
+                  "recommendationType": {
+                    "type": "string",
+                    "maxLength": 60
+                  },
+                  "recommendationTitle": {
+                    "type": "string",
+                    "maxLength": 300
+                  },
+                  "recommendationDescription": {
+                    "type": "string",
+                    "maxLength": 4000
+                  },
+                  "recommendationReasons": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "maxItems": 50
+                  },
+                  "recommendationNextSteps": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "maxItems": 50
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/company-lookup": {
+      "post": {
+        "operationId": "companyLookup",
+        "summary": "Slå upp ett bolag på organisationsnummer",
+        "description": "KRÄVER INLOGGNING, trots att uppgifterna är offentliga: rutten hämtar en extern sida på anroparens vägnar, och en öppen sådan är en proxy vem som helst kan låna. Numret måste vara exakt tio siffror - då finns ingen adress att styra om anropet till. Ett null-svar är giltigt: registret har inte alla bolag.",
+        "x-status": "beta",
         "responses": {
           "200": {
             "description": "OK"
@@ -829,7 +1113,26 @@
             }
           }
         },
-        "description": "PLANERAD: egna API:t svarar 405 i dag. Ärenden skapas genom Supabase-bryggan tills skrivvägen har ägarskap, radskydd och en minimal-form som stämmer med wizarden."
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "orgNumber"
+                ],
+                "properties": {
+                  "orgNumber": {
+                    "type": "string",
+                    "maxLength": 20,
+                    "description": "Tio siffror, med eller utan bindestreck."
+                  }
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/cases/{caseId}": {
@@ -3465,6 +3768,145 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/documents/{documentId}": {
+      "delete": {
+        "operationId": "removeDocument",
+        "summary": "Radera en handling",
+        "description": "RADEN FÖRST, FILEN SEDAN. Går objektborttagningen fel blir resultatet en fil ingen pekar på - städbart. Tvärtom blir resultatet en rad som pekar på ingenting, och en handling i listan som inte går att öppna.",
+        "x-status": "beta",
+        "parameters": [
+          {
+            "name": "documentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Handlingens id."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/documents/{documentId}/signatures": {
+      "get": {
+        "operationId": "listDocumentSignatures",
+        "summary": "Signaturerna på en handling",
+        "description": "Läsningen prövas med samma fråga som nedladdningen (app.may_read_document). Utan den kunde vem som helst räkna upp vilka som skrivit under någon annans styrelseprotokoll.",
+        "x-status": "beta",
+        "parameters": [
+          {
+            "name": "documentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Handlingens id."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/documents/{documentId}/signature": {
+      "post": {
+        "operationId": "signDocument",
+        "summary": "Signera en handling",
+        "description": "Klienten räknar fram kontrollsumman ur de bytes den faktiskt VISAT för användaren - det är den handlingen som signeras, inte en rad i en tabell. Tidpunkten, behörigheten och statusprövningen bor i databasfunktionen; ett utkast kan aldrig signeras.",
+        "x-status": "beta",
+        "parameters": [
+          {
+            "name": "documentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Handlingens id."
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "signerName",
+                  "contentSha256",
+                  "statementVersion",
+                  "statementText"
+                ],
+                "properties": {
+                  "signerName": {
+                    "type": "string",
+                    "maxLength": 200
+                  },
+                  "contentSha256": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{64}$"
+                  },
+                  "statementVersion": {
+                    "type": "string",
+                    "maxLength": 40
+                  },
+                  "statementText": {
+                    "type": "string",
+                    "maxLength": 4000
+                  }
                 }
               }
             }

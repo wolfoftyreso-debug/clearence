@@ -348,14 +348,12 @@ check(
  */
 {
   const ANNU_INTE_BYGGDA: Record<string, string> = {
-    "POST /cases":
-      "Ärenden skapas i dag genom Supabase-bryggan, inte genom egna servern. Skrivvägen behöver ägarskap, radskydd och en minimal-form som stämmer med wizarden.",
     "PATCH /cases/{caseId}":
       "Samma sak: ändringen går genom bryggan. Fältlistan i kontraktet är bredare än det egna servern hittills tagit emot.",
     "PATCH /cases/{caseId}/tasks":
       "Uppgifter ändras i dag med POST /tasks/{taskId}/done och POST /tasks/{taskId}/assign. Kontraktets PATCH är en samlad form som ingen klient använder ännu.",
     "GET /cases/{caseId}/report":
-      "Renderar en PDF, vilket kräver dokumenthinken och signeringen. Samma skäl som documents.upload.",
+      "Renderar en PDF på servern. Klienten bygger den redan lokalt ur samma underlag (src/lib/pdf), så rutten är en bekvämlighet för API-kunder - inte något produkten saknar.",
   };
 
   const implementerade = new Set(metodPar.map(([m, r]) => `${m.toUpperCase()} ${somKontraktet(r)}`));

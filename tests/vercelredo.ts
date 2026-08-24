@@ -186,6 +186,27 @@ check(
   { klientenLaddarUpp, cspTillaterBlob },
 );
 
+/*
+ * OCH VIDGNINGEN SKA VARA SÅ SMAL SOM DEN KAN VARA.
+ *
+ * `connect-src *` hade också fått raden ovan grön. Det som prövas här är
+ * att undantaget gäller Blob-värdarna och ingenting annat - en jokertecken
+ * i connect-src öppnar för att en injicerad skript kan skicka en hel akt
+ * vart som helst.
+ */
+if (klientenLaddarUpp) {
+  const connect = /connect-src([^;]*)/.exec(csp)?.[1] ?? "";
+  check("connect-src har ingen joker", !/\*(?!\.blob)/.test(connect), connect.trim());
+  check(
+    "och släpper bara in Blob-värdarna utöver det egna ursprunget",
+    connect
+      .trim()
+      .split(/\s+/)
+      .every((k) => k === "'self'" || /blob\.vercel-storage\.com$/.test(k)),
+    connect.trim(),
+  );
+}
+
 check("CSP tillåter inga främmande skript", /script-src[^;]*'unsafe-eval'/.test(csp) === false);
 check("sidan får inte ramas in", /frame-ancestors 'none'/.test(csp));
 

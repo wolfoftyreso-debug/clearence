@@ -334,7 +334,31 @@ check("catch-allen kapar /api-prefixet före routern", /replace\(\/\^\\\/api/.te
   );
   check("CSP: allt från samma ursprung som utgångsläge", direktiv.get("default-src") === "'self'");
   check("CSP: sidan får inte ramas in", direktiv.get("frame-ancestors") === "'none'");
-  check("CSP: inga externa anrop", direktiv.get("connect-src") === "'self'");
+  /*
+   * CONNECT-SRC: EGET URSPRUNG PLUS DOKUMENTLAGRINGEN, INGET ANNAT.
+   *
+   * Raden krävde `'self'` och ingenting mer, vilket var rätt så länge
+   * klienten bara läste. Uppladdningen är en `fetch(..., {method:"PUT"})`
+   * mot Vercel Blobs kontroll-API - ett annat ursprung, alltså
+   * connect-src. Utan undantaget blockerar webbläsaren den tyst.
+   *
+   * Undantaget räknas upp VID NAMN. En jokerregel hade också fått raden
+   * grön och samtidigt öppnat för att ett injicerat skript skickar en hel
+   * akt vart som helst.
+   */
+  const TILLATNA_MOTTAGARE = [
+    "'self'",
+    "https://blob.vercel-storage.com",
+    "https://*.blob.vercel-storage.com",
+  ];
+  const connect = (direktiv.get("connect-src") ?? "").trim().split(/\s+/).filter(Boolean);
+  check(
+    "CSP: connect-src är eget ursprung plus dokumentlagringen",
+    connect.length > 0 && connect.every((k) => TILLATNA_MOTTAGARE.includes(k)),
+    connect.join(" "),
+  );
+  check("CSP: eget ursprung finns med", connect.includes("'self'"));
+  check("CSP: ingen joker i connect-src", !connect.some((k) => k === "*" || k === "https:"));
   check("CSP: base-uri låst", direktiv.get("base-uri") === "'self'");
   check("CSP: formulär går bara hem", direktiv.get("form-action") === "'self'");
   /*

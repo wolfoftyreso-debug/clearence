@@ -77,6 +77,17 @@ import { ApiRequestError, apiFetch, clearToken, getToken, setToken } from "./cli
  * migreringsmätare - den ska växa tills delegeringen kan tas bort.
  */
 export const MIGRATED_PORTS = [
+  "cases.listMine",
+  "cases.select",
+  "cases.create",
+  "cases.createMinimal",
+  "documents.upload",
+  "documents.remove",
+  "documents.listSignatures",
+  "documents.sign",
+  "billing.issueInvoice",
+  "billing.registerPayment",
+  "companyLookup.lookup",
   "auth.getCurrentUser",
   "auth.onAuthChange",
   "auth.signUp",
@@ -256,6 +267,36 @@ const cases = {
   async setPlanApproval(caseId: string, approved: boolean): Promise<void> {
     await apiFetch(`/v1/cases/${caseId}/plan-approval`, { method: "POST", body: { approved } });
   },
+  async listMine(): Promise<CaseRecord[]> {
+    const res = await apiFetch<{ cases: CaseRecord[] }>("/v1/cases");
+    return res.cases;
+  },
+  /**
+   * ETT RENT KLIENTVAL, med flit.
+   *
+   * Vilket ärende praktikern tittar på är inte en uppgift som hör hemma i
+   * databasen - den ändras dussintals gånger per session och säger inget
+   * om behörighet. ÅTKOMSTEN prövas alltid i radskyddet när ärendet
+   * hämtas; det här valet kan alltså inte öppna något.
+   */
+  select(caseId: string | null): void {
+    try {
+      if (caseId) localStorage.setItem(AKTIVT_ARENDE, caseId);
+      else localStorage.removeItem(AKTIVT_ARENDE);
+    } catch {
+      // Privat läge eller full lagring. Valet faller tillbaka på senaste
+      // ärendet, vilket är rätt utfall - inte ett fel att visa.
+    }
+  },
+  async create(input: Parameters<DataPort["cases"]["create"]>[0]): Promise<CaseRecord> {
+    // userId skickas INTE med: servern tar den ur sessionen. Skickades den
+    // kunde en inloggad skapa ett ärende i någon annans namn.
+    const { userId: _userId, ...falt } = input;
+    return apiFetch<CaseRecord>("/v1/cases", { method: "POST", body: falt });
+  },
+  async createMinimal(): Promise<CaseRecord> {
+    return apiFetch<CaseRecord>("/v1/cases", { method: "POST", body: {} });
+  },
 };
 
 /**
@@ -424,12 +465,89 @@ const documents = {
       throw err;
     }
   },
-  // upload ligger kvar: den kräver en PUT-signering mot S3, som byggs när
-  // uppladdningsvägen migreras (samma hink, andra riktningen).
+  /**
+   * UPPLADDNINGEN I TVÅ STEG, som API:t vill ha den.
+   *
+   * 1. Servern skapar dokumentraden som EJ BEKRÄFTAD och signerar en
+   *    kortlivad PUT-URL. Sökvägen byggs av servern, aldrig av klienten.
+   * 2. Filen läggs på den URL:en - direkt till lagringen, inte genom
+   *    API:t. Serverlösa funktioner har ett kroppstak på några megabyte;
+   *    en årsredovisning ryms inte igenom.
+   * 3. Servern LÄSER TILLBAKA filens första bytes och prövar signaturen
+   *    mot den utlovade typen. Godkänns den inte tas den bort igen.
+   *
+   * Det är steg 3 som gör kontrollen till en kontroll: filnamn, ändelse
+   * och Content-Type skriver avsändaren själv, och en .pdf som egentligen
+   * är en binär ser likadan ut i alla tre.
+   */
+  async upload(input: Parameters<DataPort["documents"]["upload"]>[0]): Promise<DocumentRecord> {
+    const typ = input.file.type || "application/octet-stream";
+    const start = await apiFetch<{ documentId: string; uploadUrl: string }>(
+      `/v1/cases/${input.caseId}/documents`,
+      {
+        method: "POST",
+        body: { fileName: input.file.name, mimeType: typ, fileSize: input.file.size },
+      },
+    );
+
+    const lagt = await fetch(start.uploadUrl, {
+      method: "PUT",
+      body: input.file,
+      headers: { "content-type": typ },
+    });
+    if (!lagt.ok) {
+      throw new ApiRequestError(lagt.status, "upload_failed", "Filen kunde inte läggas i lagringen.");
+    }
+
+    await apiFetch(`/v1/documents/${start.documentId}/confirm`, { method: "POST" });
+
+    const lista = await apiFetch<{ documents: DocumentRecord[] }>(
+      `/v1/cases/${input.caseId}/documents`,
+    );
+    const skapad = lista.documents.find((d) => d.id === start.documentId);
+    if (!skapad) throw new ApiRequestError(404, "not_found", "Dokumentet skapades men kunde inte läsas tillbaka.");
+    return skapad;
+  },
+  async remove(id: string): Promise<void> {
+    await apiFetch(`/v1/documents/${id}`, { method: "DELETE" });
+  },
+  async listSignatures(documentId: string) {
+    const res = await apiFetch<{ signatures: unknown[] }>(`/v1/documents/${documentId}/signatures`);
+    return res.signatures as Awaited<ReturnType<DataPort["documents"]["listSignatures"]>>;
+  },
+  async sign(input: Parameters<DataPort["documents"]["sign"]>[0]) {
+    return apiFetch<Awaited<ReturnType<DataPort["documents"]["sign"]>>>(
+      `/v1/documents/${input.documentId}/signature`,
+      {
+        method: "POST",
+        body: {
+          signerName: input.signerName,
+          contentSha256: input.contentSha256,
+          statementVersion: input.statementVersion,
+          statementText: input.statementText,
+        },
+      },
+    );
+  },
 };
 
 const billing = {
   ...supabaseAdapter.billing,
+  async issueInvoice(
+    input: Parameters<DataPort["billing"]["issueInvoice"]>[0],
+  ): Promise<CustomerInvoiceRecord> {
+    return apiFetch<CustomerInvoiceRecord>("/v1/billing/invoices", { method: "POST", body: input });
+  },
+  async registerPayment(input: Parameters<DataPort["billing"]["registerPayment"]>[0]): Promise<void> {
+    await apiFetch(`/v1/billing/invoices/${input.invoiceId}/payment`, {
+      method: "POST",
+      body: {
+        paidAt: input.paidAt,
+        reference: input.reference,
+        recipientEmail: input.recipientEmail,
+      },
+    });
+  },
   async getMine(): Promise<AccountBillingRecord> {
     const res = await apiFetch<{ billing: AccountBillingRecord }>("/v1/billing/mine");
     return res.billing;
@@ -1044,6 +1162,30 @@ const audit = {
  * MIGRATED_PORTS täcker hela DataPort tas den raden bort, och då är
  * "inte Supabase" sant hela vägen.
  */
+/**
+ * BOLAGSUPPSLAGET.
+ *
+ * Låg som en Supabase Edge Function. Ett null är ett giltigt svar, inte
+ * ett fel: registret har inte alla bolag, och formuläret ska då låta
+ * användaren skriva själv i stället för att visa något rött.
+ */
+const companyLookup = {
+  async lookup(orgNumber: string) {
+    try {
+      const res = await apiFetch<{ company: unknown }>("/v1/company-lookup", {
+        method: "POST",
+        body: { orgNumber },
+      });
+      return res.company as Awaited<ReturnType<DataPort["companyLookup"]["lookup"]>>;
+    } catch {
+      return null;
+    }
+  },
+};
+
+/** Vilket ärende praktikern tittar på. Ett rent klientval - se cases.select. */
+const AKTIVT_ARENDE = "clearance-active-case";
+
 /* --- auth: hela gruppen mot eget API ------------------------------------- */
 
 /**
@@ -1231,6 +1373,7 @@ export const sistKandAnvandare = (): AuthUser | null => sistKanda;
 export const awsAdapterUtanBro: DataPort = {
   ...supabaseAdapter,
   auth: auth as DataPort["auth"],
+  companyLookup: companyLookup as DataPort["companyLookup"],
   contact: contact as DataPort["contact"],
   billing: billing as DataPort["billing"],
   ops: ops as DataPort["ops"],

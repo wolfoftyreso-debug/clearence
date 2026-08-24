@@ -64,6 +64,9 @@ import {
   type RetentionOverride,
 } from "../src/lib/retention";
 import { withAnon, withUser, type Tx } from "./db";
+import { slaUppBolag } from "./bolag";
+import { invoiceEmail, receiptEmail } from "../src/lib/email/messages";
+import { COMPANY } from "../src/lib/company";
 import { loggaFel } from "./logg";
 import { hashPassword, issueToken, sessionTtlHours, sha256, verifyPassword } from "./auth";
 
@@ -3991,6 +3994,469 @@ export const KONTORUTTER = new Set([
   "/v1/auth/password-reset",
   "/v1/auth/password",
 ]);
+
+
+/* --- Ärendet skapas: den sista rutten wizarden saknade ------------------- */
+
+/**
+ * NYTT ÄRENDE.
+ *
+ * Stod som `x-status: "planerad"` i kontraktet och svarade 405. Klienten
+ * skapade i stället ärendet direkt mot Supabase - vilket gjorde att hela
+ * onboardingen band produkten till en backend den skulle bort ifrån.
+ *
+ * `user_id` sätts av SERVERN ur sessionen, aldrig ur kroppen. Skickades
+ * det in kunde en inloggad skapa ett ärende i någon annans namn, och
+ * radskyddet hade sett det som ett giltigt ärende för den andre.
+ *
+ * Ett tomt anrop ger ett MINIMALT ärende (bara org_number = ""). Det är
+ * inte en gissning: handlingsplanen behöver någonstans att bo redan innan
+ * användaren fyllt i något, och `createMinimal` i DataPort är precis det.
+ */
+router.post("/v1/cases", async (req) => {
+  const caller = await authenticate(req);
+  const kropp = (req.body ?? {}) as Record<string, unknown>;
+
+  const orgNumber = str(req.body, "orgNumber", { max: 20, required: false }) || "";
+  const companyName = str(req.body, "companyName", { max: 200, required: false }) || null;
+
+  /*
+   * Kolumnerna är TEXT, inte numeriska. Det är wizardens fält rakt av -
+   * "ungefär 180 000" är ett svar den tar emot. Här kapas de bara till en
+   * rimlig längd; tolkningen görs av beloppsläsaren i klienten.
+   */
+  const talText = (falt: string): string | null => {
+    const v = kropp[falt];
+    if (v === null || v === undefined || v === "") return null;
+    return String(v).slice(0, 100);
+  };
+  const dag = (falt: string): number | null => {
+    const v = kropp[falt];
+    if (v === null || v === undefined || v === "") return null;
+    const n = Number(v);
+    if (!Number.isInteger(n) || n < 1 || n > 31) throw badRequest(`${falt} måste vara en dag i månaden.`);
+    return n;
+  };
+  const jaNej = (falt: string): boolean | null => {
+    const v = kropp[falt];
+    if (v === null || v === undefined) return null;
+    if (typeof v !== "boolean") throw badRequest(`${falt} måste vara true eller false.`);
+    return v;
+  };
+  // jsonb-kolumner, NOT NULL med [] som standard. En tom lista är alltså
+  // rätt tomvärde här - inte null.
+  const jsonLista = (falt: string): string => {
+    const v = kropp[falt];
+    if (v === null || v === undefined) return "[]";
+    if (!Array.isArray(v)) throw badRequest(`${falt} måste vara en lista.`);
+    if (v.length > 50) throw badRequest(`${falt} får ha högst 50 poster.`);
+    return JSON.stringify(v.map((x) => String(x).slice(0, 500)));
+  };
+
+  /*
+   * ID:T SÄTTS HÄR, OCH RADEN LÄSES TILLBAKA I ETT EGET STEG.
+   *
+   * `insert ... returning` går INTE att använda på public.cases. Skälet är
+   * ordningen: RETURNING prövas mot SELECT-policyn (has_case_access) i
+   * samma ögonblick som raden skrivs - men det som ger skaparen åtkomst är
+   * triggern cases_add_creator_as_owner, och den är AFTER INSERT. När
+   * RETURNING prövas är skaparen alltså ännu inte medlem i sitt eget
+   * ärende, och svaret blir "new row violates row-level security policy".
+   *
+   * Insert utan RETURNING lyckas. Läsningen efteråt, i samma transaktion,
+   * sker när triggern har kört - och då är åtkomsten på plats.
+   *
+   * Det här kostade en halvtimmes felsökning för att felmeddelandet pekar
+   * på WITH CHECK-villkoret, som var uppfyllt hela tiden.
+   */
+  const nyttId = randomUUID();
+  const row = await withUser(caller.userId, async (tx) => {
+    await tx.query(
+      `insert into public.cases
+         (id, user_id, org_number, company_name, employees,
+          can_pay_salary, salary_amount, salary_day,
+          can_pay_tax, tax_amount, tax_day,
+          can_pay_rent, rent_amount, rent_day,
+          can_pay_suppliers, total_debt, quick_liquidation_value,
+          recommendation_type, recommendation_title, recommendation_description,
+          recommendation_reasons, recommendation_next_steps)
+       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17,
+               $18, $19, $20, $21::jsonb, $22::jsonb)`,
+      [
+        nyttId,
+        caller.userId,
+        orgNumber,
+        companyName,
+        talText("employees"),
+        jaNej("canPaySalary"),
+        talText("salaryAmount"),
+        dag("salaryDay"),
+        jaNej("canPayTax"),
+        talText("taxAmount"),
+        dag("taxDay"),
+        jaNej("canPayRent"),
+        talText("rentAmount"),
+        dag("rentDay"),
+        jaNej("canPaySuppliers"),
+        talText("totalDebt"),
+        talText("quickLiquidationValue"),
+        str(req.body, "recommendationType", { max: 60, required: false }) || null,
+        str(req.body, "recommendationTitle", { max: 300, required: false }) || null,
+        str(req.body, "recommendationDescription", { max: 4000, required: false }) || null,
+        jsonLista("recommendationReasons"),
+        jsonLista("recommendationNextSteps"),
+      ],
+    );
+    const { rows } = await tx.query(
+      `select id, org_number, company_name, employees,
+              can_pay_salary, salary_amount, salary_day,
+              can_pay_tax, tax_amount, tax_day,
+              can_pay_rent, rent_amount, rent_day,
+              can_pay_suppliers, total_debt, quick_liquidation_value,
+              recommendation_type, recommendation_title, recommendation_description,
+              recommendation_reasons, recommendation_next_steps,
+              created_at, updated_at, closed_at, exit_reason,
+              health_mode, plan_approved_at, plan_approved_by
+         from public.cases where id = $1`,
+      [nyttId],
+    );
+    return rows[0] ?? null;
+  });
+  if (!row) throw forbidden("Ärendet kunde inte skapas.");
+  return { status: 201, body: toCase(row) };
+});
+
+/* --- Dokumenten: signering, signaturlista, radering ---------------------- */
+
+/**
+ * SIGNATURERNA PÅ EN HANDLING.
+ *
+ * Läsningen prövas med samma fråga som nedladdningen: app.may_read_document.
+ * Utan den kunde vem som helst räkna upp vilka som skrivit under någon
+ * annans styrelseprotokoll.
+ */
+router.get("/v1/documents/:documentId/signatures", async (req) => {
+  const caller = await authenticate(req);
+  const documentId = uuidParam(req, "documentId");
+  const rows = await withUser(caller.userId, async (tx) => {
+    const may = await tx.query("select app.may_read_document($1, false) as ok", [documentId]);
+    if (may.rows[0]?.ok !== true) return null;
+    const r = await tx.query(
+      `select id, document_id, signer_user_id, signer_name, signer_email,
+              statement_version, statement_text, content_sha256, signed_at
+         from public.document_signatures
+        where document_id = $1
+        order by signed_at asc`,
+      [documentId],
+    );
+    return r.rows;
+  });
+  if (rows === null) throw notFound("Dokumentet finns inte, eller är inte ditt.");
+  return {
+    status: 200,
+    body: {
+      signatures: rows.map((r) => ({
+        id: r.id,
+        documentId: r.document_id,
+        signerUserId: r.signer_user_id,
+        signerName: r.signer_name,
+        signerEmail: r.signer_email,
+        statementVersion: r.statement_version,
+        statementText: r.statement_text,
+        contentSha256: r.content_sha256,
+        signedAt: iso(r.signed_at),
+      })),
+    },
+  };
+});
+
+/**
+ * SIGNERINGEN.
+ *
+ * Klienten räknar fram kontrollsumman ur de bytes den faktiskt VISAT för
+ * användaren - det är den handlingen som signeras, inte en rad i en
+ * tabell. Tidpunkten, behörigheten och statusprövningen bor i
+ * app.sign_document; en signatur vars tidsstämpel klienten satt bevisar
+ * ingenting.
+ */
+router.post("/v1/documents/:documentId/signature", async (req) => {
+  const caller = await authenticate(req);
+  const documentId = uuidParam(req, "documentId");
+  const signerName = str(req.body, "signerName", { max: 200 });
+  const contentSha256 = str(req.body, "contentSha256", { max: 64 });
+  if (!/^[0-9a-f]{64}$/.test(contentSha256)) {
+    throw badRequest("contentSha256 måste vara 64 hexadecimala tecken.");
+  }
+  const statementVersion = str(req.body, "statementVersion", { max: 40 });
+  const statementText = str(req.body, "statementText", { max: 4000 });
+
+  const row = await withUser(caller.userId, async (tx) => {
+    const { rows } = await tx.query(
+      "select * from public.sign_document($1, $2, $3, $4, $5)",
+      [documentId, signerName, contentSha256, statementVersion, statementText],
+    );
+    return rows[0] ?? null;
+  });
+  if (!row) throw notFound("Dokumentet finns inte, eller går inte att signera.");
+  return {
+    status: 201,
+    body: {
+      id: row.id,
+      documentId: row.document_id,
+      signerUserId: row.signer_user_id,
+      signerName: row.signer_name,
+      signerEmail: row.signer_email,
+      statementVersion: row.statement_version,
+      statementText: row.statement_text,
+      contentSha256: row.content_sha256,
+      signedAt: iso(row.signed_at),
+    },
+  };
+});
+
+/**
+ * RADERING AV EN HANDLING.
+ *
+ * RADEN FÖRST, FILEN SEDAN. Går objektborttagningen fel blir resultatet en
+ * fil ingen pekar på - städbart. Gjordes det tvärtom blev resultatet en rad
+ * som pekar på ingenting, och en användare som ser en handling i listan
+ * som inte går att öppna.
+ *
+ * Radskyddet avgör om raderingen får ske: `delete` på case_documents kräver
+ * skrivroll i ärendet. Noll rader raderade = 404, samma tystnad som resten.
+ */
+router.del("/v1/documents/:documentId", async (req) => {
+  const caller = await authenticate(req);
+  const documentId = uuidParam(req, "documentId");
+  const vag = await withUser(caller.userId, async (tx) => {
+    const { rows } = await tx.query(
+      "delete from public.case_documents where id = $1 returning storage_path",
+      [documentId],
+    );
+    return (rows[0]?.storage_path as string | undefined) ?? null;
+  });
+  if (!vag) throw notFound("Dokumentet finns inte, eller är inte ditt.");
+  if (storageConfigured()) await taBortObjekt(vag).catch(() => undefined);
+  return { status: 200, body: { removed: true } };
+});
+
+
+
+/**
+ * KÖAR ETT MEJL I UTKORGEN.
+ *
+ * Raden skapas i samma anrop som det den handlar om; en arbetare skickar
+ * och skriver tillbaka resultatet. Insert-policyn kräver plattformsadmin,
+ * så behörigheten prövas av radskyddet och inte av den här funktionen -
+ * en icke-admin får noll rader, inte ett tyst utskick.
+ */
+const koaMejl = async (
+  callerUserId: string,
+  brev: { recipient: string; subject: string; bodyText: string; bodyHtml: string; kind: string },
+  fakturaId: string | null,
+): Promise<void> => {
+  await withUser(callerUserId, async (tx) => {
+    await tx.query(
+      `insert into public.outbound_emails
+         (recipient, subject, body_text, body_html, kind, related_invoice_id)
+       values ($1, $2, $3, $4, $5, $6)`,
+      [brev.recipient, brev.subject, brev.bodyText, brev.bodyHtml, brev.kind, fakturaId],
+    );
+  });
+};
+
+
+/* --- Kundfakturan: ställs ut, betalas, kvitteras ------------------------- */
+
+/**
+ * FAKTURANUMRET SÄTTS I DATABASEN, INTE HÄR.
+ *
+ * Förut läste klienten alla befintliga nummer, räknade max + 1 i
+ * webbläsaren och skrev in det. Två samtidiga utställanden läste samma max
+ * och båda försökte skriva samma nummer; unikhetsvillkoret räddade datan
+ * men gav ett ogenomskinligt fel, och den obrutna serie Skatteverket kräver
+ * låg i händerna på en klient.
+ *
+ * app.issue_customer_invoice tar seriens lås, prövar formkraven (17 kap.
+ * 24 § mervärdesskattelagen) och behörigheten, och returnerar raden.
+ */
+router.post("/v1/billing/invoices", async (req) => {
+  const caller = await authenticate(req);
+  const userId = str(req.body, "userId", { max: 64 });
+  const description = str(req.body, "description", { max: 500 });
+  const kropp = (req.body ?? {}) as Record<string, unknown>;
+  const ore = (falt: string): number => {
+    const n = Number(kropp[falt]);
+    if (!Number.isInteger(n) || n < 0) throw badRequest(`${falt} måste vara ett heltal i öre.`);
+    return n;
+  };
+  const vatRate = Number(kropp.vatRate);
+  if (!Number.isFinite(vatRate) || vatRate < 0 || vatRate > 1) {
+    throw badRequest("vatRate måste vara en andel mellan 0 och 1.");
+  }
+
+  const row = await withUser(caller.userId, async (tx) => {
+    const { rows } = await tx.query(
+      `select * from public.issue_customer_invoice($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+      [
+        userId,
+        description,
+        ore("netOre"),
+        ore("vatOre"),
+        vatRate,
+        str(req.body, "dueAt", { max: 40 }),
+        str(req.body, "customerName", { max: 300 }),
+        str(req.body, "customerOrgNumber", { max: 20, required: false }) || null,
+        str(req.body, "customerAddress", { max: 500 }),
+        str(req.body, "periodStart", { max: 40, required: false }) || null,
+        str(req.body, "periodEnd", { max: 40, required: false }) || null,
+      ],
+    );
+    return rows[0] ?? null;
+  });
+  if (!row) throw forbidden("Fakturan kunde inte ställas ut.");
+
+  // Förfallodagen följer med till kontot, annars stängs en kund vars
+  // faktura fått ny förfallodag på den gamla.
+  await withUser(caller.userId, async (tx) => {
+    await tx.query("update public.account_billing set due_at = $2 where user_id = $1", [
+      userId,
+      str(req.body, "dueAt", { max: 40 }),
+    ]);
+  });
+
+  const faktura = toCustomerInvoice(row);
+  const mottagare = str(req.body, "recipientEmail", { max: 320, required: false }) || null;
+  if (mottagare) {
+    const profil = await withUser(caller.userId, async (tx) => {
+      const { rows } = await tx.query(
+        "select display_name from public.user_profiles where user_id = $1",
+        [userId],
+      );
+      return (rows[0]?.display_name as string | undefined) ?? null;
+    });
+    await koaMejl(
+      caller.userId,
+      invoiceEmail({
+        invoiceNumber: String(faktura.invoiceNumber),
+        issuedAt: String(faktura.issuedAt),
+        dueAt: String(faktura.dueAt),
+        seller: COMPANY,
+        customer: {
+          name: profil ?? mottagare,
+          orgNumber: null,
+          email: mottagare,
+          address: null,
+        },
+        lines: [
+          { description: String(faktura.description), quantity: 1, unitPriceOre: faktura.netOre },
+        ],
+        note: null,
+        totals: {
+          netOre: faktura.netOre,
+          vatOre: faktura.vatOre,
+          grossOre: faktura.grossOre,
+          vatRate: faktura.vatRate,
+        },
+      }),
+      String(faktura.id),
+    );
+  }
+  return { status: 201, body: faktura };
+});
+
+/**
+ * INBETALNINGEN.
+ *
+ * BETALNING ÖPPNAR KONTOT IGEN. Lämnas `closed_at` kvar hålls en betalande
+ * kund utelåst - det värsta felet i hela kedjan, eftersom den som betalat
+ * har all anledning att tro att saken är utagerad.
+ */
+router.post("/v1/billing/invoices/:invoiceId/payment", async (req) => {
+  const caller = await authenticate(req);
+  const invoiceId = uuidParam(req, "invoiceId");
+  const paidAt = str(req.body, "paidAt", { max: 40 });
+  const reference = str(req.body, "reference", { max: 200, required: false }) || null;
+
+  const faktura = await withUser(caller.userId, async (tx) => {
+    const { rows } = await tx.query("select * from public.customer_invoices where id = $1", [
+      invoiceId,
+    ]);
+    const rad = rows[0];
+    if (!rad) return null;
+    const uppdaterad = await tx.query(
+      `update public.customer_invoices
+          set status = 'paid', paid_at = $2, payment_reference = $3, receipt_number = $4
+        where id = $1
+        returning *`,
+      [invoiceId, paidAt, reference, `K-${String(rad.invoice_number)}`],
+    );
+    if (uppdaterad.rows.length === 0) return null;
+    await tx.query(
+      "update public.account_billing set paid_at = $2, closed_at = null where user_id = $1",
+      [rad.user_id, paidAt],
+    );
+    return uppdaterad.rows[0];
+  });
+  if (!faktura) throw notFound("Fakturan finns inte, eller får inte ändras.");
+
+  const mottagare = str(req.body, "recipientEmail", { max: 320, required: false }) || null;
+  if (mottagare) {
+    const post = toCustomerInvoice(faktura);
+    await koaMejl(
+      caller.userId,
+      receiptEmail(
+        {
+          invoiceNumber: String(post.invoiceNumber),
+          issuedAt: String(post.issuedAt),
+          dueAt: String(post.dueAt),
+          seller: COMPANY,
+          customer: { name: mottagare, orgNumber: null, email: mottagare, address: null },
+          lines: [
+            { description: String(post.description), quantity: 1, unitPriceOre: post.netOre },
+          ],
+          note: null,
+          totals: {
+            netOre: post.netOre,
+            vatOre: post.vatOre,
+            grossOre: post.grossOre,
+            vatRate: post.vatRate,
+          },
+        },
+        { paidAt, receiptNumber: String(post.receiptNumber ?? "") },
+      ),
+      String(post.id),
+    );
+  }
+  return { status: 200, body: { registered: true } };
+});
+
+/* --- Bolagsuppslaget: ut ur Supabase edge, in i API:t -------------------- */
+
+/**
+ * ORGANISATIONSNUMMER → BOLAGSFAKTA.
+ *
+ * Låg som en Supabase Edge Function (supabase/functions/lookup-company).
+ * Det var den sista biten infrastruktur utanför den här servern, och den
+ * band produkten till en plattform vi lämnar.
+ *
+ * KRÄVER INLOGGNING, trots att uppgifterna är offentliga. Rutten hämtar en
+ * extern sida på anroparens vägnar, och en öppen sådan är en proxy vem som
+ * helst kan låna. Numret måste dessutom vara exakt tio siffror - då finns
+ * ingen adress att styra om anropet till.
+ */
+router.post("/v1/company-lookup", async (req) => {
+  await authenticate(req);
+  const siffror = str(req.body, "orgNumber", { max: 20 }).replace(/\D/g, "");
+  if (!/^\d{10}$/.test(siffror)) {
+    throw badRequest("Organisationsnumret ska vara tio siffror.");
+  }
+  const fakta = await slaUppBolag(siffror);
+  // Hittar vi inget är det ett giltigt svar, inte ett fel: registret har
+  // inte alla bolag, och formuläret ska då bara låta användaren skriva
+  // själv i stället för att visa ett rött meddelande.
+  return { status: 200, body: { company: fakta } };
+});
 
 export const provaHastighet = async (
   path: string,

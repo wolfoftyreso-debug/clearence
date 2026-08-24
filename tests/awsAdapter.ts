@@ -103,14 +103,37 @@ for (const [portName, port] of ports(demoAdapter)) {
   }
 }
 
-// Dokumentens innehåll kan inte flytta förrän det finns en hink att
-// signera mot - det är en ärlig blockering, inte en glömska.
-check(
-  "dokumentuppladdningen ligger kvar, som infrakartan säger",
-  remaining.includes("documents.upload"),
-  remaining.filter((r) => r.startsWith("documents.")),
+/*
+ * DET SOM ÅTERSTÅR SKA VARA NAMNGIVET, OCH BARA KRYMPA.
+ *
+ * Förut stod här "dokumentuppladdningen ligger kvar, som infrakartan
+ * säger" - ett påstående som var sant tills det inte var det, och som då
+ * blev rött för att arbetet gått FRAMÅT. En vakt som straffar framsteg är
+ * fel sorts vakt.
+ *
+ * Den här listar i stället de grupper som ännu inte flyttat. En port som
+ * dyker upp utanför listan betyder att någon av-migrerat något, vilket
+ * bara kan vara ett misstag. Och när en grupp är klar ska den tas BORT
+ * härifrån - annars blir listan ett spöke.
+ */
+const ATERSTAR: Record<string, string> = {
+  applications: "Rådgivaransökningarna. Egna rutter byggs; ingen finns ännu.",
+  leads: "Förmedlingarna: upplåsning, avböjande, debitering.",
+  professionals: "Praktikerregistret, byråteamen och profilanspråken.",
+  referrals: "Förmedlingsavtalen mellan byråer.",
+};
+
+const oväntade = remaining.filter((r) => !(r.split(".")[0] in ATERSTAR));
+check("inget utanför den namngivna listan är delegerat", oväntade.length === 0, oväntade);
+
+const spokgrupper = Object.keys(ATERSTAR).filter(
+  (g) => !remaining.some((r) => r.startsWith(`${g}.`)),
 );
-check("det finns fortfarande arbete kvar att mäta", remaining.length > 0);
+check("och listan innehåller inga färdiga grupper", spokgrupper.length === 0, spokgrupper);
+
+// Varje kvarvarande grupp ska bära ett skäl, inte bara ett namn.
+const utanSkal = Object.entries(ATERSTAR).filter(([, s]) => s.trim().length < 20);
+check("varje kvarvarande grupp bär ett skäl", utanSkal.length === 0, utanSkal.map(([g]) => g));
 
 /* --- 4. Bron: två oberoende mätningar ska säga samma sak ----------------- */
 
@@ -175,6 +198,6 @@ check(
   check("en flyttad port bryr sig inte om bron", !flyttadKastade);
 }
 
-console.log(`\nMigrerat: ${actuallyMigrated.length} metoder. Kvar att flytta: ${remaining.length}.`);
+console.log(`\nMigrerat: ${actuallyMigrated.length} metoder. Kvar att flytta: ${remaining.length} i ${Object.keys(ATERSTAR).length} grupper.`);
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

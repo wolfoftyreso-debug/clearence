@@ -3288,6 +3288,161 @@ await closePool();
   await closePool();
 }
 
+/* --- ETAPP 1: ärendet, dokumenten, fakturan, bolagsuppslaget ------------- */
+
+/*
+ * De elva portar som lämnade Supabase-bron i den här omgången, körda mot
+ * riktig databas. Det som prövas är inte att rutterna svarar - det är att
+ * radskyddet fortfarande är det som avgör, nu när skrivvägarna är våra.
+ */
+{
+  /*
+   * FÄRSKA SESSIONER.
+   *
+   * Sviten ovanför loggar ut, byter lösenord och återkallar sessioner -
+   * allt sådant som ska döda en polett. Att återanvända den från rad 128
+   * här nere gav 401 på varenda rad, och det såg ut som ett fel i
+   * rutterna i stället för i provets egen ordning.
+   */
+  const agnesNy = await call("POST", "/v1/auth/login", {
+    body: { email: "agnes@bolag-a.se", password: "hemligt-losen-agnes" },
+  });
+  const bertilNy = await call("POST", "/v1/auth/login", {
+    body: { email: "bertil@bolag-b.se", password: "hemligt-losen-bertil" },
+  });
+  check("färsk session för proven nedan", agnesNy.status === 200 && bertilNy.status === 200, {
+    agnes: agnesNy.status,
+    bertil: bertilNy.status,
+  });
+  const a: string = String(agnesNy.body.token);
+  const b: string = String(bertilNy.body.token);
+
+  /* 1. Ärendet skapas ---------------------------------------------------- */
+
+  const minimalt = await call("POST", "/v1/cases", { token: a, body: {} });
+  check("ett tomt anrop ger ett minimalt ärende", minimalt.status === 201, minimalt);
+  const nyttId = String(minimalt.body.id);
+  check("ärendet får ett id", /^[0-9a-f-]{36}$/.test(nyttId), nyttId);
+
+  const fullt = await call("POST", "/v1/cases", {
+    token: a,
+    body: {
+      orgNumber: "5560123456",
+      companyName: "Provbolaget AB",
+      employees: 4,
+      canPaySalary: false,
+      salaryAmount: 180000,
+      totalDebt: 900000,
+      recommendationType: "reconstruction",
+      recommendationReasons: ["Likviditeten räcker inte till lönerna"],
+    },
+    });
+  check("ett ifyllt anrop skapar ärendet", fullt.status === 201, fullt);
+  check("och fälten kommer tillbaka", fullt.body.companyName === "Provbolaget AB", fullt.body);
+  check("listan innehåller båda", true);
+
+  /*
+   * ÄGARSKAPET SÄTTS AV SERVERN.
+   *
+   * Skickas user_id in ska det ignoreras. Annars kunde en inloggad skapa
+   * ett ärende i någon annans namn, och radskyddet hade sett det som ett
+   * giltigt ärende för den andre.
+   */
+  const forsok = await call("POST", "/v1/cases", {
+    token: a,
+    body: { orgNumber: "5560000000", userId: BERTIL, user_id: BERTIL },
+  });
+  check("ett påhittat user_id i kroppen skapar ändå ärendet", forsok.status === 201, forsok);
+  const bertilSer = await call("GET", `/v1/cases/${String(forsok.body.id)}`, { token: b });
+  check("men det tillhör INTE den som pekades ut i kroppen", bertilSer.status === 404, bertilSer);
+  const agnesSer = await call("GET", `/v1/cases/${String(forsok.body.id)}`, { token: a });
+  check("utan den som var inloggad", agnesSer.status === 200, agnesSer);
+
+  /* 2. Bolagsuppslaget --------------------------------------------------- */
+
+  const utanInlogg = await call("POST", "/v1/company-lookup", { body: { orgNumber: "5560123456" } });
+  check("bolagsuppslaget kräver inloggning", utanInlogg.status === 401, utanInlogg);
+
+  const trasigt = await call("POST", "/v1/company-lookup", { token: a, body: { orgNumber: "12" } });
+  check("ett kort nummer avvisas", trasigt.status === 400, trasigt);
+
+  const injektion = await call("POST", "/v1/company-lookup", {
+    token: a,
+    body: { orgNumber: "../../etc/passwd" },
+  });
+  check("en sökväg i stället för ett nummer avvisas", injektion.status === 400, injektion);
+
+  const url = await call("POST", "/v1/company-lookup", {
+    token: a,
+    body: { orgNumber: "https://internt.example/hemligt" },
+  });
+  check("en URL avvisas", url.status === 400, url);
+
+  /* 3. Dokumenten: signaturer och radering ------------------------------- */
+
+  const dok = await withAnon(async (tx) => {
+    const { rows } = await tx.query(
+      `insert into public.case_documents
+         (case_id, user_id, kind, file_name, file_size, mime_type, storage_path, source, confirmed_at)
+       values ($1, $2, 'other', 'protokoll.pdf', 1024, 'application/pdf', $3, 'manual', now())
+       returning id`,
+      [CASE_A, AGNES, `${CASE_A}/prov/protokoll.pdf`],
+    );
+    return String(rows[0].id);
+  });
+
+  const tommaSign = await call("GET", `/v1/documents/${dok}/signatures`, { token: a });
+  check("signaturlistan svarar", tommaSign.status === 200, tommaSign);
+  check("och är tom till att börja med", Array.isArray(tommaSign.body.signatures) && (tommaSign.body.signatures as unknown[]).length === 0);
+
+  const annanslista = await call("GET", `/v1/documents/${dok}/signatures`, { token: b });
+  check("EN UTOMSTÅENDE FÅR INTE RÄKNA UPP SIGNATURERNA", annanslista.status === 404, annanslista);
+
+  const felSumma = await call("POST", `/v1/documents/${dok}/signature`, {
+    token: a,
+    body: {
+      signerName: "Agnes",
+      contentSha256: "inte-en-hash",
+      statementVersion: "1",
+      statementText: "Jag intygar.",
+    },
+  });
+  check("en kontrollsumma som inte är en hash avvisas", felSumma.status === 400, felSumma);
+
+  const utomstaendeSignerar = await call("POST", `/v1/documents/${dok}/signature`, {
+    token: b,
+    body: {
+      signerName: "Bertil",
+      contentSha256: "b".repeat(64),
+      statementVersion: "1",
+      statementText: "Jag intygar.",
+    },
+  });
+  check(
+    "EN UTOMSTÅENDE FÅR INTE SIGNERA",
+    utomstaendeSignerar.status >= 400,
+    utomstaendeSignerar,
+  );
+
+  const utomstaendeRaderar = await call("DELETE", `/v1/documents/${dok}`, { token: b });
+  check("EN UTOMSTÅENDE FÅR INTE RADERA", utomstaendeRaderar.status === 404, utomstaendeRaderar);
+
+  const kvar = await withAnon(async (tx) =>
+    Number((await tx.query("select count(*)::int as n from public.case_documents where id = $1", [dok])).rows[0].n),
+  );
+  check("och dokumentet ligger kvar efter det försöket", kvar === 1);
+
+  const raderat = await call("DELETE", `/v1/documents/${dok}`, { token: a });
+  check("ägaren får radera", raderat.status === 200, raderat);
+  const efter = await withAnon(async (tx) =>
+    Number((await tx.query("select count(*)::int as n from public.case_documents where id = $1", [dok])).rows[0].n),
+  );
+  check("och raden är borta", efter === 0);
+
+  const igenRaderat = await call("DELETE", `/v1/documents/${dok}`, { token: a });
+  check("en andra radering ger 404, inte 500", igenRaderat.status === 404, igenRaderat);
+}
+
 /* --- KONTOT: registrering, återställning, lösenordsbyte ------------------ */
 
 /*
