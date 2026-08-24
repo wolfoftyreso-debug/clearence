@@ -20,31 +20,52 @@
 -- process som per sin natur arbetar över alla tenants - den skickar allas
 -- utgående post och kontrollerar allas krediter. Att den läser tvärsnitt är
 -- funktionen, inte ett läckage. Den exponeras aldrig för en klient.
+/*
+ * BYPASSRLS GÅR INTE ATT DELA UT UTAN ATT SJÄLV HA DET.
+ *
+ * Postgres: "Only roles with the BYPASSRLS attribute may create roles with
+ * the BYPASSRLS attribute." På ett managed Postgres (Neon, Vercel Postgres)
+ * är ägarrollen inte superanvändare och har inte BYPASSRLS - alltså föll
+ * den här filen på sin FÖRSTA sats vid en repetition mot en riktig databas.
+ *
+ * Blocket är därför villkorat. Går det inte skapas ingen app_worker, och
+ * arbetaren kör i stället som schemats ÄGARE, som är undantagen sin egen
+ * RLS. db/worker/roll.ts godtar båda vägarna och vägrar köra om ingen av
+ * dem gäller - så valet syns, och en tyst nolla blir omöjlig.
+ */
 do $$
 begin
   if not exists (select 1 from pg_roles where rolname = 'app_worker') then
-    create role app_worker nologin bypassrls;
+    begin
+      create role app_worker nologin bypassrls;
+    exception when insufficient_privilege then
+      raise notice 'app_worker skapades INTE: rollen som kör saknar BYPASSRLS (normalt på managed Postgres). Låt arbetaren ansluta som schemats ägare i stället, via WORKER_DATABASE_URL.';
+    end;
   else
-    alter role app_worker bypassrls;
+    begin
+      alter role app_worker bypassrls;
+    exception when insufficient_privilege then
+      raise notice 'app_worker fanns men gick inte att ändra: rollen som kör saknar BYPASSRLS.';
+    end;
   end if;
 end $$;
 
-grant usage on schema app, public, auth to app_worker;
+do $$ begin if exists (select 1 from pg_roles where rolname='app_worker') then execute $q$grant usage on schema app, public, auth to app_worker$q$; end if; end $$;
 
 -- Arbetaren äger rättigheten genom sin egen roll (se 20260819100000): den får
 -- köra alla funktioner och röra tabellerna. Inte via authenticated.
-grant execute on all functions in schema public to app_worker;
-grant select, insert, update, delete on all tables in schema public to app_worker;
-grant usage, select on all sequences in schema public to app_worker;
+do $$ begin if exists (select 1 from pg_roles where rolname='app_worker') then execute $q$grant execute on all functions in schema public to app_worker$q$; end if; end $$;
+do $$ begin if exists (select 1 from pg_roles where rolname='app_worker') then execute $q$grant select, insert, update, delete on all tables in schema public to app_worker$q$; end if; end $$;
+do $$ begin if exists (select 1 from pg_roles where rolname='app_worker') then execute $q$grant usage, select on all sequences in schema public to app_worker$q$; end if; end $$;
 -- Aviseringsarbetaren läser mottagarens e-post ur auth.users (revoked från
 -- klientroller). Bara SELECT, inget mer.
-grant select on auth.users to app_worker;
+do $$ begin if exists (select 1 from pg_roles where rolname='app_worker') then execute $q$grant select on auth.users to app_worker$q$; end if; end $$;
 
 -- För allt migrationerna skapar EFTER den här körningen (om den körs före en
 -- senare migration i en annan ordning): standardrättigheter.
-alter default privileges in schema public grant execute on functions to app_worker;
-alter default privileges in schema public grant select, insert, update, delete on tables to app_worker;
-alter default privileges in schema public grant usage, select on sequences to app_worker;
+do $$ begin if exists (select 1 from pg_roles where rolname='app_worker') then execute $q$alter default privileges in schema public grant execute on functions to app_worker$q$; end if; end $$;
+do $$ begin if exists (select 1 from pg_roles where rolname='app_worker') then execute $q$alter default privileges in schema public grant select, insert, update, delete on tables to app_worker$q$; end if; end $$;
+do $$ begin if exists (select 1 from pg_roles where rolname='app_worker') then execute $q$alter default privileges in schema public grant usage, select on sequences to app_worker$q$; end if; end $$;
 
 /* -------------------------------------------------------------------------- */
 /* app_api: rollen API:t ANSLUTER som                                         */
@@ -127,3 +148,34 @@ grant select, insert, update on auth.sessions to app_api;
 -- live-länken. Båda är SECURITY DEFINER och grindar sig själva.
 grant execute on all functions in schema public to app_api;
 alter default privileges in schema public grant execute on functions to app_api;
+
+/*
+ * OCH SEDAN TILLBAKA MED ARBETARENS FUNKTIONER.
+ *
+ * Raden ovan är ett SVEP: "alla funktioner i public". Bland dem ligger de
+ * sex som migration 20260819100000 uttryckligen tog bort från varje
+ * klientroll, med motiveringen "ingen grant tillbaka - arbetaren äger
+ * rättigheten genom sin egen roll". Den migrationen räknar upp fyra roller
+ * vid namn; app_api skapas HÄR, efteråt, och stod därför inte med.
+ *
+ * Följden var inte teoretisk. Repetitionen mot en riktig databas läste ett
+ * annat bolags fakturamejl som API-rollen:
+ *
+ *   select ... from public.claim_outbound_emails(5)
+ *   -> offer@bolag-x.se | Din faktura 2026-114 | Hemligt belopp 48 500 kr
+ *
+ * Funktionerna är SECURITY DEFINER och ägs av schemats ägare, så
+ * radskyddet hjälper inte: den som får anropa dem ser allt. Ingen endpoint
+ * anropar dem i dag - men API:ts anslutningsroll ska inte bära en rättighet
+ * som produkten uttryckligen beslutat att den inte ska ha. Och anropet
+ * MARKERAR dessutom raderna som plockade, så den riktiga arbetaren hade
+ * aldrig skickat dem.
+ */
+revoke execute on function
+  public.claim_outbound_emails(integer),
+  public.mark_email_sent(uuid),
+  public.mark_email_failed(uuid, text),
+  public.close_overdue_accounts(timestamptz),
+  public.reminder_candidates(timestamptz),
+  public.credit_check_candidates(timestamptz)
+from app_api;

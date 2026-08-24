@@ -59,8 +59,13 @@ Postgres — radskyddet prövas på precis det med `npm run test:selfhosted`.
 
 | Roll | Används av | Får |
 |---|---|---|
-| Ägaren | `scripts/migrera.sh` | Ändra schemat |
+| Ägaren | `scripts/migrera.sh` + `WORKER_DATABASE_URL` | Ändra schemat, och arbeta över alla bolag |
 | API-rollen | `DATABASE_URL` i Vercel | Läsa och skriva **under radskyddet** |
+
+**Två anslutningssträngar, inte en.** API:t och de schemalagda jobben behöver
+motsatta roller: API:t får inte gå förbi radskyddet, jobben måste. Sätts bara
+`DATABASE_URL` kör nattjobbet som API-rollen och ser noll rader — utan att
+något kastar. Se [vercel.md](vercel.md).
 
 Pekas `DATABASE_URL` på ägaren eller på en roll med `BYPASSRLS` **stängs
 radskyddet av tyst**: varje fråga fortsätter fungera och börjar returnera
@@ -126,6 +131,9 @@ hink gör den meningslös.
 Hela listan står i [docs/vercel.md](vercel.md#miljövariabler). Sätt dem per
 miljö, och kontrollera särskilt:
 
+- `WORKER_DATABASE_URL` — arbetarens anslutning. Utan den kör jobben som
+  API-rollen och rapporterar noll utan att fela. `db/worker/roll.ts` kastar
+  numera i det läget, men variabeln ska ändå sättas.
 - `CRON_SECRET` — minst 16 tecken. **Utan den svarar cron-endpointerna
   503**, alltså kör inga jobb alls. Det är avsiktligt: en glömd variabel
   ska inte bli en öppen knapp för att köra faktureringen.

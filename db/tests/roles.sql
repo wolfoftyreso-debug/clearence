@@ -2,24 +2,40 @@
 -- db/roles-selfhosted.sql redan körts (run.sh gör det före den här).
 --
 -- Två löften vaktas, och det andra är det som kostar mest om det bryts:
---  1. app_worker (den betrodda batch-rollen) KAN röra utkorgen och köra
---     arbetarfunktionerna - annars faller arbetaren på 42501 i drift.
+--  1. Arbetaren KAN röra utkorgen och köra arbetarfunktionerna - annars
+--     faller nattjobbet på 42501, eller värre: returnerar noll utan att fela.
 --  2. authenticated (API-rollens grund) går ALDRIG förbi radskyddet. Samma
---     insert som app_worker får göra måste authenticated nekas.
+--     insert som arbetaren får göra måste authenticated nekas.
+--
+-- ARBETAREN ÄR INTE ALLTID app_worker.
+--
+-- Provet krävde tidigare att app_worker fanns och hade BYPASSRLS. På ett
+-- managed Postgres (Neon, Vercel Postgres) går BYPASSRLS inte att dela ut -
+-- ägarrollen har det inte själv - och rollen skapas därför inte alls. Då kör
+-- arbetaren som schemats ÄGARE, som är undantagen sin egen RLS. Båda
+-- vägarna är giltiga; db/worker/roll.ts godtar båda och vägrar om ingen
+-- gäller. Provet gör likadant.
 
 -- 1. Attributen.
 do $$
 begin
-  if (select rolbypassrls from pg_roles where rolname = 'app_worker') is distinct from true then
-    raise exception 'app_worker saknar bypassrls - arbetaren kan inte röra utkorgen';
+  if exists (select 1 from pg_roles where rolname = 'app_worker')
+     and (select rolbypassrls from pg_roles where rolname = 'app_worker') is distinct from true then
+    raise exception 'app_worker finns men saknar bypassrls - arbetaren kan inte röra utkorgen';
   end if;
   if (select coalesce(rolbypassrls, false) from pg_roles where rolname = 'authenticated') then
     raise exception 'authenticated har bypassrls - radskyddet är avstängt för API-rollen';
   end if;
 end $$;
 
--- 2. app_worker rör utkorgen och kör en arbetarfunktion.
-set role app_worker;
+-- 2. Arbetaren rör utkorgen och kör en arbetarfunktion. Som app_worker om
+--    den finns, annars som ägaren (vilket sessionen redan är).
+do $$
+begin
+  if exists (select 1 from pg_roles where rolname = 'app_worker') then
+    execute 'set role app_worker';
+  end if;
+end $$;
 insert into public.outbound_emails (recipient, subject, body_text, body_html, kind)
   values ('roletest@x.se', 's', 't', 'h', 'worker-can');
 select public.claim_outbound_emails(1) is not null as claimed;
@@ -138,6 +154,79 @@ begin
     raise exception 'app_api kan radera sessioner - en återkallad session ska gå att se i efterhand';
   end if;
   raise notice 'ok    en session återkallas, den raderas inte';
+end $$;
+
+/*
+ * API-ROLLEN FÅR INTE NÅ ARBETARENS FUNKTIONER.
+ *
+ * Migration 20260819100000 tog bort execute på de sex batch-funktionerna
+ * från varje klientroll, med motiveringen "ingen grant tillbaka -
+ * arbetaren äger rättigheten genom sin egen roll". Den räknar upp fyra
+ * roller VID NAMN. app_api skapas efteråt, i db/roles-selfhosted.sql, och
+ * fick där `grant execute on all functions in schema public` - ett svep som
+ * gav tillbaka precis det som tagits bort.
+ *
+ * Det var inte teoretiskt. En generalrepetition mot en riktig databas läste
+ * ett annat bolags fakturamejl som API-rollen:
+ *
+ *   select ... from public.claim_outbound_emails(5)
+ *   -> offer@bolag-x.se | Din faktura 2026-114 | Hemligt belopp 48 500 kr
+ *
+ * Funktionerna är SECURITY DEFINER och ägs av schemat, så radskyddet
+ * skyddar inte: den som får anropa dem ser allt. Anropet MARKERAR dessutom
+ * raderna som plockade, så den riktiga arbetaren hade aldrig skickat dem.
+ *
+ * Ingen endpoint anropar dem i dag. Vakten finns för att API:ts
+ * anslutningsroll aldrig ska BÄRA en rättighet produkten beslutat att den
+ * inte ska ha - en oanvänd öppen dörr är en dörr.
+ */
+do $$
+declare
+  v_fn text;
+  v_funcs text[] := array[
+    'public.claim_outbound_emails(integer)',
+    'public.mark_email_sent(uuid)',
+    'public.mark_email_failed(uuid, text)',
+    'public.close_overdue_accounts(timestamptz)',
+    'public.reminder_candidates(timestamptz)',
+    'public.credit_check_candidates(timestamptz)'
+  ];
+begin
+  foreach v_fn in array v_funcs loop
+    if has_function_privilege('app_api', v_fn, 'execute') then
+      raise exception 'app_api kan anropa %, arbetarens funktion - andras utgående post är nåbar från API-rollen', v_fn;
+    end if;
+  end loop;
+  raise notice 'ok    API-rollen når inte arbetarens funktioner';
+end $$;
+
+/*
+ * OCH ARBETAREN MÅSTE NÅ DEM.
+ *
+ * Åt andra hållet: stänger någon dörren för hårt slutar nattjobbet
+ * fungera, och det märks inte heller - stegen returnerar noll i stället
+ * för att kasta. Arbetaren kör antingen som app_worker (BYPASSRLS) eller
+ * som schemats ägare; minst en av vägarna ska vara öppen.
+ */
+do $$
+declare
+  v_agare text;
+begin
+  select r.rolname into v_agare
+    from pg_class c
+    join pg_namespace n on n.oid = c.relnamespace
+    join pg_roles r on r.oid = c.relowner
+   where n.nspname = 'public' and c.relname = 'outbound_emails';
+
+  if exists (select 1 from pg_roles where rolname = 'app_worker')
+     and has_function_privilege('app_worker', 'public.claim_outbound_emails(integer)', 'execute') then
+    raise notice 'ok    arbetarrollen når arbetarens funktioner';
+  elsif v_agare is not null
+     and has_function_privilege(v_agare, 'public.claim_outbound_emails(integer)', 'execute') then
+    raise notice 'ok    schemats ägare (%) når arbetarens funktioner', v_agare;
+  else
+    raise exception 'varken app_worker eller schemats ägare kan anropa claim_outbound_emails - nattjobbet skulle rapportera noll utan att fela';
+  end if;
 end $$;
 
 do $$ begin raise notice 'ALL ROLE TESTS PASSED'; end $$;

@@ -39,7 +39,8 @@ Sätts i Vercel-projektets inställningar, per miljö.
 
 | Namn | Krävs | Vad den gör |
 | --- | --- | --- |
-| `DATABASE_URL` | ja | Postgres. **Måste peka på en roll utan `BYPASSRLS` och utan tabellägarskap** — se nedan |
+| `DATABASE_URL` | ja | Postgres för **API:t**. **Måste peka på en roll utan `BYPASSRLS` och utan tabellägarskap** — se nedan |
+| `WORKER_DATABASE_URL` | ja | Postgres för **de schemalagda jobben**. Motsatt krav: rollen måste kunna arbeta över alla bolag |
 | `PGPOOL_MAX` | nej | Anslutningar per instans. Standard `2` |
 | `TRUSTED_PROXY_HOPS` | nej | `1` på Vercel (plattformen sätter `x-forwarded-for`) |
 | `CRON_SECRET` | ja | Delad hemlighet för cron-endpointerna. Minst 16 tecken |
@@ -75,6 +76,44 @@ omdeploy.
 
 Rollen ska vara en egen login-roll som är medlem i `authenticated` och varken
 äger tabeller eller har `BYPASSRLS`. `db/roles-selfhosted.sql` skapar den.
+
+### Två anslutningar, inte en
+
+**Den enda punkten där Vercel skiljer sig från containern på ett sätt som går
+att missa.** Där hade varje process sin egen `DATABASE_URL`: API-poden fick
+`app_api`, cron-jobben fick `app_worker`. På Vercel delar alla funktioner i ett
+projekt samma miljövariabler — och de två behöver **motsatta** roller:
+
+| Variabel | Används av | Krav |
+| --- | --- | --- |
+| `DATABASE_URL` | API:t | Får **inte** gå förbi radskyddet. `sakerRollGrind()` vägrar starta annars |
+| `WORKER_DATABASE_URL` | Cron-jobben | **Måste** kunna arbeta över alla bolag: `app_worker` (BYPASSRLS) eller schemats ägare |
+
+Det finns inget enda värde som fungerar för båda. En repetition mot en riktig
+databas visade vad som händer med API-rollen i jobben:
+
+```
+select count(*) from public.cases              -> 0
+select count(*) from public.case_invitations   -> 0
+select count(*) from public.customer_invoices  -> 0
+```
+
+Gallringen hittar inget att gallra, faktureringen inget att fakturera,
+inbjudningarna ingen att mejla. **Inget steg kastar**, så cron-endpointen
+svarar 200 och Vercel märker körningen som lyckad. Fakturorna uteblir i en
+månad innan någon undrar varför.
+
+`db/worker/roll.ts` prövar därför rollen innan jobbet börjar och **kastar** om
+den inte duger. En tyst nolla är värre än ett fel.
+
+### `app_worker` går inte alltid att skapa
+
+Postgres tillåter bara en roll som själv har `BYPASSRLS` att dela ut det. På
+ett managed Postgres är ägarrollen inte superanvändare — så
+`db/roles-selfhosted.sql` skapar ingen `app_worker` där, och säger det med ett
+`NOTICE`. Låt då `WORKER_DATABASE_URL` peka på **schemats ägare** (samma roll
+som körde migrationerna). Ägaren är undantagen sin egen RLS, vilket är precis
+det jobben behöver.
 
 ### Poolning
 

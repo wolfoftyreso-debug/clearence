@@ -243,6 +243,53 @@ check("catch-allen kapar /api-prefixet före routern", /replace\(\/\^\\\/api/.te
   check("aviseringarna körs ofta", (vercel.crons ?? []).some((c) => c.path.endsWith("aviseringar") && c.schedule.startsWith("*/")));
 }
 
+/* --- 4b. Arbetarens roll: den motsatta grinden --------------------------- */
+
+/*
+ * API OCH ARBETARE KAN INTE DELA ANSLUTNING PÅ VERCEL.
+ *
+ * I containern hade varje process sin egen DATABASE_URL. På Vercel delar
+ * alla funktioner i ett projekt samma miljövariabler - och de två behöver
+ * MOTSATTA roller: API:t får inte gå förbi radskyddet, arbetaren måste.
+ *
+ * En repetition mot en riktig databas visade vad som händer med bara en:
+ * med API-rollen såg nattjobbet noll rader i cases, case_invitations och
+ * customer_invoices. Inget steg kastade, så cron-endpointen svarade 200 och
+ * Vercel märkte körningen som lyckad. Fakturorna hade uteblivit i en månad.
+ *
+ * En tyst nolla är värre än ett fel. Därför prövar arbetaren sin roll.
+ */
+{
+  const roll = utanKommentarer(read("db/worker/roll.ts"));
+  check("arbetaren har en egen rollgrind", /export const kravArbetarroll/.test(roll));
+  check("den godtar BYPASSRLS", /rolbypassrls/.test(roll));
+  check("den godtar ägarskap (managed Postgres)", /relowner|pg_has_role/.test(roll));
+  check("och den KASTAR när ingen väg gäller", /throw new Error/.test(roll));
+  check("arbetaren har en egen anslutningssträng", /WORKER_DATABASE_URL/.test(roll));
+
+  for (const fil of [
+    "db/worker/email-worker.ts",
+    "db/worker/notification-worker.ts",
+    "db/worker/simulation-worker.ts",
+  ]) {
+    const kod = utanKommentarer(read(fil));
+    check(`${fil} prövar arbetarrollen`, /kravArbetarroll\(/.test(kod), fil);
+    check(`${fil} läser arbetarens URL`, /arbetarUrl\(\)/.test(kod), fil);
+  }
+
+  /*
+   * OCH DE TVÅ GRINDARNA MÅSTE VARA VARANDRAS MOTSATSER.
+   *
+   * server/db.ts vägrar på BYPASSRLS; db/worker/roll.ts kräver den (eller
+   * ägarskap). Skrivs den ena om till den andras villkor kan samma roll
+   * passera båda - och då är hela åtskillnaden borta utan att något blir
+   * rött.
+   */
+  const db = utanKommentarer(read("server/db.ts"));
+  check("API-grinden vägrar på BYPASSRLS", /rolbypassrls === true/.test(db) && /skal\.push\("rollen har BYPASSRLS"\)/.test(db));
+  check("arbetargrinden kräver den i stället", /skal\.push\("BYPASSRLS"\)/.test(roll));
+}
+
 /* --- 5. Säkerhetsrubrikerna och CSP:n ------------------------------------ */
 
 {

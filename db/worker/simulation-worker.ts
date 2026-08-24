@@ -34,6 +34,7 @@
  */
 
 import { Client } from "pg";
+import { arbetarUrl, kravArbetarroll } from "./roll";
 import {
   Avbruten,
   kor,
@@ -153,14 +154,15 @@ export const korEttVarv = async (): Promise<{
   klara: number;
   misslyckade: number;
 }> => {
-  const url = process.env.DATABASE_URL;
+  const url = arbetarUrl();
   // Kastar i stället för process.exit(): filen importeras numera av en
   // Vercel-funktion, där ett exit river hela instansen utan svar.
-  if (!url) throw new Error("DATABASE_URL saknas.");
+  if (!url) throw new Error("WORKER_DATABASE_URL eller DATABASE_URL måste vara satt.");
   const batch = heltalUrMiljon("SIM_BATCH", 2, 1, 10);
 
   const klient = new Client({ connectionString: url });
   await klient.connect();
+  await kravArbetarroll(klient);
 
   let klara = 0;
   let misslyckade = 0;

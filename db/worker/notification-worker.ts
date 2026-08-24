@@ -30,6 +30,7 @@
  */
 
 import { Client } from "pg";
+import { arbetarUrl, kravArbetarroll } from "./roll";
 import { makeMailSender, resolveMailConfig, type MailSender } from "./mail";
 import {
   decideDelivery,
@@ -230,8 +231,9 @@ const runNotificationQueue = async (db: Client, sms: SmsProvider): Promise<void>
  */
 export const korEttVarv = async (): Promise<void> => {
   kravMiljo();
-  const db = new Client({ connectionString: DATABASE_URL });
+  const db = new Client({ connectionString: arbetarUrl() });
   await db.connect();
+  await kravArbetarroll(db);
   try {
     const sms = await loadSmsProvider(db);
     await runVerificationQueue(db, sms);

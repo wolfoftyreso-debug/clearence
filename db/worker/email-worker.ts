@@ -30,6 +30,7 @@
  */
 
 import { Client } from "pg";
+import { arbetarUrl, kravArbetarroll } from "./roll";
 import { makeMailSender, resolveMailConfig } from "./mail";
 import {
   accountClosedEmail,
@@ -63,7 +64,7 @@ import {
  * prövas - server/tests/cron.ts pekade om den och fick samma anslutning
  * tillbaka, alltså ett prov som inte kunde misslyckas.
  */
-const databasUrl = (): string | undefined => process.env.DATABASE_URL;
+
 /** Bas för länkar i mejl, t.ex. inbjudans acceptlänk. */
 const APP_BASE_URL = (process.env.APP_BASE_URL ?? "https://clearance.se").replace(/\/$/, "");
 
@@ -78,7 +79,7 @@ const APP_BASE_URL = (process.env.APP_BASE_URL ?? "https://clearance.se").replac
  */
 const kravMiljo = (): void => {
   const saknas = [
-    !databasUrl() ? "DATABASE_URL" : null,
+    !arbetarUrl() ? "WORKER_DATABASE_URL eller DATABASE_URL" : null,
     !process.env.MAIL_FROM ? "MAIL_FROM" : null,
   ].filter((v): v is string => v !== null);
   if (saknas.length > 0) throw new Error(`${saknas.join(" och ")} måste vara satta.`);
@@ -108,8 +109,16 @@ const db = {
 export const anslut = async (): Promise<void> => {
   kravMiljo();
   if (klient) return;
-  const ny = new Client({ connectionString: databasUrl() });
+  const ny = new Client({ connectionString: arbetarUrl() });
   await ny.connect();
+  // ROLLEN PRÖVAS INNAN JOBBET BÖRJAR. En arbetare som inte ser något
+  // rapporterar inte fel - den rapporterar noll. Se db/worker/roll.ts.
+  try {
+    await kravArbetarroll(ny);
+  } catch (fel) {
+    await ny.end().catch(() => {});
+    throw fel;
+  }
   klient = ny;
 };
 
