@@ -281,6 +281,259 @@
         }
       }
     },
+    "/applications": {
+      "get": {
+        "operationId": "listApplications",
+        "summary": "Alla ansökningar",
+        "description": "Bara plattformsadmin ser rader. Radskyddet avgör, inte rutten - en vanlig användare får en tom lista, inte 403.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "createApplication",
+        "summary": "Ansök som rådgivare",
+        "description": "user_id sätts ur SESSIONEN, aldrig ur kroppen - annars kan en inloggad lägga en ansökan i någon annans namn.",
+        "x-status": "beta",
+        "responses": {
+          "201": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "contactName",
+                  "email",
+                  "company",
+                  "orgNumber",
+                  "category",
+                  "location",
+                  "description"
+                ],
+                "properties": {
+                  "contactName": {
+                    "type": "string",
+                    "maxLength": 200
+                  },
+                  "email": {
+                    "type": "string",
+                    "format": "email",
+                    "maxLength": 320
+                  },
+                  "phone": {
+                    "type": "string",
+                    "maxLength": 60,
+                    "nullable": true
+                  },
+                  "company": {
+                    "type": "string",
+                    "maxLength": 200
+                  },
+                  "orgNumber": {
+                    "type": "string",
+                    "maxLength": 20
+                  },
+                  "category": {
+                    "type": "string",
+                    "maxLength": 60
+                  },
+                  "location": {
+                    "type": "string",
+                    "maxLength": 200
+                  },
+                  "description": {
+                    "type": "string",
+                    "maxLength": 4000
+                  },
+                  "website": {
+                    "type": "string",
+                    "maxLength": 500,
+                    "nullable": true
+                  },
+                  "specializations": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "maxItems": 40
+                  },
+                  "fixedPrices": {
+                    "type": "object",
+                    "nullable": true,
+                    "additionalProperties": true
+                  },
+                  "credentialAuthority": {
+                    "type": "string",
+                    "maxLength": 200,
+                    "nullable": true
+                  },
+                  "credentialReference": {
+                    "type": "string",
+                    "maxLength": 200,
+                    "nullable": true
+                  },
+                  "credentialNote": {
+                    "type": "string",
+                    "maxLength": 2000,
+                    "nullable": true
+                  },
+                  "termsAcceptedAt": {
+                    "type": "string",
+                    "format": "date-time",
+                    "nullable": true
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/applications/mine": {
+      "get": {
+        "operationId": "getMyApplication",
+        "summary": "Min rådgivaransökan",
+        "description": "Radskyddet gör urvalet - ingen where-sats på användaren. Ingen ansökan är ett giltigt läge, inte ett fel: svaret är 200 med null.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/applications/{applicationId}/approve": {
+      "post": {
+        "operationId": "approveApplication",
+        "summary": "Godkänn en ansökan",
+        "description": "Godkännandet SKAPAR praktikerprofilen, och det sker i en databasfunktion: två anrop hade annars kunnat skapa två profiler för samma ansökan, och behörighetsprövningen hör hemma där den inte går att kringgå.",
+        "x-status": "beta",
+        "parameters": [
+          {
+            "name": "applicationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Ansökans id."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/applications/{applicationId}/review": {
+      "post": {
+        "operationId": "reviewApplication",
+        "summary": "Sätt granskningsstatus",
+        "description": "Status och anteckning. Rollprövningen bor i databasfunktionen.",
+        "x-status": "beta",
+        "parameters": [
+          {
+            "name": "applicationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Ansökans id."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "status"
+                ],
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "maxLength": 40
+                  },
+                  "note": {
+                    "type": "string",
+                    "maxLength": 2000,
+                    "nullable": true
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/auth/login": {
       "post": {
         "operationId": "login",
@@ -330,61 +583,11 @@
         }
       }
     },
-    "/auth/register": {
+    "/auth/logout": {
       "post": {
-        "operationId": "register",
-        "summary": "Skapa ett konto",
-        "description": "Skapar kontot och loggar in direkt - ingen e-postbekräftelse. Produkten används av någon vars bolag är i kris, och ett extra steg där är ett steg för mycket. Till skillnad från inloggningen röjer svaret att adressen finns: ett konto kan inte skapas två gånger. Priset betalas med takfrekvensen, som är inloggningens. Profilen (roll, namn) sätts separat i onboardingen. Kräver ingen autentisering.",
-        "x-status": "beta",
-        "responses": {
-          "201": {
-            "description": "OK"
-          },
-          "default": {
-            "description": "Fel",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        },
-        "security": [],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": [
-                  "email",
-                  "password"
-                ],
-                "properties": {
-                  "email": {
-                    "type": "string",
-                    "format": "email",
-                    "maxLength": 320
-                  },
-                  "password": {
-                    "type": "string",
-                    "minLength": 8,
-                    "maxLength": 400
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/auth/password-reset": {
-      "post": {
-        "operationId": "requestPasswordReset",
-        "summary": "Begär en återställningslänk",
-        "description": "Svaret är ALLTID detsamma, oavsett om adressen har ett konto. Skulle det skilja vore formuläret ett register över vilka bolag som är kunder i en insolvenstjänst. Finns kontot läggs ett mejl i utkorgen med en länk som lever en timme och kan användas en gång; en ny begäran makulerar den förra. Kräver ingen autentisering.",
+        "operationId": "logout",
+        "summary": "Återkalla den egna sessionen",
+        "description": "Återkallar sessionen bakom den token som skickas med. Återkallningen är slutgiltig - en token som en gång är död blir aldrig levande igen.",
         "x-status": "beta",
         "responses": {
           "200": {
@@ -400,23 +603,25 @@
               }
             }
           }
-        },
-        "security": [],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": [
-                  "email"
-                ],
-                "properties": {
-                  "email": {
-                    "type": "string",
-                    "format": "email",
-                    "maxLength": 320
-                  }
+        }
+      }
+    },
+    "/auth/me": {
+      "get": {
+        "operationId": "me",
+        "summary": "Vem den aktuella sessionen tillhör",
+        "description": "Kontot bakom token, med namn och roll ur profilen. Läses genom radskyddet som allt annat.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
                 }
               }
             }
@@ -482,11 +687,11 @@
         }
       }
     },
-    "/auth/logout": {
+    "/auth/password-reset": {
       "post": {
-        "operationId": "logout",
-        "summary": "Återkalla den egna sessionen",
-        "description": "Återkallar sessionen bakom den token som skickas med. Återkallningen är slutgiltig - en token som en gång är död blir aldrig levande igen.",
+        "operationId": "requestPasswordReset",
+        "summary": "Begär en återställningslänk",
+        "description": "Svaret är ALLTID detsamma, oavsett om adressen har ett konto. Skulle det skilja vore formuläret ett register över vilka bolag som är kunder i en insolvenstjänst. Finns kontot läggs ett mejl i utkorgen med en länk som lever en timme och kan användas en gång; en ny begäran makulerar den förra. Kräver ingen autentisering.",
         "x-status": "beta",
         "responses": {
           "200": {
@@ -502,17 +707,38 @@
               }
             }
           }
+        },
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "email"
+                ],
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "format": "email",
+                    "maxLength": 320
+                  }
+                }
+              }
+            }
+          }
         }
       }
     },
-    "/auth/me": {
-      "get": {
-        "operationId": "me",
-        "summary": "Vem den aktuella sessionen tillhör",
-        "description": "Kontot bakom token, med namn och roll ur profilen. Läses genom radskyddet som allt annat.",
+    "/auth/register": {
+      "post": {
+        "operationId": "register",
+        "summary": "Skapa ett konto",
+        "description": "Skapar kontot och loggar in direkt - ingen e-postbekräftelse. Produkten används av någon vars bolag är i kris, och ett extra steg där är ett steg för mycket. Till skillnad från inloggningen röjer svaret att adressen finns: ett konto kan inte skapas två gånger. Priset betalas med takfrekvensen, som är inloggningens. Profilen (roll, namn) sätts separat i onboardingen. Kräver ingen autentisering.",
         "x-status": "beta",
         "responses": {
-          "200": {
+          "201": {
             "description": "OK"
           },
           "default": {
@@ -521,6 +747,33 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "email",
+                  "password"
+                ],
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "format": "email",
+                    "maxLength": 320
+                  },
+                  "password": {
+                    "type": "string",
+                    "minLength": 8,
+                    "maxLength": 400
+                  }
                 }
               }
             }
@@ -1084,49 +1337,6 @@
                       "type": "string"
                     },
                     "maxItems": 50
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/company-lookup": {
-      "post": {
-        "operationId": "companyLookup",
-        "summary": "Slå upp ett bolag på organisationsnummer",
-        "description": "KRÄVER INLOGGNING, trots att uppgifterna är offentliga: rutten hämtar en extern sida på anroparens vägnar, och en öppen sådan är en proxy vem som helst kan låna. Numret måste vara exakt tio siffror - då finns ingen adress att styra om anropet till. Ett null-svar är giltigt: registret har inte alla bolag.",
-        "x-status": "beta",
-        "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "default": {
-            "description": "Fel",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        },
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": [
-                  "orgNumber"
-                ],
-                "properties": {
-                  "orgNumber": {
-                    "type": "string",
-                    "maxLength": 20,
-                    "description": "Tio siffror, med eller utan bindestreck."
                   }
                 }
               }
@@ -3239,6 +3449,49 @@
         }
       }
     },
+    "/company-lookup": {
+      "post": {
+        "operationId": "companyLookup",
+        "summary": "Slå upp ett bolag på organisationsnummer",
+        "description": "KRÄVER INLOGGNING, trots att uppgifterna är offentliga: rutten hämtar en extern sida på anroparens vägnar, och en öppen sådan är en proxy vem som helst kan låna. Numret måste vara exakt tio siffror - då finns ingen adress att styra om anropet till. Ett null-svar är giltigt: registret har inte alla bolag.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "orgNumber"
+                ],
+                "properties": {
+                  "orgNumber": {
+                    "type": "string",
+                    "maxLength": 20,
+                    "description": "Tio siffror, med eller utan bindestreck."
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/contact": {
       "post": {
         "operationId": "submitContactMessage",
@@ -3645,6 +3898,41 @@
         }
       }
     },
+    "/documents/{documentId}": {
+      "delete": {
+        "operationId": "removeDocument",
+        "summary": "Radera en handling",
+        "description": "RADEN FÖRST, FILEN SEDAN. Går objektborttagningen fel blir resultatet en fil ingen pekar på - städbart. Tvärtom blir resultatet en rad som pekar på ingenting, och en handling i listan som inte går att öppna.",
+        "x-status": "beta",
+        "parameters": [
+          {
+            "name": "documentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Handlingens id."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/documents/{documentId}/confirm": {
       "post": {
         "operationId": "confirmDocumentUpload",
@@ -3731,120 +4019,6 @@
         }
       }
     },
-    "/documents/{documentId}/url": {
-      "get": {
-        "operationId": "getDocumentDownloadUrl",
-        "summary": "En kortlivad, signerad nedladdnings-URL. Signeras bara efter app.may_read_document(); storage_path lämnar aldrig servern. Okänt och obehörigt dokument ger samma 404.",
-        "x-status": "beta",
-        "responses": {
-          "200": {
-            "description": "Den signerade URL:en",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "required": [
-                    "url",
-                    "expiresInSeconds"
-                  ],
-                  "properties": {
-                    "url": {
-                      "type": "string"
-                    },
-                    "fileName": {
-                      "type": "string"
-                    },
-                    "expiresInSeconds": {
-                      "type": "integer"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Fel",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/documents/{documentId}": {
-      "delete": {
-        "operationId": "removeDocument",
-        "summary": "Radera en handling",
-        "description": "RADEN FÖRST, FILEN SEDAN. Går objektborttagningen fel blir resultatet en fil ingen pekar på - städbart. Tvärtom blir resultatet en rad som pekar på ingenting, och en handling i listan som inte går att öppna.",
-        "x-status": "beta",
-        "parameters": [
-          {
-            "name": "documentId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            },
-            "description": "Handlingens id."
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "default": {
-            "description": "Fel",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/documents/{documentId}/signatures": {
-      "get": {
-        "operationId": "listDocumentSignatures",
-        "summary": "Signaturerna på en handling",
-        "description": "Läsningen prövas med samma fråga som nedladdningen (app.may_read_document). Utan den kunde vem som helst räkna upp vilka som skrivit under någon annans styrelseprotokoll.",
-        "x-status": "beta",
-        "parameters": [
-          {
-            "name": "documentId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            },
-            "description": "Handlingens id."
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "default": {
-            "description": "Fel",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/documents/{documentId}/signature": {
       "post": {
         "operationId": "signDocument",
@@ -3907,6 +4081,85 @@
                     "type": "string",
                     "maxLength": 4000
                   }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/documents/{documentId}/signatures": {
+      "get": {
+        "operationId": "listDocumentSignatures",
+        "summary": "Signaturerna på en handling",
+        "description": "Läsningen prövas med samma fråga som nedladdningen (app.may_read_document). Utan den kunde vem som helst räkna upp vilka som skrivit under någon annans styrelseprotokoll.",
+        "x-status": "beta",
+        "parameters": [
+          {
+            "name": "documentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Handlingens id."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/documents/{documentId}/url": {
+      "get": {
+        "operationId": "getDocumentDownloadUrl",
+        "summary": "En kortlivad, signerad nedladdnings-URL. Signeras bara efter app.may_read_document(); storage_path lämnar aldrig servern. Okänt och obehörigt dokument ger samma 404.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Den signerade URL:en",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "url",
+                    "expiresInSeconds"
+                  ],
+                  "properties": {
+                    "url": {
+                      "type": "string"
+                    },
+                    "fileName": {
+                      "type": "string"
+                    },
+                    "expiresInSeconds": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
                 }
               }
             }
@@ -4073,6 +4326,120 @@
               "application/json": {
                 "schema": {
                   "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/me/erasure": {
+      "get": {
+        "operationId": "getMyErasureRequest",
+        "summary": "Den egna begäran om radering",
+        "description": "Svarar 200 med null när ingen begäran finns. Radskyddet gör urvalet - anropet kan bara nå det egna kontot.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Begäran om radering, eller null när ingen finns",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/ErasureRequest"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "requestMyErasure",
+        "summary": "Begär radering av det egna kontot",
+        "description": "Verkställs tidigast efter karenstiden på sju dagar. En andra begäran ger tillbaka den befintliga med oförändrad karenstid - att förlänga den vid varje klick hade gjort raderingen omöjlig att nå. Vad som raderas, anonymiseras och behålls står i manifestet på inställningssidan; fakturor och händelselogg behålls med rättslig grund.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Begäran om radering",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErasureRequest"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "description": "Radering går inte att ångra efter karenstiden, så begäran kräver lösenordet.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "password"
+                ],
+                "properties": {
+                  "password": {
+                    "type": "string",
+                    "maxLength": 400,
+                    "description": "Kontots lösenord. Krävs för åtgärder som inte går att ångra: en session bevisar att någon loggade in en gång, inte att det är samma människa som sitter där nu."
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "cancelMyErasure",
+        "summary": "Återkallar begäran om radering",
+        "description": "Verbet gäller BEGÄRAN, inte kontot: att lägga verkställandet bakom DELETE hade gjort den farligaste operationen i produkten till den lättaste att råka anropa. Går bara så länge begäran inte verkställts.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Begäran om radering",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErasureRequest"
                 }
               }
             }
@@ -4787,6 +5154,107 @@
         }
       }
     },
+    "/ops/news-feeds": {
+      "get": {
+        "operationId": "getNewsFeeds",
+        "summary": "Driftens lista över nyhetsflöden",
+        "description": "Läsbar för varje inloggad: vilka källor en bevakning vilar på är inte en hemlighet, det är svaret på hur vi vet något. standard visar utgångslistan som gäller när inget satts.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "Flödena",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "feeds": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/NewsFeed"
+                      }
+                    },
+                    "standard": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/NewsFeed"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "setNewsFeeds",
+        "summary": "Sätter nyhetsflödena",
+        "description": "Kräver administratör, vilket radskyddet på app_settings avgör. Rader utan namn eller utan http/https-adress sållas bort, och en tom lista faller tillbaka på utgångslistan - en felskriven parameter ska inte tysta bevakningen utan att någon märker det. Ändringen skrivs till driftens revisionsspår.",
+        "x-status": "beta",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "feeds"
+                ],
+                "properties": {
+                  "feeds": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/NewsFeed"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Listan som sparades",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "feeds": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/NewsFeed"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/ops/north-star": {
       "get": {
         "operationId": "getNorthStarCounts",
@@ -5449,6 +5917,133 @@
         }
       }
     },
+    "/referrals": {
+      "get": {
+        "operationId": "listReferrals",
+        "summary": "Mina förmedlingar",
+        "description": "Radskyddet avgör vilka rader som syns: förmedlaren ser sina, praktikern sina.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "createReferral",
+        "summary": "Registrera en förmedling",
+        "description": "referrer_user_id sätts ur sessionen. Avgiften och fakturerbarheten sätts av månadsjobbet, inte här.",
+        "x-status": "beta",
+        "responses": {
+          "201": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "professionalId",
+                  "channel"
+                ],
+                "properties": {
+                  "professionalId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "caseId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "nullable": true
+                  },
+                  "channel": {
+                    "type": "string",
+                    "maxLength": 40
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/referrals/{referralId}": {
+      "patch": {
+        "operationId": "updateReferralStatus",
+        "summary": "Ändra en förmednings status",
+        "description": "Noll ändrade rader ger 404 - samma tystnad som resten: vi skiljer inte på 'finns inte' och 'får inte ändra'.",
+        "x-status": "beta",
+        "parameters": [
+          {
+            "name": "referralId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Förmedlingens id."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "status"
+                ],
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "maxLength": 40
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/share-links/{linkId}": {
       "delete": {
         "operationId": "revokeShareLink",
@@ -6020,6 +6615,83 @@
         }
       }
     },
+    "/sources/news": {
+      "post": {
+        "operationId": "fetchCompanyNews",
+        "summary": "Nyheter om bolaget ur namngivna RSS-flöden",
+        "description": "Läser de RSS- eller Atom-flöden driften angett (driftparametern news_feeds) och plockar ut de artiklar som nämner bolaget vid namn eller organisationsnummer. BARA RUBRIK, DATUM, LÄNK OCH KÄLLA returneras - artikeltexten är upphovsrättsskyddad och hämtas aldrig. En träff kräver bolagsnamnet som sammanhängande fras med ordgränser, eller organisationsnumret; lösa ord räknas inte, och ett för allmänt bolagsnamn matchas inte alls utan förklaras i note. Flödena kommer ur driftparametern och ALDRIG ur anropet: en klient som fick peka ut adresser hade gjort rutten till en öppen proxy. Utfallet redovisas per flöde i feeds - ett flöde som inte svarade döljs aldrig, eftersom en bevakning som tyst blivit tunnare läses som att inget har hänt. status skiljer traff, ingen-traff (flödena svarade men ingen artikel nämnde bolaget) och ingen-kalla (inget flöde är angivet). De tre får inte slås ihop.",
+        "x-status": "beta",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "description": "Minst ett av fälten krävs.",
+                "properties": {
+                  "companyName": {
+                    "type": "string",
+                    "description": "Bolagsnamnet. Bolagsform (AB, HB, publ, holding) räknas bort före matchning."
+                  },
+                  "orgNumber": {
+                    "type": "string",
+                    "description": "Organisationsnummer, med eller utan bindestreck."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Träffar och utfall per flöde",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "traff",
+                        "ingen-traff",
+                        "ingen-kalla"
+                      ]
+                    },
+                    "hits": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/NewsHit"
+                      }
+                    },
+                    "feeds": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/NewsFeedOutcome"
+                      }
+                    },
+                    "note": {
+                      "type": "string",
+                      "description": "Klartext om hur många flöden som svarade, vilka som tystnade och varför resultatet blev som det blev."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/sources/website": {
       "post": {
         "operationId": "fetchCompanyWebsite",
@@ -6251,298 +6923,6 @@
                   "properties": {
                     "deleted": {
                       "type": "boolean"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Fel",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/me/erasure": {
-      "get": {
-        "operationId": "getMyErasureRequest",
-        "summary": "Den egna begäran om radering",
-        "description": "Svarar 200 med null när ingen begäran finns. Radskyddet gör urvalet - anropet kan bara nå det egna kontot.",
-        "x-status": "beta",
-        "responses": {
-          "200": {
-            "description": "Begäran om radering, eller null när ingen finns",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "oneOf": [
-                    {
-                      "$ref": "#/components/schemas/ErasureRequest"
-                    },
-                    {
-                      "type": "null"
-                    }
-                  ]
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Fel",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "operationId": "requestMyErasure",
-        "summary": "Begär radering av det egna kontot",
-        "description": "Verkställs tidigast efter karenstiden på sju dagar. En andra begäran ger tillbaka den befintliga med oförändrad karenstid - att förlänga den vid varje klick hade gjort raderingen omöjlig att nå. Vad som raderas, anonymiseras och behålls står i manifestet på inställningssidan; fakturor och händelselogg behålls med rättslig grund.",
-        "x-status": "beta",
-        "responses": {
-          "200": {
-            "description": "Begäran om radering",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErasureRequest"
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Fel",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        },
-        "requestBody": {
-          "required": true,
-          "description": "Radering går inte att ångra efter karenstiden, så begäran kräver lösenordet.",
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": [
-                  "password"
-                ],
-                "properties": {
-                  "password": {
-                    "type": "string",
-                    "maxLength": 400,
-                    "description": "Kontots lösenord. Krävs för åtgärder som inte går att ångra: en session bevisar att någon loggade in en gång, inte att det är samma människa som sitter där nu."
-                  }
-                }
-              }
-            }
-          }
-        }
-      },
-      "delete": {
-        "operationId": "cancelMyErasure",
-        "summary": "Återkallar begäran om radering",
-        "description": "Verbet gäller BEGÄRAN, inte kontot: att lägga verkställandet bakom DELETE hade gjort den farligaste operationen i produkten till den lättaste att råka anropa. Går bara så länge begäran inte verkställts.",
-        "x-status": "beta",
-        "responses": {
-          "200": {
-            "description": "Begäran om radering",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErasureRequest"
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Fel",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/sources/news": {
-      "post": {
-        "operationId": "fetchCompanyNews",
-        "summary": "Nyheter om bolaget ur namngivna RSS-flöden",
-        "description": "Läser de RSS- eller Atom-flöden driften angett (driftparametern news_feeds) och plockar ut de artiklar som nämner bolaget vid namn eller organisationsnummer. BARA RUBRIK, DATUM, LÄNK OCH KÄLLA returneras - artikeltexten är upphovsrättsskyddad och hämtas aldrig. En träff kräver bolagsnamnet som sammanhängande fras med ordgränser, eller organisationsnumret; lösa ord räknas inte, och ett för allmänt bolagsnamn matchas inte alls utan förklaras i note. Flödena kommer ur driftparametern och ALDRIG ur anropet: en klient som fick peka ut adresser hade gjort rutten till en öppen proxy. Utfallet redovisas per flöde i feeds - ett flöde som inte svarade döljs aldrig, eftersom en bevakning som tyst blivit tunnare läses som att inget har hänt. status skiljer traff, ingen-traff (flödena svarade men ingen artikel nämnde bolaget) och ingen-kalla (inget flöde är angivet). De tre får inte slås ihop.",
-        "x-status": "beta",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "description": "Minst ett av fälten krävs.",
-                "properties": {
-                  "companyName": {
-                    "type": "string",
-                    "description": "Bolagsnamnet. Bolagsform (AB, HB, publ, holding) räknas bort före matchning."
-                  },
-                  "orgNumber": {
-                    "type": "string",
-                    "description": "Organisationsnummer, med eller utan bindestreck."
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Träffar och utfall per flöde",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "status": {
-                      "type": "string",
-                      "enum": [
-                        "traff",
-                        "ingen-traff",
-                        "ingen-kalla"
-                      ]
-                    },
-                    "hits": {
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/components/schemas/NewsHit"
-                      }
-                    },
-                    "feeds": {
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/components/schemas/NewsFeedOutcome"
-                      }
-                    },
-                    "note": {
-                      "type": "string",
-                      "description": "Klartext om hur många flöden som svarade, vilka som tystnade och varför resultatet blev som det blev."
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Fel",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/ops/news-feeds": {
-      "get": {
-        "operationId": "getNewsFeeds",
-        "summary": "Driftens lista över nyhetsflöden",
-        "description": "Läsbar för varje inloggad: vilka källor en bevakning vilar på är inte en hemlighet, det är svaret på hur vi vet något. standard visar utgångslistan som gäller när inget satts.",
-        "x-status": "beta",
-        "responses": {
-          "200": {
-            "description": "Flödena",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "feeds": {
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/components/schemas/NewsFeed"
-                      }
-                    },
-                    "standard": {
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/components/schemas/NewsFeed"
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Fel",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "operationId": "setNewsFeeds",
-        "summary": "Sätter nyhetsflödena",
-        "description": "Kräver administratör, vilket radskyddet på app_settings avgör. Rader utan namn eller utan http/https-adress sållas bort, och en tom lista faller tillbaka på utgångslistan - en felskriven parameter ska inte tysta bevakningen utan att någon märker det. Ändringen skrivs till driftens revisionsspår.",
-        "x-status": "beta",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": [
-                  "feeds"
-                ],
-                "properties": {
-                  "feeds": {
-                    "type": "array",
-                    "items": {
-                      "$ref": "#/components/schemas/NewsFeed"
-                    }
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Listan som sparades",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "feeds": {
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/components/schemas/NewsFeed"
-                      }
                     }
                   }
                 }

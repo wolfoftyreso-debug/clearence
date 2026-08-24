@@ -20,7 +20,7 @@
  * Körs av server/tests/run.sh, som reser databasen först.
  */
 
-import { createApiServer, datum, handle } from "../index";
+import { createApiServer, datum, handle, UPPRAKNINGAR } from "../index";
 import { closePool, nollstallRollGrind, provaDatabasroll, withAnon, withUser } from "../db";
 import { hashPassword, sha256, verifyPassword } from "../auth";
 import { nollstallGranser, provaGrans } from "../rateLimit";
@@ -3441,6 +3441,183 @@ await closePool();
 
   const igenRaderat = await call("DELETE", `/v1/documents/${dok}`, { token: a });
   check("en andra radering ger 404, inte 500", igenRaderat.status === 404, igenRaderat);
+}
+
+/* --- ETAPP 2: ansökningarna och förmedlingarna -------------------------- */
+
+{
+  const agnesE2 = await call("POST", "/v1/auth/login", {
+    body: { email: "agnes@bolag-a.se", password: "hemligt-losen-agnes" },
+  });
+  const bertilE2 = await call("POST", "/v1/auth/login", {
+    body: { email: "bertil@bolag-b.se", password: "hemligt-losen-bertil" },
+  });
+  const a2: string = String(agnesE2.body.token);
+  const b2: string = String(bertilE2.body.token);
+
+  /* Ansökan ------------------------------------------------------------- */
+
+  const ingen = await call("GET", "/v1/applications/mine", { token: a2 });
+  check("ingen ansökan är ett giltigt läge, inte ett fel", ingen.status === 200, ingen);
+  check("och svaret är null, inte 404", ingen.body.application === null, ingen.body);
+
+  const skickad = await call("POST", "/v1/applications", {
+    token: a2,
+    body: {
+      contactName: "Agnes Ek",
+      email: "agnes@bolag-a.se",
+      company: "Ek Rekonstruktion AB",
+      orgNumber: "5560001111",
+      category: "rekonstruktor",
+      location: "Stockholm",
+      description: "Rekonstruktioner för mindre bolag.",
+      specializations: ["rekonstruktion", "ackord"],
+    },
+  });
+  check("ansökan tas emot", skickad.status === 201, skickad);
+
+  const min = await call("GET", "/v1/applications/mine", { token: a2 });
+  check("och syns för den som skickade den", min.status === 200 && min.body.application !== null, min.body);
+
+  /*
+   * ÄGARSKAPET UR SESSIONEN.
+   *
+   * Skickas ett annat user_id in ska det ignoreras - annars kan en
+   * inloggad lägga en ansökan i någon annans namn och den andre plötsligt
+   * står som sökande hos en insolvenstjänst.
+   */
+  await call("POST", "/v1/applications", {
+    token: b2,
+    body: {
+      contactName: "Bertil",
+      email: "bertil@bolag-b.se",
+      company: "B AB",
+      orgNumber: "5560002222",
+      category: "affarsjurist",
+      location: "Göteborg",
+      description: "Juridik.",
+      userId: AGNES,
+      user_id: AGNES,
+    },
+  });
+  /*
+   * "MIN" ÄR ETT URVAL, INTE EN BEHÖRIGHETSFRÅGA.
+   *
+   * Agnes är plattformsadmin och SKA kunna se alla ansökningar. Just
+   * därför räcker inte radskyddet för att avgöra vad "min ansökan" är:
+   * utan en where-sats blir svaret den senaste ansökan i hela systemet.
+   * Bertil skickade sin efter Agnes - hade rutten litat på radskyddet
+   * hade Agnes fått hans namn, e-post och organisationsnummer på sin egen
+   * sida.
+   */
+  const agnesEfter = await call("GET", "/v1/applications/mine", { token: a2 });
+  check(
+    "en ADMIN får sin EGEN ansökan, inte den senaste i systemet",
+    (agnesEfter.body.application as { id?: string } | null)?.id ===
+      (min.body.application as { id?: string } | null)?.id,
+    { fick: agnesEfter.body.application, vantat: min.body.application },
+  );
+
+  /*
+   * Och åt andra hållet: Bertil skickade in AGNES user_id i kroppen.
+   * Ansökan ska ha hamnat på HONOM. Kontraktet lämnar bara ut fem fält
+   * här (id, kategori, status, anteckning, tid) - kategorin räcker för
+   * att skilja dem åt: Agnes sökte som rekonstruktör, Bertil som
+   * affärsjurist.
+   */
+  const bertilsEgen = await call("GET", "/v1/applications/mine", { token: b2 });
+  const bertilsAnsokan = bertilsEgen.body.application as { id?: string; category?: string } | null;
+  check(
+    "ett påhittat user_id gav ansökan till den som var INLOGGAD",
+    bertilsAnsokan?.category === "affarsjurist",
+    bertilsEgen.body,
+  );
+  check(
+    "och det är inte samma rad som Agnes ser som sin",
+    bertilsAnsokan?.id !== (agnesEfter.body.application as { id?: string } | null)?.id,
+  );
+
+  /*
+   * KÖN ÄR ADMINENS - OCH DET ÄR RADSKYDDET SOM AVGÖR, INTE RUTTEN.
+   *
+   * Agnes gjordes till plattformsadmin tidigare i sviten; Bertil är en
+   * vanlig användare. Skillnaden mellan dem är hela provet: rutten är
+   * densamma, frågan är densamma, och det enda som skiljer svaren är
+   * policyerna i databasen.
+   *
+   * En icke-admin får en TOM lista, inte 403. Det är avsiktligt: ett 403
+   * hade bekräftat att kön finns och att det ligger rader i den.
+   */
+  const konAdmin = await call("GET", "/v1/applications", { token: a2 });
+  check("adminen ser kön", konAdmin.status === 200, konAdmin);
+  check("och den innehåller ansökningar", (konAdmin.body.applications as unknown[]).length > 0, konAdmin.body);
+
+  const konVanlig = await call("GET", "/v1/applications", { token: b2 });
+  check("en vanlig användare får svar, inte 403", konVanlig.status === 200, konVanlig);
+  const bertilsRader = konVanlig.body.applications as { email?: string }[];
+  check(
+    "MEN BARA SIN EGEN ANSÖKAN - ingen annans",
+    bertilsRader.every((r) => r.email === "bertil@bolag-b.se"),
+    bertilsRader.map((r) => r.email),
+  );
+
+  const utanInlogg = await call("GET", "/v1/applications", {});
+  check("och stängd helt utan inloggning", utanInlogg.status === 401, utanInlogg);
+
+  /* Förmedlingar --------------------------------------------------------- */
+
+  const minaForm = await call("GET", "/v1/referrals", { token: a2 });
+  check("förmedlingslistan svarar", minaForm.status === 200, minaForm);
+  check("och är tom till att börja med", (minaForm.body.referrals as unknown[]).length === 0);
+
+  const felStatus = await call("PATCH", `/v1/referrals/${CASE_A}`, {
+    token: a2,
+    body: { status: "hittepa" },
+  });
+  check("ett okänt statusvärde ger 400, inte 500", felStatus.status === 400, felStatus);
+  check(
+    "och beskedet räknar upp vad som är tillåtet",
+    /initiated/.test(String((felStatus.body.error as { message?: string } | undefined)?.message ?? "")),
+    felStatus.body,
+  );
+
+  const felKategori = await call("POST", "/v1/applications", {
+    token: b2,
+    body: {
+      contactName: "B", email: "b@x.se", company: "B", orgNumber: "5560003333",
+      category: "lawyer", location: "Malmö", description: "x",
+    },
+  });
+  check("en okänd kategori ger 400, inte 500", felKategori.status === 400, felKategori);
+
+  /*
+   * UPPRÄKNINGARNA I KODEN MOT DEM I DATABASEN.
+   *
+   * Två listor som ska säga samma sak, på två ställen. Går de isär svarar
+   * API:t 400 på något databasen skulle tagit emot, eller 500 på något den
+   * inte skulle. Jämförelsen görs mot pg_enum, inte mot en tredje lista.
+   */
+  for (const [typ, iKoden] of Object.entries(UPPRAKNINGAR)) {
+    const iDatabasen = await withAnon(async (tx) => {
+      const { rows } = await tx.query(
+        `select e.enumlabel as v from pg_type t join pg_enum e on e.enumtypid = t.oid
+          where t.typname = $1 order by e.enumsortorder`,
+        [typ],
+      );
+      return rows.map((r) => String(r.v));
+    });
+    check(
+      `uppräkningen ${typ} stämmer med databasen`,
+      JSON.stringify([...iKoden]) === JSON.stringify(iDatabasen),
+      { iKoden, iDatabasen },
+    );
+  }
+
+  const okand = await call("PATCH", `/v1/referrals/${CASE_A}`, {
+    token: a2,
+    body: { status: "completed" },
+  });
+  check("en förmedling som inte är din går inte att ändra", okand.status === 404, okand);
 }
 
 /* --- KONTOT: registrering, återställning, lösenordsbyte ------------------ */

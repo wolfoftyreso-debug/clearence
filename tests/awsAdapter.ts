@@ -117,10 +117,8 @@ for (const [portName, port] of ports(demoAdapter)) {
  * härifrån - annars blir listan ett spöke.
  */
 const ATERSTAR: Record<string, string> = {
-  applications: "Rådgivaransökningarna. Egna rutter byggs; ingen finns ännu.",
   leads: "Förmedlingarna: upplåsning, avböjande, debitering.",
   professionals: "Praktikerregistret, byråteamen och profilanspråken.",
-  referrals: "Förmedlingsavtalen mellan byråer.",
 };
 
 const oväntade = remaining.filter((r) => !(r.split(".")[0] in ATERSTAR));

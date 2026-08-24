@@ -77,6 +77,14 @@ import { ApiRequestError, apiFetch, clearToken, getToken, setToken } from "./cli
  * migreringsmätare - den ska växa tills delegeringen kan tas bort.
  */
 export const MIGRATED_PORTS = [
+  "applications.getMine",
+  "applications.create",
+  "applications.listAll",
+  "applications.approve",
+  "applications.review",
+  "referrals.listMine",
+  "referrals.create",
+  "referrals.updateStatus",
   "cases.listMine",
   "cases.select",
   "cases.create",
@@ -1162,6 +1170,54 @@ const audit = {
  * MIGRATED_PORTS täcker hela DataPort tas den raden bort, och då är
  * "inte Supabase" sant hela vägen.
  */
+/* --- Rådgivaransökningarna och förmedlingarna ---------------------------- */
+
+const applications = {
+  async getMine() {
+    const res = await apiFetch<{ application: unknown }>("/v1/applications/mine");
+    return res.application as Awaited<ReturnType<DataPort["applications"]["getMine"]>>;
+  },
+  async create(input: Parameters<DataPort["applications"]["create"]>[0]): Promise<void> {
+    // userId skickas inte med: servern tar den ur sessionen.
+    const { userId: _userId, ...falt } = input;
+    await apiFetch("/v1/applications", { method: "POST", body: falt });
+  },
+  async listAll() {
+    const res = await apiFetch<{ applications: unknown[] }>("/v1/applications");
+    return res.applications as Awaited<ReturnType<DataPort["applications"]["listAll"]>>;
+  },
+  async approve(id: string): Promise<string> {
+    const res = await apiFetch<{ professionalId: string }>(`/v1/applications/${id}/approve`, {
+      method: "POST",
+    });
+    return res.professionalId;
+  },
+  async review(
+    id: string,
+    status: Parameters<DataPort["applications"]["review"]>[1],
+    note: string | null,
+  ): Promise<void> {
+    await apiFetch(`/v1/applications/${id}/review`, { method: "POST", body: { status, note } });
+  },
+};
+
+const referrals = {
+  async listMine() {
+    const res = await apiFetch<{ referrals: unknown[] }>("/v1/referrals");
+    return res.referrals as Awaited<ReturnType<DataPort["referrals"]["listMine"]>>;
+  },
+  async create(input: Parameters<DataPort["referrals"]["create"]>[0]): Promise<void> {
+    const { userId: _userId, ...falt } = input;
+    await apiFetch("/v1/referrals", { method: "POST", body: falt });
+  },
+  async updateStatus(
+    id: string,
+    status: Parameters<DataPort["referrals"]["updateStatus"]>[1],
+  ): Promise<void> {
+    await apiFetch(`/v1/referrals/${id}`, { method: "PATCH", body: { status } });
+  },
+};
+
 /**
  * BOLAGSUPPSLAGET.
  *
@@ -1374,6 +1430,8 @@ export const awsAdapterUtanBro: DataPort = {
   ...supabaseAdapter,
   auth: auth as DataPort["auth"],
   companyLookup: companyLookup as DataPort["companyLookup"],
+  applications: applications as DataPort["applications"],
+  referrals: referrals as DataPort["referrals"],
   contact: contact as DataPort["contact"],
   billing: billing as DataPort["billing"],
   ops: ops as DataPort["ops"],

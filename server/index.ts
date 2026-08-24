@@ -4266,6 +4266,255 @@ const koaMejl = async (
 };
 
 
+
+
+/*
+ * UPPRÄKNINGARNA, SKRIVNA HÄR OCH INTE BARA I DATABASEN.
+ *
+ * Ett okänt värde gav förut `invalid input value for enum
+ * professional_category: "lawyer"` med status 500 - ett internt fel för
+ * något som är ett anroparfel, och ett meddelande som varken säger vad som
+ * är tillåtet eller att det var anroparens misstag.
+ *
+ * Listorna nedan speglar typerna i databasen. Går de isär blir provet i
+ * server/tests/integration.ts rött: det läser pg_enum och jämför.
+ */
+const PRAKTIKERKATEGORIER = [
+  "konkursforvaltare",
+  "rekonstruktor",
+  "revisor",
+  "affarsjurist",
+  "kreditbolag",
+] as const;
+const ANSOKNINGSSTATUSAR = ["pending", "needs_info", "approved", "rejected"] as const;
+const FORMEDLINGSKANALER = ["email", "phone", "website"] as const;
+const FORMEDLINGSSTATUSAR = ["initiated", "accepted", "declined", "completed"] as const;
+
+/** Speglar databasens typer. server/tests/integration.ts jämför mot pg_enum. */
+export const UPPRAKNINGAR = {
+  professional_category: PRAKTIKERKATEGORIER,
+  application_status: ANSOKNINGSSTATUSAR,
+  referral_channel: FORMEDLINGSKANALER,
+  referral_status: FORMEDLINGSSTATUSAR,
+} as const;
+
+/** Prövar ett fält mot en uppräkning och ger 400 med hela listan. */
+const uppraknat = <T extends string>(body: unknown, falt: string, giltiga: readonly T[]): T => {
+  const varde = str(body, falt, { max: 60 });
+  if (!(giltiga as readonly string[]).includes(varde)) {
+    throw badRequest(`${falt} måste vara ett av: ${giltiga.join(", ")}.`);
+  }
+  return varde as T;
+};
+
+/* --- Rådgivaransökningarna ---------------------------------------------- */
+
+const toApplication = (row: Record<string, unknown>) => ({
+  id: row.id,
+  category: row.category,
+  status: row.status,
+  reviewNote: row.review_note ?? null,
+  createdAt: iso(row.created_at),
+});
+
+const toApplicationForReview = (row: Record<string, unknown>) => ({
+  ...toApplication(row),
+  contactName: row.contact_name,
+  email: row.email,
+  phone: row.phone ?? null,
+  company: row.company,
+  orgNumber: row.org_number,
+  location: row.location,
+  description: row.description,
+  website: row.website ?? null,
+  specializations: row.specializations ?? [],
+  fixedPrices: row.fixed_prices ?? null,
+  credentialAuthority: row.credential_authority ?? null,
+  credentialReference: row.credential_reference ?? null,
+  credentialNote: row.credential_note ?? null,
+  reviewedAt: iso(row.reviewed_at),
+});
+
+/**
+ * MIN ANSÖKAN.
+ *
+ * HÄR STÅR EN WHERE-SATS PÅ ANVÄNDAREN, och det är ett undantag från
+ * husregeln. Vanligtvis gör radskyddet urvalet och en extra filtrering i
+ * koden skulle bara dölja ett trasigt radskydd.
+ *
+ * Men "min" är ett URVAL, inte en behörighetsfråga - och för en
+ * plattformsadmin är de två inte samma sak. Adminpolicyn
+ * (applications_admin_read) låter henne se ALLA ansökningar, helt riktigt.
+ * Utan where-satsen blev "senaste raden jag får se" alltså den senaste
+ * ansökan i hela systemet, och en admin som öppnade sin egen sida fick
+ * någon annans namn, e-post och organisationsnummer.
+ *
+ * Felet fanns i supabase-adaptern före det här och gick aldrig att se i
+ * ett prov utan en admin i det.
+ */
+router.get("/v1/applications/mine", async (req) => {
+  const caller = await authenticate(req);
+  const row = await withUser(caller.userId, async (tx) => {
+    const { rows } = await tx.query(
+      `select * from public.professional_applications
+        where user_id = app.current_user_id()
+        order by created_at desc limit 1`,
+    );
+    return rows[0] ?? null;
+  });
+  // Ingen ansökan är ett giltigt läge, inte ett fel: de flesta användare
+  // har ingen. 200 med null, inte 404.
+  return { status: 200, body: { application: row ? toApplication(row) : null } };
+});
+
+router.post("/v1/applications", async (req) => {
+  const caller = await authenticate(req);
+  const kropp = (req.body ?? {}) as Record<string, unknown>;
+  const lista = (falt: string): string[] => {
+    const v = kropp[falt];
+    if (!Array.isArray(v)) return [];
+    return v.slice(0, 40).map((x) => String(x).slice(0, 200));
+  };
+
+  const skapad = await withUser(caller.userId, async (tx) => {
+    const { rowCount } = await tx.query(
+      `insert into public.professional_applications
+         (user_id, contact_name, email, phone, company, org_number, category,
+          location, description, website, specializations, fixed_prices,
+          credential_authority, credential_reference, credential_note, terms_accepted_at)
+       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::jsonb, $13, $14, $15, $16)`,
+      [
+        // user_id ur SESSIONEN, aldrig ur kroppen: annars kan en inloggad
+        // lägga en ansökan i någon annans namn.
+        caller.userId,
+        str(req.body, "contactName", { max: 200 }),
+        str(req.body, "email", { max: 320 }),
+        str(req.body, "phone", { max: 60, required: false }) || null,
+        str(req.body, "company", { max: 200 }),
+        str(req.body, "orgNumber", { max: 20 }),
+        uppraknat(req.body, "category", PRAKTIKERKATEGORIER),
+        str(req.body, "location", { max: 200 }),
+        str(req.body, "description", { max: 4000 }),
+        str(req.body, "website", { max: 500, required: false }) || null,
+        lista("specializations"),
+        JSON.stringify(kropp.fixedPrices ?? null),
+        str(req.body, "credentialAuthority", { max: 200, required: false }) || null,
+        str(req.body, "credentialReference", { max: 200, required: false }) || null,
+        str(req.body, "credentialNote", { max: 2000, required: false }) || null,
+        str(req.body, "termsAcceptedAt", { max: 40, required: false }) || null,
+      ],
+    );
+    return (rowCount ?? 0) > 0;
+  });
+  if (!skapad) throw forbidden("Ansökan kunde inte tas emot.");
+  return { status: 201, body: { received: true } };
+});
+
+/**
+ * HELA KÖN. Bara plattformsadmin - radskyddet avgör, inte den här koden.
+ * En vanlig användare får noll rader, inte ett 403; skillnaden spelar roll
+ * bara för den som felsöker, och tomheten är rätt svar för alla andra.
+ */
+router.get("/v1/applications", async (req) => {
+  const caller = await authenticate(req);
+  const rows = await withUser(caller.userId, async (tx) => {
+    const { rows } = await tx.query(
+      "select * from public.professional_applications order by created_at desc limit 500",
+    );
+    return rows;
+  });
+  return { status: 200, body: { applications: rows.map(toApplicationForReview) } };
+});
+
+/**
+ * GODKÄNNANDET skapar praktikerprofilen. Det sker i en databasfunktion och
+ * inte här: två anrop hade kunnat skapa två profiler för samma ansökan, och
+ * behörighetsprövningen hör hemma där den inte går att kringgå.
+ */
+router.post("/v1/applications/:applicationId/approve", async (req) => {
+  const caller = await authenticate(req);
+  const applicationId = uuidParam(req, "applicationId");
+  const id = await withUser(caller.userId, async (tx) => {
+    const { rows } = await tx.query(
+      "select public.approve_professional_application($1) as id",
+      [applicationId],
+    );
+    return (rows[0]?.id as string | undefined) ?? null;
+  });
+  if (!id) throw notFound("Ansökan finns inte, eller får inte godkännas.");
+  return { status: 200, body: { professionalId: id } };
+});
+
+router.post("/v1/applications/:applicationId/review", async (req) => {
+  const caller = await authenticate(req);
+  const applicationId = uuidParam(req, "applicationId");
+  const status = uppraknat(req.body, "status", ANSOKNINGSSTATUSAR);
+  const note = str(req.body, "note", { max: 2000, required: false }) || null;
+  await withUser(caller.userId, async (tx) => {
+    await tx.query("select public.review_professional_application($1, $2, $3)", [
+      applicationId,
+      status,
+      note,
+    ]);
+  });
+  return { status: 200, body: { reviewed: true } };
+});
+
+/* --- Förmedlingarna ------------------------------------------------------ */
+
+const toReferral = (row: Record<string, unknown>) => ({
+  id: row.id,
+  professionalId: row.professional_id,
+  channel: row.channel,
+  status: row.status,
+  feeAmount: row.fee_amount === null || row.fee_amount === undefined ? null : Number(row.fee_amount),
+  billableAt: iso(row.billable_at),
+  createdAt: iso(row.created_at),
+});
+
+router.get("/v1/referrals", async (req) => {
+  const caller = await authenticate(req);
+  const rows = await withUser(caller.userId, async (tx) => {
+    const { rows } = await tx.query(
+      "select * from public.referrals order by created_at desc limit 500",
+    );
+    return rows;
+  });
+  return { status: 200, body: { referrals: rows.map(toReferral) } };
+});
+
+router.post("/v1/referrals", async (req) => {
+  const caller = await authenticate(req);
+  const professionalId = str(req.body, "professionalId", { max: 64 });
+  const caseId = str(req.body, "caseId", { max: 64, required: false }) || null;
+  const channel = uppraknat(req.body, "channel", FORMEDLINGSKANALER);
+  const skapad = await withUser(caller.userId, async (tx) => {
+    const { rowCount } = await tx.query(
+      `insert into public.referrals (professional_id, referrer_user_id, case_id, channel)
+       values ($1, $2, $3, $4)`,
+      [professionalId, caller.userId, caseId, channel],
+    );
+    return (rowCount ?? 0) > 0;
+  });
+  if (!skapad) throw forbidden("Förmedlingen kunde inte registreras.");
+  return { status: 201, body: { created: true } };
+});
+
+router.patch("/v1/referrals/:referralId", async (req) => {
+  const caller = await authenticate(req);
+  const referralId = uuidParam(req, "referralId");
+  const status = uppraknat(req.body, "status", FORMEDLINGSSTATUSAR);
+  const antal = await withUser(caller.userId, async (tx) => {
+    const { rowCount } = await tx.query("update public.referrals set status = $2 where id = $1", [
+      referralId,
+      status,
+    ]);
+    return rowCount ?? 0;
+  });
+  if (antal === 0) throw notFound("Förmedlingen finns inte, eller får inte ändras.");
+  return { status: 200, body: { updated: true } };
+});
+
 /* --- Kundfakturan: ställs ut, betalas, kvitteras ------------------------- */
 
 /**
