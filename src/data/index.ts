@@ -28,19 +28,28 @@ export const IS_DEMO = import.meta.env.VITE_DEMO_MODE === "true";
 /**
  * Vilken backend bygget pratar med.
  *
- * `aws` väljer CLEARANCE eget API (src/data/aws/adapter.ts). Den
- * migreringen är halvfärdig med flit och säger det själv: de portar som
- * ännu inte flyttat delegeras öppet till supabase-adaptern, och listan
- * över vad som ÄR flyttat står i MIGRATED_PORTS.
+ * STANDARD ÄR CLEARANCE EGET API. Det var det inte förut: default var
+ * `supabase`, och `aws` krävde att VITE_DATA_ADAPTER sattes vid bygget.
+ * En Vercel-drift där någon glömde den variabeln hade alltså sett helt
+ * normal ut och pratat med Supabase - tyst, och med produktens egen
+ * databas orörd. Standardvärdet ska vara det man vill ha, inte det man
+ * råkar få.
+ *
+ * `supabase` finns kvar som ett MEDVETET val (VITE_DATA_ADAPTER=supabase),
+ * och som bro under aws-adaptern för de portar som ännu inte flyttat -
+ * se MIGRATED_PORTS i src/data/aws/adapter.ts. Rörs en sådan port utan
+ * att bron är uppspänd kastas ett fel som namnger porten.
  *
  * Läses vid byggtid, som demoflaggan: en bunt byggd utan flaggan kan
  * inte pratas över till en annan backend i efterhand.
  */
-export const BACKEND = IS_DEMO
+export type Backend = "demo" | "aws" | "supabase";
+
+export const BACKEND: Backend = IS_DEMO
   ? "demo"
-  : import.meta.env.VITE_DATA_ADAPTER === "aws"
-    ? "aws"
-    : "supabase";
+  : import.meta.env.VITE_DATA_ADAPTER === "supabase"
+    ? "supabase"
+    : "aws";
 
 export const data: DataPort =
   BACKEND === "demo" ? demoAdapter : BACKEND === "aws" ? awsAdapter : supabaseAdapter;
@@ -52,6 +61,15 @@ if (IS_DEMO) {
     "CLEARANCE kör i DEMOLÄGE. All data är påhittad, sparas bara i din webbläsare och lösenordet kontrolleras inte.",
   );
 }
+
+/**
+ * VAD SOM ÄNNU GÅR ÖVER BRON.
+ *
+ * Exponerad så att driften kan läsa den, inte bara koden. En tom lista
+ * betyder att `...supabaseAdapter` kan tas bort ur aws-adaptern.
+ */
+export { delegeradePortar, MIGRATED_PORTS } from "./aws/adapter";
+export { supabaseConfigured } from "@/integrations/supabase/client";
 
 export type { DataPort } from "./ports";
 export * from "./types";

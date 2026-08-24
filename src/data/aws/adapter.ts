@@ -69,6 +69,7 @@ import type {
 } from "../types";
 import type { FinancialSnapshot } from "@/lib/financial/model";
 import { supabaseAdapter } from "../supabase/adapter";
+import { SupabaseSaknasError, supabaseConfigured } from "@/integrations/supabase/client";
 import { ApiRequestError, apiFetch, clearToken, setToken } from "./client";
 
 /**
@@ -1035,7 +1036,14 @@ const audit = {
  * MIGRATED_PORTS täcker hela DataPort tas den raden bort, och då är
  * "inte Supabase" sant hela vägen.
  */
-export const awsAdapter: DataPort = {
+/**
+ * Adaptern FÖRE bron nedan. Exporterad enbart för tests/awsAdapter.ts, som
+ * mäter migreringen på funktionsidentitet: en metod som inte är samma
+ * funktionsobjekt som supabase-adapterns är per definition omskriven.
+ * Den mätningen måste ske på det oinlindade lagret - Proxyn nedan gör
+ * varje metod till ett nytt objekt och hade fått allt att se flyttat ut.
+ */
+export const awsAdapterUtanBro: DataPort = {
   ...supabaseAdapter,
   contact: contact as DataPort["contact"],
   billing: billing as DataPort["billing"],
@@ -1060,3 +1068,71 @@ export const awsAdapter: DataPort = {
   profile: profile as DataPort["profile"],
   shares: shares as DataPort["shares"],
 };
+
+/* --- Bron: den som ännu inte flyttat ska SÄGA det ----------------------- */
+
+/**
+ * VARFÖR ETT LAGER TILL.
+ *
+ * `...supabaseAdapter` överst gör att varje port som inte flyttats
+ * fortfarande fungerar - genom Supabase. Det är hela poängen med
+ * strangler-mönstret, och det är också dess tysta pris: ingenting i
+ * anropet avslöjar vilken väg det tog.
+ *
+ * I en drift som INTE har Supabase-variablerna satta blev priset synligt
+ * på värsta sätt: ett engelskt "supabaseUrl is required" ur ett SDK, utan
+ * ett ord om vilken port som saknades eller varför.
+ *
+ * Lagret nedan gör det till ett besked. Rörs en port som inte står i
+ * MIGRATED_PORTS, och bron inte är uppspänd, kastas ett fel som NAMNGER
+ * porten. Är bron uppspänd händer ingenting alls - anropet går rakt
+ * igenom, som förut.
+ *
+ * När MIGRATED_PORTS täcker hela DataPort tas både det här lagret och
+ * `...supabaseAdapter` bort. Då är "inte Supabase" sant hela vägen.
+ */
+const FLYTTADE = new Set<string>(MIGRATED_PORTS);
+
+/** Portar som fortfarande går över bron. Läses av tests/awsAdapter.ts. */
+export const delegeradePortar = (): string[] => {
+  const kvar: string[] = [];
+  for (const [grupp, innehall] of Object.entries(awsAdapterUtanBro)) {
+    if (!innehall || typeof innehall !== "object") continue;
+    for (const namn of Object.keys(innehall as Record<string, unknown>)) {
+      if (typeof (innehall as Record<string, unknown>)[namn] !== "function") continue;
+      if (!FLYTTADE.has(`${grupp}.${namn}`)) kvar.push(`${grupp}.${namn}`);
+    }
+  }
+  return kvar.sort();
+};
+
+/**
+ * Injicerbar `uppspand` så sviten kan pröva NEJ-grenen. Testbygget sätter
+ * Supabase-variabler (annars kan supabase-adaptern inte ens laddas), och
+ * utan seamen hade den gren som faktiskt kastar aldrig kunnat köras.
+ */
+export const broaPort = <T extends object>(
+  grupp: string,
+  innehall: T,
+  uppspand: () => boolean = supabaseConfigured,
+): T =>
+  new Proxy(innehall, {
+    get(mal, egenskap) {
+      const varde = Reflect.get(mal, egenskap) as unknown;
+      if (typeof varde !== "function") return varde;
+      const port = `${grupp}.${String(egenskap)}`;
+      if (FLYTTADE.has(port)) return varde;
+      return (...arg: unknown[]) => {
+        if (!uppspand()) throw new SupabaseSaknasError(port);
+        return (varde as (...a: unknown[]) => unknown)(...arg);
+      };
+    },
+  });
+
+export const awsAdapter: DataPort = Object.fromEntries(
+  Object.entries(awsAdapterUtanBro).map(([grupp, innehall]) =>
+    innehall && typeof innehall === "object"
+      ? [grupp, broaPort(grupp, innehall as object)]
+      : [grupp, innehall],
+  ),
+) as DataPort;
