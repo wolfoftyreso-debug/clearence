@@ -445,7 +445,7 @@ begin
   /*
    * Platshållaren är avsiktligt ogiltig på tre sätt: domänen .invalid kan
    * per RFC 2606 aldrig gå att nå, hashen har inget scrypt-prefix och kan
-   * därför inte verifieras av api/server/auth.ts, och disabled_at stänger
+   * därför inte verifieras av server/auth.ts, och disabled_at stänger
    * kontot oavsett. Inloggning är inte "svår" efter det här - den är omöjlig.
    */
   update auth.users

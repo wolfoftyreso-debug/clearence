@@ -26,7 +26,7 @@
  *     ser ut som bevakning. Det är hela skillnaden mellan en källa och en
  *     sökmotor.
  *
- * Filen är ren: inga nätanrop. Hämtningen bor i api/server/news.ts, dels
+ * Filen är ren: inga nätanrop. Hämtningen bor i server/news.ts, dels
  * för att webbläsaren inte får ringa tredje part (vaktat av
  * tests/browser/no-external-requests.mjs), dels för att tolkningen ska gå
  * att pröva mot verkliga flöden utan att hämta något.

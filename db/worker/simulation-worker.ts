@@ -144,12 +144,19 @@ const behandla = async (klient: Client, rad: Korad): Promise<"klar" | "misslycka
   }
 };
 
-const main = async (): Promise<void> => {
+/**
+ * Ett varv genom kön. Exporterad så att cron-endpointen kör SAMMA kod som
+ * kommandot gjorde - inte en andra, snarlik implementation.
+ */
+export const korEttVarv = async (): Promise<{
+  plockade: number;
+  klara: number;
+  misslyckade: number;
+}> => {
   const url = process.env.DATABASE_URL;
-  if (!url) {
-    console.error("DATABASE_URL saknas.");
-    process.exit(1);
-  }
+  // Kastar i stället för process.exit(): filen importeras numera av en
+  // Vercel-funktion, där ett exit river hela instansen utan svar.
+  if (!url) throw new Error("DATABASE_URL saknas.");
   const batch = heltalUrMiljon("SIM_BATCH", 2, 1, 10);
 
   const klient = new Client({ connectionString: url });
@@ -183,17 +190,21 @@ const main = async (): Promise<void> => {
         motorversion: MOTORVERSION,
       }),
     );
+    return { plockade: rows.length, klara, misslyckade };
   } finally {
     await klient.end();
   }
 };
 
-void main().catch((fel) => {
-  console.error(
-    JSON.stringify({
-      handelse: "simuleringsarbetaren_kraschade",
-      fel: fel instanceof Error ? fel.message : String(fel),
-    }),
-  );
-  process.exit(1);
-});
+// Körs bara som kommando - se samma resonemang i email-worker.ts.
+if (/simulation-worker/.test(process.argv[1] ?? "")) {
+  void korEttVarv().catch((fel) => {
+    console.error(
+      JSON.stringify({
+        handelse: "simuleringsarbetaren_kraschade",
+        fel: fel instanceof Error ? fel.message : String(fel),
+      }),
+    );
+    process.exit(1);
+  });
+}

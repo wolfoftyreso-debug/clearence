@@ -95,7 +95,7 @@ comment on function auth.uid() is
 create table if not exists auth.users (
   id uuid primary key default gen_random_uuid(),
   email citext unique not null,
-  -- Producerad av API:et (api/server/auth.ts), i formatet
+  -- Producerad av API:et (server/auth.ts), i formatet
   -- `scrypt$N$r$p$salt$hash`. Databasen ser aldrig ett lösenord och har
   -- ingen funktion som kan hasha eller verifiera ett, så ett intrång i
   -- databasen delar inte ut ett verifieringsorakel på köpet.

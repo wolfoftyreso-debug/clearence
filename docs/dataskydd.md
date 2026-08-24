@@ -23,23 +23,25 @@ Särskilda kategorier (art. 9) samlas inte in avsiktligt; fritextfält kan dock 
 > Detaljerat register med per-part-krav, dataregion, ZDR/retention och en signeringskolumn: **`docs/subprocessors-dpa.md`**. Tabellen nedan är sammanfattningen.
 | Underbiträde | Funktion | Dataregion (att bekräfta) | Krav |
 |---|---|---|---|
-| **AWS** | Hosting, databas, Secrets Manager | EU (t.ex. eu-north-1) **[ÖPPET]** | DPA, EU-region, kryptering i vila/transit |
+| **Vercel** | Hosting: app, API och schemalagda jobb | Funktionerna i Stockholm (`arn1`), satt i `vercel.json` | DPA; bekräfta var loggar och kontrollplan behandlas |
+| **Databasleverantören** | All ärende- och kontodata i vila | **[ÖPPET]** — väljs vid driftsättningen, ska vara EU | DPA, EU-region, kryptering i vila, prövad återställning |
+| **AWS (S3)** | Dokumentlagring | EU (`eu-north-1`) **[ÖPPET — bekräfta]** | DPA, EU-region, privat hink |
 | **Anthropic** | Samtalsmotorn (CLEARANCE) | **[ÖPPET: EU-residens/ZDR]** | Signerad DPA, **nolldataretention (ZDR)** på kontonivå, ingen träning på våra data |
 | **Google (Places API)** | Bolagsuppslag (adress/omdömen/status) | **[ÖPPET]** | Villkor: cache ≤30 dagar, attribution. Skickar bolagsnamn/ort — undvik personuppgifter i frågan |
 | SMS-leverantör | Premium-aviseringar | **[ÖPPET]** | DPA; skicka minsta möjliga i meddelandet |
 | Kreditupplysning (Creditsafe e.d.) | Kreditunderlag | SE/EU | Avtal + rättslig grund; kreditupplysningslagen |
-| Supabase (om kvar som brygga) | Datalager i övergången | **[ÖPPET]** | DPA; fasas ut mot AWS |
+| Supabase (om kvar som brygga) | Datalager i övergången | **[ÖPPET]** | DPA; fasas ut mot det egna API:t |
 
 ## 5. Dataminimering & tekniska skydd (implementerat i koden)
-- **Samtalsmotorn skickar ENBART** det synliga samtalet + systemprompten till modellen. **Ingen** `metadata`/user_id, **ingen** ärendedata, inget om bolaget utöver det användaren själv skrivit. (`api/server/anthropic.ts`, vaktat i `tests/anthropic.ts`.)
+- **Samtalsmotorn skickar ENBART** det synliga samtalet + systemprompten till modellen. **Ingen** `metadata`/user_id, **ingen** ärendedata, inget om bolaget utöver det användaren själv skrivit. (`server/anthropic.ts`, vaktat i `tests/anthropic.ts`.)
 - **Innehållet loggas aldrig** server-sidan — bara statuskoder. (Vaktat i test.)
 - **`storage_path` lämnar aldrig servern** — dokument nås via signerad URL efter `app.may_read_document()`.
 - **API-nycklar lagras endast som SHA-256**; sessionstokens aldrig i klartext.
-- **Lösenordet krävs igen före det som inte går att ångra.** En session bevisar att någon loggade in en gång, inte att det är samma människa som sitter där nu. `POST /v1/me/erasure` (radering) och `POST /v1/api-keys` (mynta en nyckel som överlever sessionen) prövar lösenordet mot hashen i databasen, per anrop, med ett eget tak räknat på **kontot** och inte på klientadressen. Att återkalla en nyckel kräver det däremot inte - bekräftelser hör hemma före det som ökar en angripares räckvidd, inte före det som minskar den. (`confirmPassword` i `api/server/index.ts`, vaktat i `tests/sakerhet.ts`.)
+- **Lösenordet krävs igen före det som inte går att ångra.** En session bevisar att någon loggade in en gång, inte att det är samma människa som sitter där nu. `POST /v1/me/erasure` (radering) och `POST /v1/api-keys` (mynta en nyckel som överlever sessionen) prövar lösenordet mot hashen i databasen, per anrop, med ett eget tak räknat på **kontot** och inte på klientadressen. Att återkalla en nyckel kräver det däremot inte - bekräftelser hör hemma före det som ökar en angripares räckvidd, inte före det som minskar den. (`confirmPassword` i `server/index.ts`, vaktat i `tests/sakerhet.ts`.)
 - **Transaktionslokal identitet** + **RLS** i databasen; API kör som `authenticated`, aldrig ägare/BYPASSRLS.
-- Hemligheter (`ANTHROPIC_API_KEY`, `GOOGLE_MAPS_API_KEY`, `DATABASE_URL`) i **Secrets Manager**, aldrig i frontend-bunten.
+- Hemligheter (`ANTHROPIC_API_KEY`, `GOOGLE_MAPS_API_KEY`, `DATABASE_URL`, `CRON_SECRET`) som **miljövariabler i Vercel**, aldrig i frontend-bunten. Utan `CRON_SECRET` är de schemalagda jobben avstängda - stängt, inte öppet.
 - **Dataminimering vid fritext:** en kort påminnelse står intill fritextfälten (samtalet, onboardingen) om att inte dela fler personuppgifter än läget kräver — motmedel mot art. 9-uppgifter i fritext. (`src/lib/dataMinimering.ts`, vaktat i `tests/dataskydd.ts`.)
-- **Regelaktualitet i samtalet:** modellen får aldrig påstå en specifik frist, ett belopp eller ett gränsvärde som säkert gällande, utan hänvisar till primärkälla eller en människa. (`api/server/anthropic.ts`, vaktat i `tests/anthropic.ts`.)
+- **Regelaktualitet i samtalet:** modellen får aldrig påstå en specifik frist, ett belopp eller ett gränsvärde som säkert gällande, utan hänvisar till primärkälla eller en människa. (`server/anthropic.ts`, vaktat i `tests/anthropic.ts`.)
 
 ## 6. Lagring & gallring — policy satt i kod
 Gallringspolicyn är **satt och utförd**: en tid och en åtgärd per kategori i `src/lib/retention.ts`, med tiderna som **driftparametrar** (app_settings, nyckeln `retention_policy`) och åtgärden (radera / anonymisera / behåll) medveten per kategori. Utförandet ligger i `app.gallra(kategori, brytdatum, torrkörning)` (migration `20260825100000`), en gren per kategori, stängd för klientrollerna och prövad i `supabase/tests/gallring.sql` och `supabase/tests/radering.sql` i båda databasmiljöerna — varje gren körs skarpt mot riktiga rader, och proven kräver både att det som skulle försvinna försvann OCH att resten står kvar. Driftpanelen visar policyn ärligt (RetentionSection), och workern kör den via `--gallra`.
@@ -69,7 +71,7 @@ En dataskyddssektion under Inställningar (`src/pages/DashboardSettings.tsx`, `s
 ## 8. Öppna punkter före deploy (sammanfattning)
 
 **Kräver människa/jurist (externt — kan inte byggas bort i kod):**
-1. Signera DPA med Anthropic, Google, AWS, SMS- och kreditupplysningsleverantör.
+1. Signera DPA med Vercel, databasleverantören, AWS (S3), Anthropic, Google, SMS- och kreditupplysningsleverantör.
 2. Bekräfta **EU-dataregion** för varje underbiträde; aktivera **ZDR** hos modell-leverantören.
 3. Genomför och dokumentera **DPIA**.
 4. Rättighetsprocessen: fastställ svarstid och ansvarig för utdragsbegäran som kommer via annan kanal än inloggningen (§7).

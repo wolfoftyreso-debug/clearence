@@ -7,7 +7,7 @@
  *     RSS 2.0 med CDATA och entiteter, Atom med link-attribut och flera
  *     rel-varianter. Ett flöde som tolkas fel ger en tom bevakning som ser
  *     ut som "inget har hänt".
- *  2. HÄMTNINGEN (api/server/news.ts) med injicerad fetch och injicerad
+ *  2. HÄMTNINGEN (server/news.ts) med injicerad fetch och injicerad
  *     DNS-uppslagning. Hela kedjan går alltså att pröva utan nät: SSRF-
  *     skyddet, tidsgränsen, innehållstypen och utfallet per flöde.
  *
@@ -27,7 +27,7 @@ import {
   sammanstall,
   type NewsHit,
 } from "../src/lib/sources/news";
-import { DEFAULT_FEEDS, fetchNews, newsConfigured, parseFeedSetting } from "../api/server/news";
+import { DEFAULT_FEEDS, fetchNews, newsConfigured, parseFeedSetting } from "../server/news";
 
 let passed = 0;
 let failed = 0;

@@ -8,7 +8,7 @@
  * ett test av en attrapp hade prövat attrappen.
  *
  *     Taket, fönstret, retry-after och att två klienter räknas var för sig:
- *     api/tests/integration.ts, avsnitt 9, mot en riktig Postgres.
+ *     server/tests/integration.ts, avsnitt 9, mot en riktig Postgres.
  *
  * Kvar här är det som är den här processens eget: konstanterna, och
  * uppslaget av vem anropet kommer ifrån. Det senare är trivialt att läsa
@@ -16,7 +16,7 @@
  * världen till en enda klient.
  */
 
-import { ALLMAN, klientNyckel, LOGIN } from "../api/server/rateLimit";
+import { ALLMAN, klientNyckel, LOGIN } from "../server/rateLimit";
 
 let passed = 0;
 let failed = 0;

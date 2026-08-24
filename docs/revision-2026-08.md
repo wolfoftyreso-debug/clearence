@@ -1,5 +1,10 @@
 # Revision, augusti 2026
 
+> **Daterat protokoll.** Det här är vad som gällde i augusti 2026 och
+> skrivs inte om i efterhand. Sedan dess har driften flyttat till Vercel:
+> `infra/` och `deploy/` är borttagna, och `terraform`-raderna nedan gäller
+> inte längre. Se [vercel.md](vercel.md) för det som gäller nu.
+
 **Vad som prövades, vad som höll, och vad som inte gjorde det.**
 
 En revision är inte en genomkörning av testerna. Testerna säger bara att

@@ -47,11 +47,20 @@ check("lägesnotisen rullar till systemanalysen", analysTop > -40 && analysTop <
 // Provet letade förut bara efter ordet "frist". Den dagen demons
 // löneutbetalning gled in i treodagarsfönstret fanns inget sådant ord kvar,
 // och klicket träffade en annan knapp - provet blev rött av att datumen
-// hade rört sig, inte av att produkten slutat fungera. Nu plockas raden ur
-// klockans lista på href, som är det raden faktiskt lovar.
+// hade rört sig, inte av att produkten slutat fungera.
 await page.click("button[aria-label^='Notiser']");
 await page.waitForTimeout(500);
-const fristRad = page.locator("ul li button").filter({ hasText: /frist|om \d+ dag|i dag|i morgon|sedan/i }).first();
+// RADEN PLOCKAS PÅ SITT MÅL, INTE PÅ SIN TEXT.
+//
+// Här stod en textmatchning på nedräkningens formulering. Den var redan ett
+// försök att bli av med datumberoendet - och den misslyckades ändå: appen
+// skriver "imorgon" i ETT ord, provet letade efter "i morgon" i två. Raden
+// fanns hela tiden; provet såg den aldrig, och kontrollen var röd av en
+// stavning.
+//
+// data-notis-mal bär vart raden leder. Det är regeln som prövas - "klockan har
+// en rad som leder till fristerna" - och den ändras inte med veckodagen.
+const fristRad = page.locator('ul li button[data-notis-mal="/dashboard#frister"]').first();
 check("klockan har en rad som pekar på en frist", (await fristRad.count()) > 0);
 await fristRad.click();
 await page.waitForTimeout(900);
@@ -108,7 +117,7 @@ if (harInfoRad) {
 } else {
   // Ingen informationsrad => en frist är nära. Då ska den raden finnas, och
   // den ska ingå i siffran: det är ett krav, inte en upplysning.
-  const naraFrist = await fresh.locator("ul li button").filter({ hasText: /om \d+ dag|i dag|i morgon/i }).count();
+  const naraFrist = await fresh.locator('ul li button[data-notis-mal="/dashboard#frister"][data-notis-kravd="true"]').count();
   check("en nära frist visas i stället för upplysningsraden", naraFrist > 0, `rader=${rows} siffra=${badge}`);
   check("den nära fristen räknas med i siffran", badge >= 1, `siffra=${badge}`);
 }

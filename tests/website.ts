@@ -1,5 +1,5 @@
 /**
- * HÄMTNINGEN AV BOLAGETS WEBBPLATS (api/server/website.ts).
+ * HÄMTNINGEN AV BOLAGETS WEBBPLATS (server/website.ts).
  *
  * Tolkningen prövas i tests/sources.ts. Här prövas det som bara den
  * nätvända biten kan ha fel i, och det farligaste av det står först:
@@ -17,7 +17,7 @@
  * att röra nät eller namnuppslag.
  */
 
-import { fetchWebsite, isPrivateAddress, websiteConfigured } from "../api/server/website";
+import { fetchWebsite, isPrivateAddress, websiteConfigured } from "../server/website";
 
 let passed = 0;
 let failed = 0;

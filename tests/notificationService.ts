@@ -489,7 +489,7 @@ const gaIgenom = (dir: string) => {
 };
 gaIgenom(join(process.cwd(), "src"));
 gaIgenom(join(process.cwd(), "db", "worker"));
-gaIgenom(join(process.cwd(), "api", "server"));
+gaIgenom(join(process.cwd(), "server"));
 
 const producenter = produktionsfiler.filter((f) =>
   /enqueue_notification\s*\(/.test(utanKommentarer(readFileSync(f, "utf8"))),

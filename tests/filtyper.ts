@@ -8,7 +8,7 @@
  * ett skydd som stoppar allt är samma sak som en trasig uppladdning.
  */
 
-import { provaFil, sakerLagringsvag, MAX_FILSTORLEK, TILLATNA_TYPER } from "../api/server/filtyper";
+import { provaFil, sakerLagringsvag, MAX_FILSTORLEK, TILLATNA_TYPER } from "../server/filtyper";
 
 let passed = 0;
 let failed = 0;

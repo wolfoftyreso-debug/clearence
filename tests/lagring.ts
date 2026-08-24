@@ -104,8 +104,8 @@ process.env.S3_REGION = "eu-north-1";
 process.env.S3_ACCESS_KEY_ID = "provnyckel";
 process.env.S3_SECRET_ACCESS_KEY = "provhemlighet";
 
-const lagring = await import("../api/server/storage");
-const { provaFil } = await import("../api/server/filtyper");
+const lagring = await import("../server/storage");
+const { provaFil } = await import("../server/filtyper");
 
 check("lagringen rapporteras ansluten", lagring.storageConfigured() === true);
 

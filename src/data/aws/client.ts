@@ -14,35 +14,21 @@
 const TOKEN_KEY = "clearance-api-token";
 
 /**
- * RUNTIME-KONFIG. Vite bakar in `import.meta.env` vid BYGGET, vilket binder
- * en byggd avbild till en enda miljö. I ett kluster vill vi ha EN avbild
- * som fungerar överallt. Därför läser klienten först en runtime-konfig som
- * servern (nginx) skjuter in i sidan vid start - `window.__CLEARANCE_CONFIG__`
- * - och faller tillbaka på byggvärdet bara när den saknas.
+ * API:ET LIGGER PÅ SAMMA URSPRUNG.
  *
- * Sätter servern basen till tom sträng betyder det SAMMA ORIGIN: nginx
- * proxar `/v1` till API:t, så en relativ fetch räcker och ingen CORS behövs.
+ * Här bodde en runtime-konfig: nginx sköt in `window.__CLEARANCE_CONFIG__`
+ * i index.html vid start, så att EN byggd avbild kunde peka på olika
+ * API:er i olika kluster. Det var rätt lösning på ett problem som inte
+ * längre finns - på Vercel byggs och serveras appen och API:t från samma
+ * distribution, på samma ursprung.
+ *
+ * TOM BAS ÄR NORMALLÄGET, inte ett fel. En relativ fetch mot `/v1/...`
+ * går till samma ursprung, rewriten i vercel.json skickar den till
+ * api/[...path].ts, och ingen CORS behövs. VITE_API_BASE_URL finns kvar
+ * för utvecklingsläget, där Vite och API:t kör på olika portar.
  */
-interface RuntimeConfig {
-  apiBaseUrl?: string;
-}
-const runtimeConfig = (): RuntimeConfig | undefined =>
-  (globalThis as { __CLEARANCE_CONFIG__?: RuntimeConfig }).__CLEARANCE_CONFIG__;
-
-/** Sant när servern uttryckligen konfigurerat basen (även till tom = samma origin). */
-const runtimeBaseConfigured = (): boolean => {
-  const rt = runtimeConfig();
-  return !!rt && typeof rt.apiBaseUrl === "string";
-};
-
-export const apiBaseUrl = (): string => {
-  const rt = runtimeConfig();
-  const raw =
-    rt && typeof rt.apiBaseUrl === "string"
-      ? rt.apiBaseUrl
-      : ((import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "");
-  return raw.replace(/\/$/, "");
-};
+export const apiBaseUrl = (): string =>
+  ((import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "").replace(/\/$/, "");
 
 export const getToken = (): string | null => {
   try {
@@ -90,15 +76,6 @@ interface RequestOptions {
 
 export const apiFetch = async <T>(path: string, opts: RequestOptions = {}): Promise<T> => {
   const base = apiBaseUrl();
-  // Tom bas är ett fel BARA om ingen konfig satt den. Har servern satt den
-  // till tom sträng är det ett medvetet val: samma origin, relativ fetch.
-  if (!base && !runtimeBaseConfigured()) {
-    throw new ApiRequestError(
-      0,
-      "no_api_base_url",
-      "Ingen API-bas är konfigurerad - varken runtime-konfig eller VITE_API_BASE_URL.",
-    );
-  }
   const headers: Record<string, string> = { accept: "application/json" };
   if (opts.body !== undefined) headers["content-type"] = "application/json";
   if (!opts.anonymous) {

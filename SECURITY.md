@@ -11,16 +11,16 @@
 |---|---|---|---|---|
 | F-1 | SSRF: `redirect: "follow"` följde omdirigeringar förbi SSRF-kontrollen — en 302 mot `169.254.169.254` räckte | HIGH | Manuell hoppkedja, varje `Location` omprövas | `tests/sakerhet.ts` |
 | F-2 | Hastighetsgränsen läste FÖRSTA posten i `x-forwarded-for` (den klienten skriver) → fri lösenordsforcering | HIGH | Räknas från höger, `TRUSTED_PROXY_HOPS` | `tests/sakerhet.ts`, `tests/rateLimit.ts` |
-| F-3 | nginx tappade säkerhetsrubrikerna på `index.html` och `/assets/` (add_header ärvs inte) → klickkapning på appdokumentet | MEDIUM | Rubrikerna upprepade per block | `tests/sakerhet.ts` |
-| F-4 | CSP, HSTS och Permissions-Policy saknades helt | MEDIUM | Satta i nginx-mallen | `tests/sakerhet.ts` |
+| F-3 | nginx tappade säkerhetsrubrikerna på `index.html` och `/assets/` (add_header ärvs inte) → klickkapning på appdokumentet | MEDIUM | Rubrikerna upprepades per block. Nginx är borta sedan Vercel-flytten; rubrikerna sätts nu för `/(.*)` i `vercel.json` | `tests/sakerhet.ts` |
+| F-4 | CSP, HSTS och Permissions-Policy saknades helt | MEDIUM | Satta i nginx-mallen, numera i `vercel.json` | `tests/sakerhet.ts` |
 | F-5 | `::ffff:169.254.169.254` och CGNAT passerade SSRF-listan | MEDIUM | Avbildad IPv4 normaliseras; listan utökad | `tests/sakerhet.ts` |
 | F-6 | Oanvänd `dangerouslySetInnerHTML` i `ui/chart.tsx` | LOW | Filen borttagen | `tests/sakerhet.ts` |
-| F-7 | Presigneringens behörighetskontroll kördes aldrig i test (lagringen "ej ansluten") | MEDIUM | `DOCUMENTS_BUCKET` sätts i sviten | `api/tests/integration.ts` |
-| H-1 | API:t kunde starta som en roll med `BYPASSRLS` eller tabellägarskap — radskyddet slås då av **tyst** | HIGH | `kravSakerDatabasroll()` vägrar starta | `api/tests/integration.ts` |
-| H-2 | Loggen skrev frågans parametervärden (lösenordshashar, poletter, personuppgifter) | MEDIUM | `api/server/logg.ts` maskerar fält och mönster | `tests/sakerhet.ts` |
-| H-3 | Driftåtgärder lämnade inga spår | MEDIUM | `app.logga_driftatgard()` + revisionspolicy | `api/tests/integration.ts` |
+| F-7 | Presigneringens behörighetskontroll kördes aldrig i test (lagringen "ej ansluten") | MEDIUM | `DOCUMENTS_BUCKET` sätts i sviten | `server/tests/integration.ts` |
+| H-1 | API:t kunde starta som en roll med `BYPASSRLS` eller tabellägarskap — radskyddet slås då av **tyst** | HIGH | `kravSakerDatabasroll()` vägrar starta | `server/tests/integration.ts` |
+| H-2 | Loggen skrev frågans parametervärden (lösenordshashar, poletter, personuppgifter) | MEDIUM | `server/logg.ts` maskerar fält och mönster | `tests/sakerhet.ts` |
+| H-3 | Driftåtgärder lämnade inga spår | MEDIUM | `app.logga_driftatgard()` + revisionspolicy | `server/tests/integration.ts` |
 | H-4 | Uppladdningen litade på filnamn, ändelse och Content-Type — allt tre skriver avsändaren | HIGH | Magic-byte-tillåtelselista, tvåstegsuppladdning, `confirmed_at` | `tests/filtyper.ts`, `tests/lagring.ts` |
-| H-5 | **Telefonverifieringen bevisade ingenting:** koden slumpades i webbläsaren, så den som anropade API:t kunde välja den själv och bekräfta utan att någonsin läsa SMS:et | HIGH | Koden föds i databasen, hashen lagras, klienten får `void`; gamla signaturen och `queue_verification_sms` droppade | `supabase/tests/notifications.sql`, `api/tests/integration.ts`, `tests/sakerhet.ts` |
+| H-5 | **Telefonverifieringen bevisade ingenting:** koden slumpades i webbläsaren, så den som anropade API:t kunde välja den själv och bekräfta utan att någonsin läsa SMS:et | HIGH | Koden föds i databasen, hashen lagras, klienten får `void`; gamla signaturen och `queue_verification_sms` droppade | `supabase/tests/notifications.sql`, `server/tests/integration.ts`, `tests/sakerhet.ts` |
 
 **Lärdomen ur F-2 och H-5, samma lärdom två gånger:** ett test som kodifierar
 en sårbarhet är sämre än inget test alls. `tests/rateLimit.ts` **beskrev buggen
@@ -85,7 +85,7 @@ inaktuell.
 **Bedömning: rör bara utvecklingsservern.** Sårbarheten gör det möjligt för
 en webbplats du besöker att läsa svar från en `vite dev` som körs lokalt.
 Den finns inte i något som driftsätts: produktionsbunten är statiska filer
-bakom CloudFront, och esbuild ingår inte i den.
+som Vercel serverar, och esbuild ingår inte i den.
 
 `npm audit --omit=dev` — alltså det som faktiskt går i drift — ger **noll**
 rådgivningar.

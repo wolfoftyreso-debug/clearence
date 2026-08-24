@@ -191,7 +191,7 @@ check(
  * Priserna är driftparametrar (app_settings), och när parametern saknas
  * faller koden tillbaka på betabeslutet. Reserven stod skriven rakt av -
  * 985/2780/4500 - på TRE ställen: demoadaptern, supabase-adaptern och
- * api/server/index.ts. DEFAULT_COMPANY_PLAN i src/lib/pricing.ts var
+ * server/index.ts. DEFAULT_COMPANY_PLAN i src/lib/pricing.ts var
  * alltså kanonisk bara för ytan; datavägen hade sina egna siffror, och
  * ett ändrat betabeslut hade lämnat två av dem kvar på det gamla priset
  * utan att något sa ifrån.
@@ -211,7 +211,7 @@ check(
     "src/data/demo/adapter.ts",
     "src/data/supabase/adapter.ts",
     "src/data/aws/adapter.ts",
-    "api/server/index.ts",
+    "server/index.ts",
   ];
 
   for (const fil of FILER) {

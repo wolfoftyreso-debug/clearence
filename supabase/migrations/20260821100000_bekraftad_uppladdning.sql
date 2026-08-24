@@ -5,12 +5,12 @@
 -- som heter "arsredovisning.pdf" ser i alla tre likadan ut som en
 -- årsredovisning.
 --
--- Därför sker uppladdningen i två steg (api/server/index.ts):
+-- Därför sker uppladdningen i två steg (server/index.ts):
 --
 --   1. Servern väljer sökvägen och signerar en kortlivad PUT-URL. Raden
 --      skapas med confirmed_at = null.
 --   2. Servern LÄSER TILLBAKA filens första bytes ur lagringen och prövar
---      signaturen mot den utlovade typen (api/server/filtyper.ts). Först
+--      signaturen mot den utlovade typen (server/filtyper.ts). Först
 --      då sätts confirmed_at.
 --
 -- Kolumnen nedan är vad som gör steg 2 meningsfullt: utan den fanns ingen

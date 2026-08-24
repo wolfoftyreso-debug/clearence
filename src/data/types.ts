@@ -983,7 +983,7 @@ export interface ErasureRequestRecord {
 /* --- De yttre källornas svar --------------------------------------------- */
 
 /**
- * Formerna speglar api/server/{google,website,news}.ts.
+ * Formerna speglar server/{google,website,news}.ts.
  *
  * De är medvetet MINIMALA: klienten behöver veta om något hämtades och vad
  * det blev, inte bära en kopia av serverns interna typer. Ett `status`-fält

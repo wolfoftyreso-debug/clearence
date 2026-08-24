@@ -7,7 +7,7 @@
  * ett fritextfält kan råka bära det ändå. Motmedlet är enkelt och står
  * där texten skrivs: en kort påminnelse om att bara dela det läget kräver.
  *
- * Samma hållning som röret mot modellen (api/server/anthropic.ts:
+ * Samma hållning som röret mot modellen (server/anthropic.ts:
  * DATAMINIMERING) och det docs/dataskydd.md §5/§8 efterlyser: en kort
  * användarinstruktion vid fritext. Texten bor här, som en enda sanning,
  * så att den ser likadan ut i samtalet, onboardingen och guiderna.

@@ -192,7 +192,7 @@ check("en giltig policy passerar utan anmärkning",
   ]).length === 0);
 
 // API:et ska avvisa den trasiga policyn, inte spara den.
-const apiKalla = read("api/server/index.ts");
+const apiKalla = read("server/index.ts");
 const policyBlock = apiKalla.slice(
   apiKalla.indexOf('router.post("/v1/ops/retention-policy"'),
   apiKalla.indexOf('router.get("/v1/ops/audit"'),

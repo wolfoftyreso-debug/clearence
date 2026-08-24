@@ -1,8 +1,11 @@
 # Driftsättning
 
-Körordningen från tomt AWS-konto till en tjänst som svarar. Skriven för att
-följas uppifrån och ned, en gång, av en människa som inte har hela systemet
-i huvudet.
+Körordningen från tomt Vercel-konto till en tjänst som svarar. Skriven för
+att följas uppifrån och ned, en gång, av en människa som inte har hela
+systemet i huvudet.
+
+Referensen för *vad som ligger var* är [docs/vercel.md](vercel.md). Det här
+är ordningen att göra det i.
 
 Allt som inte går att automatisera står som **DU**: det är beslut eller
 uppgifter som bara ägaren kan lämna.
@@ -24,101 +27,62 @@ en driftsättning — de hindrar bara att du börjar ta betalt:
 - F-skatt, momsregistrering, bankgiro och avsändaradress obekräftade →
   faktureringen är spärrad i koden tills de fylls i.
 - Policy och villkor är ogranskade utkast → sidorna säger det själva.
-- AWS-adaptern är delvis migrerad → resten delegeras öppet till Supabase.
 
 ### DU: fyra beslut som ska vara fattade först
 
 | Beslut | Var det landar |
 |---|---|
-| Domänen `clearance.se` delegerad till Route 53? | `hosted_zone_id` i tfvars |
-| Vilken adress skickar vi e-post ifrån? | `mail_from_address` |
-| Vart går driftlarmen? | `alert_email` |
-| Staging först, eller direkt prod? | `environment` |
+| Vilken Postgres? | `DATABASE_URL` — se steg 1 |
+| Vilken avsändaradress för e-post? | `MAIL_FROM` |
+| SMTP-relä eller SES? | `MAIL_TRANSPORT` |
+| Förhandsmiljö först, eller direkt produktion? | Vercel-miljön du sätter variablerna i |
 
-Kör staging först. Det kostar en kvälls väntan och sparar den första
-riktiga incidenten.
+Kör en förhandsmiljö först. Det kostar en kvälls väntan och sparar den
+första riktiga incidenten.
 
----
+### Planen
 
-## 1. AWS-kontot och terraform-tillståndet
-
-Terraform behöver en plats att lägga sitt tillstånd. Den platsen kan inte
-skapas av terraform självt — därför en gång för hand:
-
-```bash
-aws s3api create-bucket --bucket clearance-tfstate \
-  --region eu-north-1 \
-  --create-bucket-configuration LocationConstraint=eu-north-1
-aws s3api put-bucket-versioning --bucket clearance-tfstate \
-  --versioning-configuration Status=Enabled
-aws dynamodb create-table --table-name clearance-tflock \
-  --attribute-definitions AttributeName=LockID,AttributeType=S \
-  --key-schema AttributeName=LockID,KeyType=HASH \
-  --billing-mode PAY_PER_REQUEST --region eu-north-1
-```
-
-Versionering på hinken är inte en detalj: ett förlorat terraform-tillstånd
-betyder att infrastrukturen finns men att terraform inte längre vet om den,
-och vägen tillbaka är import av varje resurs för hand.
+`vercel.json` deklarerar `maxDuration` upp till 300 sekunder och cron var
+femte minut. Båda kräver **Pro**. På Hobby är taket 60 sekunder och crons
+körs en gång om dygnet — nattjobbet fungerar, men utkorgen och
+aviseringarna skulle dröja ett dygn, och det är fristvarningar och fakturor.
 
 ---
 
-## 2. Variablerna
+## 1. Databasen
 
-```bash
-cp infra/terraform.tfvars.example infra/terraform.tfvars
-```
+Vilken Postgres som helst duger, så länge den går att nå över nätet och
+kan hålla två roller isär. Vercel Postgres och Neon är båda vanlig
+Postgres — radskyddet prövas på precis det med `npm run test:selfhosted`.
 
-Filen är kommenterad fält för fält. Den innehåller **inga hemligheter** —
-lösenord och nycklar bor i Secrets Manager och skapas av terraform.
+**Två roller, inte en.** Det här är inte en formalitet:
 
-Låt `enable_compute = false` stå kvar. API och arbetare startar först i
-steg 5, när avbilderna finns i ECR.
+| Roll | Används av | Får |
+|---|---|---|
+| Ägaren | `scripts/migrera.sh` | Ändra schemat |
+| API-rollen | `DATABASE_URL` i Vercel | Läsa och skriva **under radskyddet** |
 
----
+Pekas `DATABASE_URL` på ägaren eller på en roll med `BYPASSRLS` **stängs
+radskyddet av tyst**: varje fråga fortsätter fungera och börjar returnera
+andra bolags insolvensdata. Ingenting kraschar. `sakerRollGrind()` i
+`server/db.ts` vägrar därför köra på en sådan roll, före den första
+databasfrågan i varje instans.
 
-## 3. Första apply — nät, databas, hinkar
+`db/roles-selfhosted.sql` skapar API-rollen.
 
-```bash
-terraform -chdir=infra init
-terraform -chdir=infra plan -out=plan.tfplan   # LÄS DENNA
-terraform -chdir=infra apply plan.tfplan
-```
-
-**Läs planen.** Det är enda gången du ser exakt vad som skapas innan det
-kostar pengar, och den tar tio minuter att läsa.
-
-Certifikatet väntar på DNS-validering. Har du inte delegerat domänen ännu
-skriver terraform ut vilka CNAME-poster som ska läggas in hos nuvarande
-DNS-leverantör; certifikatet blir giltigt inom några minuter efter det.
+**Poolning:** identiteten sätts transaktionslokalt, så *transaction
+mode*-poolning fungerar. Använd poolar-URL:en, inte den direkta.
 
 ---
 
-## 4. Migrationerna
+## 2. Migrationerna
 
-Databasen ligger i ett privat subnät och nås inte utifrån. Öppna en tunnel
-via bastionen:
-
-```bash
-aws ssm start-session --target "$(terraform -chdir=infra output -raw bastion_instance_id)" \
-  --document-name AWS-StartPortForwardingSessionToRemoteHost \
-  --parameters "host=$(terraform -chdir=infra output -raw db_endpoint),portNumber=5432,localPortNumber=55432"
-```
-
-I ett annat fönster:
+Kör dem som **ägaren**, inte som API-rollen:
 
 ```bash
-export DATABASE_URL="postgres://clearance:LÖSENORD@127.0.0.1:55432/clearance?sslmode=require"
+export DATABASE_URL="postgres://ägaren:LÖSENORD@värden/clearance?sslmode=require"
 scripts/migrera.sh --torrkor    # visa vad som skulle köras
 scripts/migrera.sh              # kör
-```
-
-Lösenordet hämtas ur Secrets Manager:
-
-```bash
-aws secretsmanager get-secret-value \
-  --secret-id "$(terraform -chdir=infra output -raw db_secret_arn)" \
-  --query SecretString --output text
 ```
 
 Skriptet kör en migration per transaktion och bokför vilka som gått
@@ -136,83 +100,80 @@ select id from auth.users where email = 'din@adress.se';
 
 ---
 
-## 5. Avbilderna och beräkningen
+## 3. Dokumentlagringen
 
-```bash
-REG="$(aws sts get-caller-identity --query Account --output text).dkr.ecr.eu-north-1.amazonaws.com"
-aws ecr get-login-password --region eu-north-1 | docker login --username AWS --password-stdin "$REG"
-TAGG="sha-$(git rev-parse --short HEAD)"
+Dokumenten ligger i S3. Det är den enda AWS-tjänst som är kvar, och den är
+kvar för att `storage_path` **aldrig lämnar servern**: klienten får en
+signerad URL, och bara efter att `app.may_read_document()` sagt ja.
 
-docker build -f api/Dockerfile -t "$REG/clearance-api:$TAGG" .
-docker build -f db/Dockerfile  -t "$REG/clearance-worker:$TAGG" .
-docker push "$REG/clearance-api:$TAGG"
-docker push "$REG/clearance-worker:$TAGG"
+**DU:** skapa hinken, en IAM-användare med rätt att läsa och skriva i
+just den, och sätt i Vercel:
 
-terraform -chdir=infra apply \
-  -var="enable_compute=true" \
-  -var="api_image=$REG/clearance-api:$TAGG" \
-  -var="worker_image=$REG/clearance-worker:$TAGG"
+```
+DOCUMENTS_BUCKET=clearance-dokument
+AWS_REGION=eu-north-1
+AWS_ACCESS_KEY_ID=...
+AWS_SECRET_ACCESS_KEY=...
 ```
 
-Avbilderna byggs **från repots rot**, inte från `api/` — bygget behöver
-`package.json` och källan tillsammans.
-
-Kontrollera att API:t lever innan du går vidare:
-
-```bash
-curl -s https://api.clearance.se/v1/health
-```
-
-> ALB:n hälsokontrollerar `/v1/health`. Att den en gång pekade på
-> `/health` är värt att minnas: varje uppgift underkändes och dödades i en
-> loop, och det enda symtomet var en driftsättning som aldrig blev klar.
-> Startkontrollen jämför numera de två.
+Hinken ska vara privat. Signeringen är hela behörighetsmodellen; en publik
+hink gör den meningslös.
 
 ---
 
-## 6. Frontenden
+## 4. Miljövariablerna i Vercel
+
+Hela listan står i [docs/vercel.md](vercel.md#miljövariabler). Sätt dem per
+miljö, och kontrollera särskilt:
+
+- `CRON_SECRET` — minst 16 tecken. **Utan den svarar cron-endpointerna
+  503**, alltså kör inga jobb alls. Det är avsiktligt: en glömd variabel
+  ska inte bli en öppen knapp för att köra faktureringen.
+- `TRUSTED_PROXY_HOPS=1` — Vercel sätter `x-forwarded-for`. Med fel värde
+  delar hela världen en räknare i hastighetsgränsen, eller så får varje
+  anrop en färsk.
+- `VITE_API_BASE_URL` — sätt den **inte**. Appen och API:t delar ursprung.
+
+---
+
+## 5. Första utrullningen
+
+Koppla repot till Vercel-projektet. Ramverket är Vite; `vercel.json` bär
+byggkommandot, utdatakatalogen, regionen (`arn1`, Stockholm), funktionernas
+livslängd, cron-schemat och säkerhetsrubrikerna.
+
+Kontrollera efteråt:
 
 ```bash
-VITE_API_BASE_URL=https://api.clearance.se \
-VITE_DATA_ADAPTER=aws \
-VITE_DEMO_MODE=false \
-npx vite build
-
-BUCKET="$(terraform -chdir=infra output -raw frontend_bucket)"
-aws s3 sync dist/ "s3://$BUCKET/" --delete \
-  --exclude index.html --exclude sw.js \
-  --cache-control "public,max-age=31536000,immutable"
-aws s3 cp dist/index.html "s3://$BUCKET/index.html" --cache-control "no-cache,must-revalidate"
-aws s3 cp dist/sw.js      "s3://$BUCKET/sw.js"      --cache-control "no-cache,must-revalidate"
-aws cloudfront create-invalidation \
-  --distribution-id "$(terraform -chdir=infra output -raw cloudfront_distribution_id)" --paths "/*"
+curl https://clearance.se/v1/health
 ```
 
-**`index.html` och `sw.js` får aldrig cachas.** Hashade tillgångar är
-oföränderliga och cachas ett år; `index.html` pekar ut vilken version som
-gäller, och en cachad `index.html` låser besökare vid ett gammalt bygge.
-Cachas service-workern kan dessutom en trasig worker aldrig ersättas.
+Svarar den inte, läs loggen för funktionen `api/[...path]`. Två fel är
+mycket vanligare än alla andra:
 
-`VITE_DEMO_MODE=false` är inte valfritt. Startkontrollen och CI faller
-båda om ordet DEMOLÄGE hittas i en produktionsbunt.
-
----
-
-## 7. E-post
-
-SES startar i sandlådan och skickar bara till verifierade adresser.
-
-1. Verifiera domänen (terraform lägger DKIM-posterna om zonen är känd).
-2. **DU:** begär utträde ur sandlådan i SES-konsolen. Tar ett par dagar.
-3. Prova skarpt genom att köra arbetaren en gång och titta i utkorgen
-   under `/admin/inkorg`.
-
-Tills utträdet är klart går inga mejl fram till riktiga kunder. Utkorgen
-visar det — den skiljer på *skickat* och *misslyckat fem gånger*.
+1. `osäker databasroll: API:t vägrar starta` → `DATABASE_URL` pekar på
+   ägaren. Se steg 1.
+2. `hastighetsgränsen kunde inte prövas` → migrationerna är inte körda mot
+   den här databasen. Se steg 2.
 
 ---
 
-## 7b. Google som källa (valfritt)
+## 6. E-post
+
+Standardtransporten är **SMTP**. Sätt `SMTP_HOST` och, om reläet kräver
+det, `SMTP_USER`/`SMTP_PASS`. Port 587 ger STARTTLS, 465 implicit TLS.
+
+Vill du köra SES i stället: `MAIL_TRANSPORT=ses`, `SES_REGION`, AWS-uppgifter
+i miljön — och `npm install @aws-sdk/client-ses`, som **inte** är ett
+beroende i dag. Utan paketet får du ett läsbart fel vid första mejlet, inte
+en tyst tystnad.
+
+Prova skarpt genom att köra utkorgen en gång och titta under
+`/admin/inkorg`. Utkorgen skiljer på *skickat* och *misslyckat fem gånger*.
+
+---
+
+## 6b. Google som källa (valfritt)
 
 Ger tre saker analysen annars saknar: **bolagets webbadress** (som gör att
 webbplatsläsaren kan köra utan att fråga användaren), **omdömen och betyg**,
@@ -224,30 +185,17 @@ momsregistrering. Places känner till platser och verksamheter, inte
 juridiska personer. Den raden i bakgrundspanelen kräver fortfarande
 Bolagsverket eller en kreditupplysare.
 
-**ORDNINGEN ÄR INTE VALFRI.** Slås flaggan på innan nyckeln finns kan ECS
-inte läsa hemligheten, och API-uppgifterna startar om i evighet — samma
-felklass som en hälsokontroll mot fel sökväg.
-
 1. **DU:** skapa ett Google Cloud-projekt, aktivera **Places API (New)**
    och slå på fakturering. Places debiteras per anrop.
 2. **DU:** begränsa nyckeln till Places API. En obegränsad nyckel som
    läcker är någon annans trafik på din faktura.
-3. **DU:** lägg in nyckeln i integrationshemligheten, under fältet
-   `google_maps_api_key`:
-
-   ```bash
-   aws secretsmanager put-secret-value \
-     --secret-id clearance-prod/integrations \
-     --secret-string '{"google_maps_api_key":"..."}'
-   ```
-
-4. Sätt `enable_google_source = true` i tfvars och kör `terraform apply`.
-5. Kontrollera: `curl https://api.<domän>/v1/health` ska svara
+3. **DU:** sätt `GOOGLE_MAPS_API_KEY` i Vercel och rulla ut.
+4. Kontrollera: `curl https://clearance.se/v1/health` ska svara
    `"sources":{"google":true}`.
 
-Med flaggan av fungerar tjänsten precis som förut — källan redovisas som
-ej ansluten i bakgrundspanelen, och analysen blir tunnare. Det är ett
-giltigt läge, inte ett fel.
+Utan nyckeln fungerar tjänsten precis som förut — källan redovisas som ej
+ansluten i bakgrundspanelen, och analysen blir tunnare. Det är ett giltigt
+läge, inte ett fel.
 
 **Om ett bolag inte matchar:** uppslaget kräver att exakt en verksamhet
 hos Google heter samma sak som bolaget. Två träffar med samma namn ger
@@ -256,54 +204,24 @@ med, och fel bolags omdömen i en analys är värre än inga omdömen.
 
 ---
 
-## 8. Automatiken
+## 7. De schemalagda jobben
 
-När första driftsättningen gått igenom för hand tar `.github/workflows/`
-över.
+Cron deklareras i `vercel.json` och startar av sig självt vid utrullningen.
+Kontrollera i Vercels cron-vy att alla fyra har kört en gång.
 
-- **`ci.yml`** — körs på varje push: enhetsbatteriet, byggen, migrationer
-  på tom databas, databas- och API-sviterna, alla webbläsarsviter.
-- **`driftsatt.yml`** — startas **för hand** via *Run workflow*.
+Ett jobb som misslyckas svarar **500**, inte 200 — Vercel märker
+körningen som misslyckad. Nattjobbets steg körs oberoende av varandra:
+kastar gallringen körs faktureringen ändå.
 
-Driftsättningen använder **OIDC**, inte lagrade AWS-nycklar. Skapa rollen
-en gång:
+Att köra ett jobb för hand:
 
 ```bash
-aws iam create-open-id-connect-provider \
-  --url https://token.actions.githubusercontent.com \
-  --client-id-list sts.amazonaws.com
+curl -H "Authorization: Bearer $CRON_SECRET" https://clearance.se/api/cron/utkorg
 ```
-
-Förtroendepolicyn ska begränsa till just det här repot och gärna till
-miljön — annars kan vilket repo som helst i världen anta rollen:
-
-```json
-{
-  "Condition": {
-    "StringEquals": {
-      "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
-      "token.actions.githubusercontent.com:sub": "repo:wolfoftyreso-debug/rekonstruktion:environment:prod"
-    }
-  }
-}
-```
-
-### DU: i GitHub
-
-| Typ | Namn | Värde |
-|---|---|---|
-| Variable | `AWS_DEPLOY_ROLE_ARN` | rollens ARN |
-| Variable | `VITE_API_BASE_URL` | `https://api.clearance.se` |
-| Secret | `DATABASE_URL` | anslutningen för migrationerna |
-| Environment | `prod` | med *required reviewers* = du |
-
-Kravet på granskare är inte byråkrati. Det är det som gör att en
-driftsättning mot prod inte kan ske av misstag klockan halv tolv på
-kvällen.
 
 ---
 
-## 9. Innan första betalande kund
+## 8. Innan första betalande kund
 
 Tekniskt går tjänsten att driftsätta utan det här. Att **ta betalt** gör
 den inte.
@@ -316,8 +234,10 @@ den inte.
 - [ ] **DU:** jurist har granskat policy och villkor, och de tre öppna
       punkterna är beslutade (biträdesavtal, gallringsfrister,
       ansvarsbegränsning)
-- [ ] **DU:** personuppgiftsbiträdesavtal med AWS undertecknat
-- [ ] Månadsjobbens fakturanummer flyttade till `app.next_invoice_number()`
+- [ ] **DU:** personuppgiftsbiträdesavtal med Vercel, databasleverantören
+      och AWS (S3) undertecknade — se [docs/subprocessors-dpa.md](subprocessors-dpa.md)
+- [ ] **DU:** `CRON_SECRET` satt. Utan den körs inga jobb, alltså ställs
+      inga fakturor ut.
 
 Fakturaspärren i `missingInvoiceFields()` är på tills de fyra första är
 gjorda. Den är avsiktlig: att ta ut moms utan registrering är inte ett
@@ -327,23 +247,23 @@ formfel, det är att kräva in en skatt man inte får kräva in.
 
 ## Om något går fel
 
-**Rulla tillbaka koden** — avbilderna ligger kvar i ECR med sin
-commit-tagg:
-
-```bash
-terraform -chdir=infra apply -var="api_image=$REG/clearance-api:sha-FÖRRA"
-```
+**Rulla tillbaka koden** — Vercel behåller varje utrullning. Använd
+*Promote to Production* på den föregående.
 
 **Rulla inte tillbaka migrationer.** Det finns inga nedåtmigrationer, med
 flit: en nedåtmigration som körs i panik raderar oftast data som inte går
 att få tillbaka. Rätta framåt med en ny migration.
 
-**Databasen** har automatiska ögonblicksbilder med den retention som står
-i tfvars, plus point-in-time recovery. En återställning skapar en *ny*
-instans — den skriver inte över den trasiga, så du hinner jämföra.
+**En kodrullbakåt tar inte tillbaka en migration.** Kör därför aldrig en
+migration som tar bort något i samma utrullning som koden som slutar
+använda det. Två utrullningar, i den ordningen.
 
-**Loggarna** finns i CloudWatch under `/clearance/`. Larmen går till
-`alert_email`.
+**Databasen** — säkerhetskopieringen är leverantörens. Kontrollera att
+point-in-time recovery faktiskt är påslaget innan första kunden, inte
+efter.
+
+**Loggarna** finns per funktion i Vercel. En cron-körning som misslyckas
+syns som 500 i cron-vyn.
 
 **Om API:t svarar 503 på allt** — leta efter `hastighetsgränsen kunde inte
 prövas` i loggen innan du misstänker något annat. Varje anrop räknas mot
@@ -353,9 +273,14 @@ databasstörning till ett öppet fönster för lösenordsforcering. Två orsaker
 i den ordning de är sannolika:
 
 1. Migrationerna har inte körts mot den här databasen (funktionen kommer
-   ur `20260811100000_hastighetsgrans_i_databasen.sql`). `scripts/startkontroll.sh`
-   fångar det som ett STOPP före driftsättning.
+   ur `20260811100000_hastighetsgrans_i_databasen.sql`).
+   `scripts/startkontroll.sh` fångar det som ett STOPP före driftsättning.
 2. Databasen är faktiskt nere — och då är 503 rätt svar ändå.
 
-Gränsen är delad mellan alla uppgifter. Skalar du upp tjänsten ändras
-alltså inte taket, vilket var hela poängen med att flytta räkningen hit.
+Gränsen är delad mellan alla instanser. Skalar Vercel upp ändras alltså
+inte taket, vilket var hela poängen med att flytta räkningen till
+databasen.
+
+**Om API:t svarar 401 på varje cron-anrop** — `CRON_SECRET` i Vercel och
+det du skickar är inte samma sträng. Svarar den 503 är variabeln inte satt
+alls, eller kortare än 16 tecken.

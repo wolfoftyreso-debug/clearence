@@ -5,14 +5,35 @@
  * till: vanlig SMTP (nodemailer), som varje egen mejlrelä talar. Valet är en
  * driftparameter, inte en kodgren man byter i källan:
  *
- *   MAIL_TRANSPORT=ses    (standard)  -> SES, som förr. SES_REGION styr.
- *   MAIL_TRANSPORT=smtp               -> SMTP. SMTP_HOST/PORT/USER/PASS/SECURE.
+ *   MAIL_TRANSPORT=smtp   (standard)  -> SMTP. SMTP_HOST/PORT/USER/PASS/SECURE.
+ *   MAIL_TRANSPORT=ses                -> SES. SES_REGION styr. Kräver att
+ *                                        @aws-sdk/client-ses är installerat
+ *                                        och att AWS-uppgifter finns i miljön.
+ *
+ * STANDARDEN ÄR SMTP, INTE SES, och det är ett byte som gjordes när driften
+ * flyttade till Vercel. SES var rätt standard i ett AWS-kluster där rollen
+ * redan fanns. På Vercel finns ingen AWS-roll, och @aws-sdk/client-ses är
+ * inte ens ett beroende - en SES-standard hade betytt att utkorgen kraschar
+ * på första mejlet i en helt normal installation. En standard ska vara det
+ * som fungerar utan extra steg.
  *
  * `resolveMailConfig` är REN och prövad: den läser miljön och säger vilken
  * transport som gäller och med vilka värden, utan att röra nätet. Själva
  * sändaren byggs av `makeMailSender`, och nodemailer laddas LAT (dynamisk
  * import) bara när smtp valts - en SES-drift behöver aldrig ens ha paketet.
  */
+
+/**
+ * Formen på den valfria SES-modulen.
+ *
+ * Skriven här i stället för importerad: paketet är inte ett beroende, och
+ * `import type` från något som inte finns installerat gör typkontrollen
+ * röd i varje installation som inte kör SES.
+ */
+interface SesModul {
+  SESClient: new (opt: { region: string }) => { send: (kommando: unknown) => Promise<unknown> };
+  SendEmailCommand: new (indata: unknown) => unknown;
+}
 
 export interface EmailPayload {
   recipient: string;
@@ -38,7 +59,7 @@ export type MailConfig =
 /** Läser miljön och bestämmer transporten. Ren - inga sidoeffekter. */
 export const resolveMailConfig = (env: NodeJS.ProcessEnv): MailConfig => {
   const from = (env.MAIL_FROM ?? "").trim();
-  const transport = (env.MAIL_TRANSPORT ?? "ses").trim().toLowerCase();
+  const transport = (env.MAIL_TRANSPORT ?? "smtp").trim().toLowerCase();
 
   if (transport === "smtp") {
     const host = (env.SMTP_HOST ?? "").trim();
@@ -91,7 +112,28 @@ export const makeMailSender = async (config: MailConfig): Promise<MailSender> =>
     };
   }
 
-  const { SESClient, SendEmailCommand } = await import("@aws-sdk/client-ses");
+  /*
+   * IMPORTEN GÅR VIA EN VARIABEL MED FLIT.
+   *
+   * @aws-sdk/client-ses är inget beroende i package.json - det är valfritt,
+   * för den som kör mot SES. Ett bokstavligt `import("@aws-sdk/client-ses")`
+   * hade buntaren löst upp vid BYGGET, och Vercel-bygget hade fallit på ett
+   * paket som en SMTP-drift aldrig behöver.
+   *
+   * Priset är att felet flyttar till körtiden. Därför fångas det och
+   * översätts till ett besked som säger vad som ska göras.
+   */
+  const paket = "@aws-sdk/client-ses";
+  let modul: SesModul;
+  try {
+    modul = (await import(/* @vite-ignore */ paket)) as SesModul;
+  } catch {
+    throw new Error(
+      `MAIL_TRANSPORT=ses kräver att ${paket} är installerat. ` +
+        "Kör `npm install @aws-sdk/client-ses`, eller sätt MAIL_TRANSPORT=smtp.",
+    );
+  }
+  const { SESClient, SendEmailCommand } = modul;
   const ses = new SESClient({ region: config.region });
   return async (payload) => {
     await ses.send(

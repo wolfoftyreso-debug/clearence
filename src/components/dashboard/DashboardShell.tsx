@@ -383,6 +383,32 @@ const NotificationBell = () => {
                 <li key={n.id}>
                   <button
                     type="button"
+                    /*
+                     * VART RADEN LEDER, LÄSBART UTIFRÅN.
+                     *
+                     * Raden är en <button> med en onClick, alltså finns
+                     * målet ingenstans i DOM:en. Webbläsarproven fick då
+                     * plocka fristraden på sin TEXT - och texten är
+                     * formulerad av nedräkningen: "imorgon", "om 3 dagar",
+                     * "Nästa frist: ...". Provet letade efter "i morgon"
+                     * i två ord och hittade ingenting, i månader, medan
+                     * raden fanns hela tiden.
+                     *
+                     * Ett prov som letar efter något som inte finns prövar
+                     * ingenting alls. Målet står därför i DOM:en, så att
+                     * regeln - "klockan har en rad som leder till
+                     * fristerna" - går att pröva som regel.
+                     */
+                    data-notis-mal={n.href}
+                    /*
+                     * KRAV ELLER UPPLYSNING - samma skäl som ovan.
+                     *
+                     * "Nästa frist: ... om 21 dagar" är en upplysning och
+                     * räknas inte i siffran; "Löneutbetalning imorgon" är
+                     * ett krav och gör det. Skillnaden gick bara att se på
+                     * formuleringen, alltså inte alls.
+                     */
+                    data-notis-kravd={n.demandsAction ? "true" : "false"}
                     onClick={() => {
                       // Klicket ÄR kvitteringen: den som gått dit har
                       // sett saken. Trappas läget upp senare får raden

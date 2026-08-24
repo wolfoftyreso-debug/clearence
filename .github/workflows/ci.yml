@@ -28,7 +28,6 @@ jobs:
       - name: Byggen
         run: |
           VITE_DEMO_MODE=false npx vite build
-          npm run build:api
           npm run build:worker
 
       # Produktionsbunten får aldrig bära demoläget.
@@ -38,12 +37,9 @@ jobs:
             echo "::error::demoläget finns i produktionsbunten"; exit 1
           fi
 
-      - uses: hashicorp/setup-terraform@v3
-      - name: Terraform
-        run: |
-          terraform -chdir=infra fmt -check -recursive
-          terraform -chdir=infra init -backend=false
-          terraform -chdir=infra validate
+      # Serverkoden byggs inte till en avbild längre - Vercel bygger den.
+      # Men den ska ändå typkontrolleras, och det gör "npm test" ovan via
+      # tsconfig.server.json.
 
   databas:
     runs-on: ubuntu-latest
@@ -60,6 +56,13 @@ jobs:
         ports: ["5432:5432"]
     env:
       DATABASE_URL: postgres://postgres:prov@127.0.0.1:5432/clearance
+      # db/tests/run.sh och server/tests/run.sh bygger sina egna
+      # psql-anrop ur PGHOST/PGPORT/PGUSER och faller annars tillbaka på
+      # utvecklingsmaskinens unix-socket - alltså på ingenting här.
+      PGHOST: 127.0.0.1
+      PGPORT: "5432"
+      PGUSER: postgres
+      PGPASSWORD: prov
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -90,18 +93,18 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx playwright install --with-deps chromium
-      - run: VITE_DEMO_MODE=true npx vite build
-      - name: Förhandsserver
-        run: |
-          npx vite preview --host 127.0.0.1 --port 4310 &
-          npx wait-on http://127.0.0.1:4310 -t 60000
+
+      # SAMMA KOMMANDO SOM UTVECKLAREN KÖR.
+      #
+      # Här stod bygget och slingan utskrivna en gång till. Två
+      # implementationer av samma sak driver isär, och den här hade redan
+      # gjort det: bygget saknade Supabase-platshållarna som klienten
+      # kräver vid modulinladdning, så sidan hade fallit på
+      # "supabaseUrl is required" och VARJE svit blivit röd med
+      # "Timeout 30000ms exceeded" - ett fel som ser ut som ett trasigt
+      # gränssnitt men är ett trasigt bygge.
+      #
+      # scripts/kor-webblasarprov.sh bygger rätt, reser servern och kör
+      # alla sviterna. Den är dessutom det som faktiskt underhålls.
       - name: Alla webbläsarsviter
-        run: |
-          fel=0
-          for f in tests/browser/verify-*.mjs tests/browser/walkthrough.mjs; do
-            [ "$(basename "$f")" = "verify-design.mjs" ] && continue
-            node "$f" || fel=1
-          done
-          node tests/browser/mobile.mjs http://127.0.0.1:4310 || fel=1
-          node tests/browser/no-external-requests.mjs http://127.0.0.1:4310 || fel=1
-          exit $fel
+        run: npm run test:webblasare

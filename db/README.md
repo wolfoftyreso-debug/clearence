@@ -24,7 +24,7 @@ Samma testfil körs mot båda. Den sätter både `request.jwt.claim.sub` och `ap
 | `auth.users` | Egen tabell med `password_hash` | **Klart** i `db/bootstrap.sql` |
 | Sessioner | `auth.sessions`, token lagras som SHA-256 | Schema klart, API saknas |
 | Row Level Security | Oförändrad — det var alltid vanlig Postgres | **Klart, 45 tester** |
-| Storage-bucket | S3, privat bucket | **Klart** — MinIO/S3 via `api/server/storage.ts` |
+| Storage-bucket | S3, privat bucket | **Klart** — MinIO/S3 via `server/storage.ts` |
 | Signerade URL:er | S3 presigned URLs | **Klart** — `GET /v1/documents/{id}/url`, 60 s, efter `app.may_read_document()` |
 | Edge function `lookup-company` | Endpoint i eget API | Saknas |
 | PostgREST | Eget API | Saknas — se nedan |
@@ -93,17 +93,29 @@ Arbetaren är TypeScript (`db/worker/email-worker.ts`) och bundlas med `npm run 
 
 Stängningsjobbet `close_overdue_accounts()` är idempotent, jämför svenska kalenderdagar (fristen ska inte bero på vilket klockslag fakturan råkade ställas ut), rör aldrig ett betalt konto och raderar ingenting. Testat i `supabase/tests/billingJob.sql`, i båda miljöerna.
 
-## Infrastrukturen som kod
+## Var det här körs
 
-Terraform för hela miljön finns i `infra/`, och kartan över hur delarna
-hänger ihop med produktens flöden i `docs/infrastructure.md`. Tabellen
-ovan säger vad som ska ersätta vad; `infra/` säger exakt hur det reses.
+På Vercel. `vercel.json` bär regionen, funktionernas livslängd, cron-schemat
+och säkerhetsrubrikerna; [docs/vercel.md](../docs/vercel.md) säger vad som
+ligger var och varför, och [docs/driftsattning.md](../docs/driftsattning.md)
+är körordningen från tomt konto.
+
+Terraform-beskrivningen av ett AWS-kluster fanns i `infra/` och är
+borttagen — den beskrev en drift som inte längre finns, och en sådan
+beskrivning är sämre än ingen.
+
+**Två roller, inte en.** Migrationerna körs som ägaren; API:t ansluter som
+en roll som varken äger tabeller eller har `BYPASSRLS`. Blandas de ihop
+stängs radskyddet av tyst. `db/roles-selfhosted.sql` skapar API-rollen och
+`sakerRollGrind()` i `server/db.ts` vägrar köra utan den.
 
 ## Externa beroenden, och varför
 
 | Beroende | Oundvikligt? | Motivering |
 |---|---|---|
-| AWS (EC2/RDS/S3/SES/KMS) | Ja | Det är plattformen |
+| Vercel | Ja | Det är plattformen: bygget, appen, API:t och cron |
+| Postgres (Vercel/Neon) | Ja | Radskyddet ÄR säkerhetsmodellen |
+| AWS S3 | Ja | Dokumenten. `storage_path` lämnar aldrig servern |
 | Fortnox/Visma m.fl. | Bara om kunden vill | Frivillig integration, en per adapter |
 | Bolagsverket | Nej, men | Ersätter manuell inmatning av företagsuppgifter |
 

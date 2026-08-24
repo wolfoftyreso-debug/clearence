@@ -1,7 +1,7 @@
 /*
  * HASTIGHETSBEGRÄNSNINGEN FLYTTAR TILL DELAD LAGRING.
  *
- * Räknaren bodde i minnet, per container. api/server/rateLimit.ts skrev ut
+ * Räknaren bodde i minnet, per container. server/rateLimit.ts skrev ut
  * begränsningen själv: "Kör tjänsten på tre uppgifter blir den effektiva
  * gränsen tre gånger den angivna." Tio inloggningsförsök per fem minuter
  * blev alltså trettio, och blir sextio den dagen tjänsten skalas till sex

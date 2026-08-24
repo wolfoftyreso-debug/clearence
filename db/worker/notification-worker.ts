@@ -48,10 +48,14 @@ import { SMS_SECRET_PROVIDER, providerFromSecret, type SmsProvider } from "./sms
 const DATABASE_URL = process.env.DATABASE_URL;
 const MAIL_FROM = process.env.MAIL_FROM;
 
-if (!DATABASE_URL || !MAIL_FROM) {
-  console.error("DATABASE_URL och MAIL_FROM måste vara satta.");
-  process.exit(1);
-}
+// Prövas när jobbet körs, inte när filen läses: process.exit() vid import
+// river en Vercel-instans mitt i en request. Samma resonemang som i
+// email-worker.ts.
+const kravMiljo = (): void => {
+  if (!DATABASE_URL || !MAIL_FROM) {
+    throw new Error("DATABASE_URL och MAIL_FROM måste vara satta.");
+  }
+};
 
 // Mejltransporten (SES eller SMTP) väljs av MAIL_TRANSPORT, som i
 // e-postarbetaren. Byggs en gång och återanvänds.
@@ -220,7 +224,12 @@ const runNotificationQueue = async (db: Client, sms: SmsProvider): Promise<void>
   );
 };
 
-const main = async (): Promise<void> => {
+/**
+ * Ett varv genom verifierings- och aviseringskön. Exporterad så att
+ * cron-endpointen kör samma kod som kommandot.
+ */
+export const korEttVarv = async (): Promise<void> => {
+  kravMiljo();
   const db = new Client({ connectionString: DATABASE_URL });
   await db.connect();
   try {
@@ -232,7 +241,10 @@ const main = async (): Promise<void> => {
   }
 };
 
-main().catch((error) => {
-  console.error(error);
-  process.exit(1);
-});
+// Körs bara som kommando - annars startar en import ett varv i kön.
+if (/notification-worker/.test(process.argv[1] ?? "")) {
+  korEttVarv().catch((error) => {
+    console.error(error);
+    process.exit(1);
+  });
+}

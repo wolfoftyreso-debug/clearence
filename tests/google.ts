@@ -30,7 +30,7 @@ import {
   statusNote,
   type PlaceCandidate,
 } from "../src/lib/sources/google";
-import { lookupCompany } from "../api/server/google";
+import { lookupCompany } from "../server/google";
 import { sourceById } from "../src/lib/sources/registry";
 
 let passed = 0;

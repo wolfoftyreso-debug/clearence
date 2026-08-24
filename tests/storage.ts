@@ -7,7 +7,7 @@
  * storage_path aldrig går ut i svaret.
  */
 
-import { DOCUMENT_URL_TTL_SECONDS, presignDocument, storageConfigured } from "../api/server/storage";
+import { DOCUMENT_URL_TTL_SECONDS, presignDocument, storageConfigured } from "../server/storage";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -44,7 +44,7 @@ check("URL:en är kortlivad (60 s)", DOCUMENT_URL_TTL_SECONDS === 60);
 
 /* --- Rutten: ordningen som är hela poängen ------------------------------- */
 
-const api = readFileSync(join(process.cwd(), "api/server/index.ts"), "utf8");
+const api = readFileSync(join(process.cwd(), "server/index.ts"), "utf8");
 const route = api.slice(
   api.indexOf('"/v1/documents/:documentId/url"'),
   api.indexOf('"/v1/documents/:documentId/review"'),

@@ -13,8 +13,26 @@ verified insolvency professionals.
 - [Vite](https://vitejs.dev/) + [React](https://react.dev/) + TypeScript
 - [shadcn/ui](https://ui.shadcn.com/) + [Tailwind CSS](https://tailwindcss.com/)
 - [TanStack Query](https://tanstack.com/query) for data fetching
-- [Supabase](https://supabase.com/) (Postgres + Edge Functions) for the
-  professionals marketplace
+- Own HTTP API on `node:http` against Postgres — one runtime dependency
+  (`pg`). Lives in `server/`, served by `api/[...path].ts`.
+- [Supabase](https://supabase.com/) as a bridge adapter only, while the
+  remaining ports move to the own API
+
+## Where this runs
+
+**Vercel, exclusively.** The Vite build is served statically, `api/[...path].ts`
+is the whole API as one function, and `api/cron/*.ts` are the scheduled jobs.
+Functions run in Stockholm (`arn1`).
+
+- [docs/vercel.md](docs/vercel.md) — what lives where, environment
+  variables, and why the database role matters.
+- [docs/driftsattning.md](docs/driftsattning.md) — the ordered runbook from
+  an empty Vercel account to a service that answers.
+
+The container path — Docker, Helm, Terraform, nginx — was removed, not
+parked. `tests/deploy.ts` checks that it is actually gone: a half-maintained
+second path describes a deployment that does not exist, and the next person
+to read it believes it.
 
 ## Getting started
 
@@ -41,7 +59,7 @@ npm run dev
 | `npm run build:dev` | Development-mode build |
 | `npm run preview` | Preview a production build locally |
 | `npm run lint` | Run ESLint |
-| `npm test` | Hela nodbatteriet: lint, typecheck och ~50 sviter. Sekunder. |
+| `npm test` | Hela nodbatteriet: lint, typecheck (including `server/`, `api/`, `db/worker/`) and ~51 suites. Seconds. |
 | `npm run test:webblasare` | De fyrtio webbläsarproven i `tests/browser/`. Bygger i demoläge, startar en förhandsserver och kör alla. Minuter. |
 | `npm run motor` | Bygger `clearance-motor.ts` – hela domänlagret i en fil, för ett verktyg som ska byggas vid sidan av. |
 | `npm run test:motor` | Bygger om motorfilen, kräver att den var färsk, och kör 28 av produktens egna sviter MOT den extraherade filen. |
@@ -53,13 +71,23 @@ flesta sedan länge, för att de letade efter knappar och texter som bytts
 ut. Kör dem före en release, och efter varje ändring i en yta de rör.
 
 Databasproven kräver ett Postgres-kluster och körs för sig:
-`bash db/tests/run.sh` (självhostat) och `bash supabase/tests/run.sh`
-(Supabase-skalet). Samma påståenden ska gälla i båda - en skillnad mellan
-miljöerna ska synas där och inte i produktion.
+
+| Kommando | Vad det bevisar |
+| --- | --- |
+| `npm run test:selfhosted` | Radskyddet och rollerna på en **vanlig Postgres** - alltså det Vercel Postgres och Neon är. 324 kontroller. |
+| `npm run test:rls` | Samma påståenden mot Supabase-skalet. En skillnad mellan miljöerna ska synas här, inte i produktion. |
+| `npm run test:api` | Hela API:t över riktig HTTP mot en riktig databas, inklusive Vercel-ingången `api/[...path].ts`. 577 kontroller. |
 
 ## Project structure
 
 ```
+server/           Routern, auth, lagring, loggen. UTANFÖR api/ med flit:
+                  Vercel gör varje fil under api/ till en publik endpoint.
+api/
+  [...path].ts    Hela API:t, en funktion
+  cron/           Ett schemalagt jobb per fil (_vakt.ts är ingen endpoint)
+db/
+  worker/         Jobbens riktiga kod. Cron-endpointerna importerar den.
 src/
   components/
     landing/       Marketing site sections (hero, features, footer, ...)

@@ -79,11 +79,17 @@ await page.goto(`${BASE}#/dashboard/handelser`, { waitUntil: "domcontentloaded" 
 await page.waitForTimeout(1200);
 await page.click("button[aria-label^='Notiser']");
 await page.waitForTimeout(500);
-// Samma sak som i verify-notisklick: VILKEN fristrad klockan visar beror på
-// datumen. Ordet "frist" finns bara i informationsraden, och den visas bara
-// när ingen frist är nära - raden plockas därför på vad den handlar om, inte
-// på ett ord som försvinner när demons datum rör sig.
-const fristRad = page.locator("ul li button").filter({ hasText: /frist|om \d+ dag|i dag|i morgon|sedan/i }).first();
+// RADEN PLOCKAS PÅ SITT MÅL, INTE PÅ SIN TEXT.
+//
+// Här stod en textmatchning på nedräkningens formulering. Den var redan ett
+// försök att bli av med datumberoendet - och den misslyckades ändå: appen
+// skriver "imorgon" i ETT ord, provet letade efter "i morgon" i två. Raden
+// fanns hela tiden; provet såg den aldrig, och kontrollen var röd av en
+// stavning.
+//
+// data-notis-mal bär vart raden leder. Det är regeln som prövas - "klockan har
+// en rad som leder till fristerna" - och den ändras inte med veckodagen.
+const fristRad = page.locator('ul li button[data-notis-mal="/dashboard#frister"]').first();
 check("klockan har en rad som pekar på en frist", (await fristRad.count()) > 0);
 await fristRad.click();
 await page.waitForTimeout(1500);

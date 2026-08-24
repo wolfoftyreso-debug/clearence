@@ -1,0 +1,38 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2023"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "moduleDetection": "force",
+    "noEmit": true,
+    "types": ["node"],
+
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"]
+    }
+  },
+  /*
+   * SERVERKODEN TYPKONTROLLERADES INTE FÖRUT.
+   *
+   * tsconfig.app.json täcker src/, tsconfig.node.json täcker vite.config.ts -
+   * och däremellan låg server/, api/ och db/worker/ helt utanför. De byggdes
+   * av esbuild, som transpilerar utan att kontrollera typer. Ett fel där syns
+   * alltså först i drift.
+   *
+   * Att flytten hittade sönderslagna importvägar (../../src/ pekade utanför
+   * repot efter att api/server blev server/) är beviset på att luckan var
+   * verklig, inte teoretisk.
+   */
+  "include": ["server", "api", "db/worker"],
+  "exclude": ["server/tests"]
+}

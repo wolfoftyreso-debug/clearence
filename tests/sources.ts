@@ -177,30 +177,54 @@ check("notisen räknar rätt", /2 sociala konton/.test(websiteNote(facts)), webs
 /* --- 5. CSP:n tillåter det appen faktiskt gör ----------------------------- */
 
 /*
- * Innehållspolicyn står i infrastrukturen och gäller först i produktion.
- * Den kan därför motsäga appen utan att någon märker det förrän en kund
- * gör det - vilket den gjorde: object-src var 'none' medan
+ * Innehållspolicyn står i driftkonfigurationen och gäller först i
+ * produktion. Den kan därför motsäga appen utan att någon märker det förrän
+ * en kund gör det - vilket den gjorde: object-src var 'none' medan
  * rapportvisaren bäddar in PDF:en med <object data={blob-url}>.
  *
- * Testet läser policyn ur Terraform och jämför med vad koden använder.
+ * Testet läser policyn ur vercel.json och jämför med vad koden använder.
  * Det är trubbigt, men det fångar just den klass av fel som annars bara
- * syns bakom CloudFront.
+ * syns i drift.
  */
 {
   // process.cwd(), inte __dirname: bunten hamnar i node_modules/.cache
   // och __dirname pekar då dit, inte på repot. Sviterna körs från roten.
   const rot = process.cwd();
-  const tf = fs.readFileSync(`${rot}/infra/frontend.tf`, "utf8");
+  const vercel = JSON.parse(fs.readFileSync(`${rot}/vercel.json`, "utf8")) as {
+    headers?: { headers: { key: string; value: string }[] }[];
+  };
   const visaren = fs.readFileSync(`${rot}/src/components/reports/useInlineReport.tsx`, "utf8");
 
+  const csp =
+    (vercel.headers ?? [])
+      .flatMap((h) => h.headers)
+      .find((h) => h.key.toLowerCase() === "content-security-policy")?.value ?? "";
+
   const direktiv = (namn: string): string => {
-    const m = new RegExp(`"${namn} ([^"]*)"`).exec(tf);
-    return m ? m[1] : "";
+    const d = csp
+      .split(";")
+      .map((x) => x.trim())
+      .find((x) => x === namn || x.startsWith(`${namn} `));
+    return d ? d.slice(namn.length).trim() : "";
   };
 
-  check("CSP:n finns i infrastrukturen", /content_security_policy/.test(tf));
-  check("frame-ancestors är låst", /"frame-ancestors 'none'"/.test(tf));
-  check("base-uri är låst", /"base-uri 'self'"/.test(tf));
+  check("CSP:n finns i driftkonfigurationen", csp.length > 0);
+  check("frame-ancestors är låst", direktiv("frame-ancestors") === "'none'");
+  check("base-uri är låst", direktiv("base-uri") === "'self'");
+
+  /*
+   * DEN HÄR UPPSLAGNINGEN HAR HAFT FEL FÖRR.
+   *
+   * Läses direktiven med en regexp som matchar var som helst i strängen
+   * kan "font-src" träffa i "font-src 'self'" OCH i ingenting alls -
+   * en tom träff blir en tom sträng, och en tom sträng innehåller varken
+   * 'self' eller blob:, alltså rött. Värre är motsatsen: en uppslagning
+   * som råkar returnera default-src:s värde för ett direktiv som inte
+   * finns gör kontrollen nedan grön utan täckning. Därför prövas
+   * mekanismen här.
+   */
+  check("uppslagningen hittar ett direktiv som finns", direktiv("default-src") === "'self'");
+  check("och ger tomt för ett som inte finns", direktiv("finns-inte-src") === "");
 
   if (/<object\b/.test(visaren)) {
     const o = direktiv("object-src");

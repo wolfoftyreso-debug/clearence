@@ -1,7 +1,7 @@
 /**
  * CLEARANCE - MOTORN, I EN FIL.
  *
- * Genererad 2026-08-23 av scripts/extrahera-motor.mjs ur arbetsträdet.
+ * Genererad 2026-08-24 av scripts/extrahera-motor.mjs ur arbetsträdet.
  * REDIGERA INTE HÄR. Ändringar hör hemma i modulerna filen byggs av;
  * annars glider originalet och kopian isär, och kopian vinner aldrig.
  *
@@ -1203,7 +1203,7 @@ export interface ErasureRequestRecord {
 /* --- De yttre källornas svar --------------------------------------------- */
 
 /**
- * Formerna speglar api/server/{google,website,news}.ts.
+ * Formerna speglar server/{google,website,news}.ts.
  *
  * De är medvetet MINIMALA: klienten behöver veta om något hämtades och vad
  * det blev, inte bära en kopia av serverns interna typer. Ett `status`-fält
@@ -2654,7 +2654,7 @@ export interface PrivacyPort {
 /**
  * DE YTTRE KÄLLORNA: registret, Google, webbplatsen och nyheterna.
  *
- * Hämtningarna bor på servern (api/server/{google,website,news}.ts) - dels
+ * Hämtningarna bor på servern (server/{google,website,news}.ts) - dels
  * för att webbläsaren inte får ringa tredje part, dels för att nycklar och
  * SSRF-skydd hör hemma där. Porten är vägen dit.
  *
@@ -2884,7 +2884,7 @@ export const SOURCES: SourceSpec[] = [
     /*
      * LIVE, OCH KÖRNINGSBEROENDE. Skillnaden mot förut är att hämtaren nu
      * finns: API-slutpunkten /v1/sources/website hämtar sidan på riktigt,
-     * med robots.txt först och SSRF-skydd (api/server/website.ts), och
+     * med robots.txt först och SSRF-skydd (server/website.ts), och
      * tolkningen är prövad (sources/website.ts, tests/sources.ts).
      *
      * Ingen nyckel och inget avtal krävs - sidan är publik och kunden äger
@@ -2929,7 +2929,7 @@ export const SOURCES: SourceSpec[] = [
     acquisition: "api-avtal",
     /*
      * KÖRNINGSBEROENDE, som företagsregistret. Hämtningen är byggd
-     * (api/server/google.ts) och tolkningen prövad (sources/google.ts).
+     * (server/google.ts) och tolkningen prövad (sources/google.ts).
      * Om källan svarar avgörs vid körning av två saker: att driften har
      * en Google-nyckel, och att bolaget går att matcha entydigt.
      *
@@ -8478,7 +8478,7 @@ export const buildMyDataExport = (
  * ett fritextfält kan råka bära det ändå. Motmedlet är enkelt och står
  * där texten skrivs: en kort påminnelse om att bara dela det läget kräver.
  *
- * Samma hållning som röret mot modellen (api/server/anthropic.ts:
+ * Samma hållning som röret mot modellen (server/anthropic.ts:
  * DATAMINIMERING) och det docs/dataskydd.md §5/§8 efterlyser: en kort
  * användarinstruktion vid fritext. Texten bor här, som en enda sanning,
  * så att den ser likadan ut i samtalet, onboardingen och guiderna.
@@ -22154,7 +22154,7 @@ export const googleNote = (f: GoogleFacts): string => {
  *     ser ut som bevakning. Det är hela skillnaden mellan en källa och en
  *     sökmotor.
  *
- * Filen är ren: inga nätanrop. Hämtningen bor i api/server/news.ts, dels
+ * Filen är ren: inga nätanrop. Hämtningen bor i server/news.ts, dels
  * för att webbläsaren inte får ringa tredje part (vaktat av
  * tests/browser/no-external-requests.mjs), dels för att tolkningen ska gå
  * att pröva mot verkliga flöden utan att hämta något.

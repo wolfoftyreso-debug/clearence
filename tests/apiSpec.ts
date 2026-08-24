@@ -113,7 +113,7 @@ check("ordet AI förekommer inte", !/\bAI\b/i.test(raw));
  * ner hela översikten en gång; kontrollen finns för att det inte ska
  * kunna hända igen.
  */
-const apiSource = readFileSync(join(process.cwd(), "api/server/index.ts"), "utf8");
+const apiSource = readFileSync(join(process.cwd(), "server/index.ts"), "utf8");
 const toCaseBlock = apiSource.slice(
   apiSource.indexOf("const toCase = (row"),
   apiSource.indexOf("const toDecision = (row"),
@@ -155,7 +155,7 @@ for (const listField of ["recommendationReasons", "recommendationNextSteps"]) {
  * att se. Kontrollen läser rutterna som text ur servern; det är trubbigt,
  * men det är den sortens trubbighet som håller när ingen tittar.
  */
-const serverKod = readFileSync(join(process.cwd(), "api", "server", "index.ts"), "utf8");
+const serverKod = readFileSync(join(process.cwd(), "server", "index.ts"), "utf8");
 
 /** "/v1/cases/:caseId" -> "/cases/{caseId}", som kontraktet skriver det. */
 const somKontraktet = (rutt: string): string =>
@@ -284,7 +284,7 @@ for (const [metod, rutt] of metodPar) {
  * Åt andra hållet är läget ett annat, och det ska inte påstås vara ett fel.
  *
  * Kontraktet beskriver HELA v1. Den egna servern är första lodräta skivan
- * (api/server/index.ts): identiteten, ärendena, journalen och
+ * (server/index.ts): identiteten, ärendena, journalen och
  * beslutsminnet. Resten serveras idag genom supabase-adaptern. Att kräva
  * att servern täcker kontraktet vore alltså att kräva att migreringen är
  * klar, vilket den inte är.

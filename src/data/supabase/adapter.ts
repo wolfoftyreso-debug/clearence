@@ -475,7 +475,7 @@ const toInvoice = (row: {
  * Det är ett svagare skydd än det egna API:et ger, och skillnaden är värd
  * att veta: här är kontrollen och åtgärden två anrop från samma webbläsare,
  * medan servern gör dem till ett enda anrop den själv avgör. Bryggan är
- * övergångsläget; den skarpa vägen är api/server.
+ * övergångsläget; den skarpa vägen är server.
  */
 const bekraftaLosenord = async (password: string): Promise<void> => {
   if (!password) throw new Error("Lösenordet krävs för den här åtgärden.");

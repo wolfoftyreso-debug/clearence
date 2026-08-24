@@ -17,9 +17,9 @@
  *  4. Källkodsvakter för sådant som inte får återinföras.
  */
 
-import { isPrivateAddress, fetchWebsite } from "../api/server/website";
-import { klientNyckel } from "../api/server/rateLimit";
-import { loggaFel, maskera, maskeraText } from "../api/server/logg";
+import { isPrivateAddress, fetchWebsite } from "../server/website";
+import { klientNyckel } from "../server/rateLimit";
+import { loggaFel, maskera, maskeraText } from "../server/logg";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -222,7 +222,7 @@ process.env.TRUSTED_PROXY_HOPS = utanProxy.TRUSTED_PROXY_HOPS ?? "1";
 const utanKommentarer = (kod: string): string =>
   kod.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
 
-const web = utanKommentarer(readFileSync(join(process.cwd(), "api/server/website.ts"), "utf8"));
+const web = utanKommentarer(readFileSync(join(process.cwd(), "server/website.ts"), "utf8"));
 check(
   'website.ts använder aldrig redirect: "follow"',
   !/redirect:\s*["']follow["']/.test(web),
@@ -230,13 +230,13 @@ check(
 );
 check('website.ts följer omdirigeringar manuellt', /redirect:\s*["']manual["']/.test(web));
 
-const rl = readFileSync(join(process.cwd(), "api/server/rateLimit.ts"), "utf8");
+const rl = readFileSync(join(process.cwd(), "server/rateLimit.ts"), "utf8");
 check(
   "rateLimit.ts tar inte längre den FÖRSTA posten ur x-forwarded-for",
   !/split\(","\)\[0\]/.test(rl) && !/\[0\]\?\.trim\(\)/.test(rl),
 );
 
-const httpKod = readFileSync(join(process.cwd(), "api/server/http.ts"), "utf8");
+const httpKod = readFileSync(join(process.cwd(), "server/http.ts"), "utf8");
 check(
   "API:t sätter aldrig Access-Control-Allow-Origin: *",
   !/access-control-allow-origin/i.test(httpKod),
@@ -244,7 +244,7 @@ check(
 check("svaren bär nosniff", /x-content-type-options/i.test(httpKod));
 check("ärendedata cachas aldrig av mellanled", /no-store/.test(httpKod));
 
-const indexKod = readFileSync(join(process.cwd(), "api/server/index.ts"), "utf8");
+const indexKod = readFileSync(join(process.cwd(), "server/index.ts"), "utf8");
 check(
   "inga råa databasfel läcker ut (generiskt 500-svar finns)",
   /internal_error/.test(indexKod) && /Något gick fel/.test(indexKod),
@@ -265,37 +265,63 @@ for (const f of frontendKallor) {
   );
 }
 
-// Nginx: säkerhetsrubrikerna får inte tappas i location-block. add_header
-// ÄRVS INTE ned i ett block som har egna add_header - då måste de upprepas.
-const nginx = readFileSync(join(process.cwd(), "deploy/frontend/nginx.conf.template"), "utf8");
-const locationBlock = (namn: string): string => {
-  // Leta efter DIREKTIVET (radbörjan + "{" på samma rad), inte efter texten
-  // var som helst - annars träffar sökningen en kommentar som nämner den.
-  const rad = new RegExp(`^[ \\t]*${namn.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&")}\\s*\\{`, "m");
-  const traff = rad.exec(nginx);
-  if (!traff) return "";
-  const i = traff.index;
-  const start = nginx.indexOf("{", i);
-  let djup = 0;
-  for (let j = start; j < nginx.length; j++) {
-    if (nginx[j] === "{") djup++;
-    if (nginx[j] === "}") {
-      djup--;
-      if (djup === 0) return nginx.slice(start, j);
-    }
+/*
+ * SÄKERHETSRUBRIKERNA.
+ *
+ * Här stod en kontroll av nginx-mallen: add_header ÄRVS INTE ned i ett
+ * location-block som har egna add_header, så rubrikerna måste upprepas i
+ * varje sådant block. Det var en verklig bugg en gång - index.html och
+ * /assets/ saknade både nosniff och klickkapningsskydd.
+ *
+ * Nginx finns inte längre. Rubrikerna sätts av vercel.json, och den fällan
+ * finns inte där. En annan gör det: rubriker som bara gäller EN sökväg. En
+ * regel vars source inte matchar allt lämnar resten av produkten utan
+ * skydd, och det syns inte förrän någon läser konfigurationen.
+ */
+{
+  const vercel = JSON.parse(readFileSync(join(process.cwd(), "vercel.json"), "utf8")) as {
+    headers?: { source: string; headers: { key: string; value: string }[] }[];
+  };
+  const regler = vercel.headers ?? [];
+  // Regeln som gäller ALLA sökvägar. Utan en sådan är skyddet fläckvis.
+  const allaVagar = regler.filter((r) => r.source === "/(.*)" || r.source === "/:path*");
+  check("det finns en rubrikregel som gäller varje sökväg", allaVagar.length > 0);
+
+  const satta = new Set(
+    allaVagar.flatMap((r) => r.headers.map((h) => h.key.toLowerCase())),
+  );
+  for (const rubrik of [
+    "x-content-type-options",
+    "x-frame-options",
+    "referrer-policy",
+    "strict-transport-security",
+    "content-security-policy",
+    "permissions-policy",
+  ]) {
+    check(`${rubrik} gäller hela produkten`, satta.has(rubrik));
   }
-  return "";
-};
-for (const block of ["location = /index.html", "location /assets/"]) {
-  const kod = locationBlock(block);
-  check(`${block} behåller nosniff`, /x-content-type-options/i.test(kod), block);
-  check(`${block} behåller klickkapningsskyddet`, /x-frame-options/i.test(kod), block);
-  check(`${block} behåller referrer-policy`, /referrer-policy/i.test(kod), block);
+
+  const csp =
+    allaVagar
+      .flatMap((r) => r.headers)
+      .find((h) => h.key.toLowerCase() === "content-security-policy")?.value ?? "";
+  check("CSP:n förbjuder inramning", /frame-ancestors 'none'/.test(csp), csp);
+
+  /*
+   * OCH INGEN SMALARE REGEL FÅR TA BORT DEM.
+   *
+   * Vercel slår ihop matchande header-regler, och en senare regel med
+   * samma nyckel VINNER. En regel för /assets/ som sätter en slappare CSP
+   * hade alltså tyst öppnat just den sökvägen. Kontrollen kräver att varje
+   * smalare regel som rör en säkerhetsrubrik är ett medvetet tillägg, inte
+   * en försvagning - i praktiken: den får inte röra dem alls.
+   */
+  const smalare = regler.filter((r) => !allaVagar.includes(r));
+  const overskrivna = smalare.flatMap((r) =>
+    r.headers.filter((h) => satta.has(h.key.toLowerCase())).map((h) => `${r.source}: ${h.key}`),
+  );
+  check("ingen smalare regel skriver över en säkerhetsrubrik", overskrivna.length === 0, overskrivna.join(", "));
 }
-check("nginx sätter HSTS", /strict-transport-security/i.test(nginx));
-check("nginx sätter en innehållspolicy (CSP)", /content-security-policy/i.test(nginx));
-check("CSP:n förbjuder inramning", /frame-ancestors/i.test(nginx));
-check("nginx sätter Permissions-Policy", /permissions-policy/i.test(nginx));
 
 // Den döda XSS-sänkan ska vara borta ur trädet.
 let harChart = true;
@@ -361,7 +387,7 @@ check("maskeringen hänger sig inte på cykliska objekt", (() => {
   try { JSON.stringify(maskera(a)); return true; } catch { return false; }
 })());
 
-const loggKod = utanKommentarer(readFileSync(join(process.cwd(), "api/server/index.ts"), "utf8"));
+const loggKod = utanKommentarer(readFileSync(join(process.cwd(), "server/index.ts"), "utf8"));
 check(
   "index.ts loggar aldrig ett rått felobjekt igen",
   !/console\.error\(\s*["'][^"']*["']\s*,\s*error\s*\)/.test(loggKod),
@@ -377,13 +403,13 @@ check(
  * Kontrollen körs före första requesten och stoppar uppstarten.
  */
 
-const dbKod = utanKommentarer(readFileSync(join(process.cwd(), "api/server/db.ts"), "utf8"));
+const dbKod = utanKommentarer(readFileSync(join(process.cwd(), "server/db.ts"), "utf8"));
 check("db.ts prövar superanvändare", /rolsuper/.test(dbKod));
 check("db.ts prövar BYPASSRLS", /rolbypassrls/.test(dbKod));
 check("db.ts prövar tabellägarskap", /relowner/.test(dbKod));
 check("och en osäker roll KASTAR (vägrar starta)", /throw new Error\("osäker databasroll/.test(dbKod));
 
-const mainKod = utanKommentarer(readFileSync(join(process.cwd(), "api/server/main.ts"), "utf8"));
+const mainKod = utanKommentarer(readFileSync(join(process.cwd(), "server/main.ts"), "utf8"));
 check("uppstarten prövar rollen FÖRE listen()", (() => {
   const i = mainKod.indexOf("kravSakerDatabasroll");
   const j = mainKod.indexOf(".listen(");
@@ -391,14 +417,43 @@ check("uppstarten prövar rollen FÖRE listen()", (() => {
 })(), { krav: mainKod.indexOf("kravSakerDatabasroll"), listen: mainKod.indexOf(".listen(") });
 check("och avslutar processen om den inte går att starta", /process\.exit\(1\)/.test(mainKod));
 
-// Undantaget får finnas för sviterna - men ALDRIG i chartet.
-const chartFiler = [
-  "deploy/helm/clearance/values.yaml",
-  "deploy/helm/clearance/values-prod.example.yaml",
-  "deploy/helm/clearance/templates/configmap.yaml",
-  "deploy/helm/clearance/templates/api.yaml",
-];
-for (const f of chartFiler) {
+/*
+ * OCH SAMMA VÄGRAN I SERVERLESS, DÄR DEN FAKTISKT GÄLLER.
+ *
+ * main.ts kör bara den egna servern (utvecklingsläget och test:api). I
+ * drift går varje anrop genom api/[...path].ts, där ingen uppstart finns
+ * att vägra i. Höll bara kontrollen ovan vore rollgrinden intygad av ett
+ * prov på en väg som inte används.
+ */
+{
+  const efter = (namn: string): string => {
+    const i = dbKod.indexOf(`export const ${namn} = async`);
+    return i < 0 ? "" : dbKod.slice(i, i + 900);
+  };
+  const grindenForePoolen = (kropp: string): boolean => {
+    const grind = kropp.indexOf("await sakerRollGrind()");
+    const pool = kropp.indexOf("getPool().connect()");
+    return grind >= 0 && pool >= 0 && grind < pool;
+  };
+  check("withUser prövar rollen före databasen", grindenForePoolen(efter("withUser")));
+  check("withAnon gör det också", grindenForePoolen(efter("withAnon")));
+  // -1 < allt: en kontroll skriven som ren indexjämförelse hade godkänt
+  // kod UTAN grind. Prövas här så att den inte skrivs om till det.
+  check("kontrollen godkänner inte en saknad grind", !grindenForePoolen("await getPool().connect();"));
+}
+
+/*
+ * UNDANTAGET FÅR FINNAS FÖR SVITERNA - ALDRIG I DRIFTKONFIGURATIONEN.
+ *
+ * ALLOW_UNSAFE_DB_ROLE=1 stänger av vägran mot en roll som kringgår
+ * radskyddet. Det står här för att sviterna ansluter som superanvändaren
+ * med flit (fixturerna ska inte bero på de policyer som är under test).
+ * Hamnar det i det som rullas ut är hela grinden en artighet.
+ *
+ * Chartet vaktades förut. Chartet finns inte längre - vercel.json och
+ * cron-endpointerna är det som rullas ut, och de vaktas i stället.
+ */
+for (const f of ["vercel.json", "api/[...path].ts", "api/cron/nattjobb.ts", "api/cron/utkorg.ts", "api/cron/aviseringar.ts", "api/cron/simulering.ts", "api/cron/_vakt.ts"]) {
   let kod = "";
   try { kod = readFileSync(join(process.cwd(), f), "utf8"); } catch { continue; }
   check(`${f} sätter aldrig ALLOW_UNSAFE_DB_ROLE`, !/ALLOW_UNSAFE_DB_ROLE/.test(kod));
@@ -631,7 +686,7 @@ check(
 // Lösenordet får aldrig ta vägen genom en logg.
 check(
   "lösenordsfältet maskeras i loggen",
-  /"password"/.test(utanKommentarer(readFileSync(join(process.cwd(), "api/server/logg.ts"), "utf8"))),
+  /"password"/.test(utanKommentarer(readFileSync(join(process.cwd(), "server/logg.ts"), "utf8"))),
 );
 
 

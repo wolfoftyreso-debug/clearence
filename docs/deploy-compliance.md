@@ -11,12 +11,12 @@ Legend: 🟢 klart · 🟡 påbörjat/underlag finns · 🔴 ej gjort
 | # | Krav | Typ | Status | Var / hur |
 |---|---|---|---|---|
 | P0-1 | DPA (personuppgiftsbiträdesavtal) med Anthropic, Google, AWS, SMS- och kreditupplysningsleverantör | [EXTERNT] | 🔴 | Register + per-part-checklista med signeringskolumn: `docs/subprocessors-dpa.md`. Signeras av bolaget. |
-| P0-2 | EU-dataregion bekräftad för varje underbiträde; **nolldataretention (ZDR)** aktiverad hos modell-leverantören | [EXTERNT] | 🔴 | Konto-/avtalsbeslut, spårat i `docs/subprocessors-dpa.md`. Egen infra är EU-låst i Terraform (`data_residency_posture`); koden skickar dataminimerat (P0-6). |
+| P0-2 | EU-dataregion bekräftad för varje underbiträde; **nolldataretention (ZDR)** aktiverad hos modell-leverantören | [EXTERNT] | 🔴 | Konto-/avtalsbeslut, spårat i `docs/subprocessors-dpa.md`. Funktionerna är låsta till Stockholm (`regions: ["arn1"]` i `vercel.json`); koden skickar dataminimerat (P0-6). |
 | P0-3 | DPIA genomförd och dokumenterad före skarp pilot | [EXTERNT] | 🟡 | Underlag klart i `docs/dataskydd.md` §2–7. DPO slutför. |
 | P0-4 | Rättslig grund för behandlingen fastställd per kategori | [EXTERNT] | 🟡 | Förslag i behandlingsregistret, `docs/dataskydd.md` §3. |
 | P0-5 | Säkerhetsinvarianter verifierade i skarp miljö (RLS, roller, signerade URL:er, SHA-256-nycklar) | [KOD] | 🟡 | Byggt och testat i demo/self-hosted; ska köras om i produktionsmiljön. RLS-tester: `supabase/tests`, `db/tests`. |
-| P0-8 | Omautentisering före oåterkalleliga åtgärder (radering, myntning av API-nyckel) | [KOD] | 🟢 | `confirmPassword` i `api/server/index.ts`; lösenordet prövas mot hashen per anrop, taket räknas på kontot (`BEKRAFTELSE` i `api/server/rateLimit.ts`). Porten kräver det i alla tre adaptrar. Vaktat i `tests/sakerhet.ts` - sju mutationer, sju fångade. |
-| P0-6 | Dataminimering mot modell-leverantören (inget user_id/metadata, inget innehåll loggas) | [KOD] | 🟢 | `api/server/anthropic.ts`, vaktat i `tests/anthropic.ts`. |
+| P0-8 | Omautentisering före oåterkalleliga åtgärder (radering, myntning av API-nyckel) | [KOD] | 🟢 | `confirmPassword` i `server/index.ts`; lösenordet prövas mot hashen per anrop, taket räknas på kontot (`BEKRAFTELSE` i `server/rateLimit.ts`). Porten kräver det i alla tre adaptrar. Vaktat i `tests/sakerhet.ts` - sju mutationer, sju fångade. |
+| P0-6 | Dataminimering mot modell-leverantören (inget user_id/metadata, inget innehåll loggas) | [KOD] | 🟢 | `server/anthropic.ts`, vaktat i `tests/anthropic.ts`. |
 | P0-7 | Ansvarsgräns: eskalering på höga insatser, aldrig säkert juridiskt besked, regelaktualitet | [KOD] | 🟢 | Systemprompt-konstitutionen, vaktat i `tests/anthropic.ts`. |
 
 ## P1 — före publik lansering (första kund)
@@ -27,7 +27,7 @@ Legend: 🟢 klart · 🟡 påbörjat/underlag finns · 🔴 ej gjort
 | P1-2 | Den registrerades rättigheter: registerutdrag, dataportabilitet, rättelse, radering | [KOD] | 🟢 | Dataskyddssektion i `src/pages/DashboardSettings.tsx` + `src/components/settings/ErasureSection.tsx`. Utdrag/portabilitet: `src/lib/dataExport.ts`. Rättelse: `RECTIFICATION_MAP`. Radering: självbetjänad med sju dagars karenstid via `GET/POST/DELETE /v1/me/erasure` → `app.erase_user()` i en transaktion (migration `20260825100000`). `ERASURE_MANIFEST` lovar vad som raderas, anonymiseras och behålls med rättslig grund; `tests/dataskydd.ts` kräver att manifestet och SQL:en täcker varandra i båda riktningarna, och `supabase/tests/radering.sql` söker efter kvarvarande personuppgifter i **varje textkolumn i varje tabell**. |
 | P1-3 | Art. 9-risk i fritext hanterad: dataminimeringsinstruktion vid fritextfält | [KOD] | 🟢 | `src/lib/dataMinimering.ts` + `DataMinimeringHint` i samtalet och onboardingen. Vaktat i `tests/dataskydd.ts`. |
 | P1-4 | E-signeringens beviskedja (vem/vad/när, oföränderlig länkad kedja, ärliga eIDAS-gränser) | [KOD] | 🟢 | `src/lib/signing.ts`, vaktat i `tests/signing.ts`. |
-| P1-5 | Webbhämtaren live med robots.txt + SSRF-skydd (halvtomma källpaneler undvikna) | [KOD] | 🟢 | `api/server/website.ts`, vaktat i `tests/website.ts`. |
+| P1-5 | Webbhämtaren live med robots.txt + SSRF-skydd (halvtomma källpaneler undvikna) | [KOD] | 🟢 | `server/website.ts`, vaktat i `tests/website.ts`. |
 | P1-6 | Avtal för företagsregister (Bolagsverket/kreditupplysare) | [EXTERNT] | 🔴 | Registret märker källan som ej-live tills avtal finns (`src/lib/sources/registry.ts`). |
 
 ## P2 — tidig iteration
@@ -45,8 +45,9 @@ prövar tre olika saker, och de körs på tre olika sätt:
 
 | Lager | Kommando | Vad det bevisar |
 |---|---|---|
-| Nodbatteriet | `npm test` | Lint, typer och ~50 sviter över logik, kontrakt, texter och källvakter. Sekunder. |
-| Databasen | `bash db/tests/run.sh` och `bash supabase/tests/run.sh` | Radskyddet, rollerna, jobben och raderingen - i BÅDA miljöerna. En skillnad mellan dem ska synas här, inte i produktion. |
+| Nodbatteriet | `npm test` | Lint, typer (inklusive `server/`, `api/` och `db/worker/`) och ~51 sviter över logik, kontrakt, texter och källvakter. Sekunder. |
+| Databasen | `bash db/tests/run.sh` och `bash supabase/tests/run.sh` | Radskyddet, rollerna, jobben och raderingen - i BÅDA miljöerna. En skillnad mellan dem ska synas här, inte i produktion. Det självhostade lagret är det som gäller i drift: Vercel Postgres och Neon ÄR vanlig Postgres. |
+| API:t över HTTP | `bash server/tests/run.sh` | Hela stacken genom riktig HTTP mot en riktig databas - inklusive Vercel-ingången `api/[...path].ts`, som inget annat prov rör. |
 | Webbläsaren | `npm run test:webblasare` | Att ytorna går att använda: att knappen går att träffa, att flödet tar slut, att filen kommer. Minuter. |
 
 **Webbläsarlagret är det som glöms.** Det ligger utanför `npm test` med

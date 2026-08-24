@@ -74,7 +74,7 @@ alter default privileges in schema public grant usage, select on sequences to ap
  * annan sak än klientrollen den växlar till.
  *
  * Att bristen inte syntes i testerna har samma orsak som den gamla
- * grant-luckan ovan: api/tests/run.sh ansluter som ägaren. Harnesset
+ * grant-luckan ovan: server/tests/run.sh ansluter som ägaren. Harnesset
  * motiverar det med att `withUser()` alltid byter roll först - vilket
  * stämmer för withUser, men inte för withAnon, som aldrig gör det.
  */
@@ -90,7 +90,7 @@ end $$;
 
 -- INGEN BYPASSRLS, INGET ÄGANDE. Rollen betjänar otrodda klientfrågor;
 -- går den förbi radskyddet börjar frågorna returnera andra bolags
--- insolvensdata utan att något fallerar. api/server/db.ts vägrar starta
+-- insolvensdata utan att något fallerar. server/db.ts vägrar starta
 -- om rollen bryter mot det (kravSakerDatabasroll).
 do $$
 begin

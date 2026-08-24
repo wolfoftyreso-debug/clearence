@@ -578,7 +578,7 @@ const seedInvoices = (caseId: string): InvoiceRecord[] => [
  *
  * Kravet som PRÖVAS är därför bara att fältet är ifyllt. Det räcker för
  * att yta och portanrop ska gå att gå igenom på riktigt; det riktiga
- * skyddet ligger i api/server (confirmPassword) och prövas där.
+ * skyddet ligger i server (confirmPassword) och prövas där.
  */
 const kravLosenord = (password: string) => {
   if (!password.trim()) throw new Error("Lösenordet krävs för den här åtgärden.");

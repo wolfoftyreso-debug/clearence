@@ -801,7 +801,7 @@ export interface PrivacyPort {
 /**
  * DE YTTRE KÄLLORNA: registret, Google, webbplatsen och nyheterna.
  *
- * Hämtningarna bor på servern (api/server/{google,website,news}.ts) - dels
+ * Hämtningarna bor på servern (server/{google,website,news}.ts) - dels
  * för att webbläsaren inte får ringa tredje part, dels för att nycklar och
  * SSRF-skydd hör hemma där. Porten är vägen dit.
  *

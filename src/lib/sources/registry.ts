@@ -112,7 +112,7 @@ export const SOURCES: SourceSpec[] = [
     /*
      * LIVE, OCH KÖRNINGSBEROENDE. Skillnaden mot förut är att hämtaren nu
      * finns: API-slutpunkten /v1/sources/website hämtar sidan på riktigt,
-     * med robots.txt först och SSRF-skydd (api/server/website.ts), och
+     * med robots.txt först och SSRF-skydd (server/website.ts), och
      * tolkningen är prövad (sources/website.ts, tests/sources.ts).
      *
      * Ingen nyckel och inget avtal krävs - sidan är publik och kunden äger
@@ -157,7 +157,7 @@ export const SOURCES: SourceSpec[] = [
     acquisition: "api-avtal",
     /*
      * KÖRNINGSBEROENDE, som företagsregistret. Hämtningen är byggd
-     * (api/server/google.ts) och tolkningen prövad (sources/google.ts).
+     * (server/google.ts) och tolkningen prövad (sources/google.ts).
      * Om källan svarar avgörs vid körning av två saker: att driften har
      * en Google-nyckel, och att bolaget går att matcha entydigt.
      *

@@ -54,8 +54,13 @@ const KOPIERAS = [
   "src",
   "public",
   // Utvecklarsidan (/api) läser kontraktet direkt: ApiDocs.tsx importerar
-  // ../../api/openapi.json, och utan den katalogen stannar bygget.
-  "api",
+  // ../../api/openapi.json, och utan den filen stannar bygget.
+  //
+  // BARA kontraktet, inte hela api/. Katalogen innehåller numera
+  // serverfunktionerna (Vercel-ingången och cron-jobben); de har inget i
+  // en frontend-artefakt att göra, och "kopian tar bara det vite behöver"
+  // ska vara sant och inte ungefär sant.
+  "api/openapi.json",
   "index.html",
   "tailwind.config.ts",
   "postcss.config.js",
@@ -63,6 +68,10 @@ const KOPIERAS = [
   "tsconfig.json",
   "tsconfig.app.json",
   "tsconfig.node.json",
+  // Rotens tsconfig REFERERAR den. Utan filen faller vite på
+  // "parsing tsconfig.server.json failed" - ett bygge som gick sönder av
+  // en referens till något som inte kopierades med.
+  "tsconfig.server.json",
   "package.json",
   "node_modules",
 ];

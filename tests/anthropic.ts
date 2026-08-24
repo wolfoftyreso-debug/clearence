@@ -1,5 +1,5 @@
 /**
- * Tester för CLEARANCE-samtalets modell-rör (api/server/anthropic.ts).
+ * Tester för CLEARANCE-samtalets modell-rör (server/anthropic.ts).
  *
  * Utan nät: en inskjuten fetch spelar Anthropic. Det som prövas är det som
  * MÅSTE hålla oavsett vad modellen råkar svara - konstitutionen i
@@ -12,7 +12,7 @@ import {
   clearanceReply,
   CLEARANCE_SYSTEM_PROMPT,
   type AdvisorMessage,
-} from "../api/server/anthropic";
+} from "../server/anthropic";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -55,7 +55,7 @@ check("systemprompten svarar på svenska", /på svenska/.test(P));
 
 // Dataskydd: samtalsinnehållet loggas ALDRIG server-sidan. Ett känsligt
 // krissamtal i en loggrad är precis det som inte får hända.
-const anthropicKod = readFileSync(join(process.cwd(), "api/server/anthropic.ts"), "utf8");
+const anthropicKod = readFileSync(join(process.cwd(), "server/anthropic.ts"), "utf8");
 check("röret loggar aldrig samtalsinnehållet", !/console\.(log|error|info|warn)/.test(anthropicKod));
 check("dataminimeringen är utskriven", /DATAMINIMERING/.test(anthropicKod));
 

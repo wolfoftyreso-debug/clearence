@@ -30,3 +30,6 @@ dist-ssr
 
 # Skärmbilder från webbläsarproven. Bevis för en körning, inte källkod.
 shots/
+
+# Vercel CLI: lokal projektkoppling och lokala miljövariabler.
+.vercel

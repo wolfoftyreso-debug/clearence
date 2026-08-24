@@ -31,53 +31,106 @@ if npm test --silent >/dev/null 2>&1; then ok "hela enhetsbatteriet"; else stopp
 
 echo
 echo "== Bygget =="
-if VITE_DEMO_MODE=false npx vite build >/dev/null 2>&1; then ok "frontend byggs"; else stopp "frontend byggs inte"; fi
-npm run build:api --silent >/dev/null 2>&1 && ok "API byggs" || stopp "API byggs inte"
+# BYGGER TILL EN EGEN KATALOG, INTE TILL dist/.
+#
+# Den här raden skrev tidigare över dist/ med ett produktionsbygge. Det
+# kostade en hel felsökning: startkontrollen kördes medan webbläsarsvepet
+# pågick, dist/ byttes ut mot ett bygge UTAN demoläget, och tjugo sviter
+# blev röda med "Timeout 30000ms exceeded" - som såg ut som ett trasigt
+# gränssnitt men var en kontroll som förstörde det den kontrollerade.
+BYGGUT="$(mktemp -d)"
+if VITE_DEMO_MODE=false npx vite build --outDir "$BYGGUT" --emptyOutDir >/dev/null 2>&1; then
+  ok "frontend byggs"
+else
+  stopp "frontend byggs inte"
+fi
+# Serverkoden byggs av Vercel, inte här. Men den ska gå att TYPKONTROLLERA -
+# esbuild transpilerar utan att kontrollera typer, så ett typfel i server/
+# eller api/ skulle annars synas först i drift.
+npx tsc --noEmit -p tsconfig.server.json >/dev/null 2>&1 \
+  && ok "server, api och arbetarna typkontrollerar" \
+  || stopp "typfel i server/, api/ eller db/worker/"
 npm run build:worker --silent >/dev/null 2>&1 && ok "arbetaren byggs" || stopp "arbetaren byggs inte"
 
 echo
 echo "== Bunten =="
 # En produktionsbunt som bär demoläget är en bunt som kan visa påhittade
 # siffror för en riktig kund.
-if grep -rq "DEMOLÄGE" dist/assets/*.js 2>/dev/null; then
+# Prövas mot bygget OVAN, inte mot dist/: dist/ kan bära vad som helst -
+# ett demobygge från webbläsarsvepet, till exempel - och då hade den här
+# kontrollen svarat på en annan fråga än den ställer.
+if [ -d "$BYGGUT/assets" ] && grep -rq "DEMOLÄGE" "$BYGGUT"/assets/*.js 2>/dev/null; then
   stopp "demoläget finns i produktionsbunten"
-else
+elif [ -d "$BYGGUT/assets" ]; then
   ok "inget demoläge i bunten"
+else
+  varning "ingen bunt att pröva - bygget gick inte igenom"
 fi
+rm -rf "$BYGGUT"
 
 echo
-echo "== Infrastrukturen =="
-if command -v terraform >/dev/null; then
-  terraform -chdir=infra fmt -check -recursive >/dev/null 2>&1 && ok "terraform fmt" || stopp "terraform fmt"
-  terraform -chdir=infra validate >/dev/null 2>&1 && ok "terraform validate" || varning "terraform validate (kräver init)"
+echo "== Driften =="
+# Vercel gör VARJE fil under api/ till en publik endpoint. Serverkoden ska
+# därför ligga i server/, utanför api/.
+if [ -d api/server ]; then
+  stopp "api/server/ finns - varje fil där blir en publik endpoint på Vercel"
 else
-  varning "terraform saknas i PATH - infra kunde inte prövas"
+  ok "serverkoden ligger utanför api/"
 fi
-# Hälsokontrollen måste peka på en rutt API:t faktiskt svarar på. Att de
-# glider isär märks annars först som en driftsättning som aldrig blir klar.
-HK=$(grep -oE 'path *= *"[^"]+"' infra/compute.tf | head -1 | grep -oE '"[^"]+"' | tr -d '"')
-if grep -q "\"$HK\"" api/server/index.ts; then
-  ok "ALB:ns hälsokontroll ($HK) finns i API:t"
+[ -f vercel.json ] && ok "vercel.json finns" || stopp "vercel.json saknas"
+[ -f "api/[...path].ts" ] && ok "API-funktionen finns" || stopp "api/[...path].ts saknas"
+
+# Varje schemalagt jobb i vercel.json ska ha en fil som svarar. Ett cron
+# som pekar på ingenting kör inte, och tystnaden ser ut som "inga fakturor
+# att ställa ut".
+saknade_cron=""
+for c in $(grep -oE '"/api/cron/[a-z]+"' vercel.json | tr -d '"' | sort -u); do
+  [ -f ".${c}.ts" ] || saknade_cron="$saknade_cron $c"
+done
+if [ -n "$saknade_cron" ]; then
+  stopp "schemalagda jobb utan fil:$saknade_cron"
 else
-  stopp "ALB kontrollerar $HK men API:t har ingen sådan rutt"
+  ok "varje schemalagt jobb har en fil"
 fi
+
 # Hastighetsbegränsningen räknas i databasen sedan 20260811100000, och
 # API:t STÄNGER när räkningen inte går att göra. Det är rätt beteende vid en
 # störning - men saknas funktionen svarar tjänsten 503 på allt, från första
 # sekunden, och felet ser då ut som en trasig databas i stället för en
 # migration som inte följt med.
-if grep -q "app.rate_limit_hit" api/server/rateLimit.ts; then
+if grep -q "app.rate_limit_hit" server/rateLimit.ts; then
   if grep -rq "function app.rate_limit_hit" supabase/migrations/; then
     ok "hastighetsgränsens funktion finns i migrationerna"
   else
     stopp "API:t räknar mot app.rate_limit_hit men ingen migration skapar den"
   fi
 fi
-[ -f api/Dockerfile ] && ok "api/Dockerfile finns" || stopp "api/Dockerfile saknas"
-[ -f db/Dockerfile ] && ok "db/Dockerfile finns" || stopp "db/Dockerfile saknas"
-[ -f infra/terraform.tfvars ] && ok "terraform.tfvars finns" || varning "terraform.tfvars saknas (kopiera .example)"
 
-echo
+# Gränsen måste gälla på den väg Vercel faktiskt använder. Låg den kvar i
+# node:http-lagret vore forceringsskyddet borta i drift medan sviterna som
+# reser den egna servern fortsatt vore gröna.
+if grep -q "provaHastighet" "api/[...path].ts"; then
+  ok "hastighetsgränsen gäller på Vercel-vägen"
+else
+  stopp "api/[...path].ts prövar inte hastighetsgränsen"
+fi
+
+# Rollgrinden i serverless: vägran måste ligga i varje väg in, inte i en
+# uppstart som inte finns.
+if grep -q "await sakerRollGrind()" server/db.ts; then
+  ok "rollgrinden prövas före databasen rörs"
+else
+  stopp "server/db.ts prövar inte databasrollen"
+fi
+
+# ALLOW_UNSAFE_DB_ROLE stänger av den grinden. Det får stå i sviterna och
+# ingen annanstans.
+if grep -rq "ALLOW_UNSAFE_DB_ROLE" vercel.json api/ 2>/dev/null; then
+  stopp "ALLOW_UNSAFE_DB_ROLE står i driftkonfigurationen"
+else
+  ok "ALLOW_UNSAFE_DB_ROLE står inte i det som rullas ut"
+fi
+
 echo "== Juridik och fakturering =="
 # Fakturaspärren är MENAD att vara på tills uppgifterna bekräftats. Den
 # är därför en varning, inte ett stopp: tjänsten går att driftsätta utan

@@ -53,19 +53,87 @@ import {
   type CaseRole,
 } from "../../src/lib/caseRoles";
 
-const DATABASE_URL = process.env.DATABASE_URL;
-const MAIL_FROM = process.env.MAIL_FROM;
+/*
+ * MILJÖN LÄSES NÄR DEN ANVÄNDS, INTE VID IMPORT.
+ *
+ * `const DATABASE_URL = process.env.DATABASE_URL` fångade värdet i det
+ * ögonblick modulen lästes. Det höll för ett kommando som startade med
+ * miljön redan satt, men gör två saker fel här: en rättad DATABASE_URL
+ * kräver en ny process i stället för en ny körning, och den kan inte
+ * prövas - server/tests/cron.ts pekade om den och fick samma anslutning
+ * tillbaka, alltså ett prov som inte kunde misslyckas.
+ */
+const databasUrl = (): string | undefined => process.env.DATABASE_URL;
 /** Bas för länkar i mejl, t.ex. inbjudans acceptlänk. */
 const APP_BASE_URL = (process.env.APP_BASE_URL ?? "https://clearance.se").replace(/\/$/, "");
 
-if (!DATABASE_URL || !MAIL_FROM) {
-  console.error("DATABASE_URL och MAIL_FROM måste vara satta.");
-  process.exit(1);
-}
+/*
+ * KRAVET PÅ MILJÖN PRÖVAS NÄR JOBBET KÖRS, INTE NÄR FILEN LÄSES.
+ *
+ * `process.exit(1)` vid import dödade processen. Det var rätt för ett
+ * kommando i en container - fel för en modul som importeras av en
+ * Vercel-funktion, där import sker inuti en request som redan tagits emot
+ * och det enda som händer är att jobbet försvinner utan svar. Ett kastat
+ * fel går att fånga, rapportera och svara 500 på.
+ */
+const kravMiljo = (): void => {
+  const saknas = [
+    !databasUrl() ? "DATABASE_URL" : null,
+    !process.env.MAIL_FROM ? "MAIL_FROM" : null,
+  ].filter((v): v is string => v !== null);
+  if (saknas.length > 0) throw new Error(`${saknas.join(" och ")} måste vara satta.`);
+};
 
-const db = new Client({ connectionString: DATABASE_URL });
+/*
+ * KLIENTEN GÅR ATT ÖPPNA OM.
+ *
+ * En pg-Client som en gång fått end() kan inte återanslutas. På en egen
+ * server spelade det ingen roll - processen dog ändå efter körningen. En
+ * Vercel-instans återanvänds mellan cron-körningar, och den andra
+ * körningen hade fått "Client was already connected"-fel på en död
+ * anslutning. Därför skapas en NY klient vid varje anslut().
+ *
+ * `db` är en tunn fasad så att de nitton anropen nedan står kvar
+ * oförändrade och inte behöver veta något om det här.
+ */
+let klient: Client | null = null;
+
+const db = {
+  query: (text: string, values?: unknown[]) => {
+    if (!klient) throw new Error("workern är inte ansluten - anslut() först");
+    return values === undefined ? klient.query(text) : klient.query(text, values);
+  },
+};
+
+export const anslut = async (): Promise<void> => {
+  kravMiljo();
+  if (klient) return;
+  const ny = new Client({ connectionString: databasUrl() });
+  await ny.connect();
+  klient = ny;
+};
+
+export const koppla_ner = async (): Promise<void> => {
+  if (!klient) return;
+  const gammal = klient;
+  klient = null;
+  await gammal.end();
+};
 // Transporten (SES eller SMTP) väljs av MAIL_TRANSPORT. Se db/worker/mail.ts.
-const mailConfig = resolveMailConfig(process.env);
+/*
+ * MEJLKONFIGURATIONEN LÄSES NÄR MEJL SKA SKICKAS, INTE VID IMPORT.
+ *
+ * Här stod `const mailConfig = resolveMailConfig(process.env)` på modulnivå.
+ * resolveMailConfig KASTAR på en ofullständig konfiguration (t.ex.
+ * MAIL_TRANSPORT=smtp utan SMTP_HOST), och ett kast vid import stoppade då
+ * hela filen - alltså också gallringen, raderingen, kreditkontrollerna och
+ * de två faktureringarna, som inte skickar ett enda mejl.
+ *
+ * I containern spelade det mindre roll: kommandot dog, någon läste loggen.
+ * På Vercel importeras filen av api/cron/nattjobb.ts inuti en request, och
+ * en saknad SMTP_HOST hade tagit natten med sig.
+ */
+const mailSandare = () => makeMailSender(resolveMailConfig(process.env));
 
 const enqueue = async (
   message: EmailMessage,
@@ -100,7 +168,7 @@ const enqueue = async (
  *    Saknas nyckel loggas det och läget avslutas lugnt: att panelen inte
  *    fått en nyckel än är ett normalläge, inte ett fel.
  */
-const runCreditChecks = async (): Promise<void> => {
+export const runCreditChecks = async (): Promise<void> => {
   const { rows: keyRows } = await db.query(
     "select secret from public.integration_secrets where provider = 'creditsafe'",
   );
@@ -181,7 +249,7 @@ const runCreditChecks = async (): Promise<void> => {
  * i driftpanelen, inte en default: att radera fel, eller det spårbarheten
  * kräver, är värre än att spara en månad för länge.
  */
-const runGallring = async (): Promise<void> => {
+export const runGallring = async (): Promise<void> => {
   const { rows } = await db.query(
     "select value from public.app_settings where key = 'retention_policy'",
   );
@@ -239,7 +307,7 @@ const runGallring = async (): Promise<void> => {
  * halvvägs krashad körning lämnade ett halvraderat konto - i databasen är
  * det en transaktion.
  */
-const runRaderingar = async (): Promise<void> => {
+export const runRaderingar = async (): Promise<void> => {
   const { rows } = await db.query("select app.execute_due_erasures() as resultat");
   const resultat = (rows[0]?.resultat ?? {}) as { utforda?: number; detaljer?: unknown[] };
   const antal = Number(resultat.utforda ?? 0);
@@ -262,7 +330,7 @@ const runRaderingar = async (): Promise<void> => {
  * kundfakturorna - inga fakturor utan momsregistrering, F-skatt och
  * betalkonto), och mejlen byggs ur samma byggare som allt annat.
  */
-const runReferralInvoicing = async (): Promise<void> => {
+export const runReferralInvoicing = async (): Promise<void> => {
   const blockers = missingInvoiceFields();
   if (blockers.length > 0) {
     console.log(`förmedlingsfakturering blockerad: ${blockers.join("; ")}`);
@@ -312,7 +380,7 @@ const runReferralInvoicing = async (): Promise<void> => {
  * usage_charges (kopplade via invoice_id) och visas rad för rad i byråns
  * fakturacentral - mejlet bär summan, systemet bär detaljerna.
  */
-const runUsageInvoicing = async (): Promise<void> => {
+export const runUsageInvoicing = async (): Promise<void> => {
   const blockers = missingInvoiceFields();
   if (blockers.length > 0) {
     console.log(`användningsfakturering blockerad: ${blockers.join("; ")}`);
@@ -356,76 +424,58 @@ const runUsageInvoicing = async (): Promise<void> => {
   console.log(`samlingsfakturor: ${issued} utställda, ${rows.length - issued} överhoppade`);
 };
 
-const main = async () => {
-  await db.connect();
-
-  if (process.argv.includes("--invoice-referrals")) {
-    await runReferralInvoicing();
-    await db.end();
-    return;
-  }
-
-  if (process.argv.includes("--invoice-usage")) {
-    await runUsageInvoicing();
-    await db.end();
-    return;
-  }
-
-  if (process.argv.includes("--credit")) {
-    await runCreditChecks();
-    await db.end();
-    return;
-  }
-
-  if (process.argv.includes("--gallra")) {
-    await runGallring();
-    await runRaderingar();
-    await db.end();
-    return;
-  }
-
-  if (process.argv.includes("--close")) {
-    const { rows } = await db.query(
-      "select user_id, email, display_name, invoice_number from public.close_overdue_accounts()",
+/** Stänger konton vars betalningsfrist gått ut och köar beskedet. */
+export const runStangning = async (): Promise<void> => {
+  const { rows } = await db.query(
+    "select user_id, email, display_name, invoice_number from public.close_overdue_accounts()",
+  );
+  for (const row of rows) {
+    await enqueue(
+      accountClosedEmail({
+        recipient: row.email,
+        customerName: row.display_name ?? row.email,
+        invoiceNumber: row.invoice_number,
+      }),
+      { userId: row.user_id, invoiceId: null },
     );
-    for (const row of rows) {
-      await enqueue(
-        accountClosedEmail({
-          recipient: row.email,
-          customerName: row.display_name ?? row.email,
-          invoiceNumber: row.invoice_number,
-        }),
-        { userId: row.user_id, invoiceId: null },
-      );
-    }
-    console.log(`stängda konton: ${rows.length}, besked köade: ${rows.length}`);
   }
+  console.log(`stängda konton: ${rows.length}, besked köade: ${rows.length}`);
+};
 
-  if (process.argv.includes("--remind")) {
-    const { rows } = await db.query(
-      `select user_id, email, display_name, invoice_id, invoice_number, gross_ore, due_at, days_left
-       from public.reminder_candidates()`,
+/** Påminner om fakturor som närmar sig förfall. */
+export const runPaminnelser = async (): Promise<void> => {
+  const { rows } = await db.query(
+    `select user_id, email, display_name, invoice_id, invoice_number, gross_ore, due_at, days_left
+     from public.reminder_candidates()`,
+  );
+  for (const row of rows) {
+    // Utan faktura finns inget belopp att påminna om - då gäller
+    // gratisperiodens slut, och det beskedet bär fakturan när den ställs
+    // ut. Kandidater utan faktura hoppas därför över här.
+    if (!row.invoice_number) continue;
+    await enqueue(
+      paymentReminderEmail({
+        recipient: row.email,
+        customerName: row.display_name ?? row.email,
+        invoiceNumber: row.invoice_number,
+        dueAt: row.due_at.toISOString(),
+        grossOre: Number(row.gross_ore),
+        daysLeft: Number(row.days_left),
+      }),
+      { userId: row.user_id, invoiceId: row.invoice_id },
     );
-    for (const row of rows) {
-      // Utan faktura finns inget belopp att påminna om - då gäller
-      // gratisperiodens slut, och det beskedet bär fakturan när den ställs
-      // ut. Kandidater utan faktura hoppas därför över här.
-      if (!row.invoice_number) continue;
-      await enqueue(
-        paymentReminderEmail({
-          recipient: row.email,
-          customerName: row.display_name ?? row.email,
-          invoiceNumber: row.invoice_number,
-          dueAt: row.due_at.toISOString(),
-          grossOre: Number(row.gross_ore),
-          daysLeft: Number(row.days_left),
-        }),
-        { userId: row.user_id, invoiceId: row.invoice_id },
-      );
-    }
-    console.log(`påminnelser köade: ${rows.filter((r) => r.invoice_number).length}`);
   }
+  console.log(`påminnelser köade: ${rows.filter((r) => r.invoice_number).length}`);
+};
 
+/**
+ * UTKORGEN: bygger inbjudningsmejlen och tömmer kön.
+ *
+ * Låg tidigare i svansen på main(), alltså oåtkomlig för allt utom
+ * kommandoraden. Cron-endpointen api/cron/utkorg.ts anropar den här - det
+ * är samma kod som containern körde, inte en ny.
+ */
+export const runUtkorg = async (): Promise<void> => {
   // Inbjudningar som ännu inte mejlats. Klienten kan inte skriva i utkorgen
   // (det vore en spamkanal med vårt avsändarrykte), så mejlet byggs här, ur
   // samma byggare som allt annat, och bockas av i samma transaktion som det
@@ -480,7 +530,7 @@ const main = async () => {
   let failed = 0;
 
   // Sändaren byggs en gång per körning (öppnar SMTP-transporten / SES-klienten).
-  const sender = await makeMailSender(mailConfig);
+  const sender = await mailSandare();
 
   for (const row of batch) {
     try {
@@ -501,10 +551,36 @@ const main = async () => {
   }
 
   console.log(`skickade: ${sent}, misslyckade: ${failed}`);
-  await db.end();
 };
 
-main().catch((error) => {
-  console.error(error);
-  process.exit(1);
-});
+const main = async () => {
+  await anslut();
+  try {
+    if (process.argv.includes("--invoice-referrals")) return await runReferralInvoicing();
+    if (process.argv.includes("--invoice-usage")) return await runUsageInvoicing();
+    if (process.argv.includes("--credit")) return await runCreditChecks();
+    if (process.argv.includes("--gallra")) {
+      await runGallring();
+      return await runRaderingar();
+    }
+    if (process.argv.includes("--close")) await runStangning();
+    if (process.argv.includes("--remind")) await runPaminnelser();
+    await runUtkorg();
+  } finally {
+    await koppla_ner();
+  }
+};
+
+/*
+ * KÖRS BARA SOM KOMMANDO.
+ *
+ * Filen importeras numera av cron-endpointerna under api/cron/. En modul
+ * som startar ett jobb bara för att den läses hade kört utkorgen en gång
+ * extra vid varje import - och gjort dubbla mejl till en importbieffekt.
+ */
+if (/email-worker/.test(process.argv[1] ?? "")) {
+  main().catch((error) => {
+    console.error(error);
+    process.exit(1);
+  });
+}

@@ -1,5 +1,12 @@
 # Security Readiness Report — CLEARANCE
 
+> **Daterat protokoll.** Fynden och åtgärderna nedan är vad som gällde när
+> granskningen gjordes och skrivs inte om i efterhand. Sedan dess har
+> driften flyttat till Vercel: nginx, Helm och Terraform är borttagna.
+> Rubrikerna som F-3 och F-4 gällde sätts nu i `vercel.json` för `/(.*)`,
+> och `tests/sakerhet.ts` kräver dem där i stället — samma krav, ny plats.
+> Se [vercel.md](vercel.md) för det som gäller nu.
+
 **Datum:** 2026-08-10 · **Omfattning:** hela systemet (frontend, API, databas,
 arbetare, chart/deployment, CI) · **Metod:** audit först, därefter åtgärd med
 regressionstest per fynd.
@@ -38,7 +45,7 @@ felaktigt escape-tecken. Grönt är inte samma sak som prövat.
 | | |
 |---|---|
 | **Attackvektor** | Inloggad användare anger sin "webbplats". Servern slår upp värdnamnet, ser en publik adress, och hämtar. Angriparen pekar på sin **egen publika** server som svarar `302 Location: http://169.254.169.254/latest/meta-data/`. |
-| **Komponent** | `api/server/website.ts`, `POST /v1/sources/website` |
+| **Komponent** | `server/website.ts`, `POST /v1/sources/website` |
 | **Root cause** | SSRF-kontrollen kördes på den adress användaren angav; själva hämtningen gjordes med `redirect: "follow"`, som följer vidare **utan ny prövning**. Kontrollen gällde alltså en annan adress än den som faktiskt hämtades. |
 | **Åtgärd** | `redirect: "manual"` + egen hoppkedja (max 5). Varje `Location` prövas mot `hostArSaker()` med samma regel som första adressen; protokollbyte utanför http/https vägras; blockerad omdirigering ger samma neutrala fel som "gick inte att nå". |
 | **Regressionstest** | `tests/sakerhet.ts`: omdirigering → molnmetadata, → internt värdnamn, → `file://`, slinga, samt att en **laglig** omdirigering mellan publika värdar fortfarande fungerar. Källkodsvakt: `redirect: "follow"` får inte återinföras. |
@@ -48,7 +55,7 @@ felaktigt escape-tecken. Grönt är inte samma sak som prövat.
 | | |
 |---|---|
 | **Attackvektor** | Angriparen skickar `X-Forwarded-For: <slumpvärde>` och får en **färsk räknare per anrop**. Spärren på inloggningen (10 försök / 5 min) upphör i praktiken att finnas → obegränsad lösenordsforcering och credential stuffing. |
-| **Komponent** | `api/server/rateLimit.ts` (`klientNyckel`) |
+| **Komponent** | `server/rateLimit.ts` (`klientNyckel`) |
 | **Root cause** | Funktionen tog **första** posten i `x-forwarded-for`. nginx sätter `$proxy_add_x_forwarded_for`, som **lägger till** den observerade adressen **sist** — den första posten är alltså exakt det klienten själv skrev. Nätverksisolering hjälper inte: anropet kommer via den betrodda proxyn. |
 | **Åtgärd** | Räkna **från höger**, `TRUSTED_PROXY_HOPS` steg in (default 1 = nginx-sidovagnen). `0` ignorerar rubriken helt. En kedja kortare än antalet hopp faller tillbaka på socketadressen i stället för att gissa. Driftparametern kopplad i Helm (configmap + values). |
 | **Regressionstest** | `tests/sakerhet.ts`: 50 förfalskade adresser ger **en** räknare, inte 50; 1 och 2 hopp; kort kedja; `hops=0`. `tests/rateLimit.ts` rättad — se anmärkning nedan. |
@@ -98,9 +105,9 @@ felaktigt escape-tecken. Grönt är inte samma sak som prövat.
 
 | | |
 |---|---|
-| **Root cause** | `api/tests/run.sh` satte inte `DOCUMENTS_BUCKET`. Rutten `GET /v1/documents/{id}/url` kortslöt därför på "lagringen är inte ansluten" **innan** `app.may_read_document()` — behörighetsprövningen på den farligaste rutten i API:t kördes aldrig, och såg grön ut. |
+| **Root cause** | `server/tests/run.sh` satte inte `DOCUMENTS_BUCKET`. Rutten `GET /v1/documents/{id}/url` kortslöt därför på "lagringen är inte ansluten" **innan** `app.may_read_document()` — behörighetsprövningen på den farligaste rutten i API:t kördes aldrig, och såg grön ut. |
 | **Åtgärd** | `DOCUMENTS_BUCKET` sätts i testkörningen; hälsokontrollen i sviten kräver `storage: true` så att gapet inte kan återuppstå tyst. |
-| **Regressionstest** | `api/tests/integration.ts`: utomstående får 404 utan URL och utan `storage_path`; oinloggad får 401. |
+| **Regressionstest** | `server/tests/integration.ts`: utomstående får 404 utan URL och utan `storage_path`; oinloggad får 401. |
 
 
 ### H-1 · Databasrollen kunde stänga av radskyddet tyst — **HIGH** — ÅTGÄRDAD (rond 2)
@@ -110,7 +117,7 @@ felaktigt escape-tecken. Grönt är inte samma sak som prövat.
 | **Attackvektor** | Ingen angripare behövs — en felpekad `DATABASE_URL` räcker. Pekas den på superanvändaren, på tabellernas ägare eller på en roll med `BYPASSRLS` **fortsätter varje fråga att fungera** och börjar returnera andra bolags insolvensdata. Ingenting kraschar, ingen logg blir röd. |
 | **Root cause** | Ingenting prövade rollen. `withUser()` byter till `authenticated` per transaktion, men `withAnon()` gör det **inte** — den kör som anslutningens egen roll (funktionerna där är SECURITY DEFINER). Är den rollen ägaren skriver t.ex. kontaktformuläret förbi kolumnrättigheterna. |
 | **Åtgärd** | `provaDatabasroll()` frågar `pg_roles`/`pg_class`: superanvändare, `BYPASSRLS`, ägda tabeller i `public`/`auth`/`app`. `kravSakerDatabasroll()` körs i `main.ts` **före `listen()`** och avslutar processen med kod 1 och ett besked om vad som ska ändras. Undantag endast via uttrycklig `ALLOW_UNSAFE_DB_ROLE=1` (sviterna) — chartet får aldrig sätta den. |
-| **Regressionstest** | `api/tests/integration.ts` mot **riktig Postgres**, båda utfallen: superanvändaren nekas med skäl, en driftlik roll (login, medlem i `authenticated`, äger inget) godkänns, `app_worker` (BYPASSRLS) nekas. `tests/sakerhet.ts` vaktar ordningen i `main.ts` och att chartet aldrig sätter undantaget. |
+| **Regressionstest** | `server/tests/integration.ts` mot **riktig Postgres**, båda utfallen: superanvändaren nekas med skäl, en driftlik roll (login, medlem i `authenticated`, äger inget) godkänns, `app_worker` (BYPASSRLS) nekas. `tests/sakerhet.ts` vaktar ordningen i `main.ts` och att chartet aldrig sätter undantaget. |
 | **Verifierat i drift** | Ja, end-to-end mot byggd `server.cjs`: superanvändare → vägrar starta, exit 1, tre skäl utskrivna. Driftlik roll → startar, loggar rollnamnet, `/v1/health` svarar 200. |
 
 ### H-2 · Loggen skrev frågans parametervärden — **MEDIUM** — ÅTGÄRDAD (rond 2)
@@ -119,7 +126,7 @@ felaktigt escape-tecken. Grönt är inte samma sak som prövat.
 |---|---|
 | **Attackvektor** | Ingen direkt — men loggen är en kopia av produktionen som hamnar på ställen produktionen inte gör (filer, insamlare, supportbilagor) och bevakas sällan lika hårt. |
 | **Root cause** | `console.error("api error", error)` skrev hela felobjektet. Ett `pg`-fel bär `query` **och** `parameters` — alltså den SQL som kördes och de **värden** som skickades in. Ett fel i inloggningen kunde därmed skriva ett lösenordsförsök till loggen; ett fel i sessionsuppslaget en token-hash. |
-| **Åtgärd** | `api/server/logg.ts`: strukturen behålls (felkod, villkor, tabell — det som faktiskt hjälper vid felsökning), värdena maskeras. Fältnamn (`password`, `token`, `parameters`, …) maskeras på alla djup; mönster (våra `clr_`-nycklar, Anthropic-nycklar, AWS-id, JWT, sha256, anslutningssträngar, e-postadresser) maskeras även mitt i fritext. Djupgräns så en cyklisk struktur inte kan hänga loggningen. |
+| **Åtgärd** | `server/logg.ts`: strukturen behålls (felkod, villkor, tabell — det som faktiskt hjälper vid felsökning), värdena maskeras. Fältnamn (`password`, `token`, `parameters`, …) maskeras på alla djup; mönster (våra `clr_`-nycklar, Anthropic-nycklar, AWS-id, JWT, sha256, anslutningssträngar, e-postadresser) maskeras även mitt i fritext. Djupgräns så en cyklisk struktur inte kan hänga loggningen. |
 | **Regressionstest** | `tests/sakerhet.ts`: felkod och villkor finns kvar, medan parametervärden, lösenordshash och e-postadress är borta; cykliska objekt hanteras; källkodsvakt mot att ett rått felobjekt loggas igen. |
 
 
@@ -130,7 +137,7 @@ felaktigt escape-tecken. Grönt är inte samma sak som prövat.
 | **Attackvektor** | En komprometterad eller illojal driftsession kunde byta Creditsafe-nyckeln, ändra en byrås prisplan, slå på kreditspärren eller stänga ett konto — **utan att något gick att härleda efteråt**. "Vem bytte nyckeln i tisdags?" gick inte att svara på. |
 | **Root cause** | Ärendenivån var spårad (triggers på uppgifter, inbjudningar, beslut), men de mest privilegierade operationerna skrev ingenting till `audit_events`. En behörighet utan spår är en behörighet ingen kan granska. |
 | **Åtgärd** | `app.logga_driftatgard()` (SECURITY DEFINER, kräver `is_platform_admin`) skriver till `audit_events` med `case_id null` i **samma transaktion** som åtgärden — en åtgärd utan spår, och ett spår utan åtgärd, är båda omöjliga. Nio åtgärder kopplade. Namnrymden `drift.*` skiljer dem från trigger-händelser som råkar sakna ärende. Ny läsrutt `GET /v1/ops/audit`. Spåret bär **aldrig** hemligheten — bara leverantörsnamnet och vad som ändrades. |
-| **Regressionstest** | `api/tests/integration.ts` mot riktig Postgres: åtgärden syns, **hemligheten finns inte i spåret**, vem och när står där, en icke-administratör ser ett tomt spår och kan inte skriva i det, och en skriven rad går inte att ändra eller radera — inte ens av drift. |
+| **Regressionstest** | `server/tests/integration.ts` mot riktig Postgres: åtgärden syns, **hemligheten finns inte i spåret**, vem och när står där, en icke-administratör ser ett tomt spår och kan inte skriva i det, och en skriven rad går inte att ändra eller radera — inte ens av drift. |
 
 
 ### H-4 · Filuppladdningen litade på klientens påstående — **HIGH** — ÅTGÄRDAD (rond 4)
@@ -139,8 +146,8 @@ felaktigt escape-tecken. Grönt är inte samma sak som prövat.
 |---|---|
 | **Attackvektor** | En uppladdning bär tre påståenden från avsändaren: filnamnet, ändelsen och Content-Type. Alla tre är fritext hen väljer. En Linux-binär (`ELF`) eller Windows-exe (`MZ`) som heter `arsredovisning.pdf` och skickas som `application/pdf` såg i alla tre likadan ut som en årsredovisning. Även SVG med `<script>`, polyglotter och dubbla ändelser (`rapport.pdf.exe`) passerade. |
 | **Root cause** | Ingen innehållskontroll fanns någonstans. Saneringen av filnamnet skedde dessutom i **webbläsaren** — alltså hos den som angriper. Den enda server-side-gränsen var storage-policyns sökvägsprefix, som säger *var* filen får ligga men ingenting om *vad* den är. |
-| **Åtgärd** | `api/server/filtyper.ts`: **tillåtelselista** med magiska bytes (PDF, PNG, JPEG, XLSX, DOCX + textformat som prövas tvärtom — inga styrbytes, ingen märkspråksinledning). SVG, arkiv, körbara filer och okända ändelser avvisas. Uppladdningen sker i **två steg**: servern väljer sökvägen och signerar en kortlivad PUT (klienten kan bara skriva till sitt eget ärendes prefix), och i steg 2 **läser servern tillbaka filens första bytes ur lagringen** och prövar signaturen mot utlovad typ samt den **lagrade** storleken. Godkänns den inte tas filen bort och raden raderas. Ny kolumn `confirmed_at`: en obekräftad fil syns inte i listan och `app.may_read_document()` säger nej till den — annars hade steg 2 varit valfritt. |
-| **Regressionstest** | `tests/filtyper.ts` (45 kontroller): ELF/PE med `.pdf`, SVG i tre förklädnader, polyglott, dubbla ändelser, csv som är HTML eller binärt, zip/tar.gz, storleksgränsen, samt att de **sex riktiga formaten fortfarande går igenom**. Sökvägsbyggaren prövas mot `../`, absoluta sökvägar och backslash. `api/tests/integration.ts`: obekräftad fil ger ingen signerad URL och syns inte i listan, en utomstående kan varken påbörja eller bekräfta, och SVG/skalskript/orimlig storlek nekas redan i steg 1. |
+| **Åtgärd** | `server/filtyper.ts`: **tillåtelselista** med magiska bytes (PDF, PNG, JPEG, XLSX, DOCX + textformat som prövas tvärtom — inga styrbytes, ingen märkspråksinledning). SVG, arkiv, körbara filer och okända ändelser avvisas. Uppladdningen sker i **två steg**: servern väljer sökvägen och signerar en kortlivad PUT (klienten kan bara skriva till sitt eget ärendes prefix), och i steg 2 **läser servern tillbaka filens första bytes ur lagringen** och prövar signaturen mot utlovad typ samt den **lagrade** storleken. Godkänns den inte tas filen bort och raden raderas. Ny kolumn `confirmed_at`: en obekräftad fil syns inte i listan och `app.may_read_document()` säger nej till den — annars hade steg 2 varit valfritt. |
+| **Regressionstest** | `tests/filtyper.ts` (45 kontroller): ELF/PE med `.pdf`, SVG i tre förklädnader, polyglott, dubbla ändelser, csv som är HTML eller binärt, zip/tar.gz, storleksgränsen, samt att de **sex riktiga formaten fortfarande går igenom**. Sökvägsbyggaren prövas mot `../`, absoluta sökvägar och backslash. `server/tests/integration.ts`: obekräftad fil ger ingen signerad URL och syns inte i listan, en utomstående kan varken påbörja eller bekräfta, och SVG/skalskript/orimlig storlek nekas redan i steg 1. |
 | **S3-vägen (rond 5)** | **VERIFIERAD mot den riktiga AWS-SDK:n över riktig HTTP** (`tests/lagring.ts`, 28 kontroller): en S3-kompatibel server reses i processen, och hela kedjan körs — presignerad PUT (signerad, kortlivad, path-style), HEAD som ger den **lagrade** storleken, intervall-GET som ger **exakt de bytes som skrevs**, och DELETE. Det avgörande fallet körs skarpt: en Linux-binär laddas upp genom en giltig presignerad URL som `arsredovisning.pdf` → **avvisas och tas bort ur hinken**. Ett riktigt PDF går hela vägen, och nedladdnings-URL:en (60 s, med `content-disposition`) returnerar filen byte för byte. |
 | **Kvar** | **MinIO:s egna egenheter är NOT VERIFIED** — en S3-dubbel är inte MinIO, och den skillnaden går bara att stänga genom att köra mot en riktig MinIO. Miljön här har varken docker-daemon eller nätåtkomst till `dl.min.io`. Klientadaptern går ännu den gamla vägen; cutover är ett driftbeslut. |
 
@@ -155,7 +162,7 @@ felaktigt escape-tecken. Grönt är inte samma sak som prövat.
 | **Attackvektor** | Ett vanligt konto, DevTools öppna. Verifieringskoden **slumpades i webbläsaren**, hashades i webbläsaren, och både hashen och den färdiga SMS-texten skickades in som argument (`start_phone_verification(nummer, HASH)` + `queue_verification_sms(TEXT)`). Angriparen kunde alltså välja koden själv, aldrig läsa något SMS, och bekräfta direkt. Utfallet: ett "verifierat" nummer som tillhör **någon annan** — och som därefter får SMS om att någon har ett ärende hos CLEARANCE. Det är precis den uppgift produkten finns för att skydda. |
 | **Root cause** | En rimligt klingande regel drev fram fel protokoll: *"databasen ska aldrig se klartexten"*. Den höll inte ens i den gamla koden — SMS-texten, med koden i sig, gick in som argument och landade i `outbound_sms.body`. Databasen såg alltså redan klartexten, bara på ett ställe där ingen letade. Och när koden föds hos den som ska bevisa något med den, bevisar den ingenting. Detta är exakt "frontend-säkerhet är inte en säkerhetsmekanism", i sin renaste form. |
 | **Åtgärd** | Migration `20260822100000`: `start_phone_verification(p_e164, p_ttl_minutes)` **föder koden i databasen** (`gen_random_bytes`, inte `random()`), lagrar bara SHA-256-hashen, komponerar SMS-texten och köar den — allt i **en** transaktion. Anroparen får `void`. Gamla treargumentsformen **droppas** (inte `create or replace` — en ny signatur hade lämnat den gamla vägen öppen bredvid den nya), och `queue_verification_sms(p_body)` tas bort helt: en "skicka den här texten till mitt nummer"-funktion är en text angriparen skriver. `confirm_phone_verification` tar numera klartexten och jämför mot hashen inne i funktionen. Taket (fem koder per nummer och timme) flyttade med. **Rättningen ligger i databasen, inte i API:t** — den gäller därför varje väg in: eget API, PostgREST och psql. `generateCode()`/`hashCode()` är borta ur det delade klientbiblioteket. |
-| **Regressionstest** | `supabase/tests/notifications.sql`: koden läses **ur `outbound_sms`** — testet får inte veta den i förväg (det gamla testet matade in svaret och prövade därför ingenting). Bevisar att SMS:ets kod och radens hash hör ihop, att fel kod nekas, att rätt kod verifierar och bränns, att två begäranden ger **olika** koder, att fem fel bränner koden, och att den gamla signaturen samt `queue_verification_sms` **inte finns kvar i katalogen**. `api/tests/integration.ts` kör hela flödet genom API:t: koden finns ingenstans i svaret, numret kommer tillbaka maskerat, fast nummer/felformat nekas server-side, alla sju rutter kräver inloggning. `tests/sakerhet.ts`: källvakter mot återfall (inget `getRandomValues`/`subtle.digest` i telefonbiblioteket, ingen `p_code_sha256` i någon adapter, svarskropparna ordagrant `{ sent: true }` och `{ verified }`). |
+| **Regressionstest** | `supabase/tests/notifications.sql`: koden läses **ur `outbound_sms`** — testet får inte veta den i förväg (det gamla testet matade in svaret och prövade därför ingenting). Bevisar att SMS:ets kod och radens hash hör ihop, att fel kod nekas, att rätt kod verifierar och bränns, att två begäranden ger **olika** koder, att fem fel bränner koden, och att den gamla signaturen samt `queue_verification_sms` **inte finns kvar i katalogen**. `server/tests/integration.ts` kör hela flödet genom API:t: koden finns ingenstans i svaret, numret kommer tillbaka maskerat, fast nummer/felformat nekas server-side, alla sju rutter kräver inloggning. `tests/sakerhet.ts`: källvakter mot återfall (inget `getRandomValues`/`subtle.digest` i telefonbiblioteket, ingen `p_code_sha256` i någon adapter, svarskropparna ordagrant `{ sent: true }` och `{ verified }`). |
 
 **En bugg i mitt eget arbete, hittad av sviten:** `lpad()` tar text, inte `bigint` — funktionen föll på 42883 vid första riktiga anropet. Och två vakter i `tests/sakerhet.ts` var i praktiken avstängda: `\b` hade blivit ett backsteg (0x08) i regexen, så de matchade aldrig. `npm run lint` fångade kontrolltecknet; efter rättningen blev båda **röda** och fick skrivas om — den ena läste prosan i en kommentar, den andra förbjöd ordet `code` även där rutten med rätta *tar emot* en kod.
 
@@ -167,7 +174,7 @@ felaktigt escape-tecken. Grönt är inte samma sak som prövat.
 - Ingen `.env` har **någonsin** committats (`git log --diff-filter=A`, hela historiken). Endast `.env.example`.
 - Mönstersökning över **alla** blobbar i historiken (Anthropic-, AWS-, GitHub-, Slack-nycklar, privata nycklar, JWT): **noll träffar**.
 - Frontend bär bara `VITE_SUPABASE_URL` + `VITE_SUPABASE_PUBLISHABLE_KEY` (anon-nyckel, publik med flit — RLS är gränsen). Inga serversecrets i `src/`.
-- Nyckelvalvet: hemligheter lagras i `integration_secrets` via `set_integration_secret` (SECURITY DEFINER, admin-gatad) och kan **aldrig läsas tillbaka** — bara fyra sista tecken + bytesdatum. Verifierat i `api/tests` (21 kontroller).
+- Nyckelvalvet: hemligheter lagras i `integration_secrets` via `set_integration_secret` (SECURITY DEFINER, admin-gatad) och kan **aldrig läsas tillbaka** — bara fyra sista tecken + bytesdatum. Verifierat i `server/tests` (21 kontroller).
 - **Utestående (organisatoriskt):** Claude-API-nyckeln som klistrades in i den här sessionen ska **roteras**. Den committades aldrig, men ska betraktas som exponerad.
 
 ### Autentisering
@@ -175,7 +182,7 @@ felaktigt escape-tecken. Grönt är inte samma sak som prövat.
 - Sessionstoken = 32 slumpbytes, lagras **bara** som SHA-256. En databasdump är inte en samling fungerande sessioner. Verifierat.
 - Utloggning återkallar server-side. Utgångstid och `disabled_at` prövas vid varje uppslag.
 - Inloggningen: samma svar för okänt konto och fel lösenord (ingen kontolista), dummy-hash mot tidsläckage, hårdare tak (10/5 min).
-- Identiteten sätts **transaktionslokalt** (`set_config(..., true)`) — prövat under samtidighet: `api/tests` kör växlade requests genom samma pool och kräver noll läckage.
+- Identiteten sätts **transaktionslokalt** (`set_config(..., true)`) — prövat under samtidighet: `server/tests` kör växlade requests genom samma pool och kräver noll läckage.
 
 ### Auktorisation
 - 73 rutter inventerade. **3** utan autentisering, alla avsiktliga: `/v1/health`, `/v1/auth/login`, `/v1/shared/{token}` (token *är* referensen, prövas i databasfunktion). `/v1/contact` har valfri auth med flit.

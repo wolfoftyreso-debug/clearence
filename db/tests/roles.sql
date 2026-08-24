@@ -57,7 +57,7 @@ reset role;
  * det byggda API:t startade, svarade på /v1/health, och gav 403 på varje
  * inloggningsförsök med 42501 i loggen.
  *
- * Sviterna kunde inte se det: api/tests/run.sh ansluter som ÄGAREN, som
+ * Sviterna kunde inte se det: server/tests/run.sh ansluter som ÄGAREN, som
  * går förbi allt. Harnesset motiverar det med att withUser() alltid byter
  * roll först - sant för withUser, falskt för withAnon.
  *
@@ -73,7 +73,7 @@ begin
     raise exception 'app_api finns inte - API:t har ingen anslutningsroll och kan inte logga in någon';
   end if;
 
-  -- Samma krav som api/server/db.ts vägrar starta utan.
+  -- Samma krav som server/db.ts vägrar starta utan.
   if (select rolsuper from pg_roles where rolname = 'app_api') then
     raise exception 'app_api är superanvändare - radskyddet gäller inte för API:t';
   end if;
