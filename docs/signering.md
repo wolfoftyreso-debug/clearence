@@ -105,7 +105,7 @@ och en starkare signaturmetod blir en ny version, inte en ombyggnad.
 ---
 
 *Efterlevnad i kod: `src/lib/signing.ts` (intygstext, hash, kontroll),
-`supabase/migrations/20260816100000_document_signatures.sql` (reglerna),
+`db/migrations/20260816100000_document_signatures.sql` (reglerna),
 `tests/signing.ts` (35 kontroller, inklusive att vi aldrig påstår
 BankID-nivå), `tests/browser/verify-signering.mjs` (20 kontroller genom
 hela flödet) och 10 RLS-tester i båda miljöerna. En regel som inte testas

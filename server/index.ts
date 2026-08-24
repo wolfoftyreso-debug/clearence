@@ -4289,6 +4289,7 @@ const PRAKTIKERKATEGORIER = [
 const ANSOKNINGSSTATUSAR = ["pending", "needs_info", "approved", "rejected"] as const;
 const FORMEDLINGSKANALER = ["email", "phone", "website"] as const;
 const FORMEDLINGSSTATUSAR = ["initiated", "accepted", "declined", "completed"] as const;
+const BYRAROLLER = ["admin", "member"] as const;
 
 /** Speglar databasens typer. server/tests/integration.ts jämför mot pg_enum. */
 export const UPPRAKNINGAR = {
@@ -4515,6 +4516,492 @@ router.patch("/v1/referrals/:referralId", async (req) => {
   return { status: 200, body: { updated: true } };
 });
 
+
+/* --- Förmedlingarna: förhandsvisning, upplåsning, debitering ------------- */
+
+/**
+ * KONTAKTFÖRFRÅGAN.
+ *
+ * Nästan allt här ligger i databasfunktioner, och det är avsiktligt.
+ * Upplåsningen är den enda plats i produkten där en läsning KOSTAR PENGAR
+ * - den skriver en debiteringsrad i samma andetag som den öppnar akten.
+ * De två får inte kunna gå isär, och det enda stället där de säkert håller
+ * ihop är en transaktion i databasen.
+ *
+ * Rutterna nedan är därför tunna med flit: de prövar formen på det som
+ * kommer in och lämnar över. Behörighet, pris och skuggdebitering avgörs
+ * där de inte går att kringgå.
+ */
+
+const toContactRequest = (row: Record<string, unknown>) => ({
+  id: row.id,
+  caseId: row.case_id,
+  professionalId: row.professional_id,
+  status: row.status,
+  createdAt: iso(row.created_at),
+  consentAt: iso(row.consent_at),
+  unlockedAt: iso(row.unlocked_at),
+  declinedAt: iso(row.declined_at),
+  declineNote: row.decline_note ?? null,
+});
+
+router.post("/v1/cases/:caseId/leads", async (req) => {
+  const caller = await authenticate(req);
+  const caseId = uuidParam(req, "caseId");
+  const professionalId = str(req.body, "professionalId", { max: 64 });
+  const kropp = (req.body ?? {}) as Record<string, unknown>;
+  await withUser(caller.userId, async (tx) => {
+    await tx.query("select public.create_contact_request($1, $2, $3::jsonb, $4::jsonb)", [
+      caseId,
+      professionalId,
+      JSON.stringify(kropp.preview ?? {}),
+      JSON.stringify(kropp.summary ?? {}),
+    ]);
+  });
+  return { status: 201, body: { created: true } };
+});
+
+router.get("/v1/cases/:caseId/leads", async (req) => {
+  const caller = await authenticate(req);
+  const caseId = uuidParam(req, "caseId");
+  const rows = await withUser(caller.userId, async (tx) => {
+    const { rows } = await tx.query(
+      `select id, case_id, professional_id, status, created_at, consent_at,
+              unlocked_at, declined_at, decline_note
+         from public.contact_requests
+        where case_id = $1
+        order by created_at desc`,
+      [caseId],
+    );
+    return rows;
+  });
+  return { status: 200, body: { leads: rows.map(toContactRequest) } };
+});
+
+/**
+ * PRAKTIKERNS INKORG.
+ *
+ * Förhandsvisningen är avsiktligt tunn: bransch, ort, storleksordning -
+ * aldrig bolagets namn. Den som inte betalat ska inte kunna räkna ut
+ * vilket bolag som är i kris, för den uppgiften är i sig skadlig.
+ * Beskärningen görs i databasfunktionen, inte här.
+ */
+router.get("/v1/leads", async (req) => {
+  const caller = await authenticate(req);
+  const rows = await withUser(caller.userId, async (tx) => {
+    const { rows } = await tx.query("select * from public.list_lead_previews()");
+    return rows;
+  });
+  return {
+    status: 200,
+    body: {
+      leads: rows.map((row) => ({
+        id: row.id,
+        professionalId: row.professional_id,
+        status: row.status,
+        createdAt: iso(row.created_at),
+        unlockedAt: iso(row.unlocked_at),
+        preview: row.preview,
+        planKind: row.plan_kind ?? "per_case",
+        unlockFeeSek: row.unlock_fee_sek === null || row.unlock_fee_sek === undefined
+          ? null
+          : Number(row.unlock_fee_sek),
+      })),
+    },
+  };
+});
+
+/**
+ * UPPLÅSNINGEN. Villkorsversionen skickas med och sparas: den som
+ * debiteras ska kunna se vilka villkor som gällde vid just det köpet.
+ */
+router.post("/v1/leads/:requestId/unlock", async (req) => {
+  const caller = await authenticate(req);
+  const requestId = uuidParam(req, "requestId");
+  const termsVersion = str(req.body, "termsVersion", { max: 40 });
+  const resultat = await withUser(caller.userId, async (tx) => {
+    const { rows } = await tx.query("select public.unlock_case_lead($1, $2) as ut", [
+      requestId,
+      termsVersion,
+    ]);
+    return rows[0]?.ut ?? null;
+  });
+  if (resultat === null) throw notFound("Förfrågan finns inte, eller får inte låsas upp.");
+  return { status: 200, body: { lead: resultat } };
+});
+
+router.get("/v1/leads/:requestId", async (req) => {
+  const caller = await authenticate(req);
+  const requestId = uuidParam(req, "requestId");
+  const resultat = await withUser(caller.userId, async (tx) => {
+    const { rows } = await tx.query("select public.get_unlocked_lead($1) as ut", [requestId]);
+    return rows[0]?.ut ?? null;
+  });
+  if (resultat === null) throw notFound("Förfrågan finns inte, eller är inte upplåst.");
+  return { status: 200, body: { lead: resultat } };
+});
+
+router.post("/v1/leads/:requestId/decline", async (req) => {
+  const caller = await authenticate(req);
+  const requestId = uuidParam(req, "requestId");
+  const note = str(req.body, "note", { max: 2000, required: false }) || null;
+  await withUser(caller.userId, async (tx) => {
+    await tx.query("select public.decline_case_lead($1, $2)", [requestId, note]);
+  });
+  return { status: 200, body: { declined: true } };
+});
+
+/**
+ * MINA DEBITERINGAR.
+ *
+ * SÖKVÄGEN ÄR /v1/usage-charges OCH INTE /v1/leads/charges, och det är
+ * ingen smaksak. Routern matchar på antal segment i registreringsordning,
+ * så `/v1/leads/charges` hade matchat `/v1/leads/:requestId` först - och
+ * "charges" hade blivit ett ogiltigt id, med 400 i stället för listan.
+ * Ett fel som bara syns när båda rutterna finns.
+ *
+ * Samma undantag från husregeln som /applications/mine gäller här: "mina"
+ * är ett URVAL, och radskyddet kan vara vidare än urvalet för den som är
+ * admin. Where-satsen är alltså inte en dubblering av radskyddet.
+ */
+router.get("/v1/usage-charges", async (req) => {
+  const caller = await authenticate(req);
+  const rows = await withUser(caller.userId, async (tx) => {
+    const { rows } = await tx.query(
+      `select * from public.usage_charges
+        where user_id = app.current_user_id()
+        order by created_at desc limit 500`,
+    );
+    return rows;
+  });
+  return {
+    status: 200,
+    body: {
+      charges: rows.map((row) => ({
+        id: row.id,
+        serviceCode: row.service_code,
+        serviceLabel: row.service_label,
+        caseType: row.case_type ?? null,
+        companyName: row.company_name ?? null,
+        orgNumber: row.org_number ?? null,
+        amountOre: Number(row.amount_ore),
+        vatRate: Number(row.vat_rate),
+        shadow: row.shadow,
+        createdAt: iso(row.created_at),
+        invoiceId: row.invoice_id ?? null,
+        contactRequestId: row.contact_request_id ?? null,
+      })),
+    },
+  };
+});
+
+
+/* --- Praktikerregistret, byråteamen och profilanspråken ----------------- */
+
+/**
+ * REGISTRET ÄR PUBLIKT LÄSBART FÖR DEN SOM ÄR INLOGGAD, och det är hela
+ * poängen med det: en företagare i kris ska kunna se vilka som tar
+ * uppdrag utan att först behöva be någon om tillstånd.
+ *
+ * Det som INTE ligger här är omdömen kopplade till namngivna ärenden.
+ * Betygen är aggregat, och aggregaten kommer ur en egen tabell.
+ */
+const toProfessional = (row: Record<string, unknown>) => ({
+  id: row.id,
+  name: row.name,
+  company: row.company,
+  category: row.category,
+  description: row.description ?? null,
+  location: row.location ?? null,
+  email: row.email ?? null,
+  phone: row.phone ?? null,
+  website: row.website ?? null,
+  fixedPrices: row.fixed_prices ?? null,
+  specializations: row.specializations ?? [],
+  verified: row.verified,
+  source: row.source === "public_register" ? "public_register" : "application",
+});
+
+router.get("/v1/professionals", async (req) => {
+  const caller = await authenticate(req);
+  const rows = await withUser(caller.userId, async (tx) => {
+    const { rows } = await tx.query(
+      "select * from public.professionals where active = true order by name limit 1000",
+    );
+    return rows;
+  });
+  return { status: 200, body: { professionals: rows.map(toProfessional) } };
+});
+
+router.get("/v1/professionals/ratings", async (req) => {
+  const caller = await authenticate(req);
+  const rows = await withUser(caller.userId, async (tx) => {
+    const { rows } = await tx.query("select * from public.professional_ratings limit 2000");
+    return rows;
+  });
+  return {
+    status: 200,
+    body: {
+      ratings: rows.map((row) => ({
+        professionalId: row.professional_id,
+        communicationScore: row.communication_score,
+        expertiseScore: row.expertise_score,
+        priceTransparencyScore: row.price_transparency_score,
+        responseTimeScore: row.response_time_score,
+        overallScore: row.overall_score,
+      })),
+    },
+  };
+});
+
+/** MIN profil. Databasfunktionen avgör vilken rad som är "min". */
+router.get("/v1/professionals/mine", async (req) => {
+  const caller = await authenticate(req);
+  const row = await withUser(caller.userId, async (tx) => {
+    const { rows } = await tx.query("select * from public.get_my_professional_profile()");
+    return rows[0] ?? null;
+  });
+  if (!row) return { status: 200, body: { profile: null } };
+  return {
+    status: 200,
+    body: {
+      profile: {
+        id: row.id,
+        name: row.name,
+        company: row.company,
+        category: row.category,
+        verified: row.verified,
+        description: row.description ?? null,
+        location: row.location ?? null,
+        email: row.email ?? null,
+        phone: row.phone ?? null,
+        website: row.website ?? null,
+        specializations: row.specializations ?? [],
+        fixedPrices: row.fixed_prices ?? null,
+        billingEmail: row.billing_email ?? null,
+      },
+    },
+  };
+});
+
+router.patch("/v1/professionals/mine", async (req) => {
+  const caller = await authenticate(req);
+  const kropp = (req.body ?? {}) as Record<string, unknown>;
+  const lista = (falt: string): string[] => {
+    const v = kropp[falt];
+    if (!Array.isArray(v)) return [];
+    return v.slice(0, 40).map((x) => String(x).slice(0, 200));
+  };
+  await withUser(caller.userId, async (tx) => {
+    await tx.query(
+      "select public.update_my_professional_profile($1, $2, $3, $4, $5, $6, $7::jsonb, $8)",
+      [
+        str(req.body, "description", { max: 4000, required: false }) || null,
+        str(req.body, "location", { max: 200, required: false }) || null,
+        str(req.body, "email", { max: 320, required: false }) || null,
+        str(req.body, "phone", { max: 60, required: false }) || null,
+        str(req.body, "website", { max: 500, required: false }) || null,
+        lista("specializations"),
+        JSON.stringify(kropp.fixedPrices ?? null),
+        str(req.body, "billingEmail", { max: 320, required: false }) || null,
+      ],
+    );
+  });
+  return { status: 200, body: { updated: true } };
+});
+
+/* --- Profilanspråk: "är detta din profil?" ------------------------------ */
+
+router.post("/v1/professionals/:professionalId/claim", async (req) => {
+  const caller = await authenticate(req);
+  const professionalId = uuidParam(req, "professionalId");
+  await withUser(caller.userId, async (tx) => {
+    await tx.query("select public.claim_professional_profile($1, $2, $3)", [
+      professionalId,
+      str(req.body, "motivation", { max: 2000 }),
+      str(req.body, "contact", { max: 320 }),
+    ]);
+  });
+  return { status: 201, body: { claimed: true } };
+});
+
+/**
+ * MINA ANSPRÅK.
+ *
+ * Tredje stället med samma undantag: radskyddet visar även allas anspråk
+ * för en administratör, helt riktigt, men "mina" är ett urval. Utan
+ * where-satsen hade en admin sett hela kön på sin egen sida.
+ */
+router.get("/v1/professionals/claims/mine", async (req) => {
+  const caller = await authenticate(req);
+  const rows = await withUser(caller.userId, async (tx) => {
+    const { rows } = await tx.query(
+      `select id, professional_id, status, review_note, created_at
+         from public.profile_claims
+        where user_id = app.current_user_id()
+        order by created_at desc limit 200`,
+    );
+    return rows;
+  });
+  return {
+    status: 200,
+    body: {
+      claims: rows.map((row) => ({
+        id: row.id,
+        professionalId: row.professional_id,
+        status: row.status,
+        reviewNote: row.review_note ?? null,
+        createdAt: iso(row.created_at),
+      })),
+    },
+  };
+});
+
+/** Hela kön. Databasfunktionen släpper bara igenom en administratör. */
+router.get("/v1/professionals/claims", async (req) => {
+  const caller = await authenticate(req);
+  const rows = await withUser(caller.userId, async (tx) => {
+    const { rows } = await tx.query("select * from public.list_profile_claims()");
+    return rows;
+  });
+  return {
+    status: 200,
+    body: {
+      claims: rows.map((row) => ({
+        id: row.id,
+        professionalId: row.professional_id,
+        professionalName: row.professional_name,
+        claimantEmail: row.claimant_email,
+        motivation: row.motivation,
+        contact: row.contact,
+        status: row.status,
+        reviewNote: row.review_note ?? null,
+        createdAt: iso(row.created_at),
+      })),
+    },
+  };
+});
+
+router.post("/v1/professionals/claims/:claimId/review", async (req) => {
+  const caller = await authenticate(req);
+  const claimId = uuidParam(req, "claimId");
+  const kropp = (req.body ?? {}) as Record<string, unknown>;
+  if (typeof kropp.approve !== "boolean") throw badRequest("approve måste vara true eller false.");
+  const note = str(req.body, "note", { max: 2000, required: false }) || null;
+  await withUser(caller.userId, async (tx) => {
+    await tx.query("select public.review_profile_claim($1, $2, $3)", [claimId, kropp.approve, note]);
+  });
+  return { status: 200, body: { reviewed: true } };
+});
+
+/* --- Byråteamet ---------------------------------------------------------- */
+
+router.get("/v1/professionals/:professionalId/team", async (req) => {
+  const caller = await authenticate(req);
+  const professionalId = uuidParam(req, "professionalId");
+  const rows = await withUser(caller.userId, async (tx) => {
+    const { rows } = await tx.query("select * from public.list_firm_team($1)", [professionalId]);
+    return rows;
+  });
+  return {
+    status: 200,
+    body: {
+      team: rows.map((row) => ({
+        id: row.id,
+        userId: row.user_id,
+        email: row.email,
+        role: row.role,
+        createdAt: iso(row.created_at),
+      })),
+    },
+  };
+});
+
+router.get("/v1/professionals/:professionalId/invitations", async (req) => {
+  const caller = await authenticate(req);
+  const professionalId = uuidParam(req, "professionalId");
+  const rows = await withUser(caller.userId, async (tx) => {
+    const { rows } = await tx.query(
+      `select id, email, role, created_at
+         from public.professional_invitations
+        where professional_id = $1 and accepted_at is null and revoked_at is null
+        order by created_at desc`,
+      [professionalId],
+    );
+    return rows;
+  });
+  return {
+    status: 200,
+    body: {
+      invitations: rows.map((row) => ({
+        id: row.id,
+        email: row.email,
+        role: row.role,
+        createdAt: iso(row.created_at),
+      })),
+    },
+  };
+});
+
+router.post("/v1/professionals/:professionalId/invitations", async (req) => {
+  const caller = await authenticate(req);
+  const professionalId = uuidParam(req, "professionalId");
+  const email = str(req.body, "email", { max: 320 });
+  const role = uppraknat(req.body, "role", BYRAROLLER);
+  await withUser(caller.userId, async (tx) => {
+    await tx.query("select public.invite_firm_member($1, $2, $3)", [professionalId, email, role]);
+  });
+  return { status: 201, body: { invited: true } };
+});
+
+router.del("/v1/professionals/invitations/:invitationId", async (req) => {
+  const caller = await authenticate(req);
+  const invitationId = uuidParam(req, "invitationId");
+  await withUser(caller.userId, async (tx) => {
+    await tx.query("select public.revoke_firm_invitation($1)", [invitationId]);
+  });
+  return { status: 200, body: { revoked: true } };
+});
+
+router.del("/v1/professionals/team/:memberId", async (req) => {
+  const caller = await authenticate(req);
+  const memberId = uuidParam(req, "memberId");
+  await withUser(caller.userId, async (tx) => {
+    await tx.query("select public.remove_firm_member($1)", [memberId]);
+  });
+  return { status: 200, body: { removed: true } };
+});
+
+/** Inbjudningar TILL MIG. Databasfunktionen matchar på min e-postadress. */
+router.get("/v1/firm-invitations", async (req) => {
+  const caller = await authenticate(req);
+  const rows = await withUser(caller.userId, async (tx) => {
+    const { rows } = await tx.query("select * from public.my_firm_invitations()");
+    return rows;
+  });
+  return {
+    status: 200,
+    body: {
+      invitations: rows.map((row) => ({
+        id: row.id,
+        professionalId: row.professional_id,
+        firmName: row.firm_name,
+        role: row.role,
+        createdAt: iso(row.created_at),
+      })),
+    },
+  };
+});
+
+router.post("/v1/firm-invitations/:invitationId/accept", async (req) => {
+  const caller = await authenticate(req);
+  const invitationId = uuidParam(req, "invitationId");
+  await withUser(caller.userId, async (tx) => {
+    await tx.query("select public.accept_firm_invitation($1)", [invitationId]);
+  });
+  return { status: 200, body: { accepted: true } };
+});
+
 /* --- Kundfakturan: ställs ut, betalas, kvitteras ------------------------- */
 
 /**
@@ -4685,7 +5172,8 @@ router.post("/v1/billing/invoices/:invoiceId/payment", async (req) => {
 /**
  * ORGANISATIONSNUMMER → BOLAGSFAKTA.
  *
- * Låg som en Supabase Edge Function (supabase/functions/lookup-company).
+ * Låg som en Supabase Edge Function (supabase/functions/lookup-company i
+ * repots historik).
  * Det var den sista biten infrastruktur utanför den här servern, och den
  * band produkten till en plattform vi lämnar.
  *

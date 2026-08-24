@@ -1,23 +1,3 @@
-/**
- * Adaptern mot CLEARANCE eget API.
- *
- * **Det här är en halvfärdig migrering, och den säger det själv.**
- *
- * `DataPort` är hela kontraktet; eget API täcker i dag ärenden,
- * journalen, beslutsminnet, uppgifterna, betalningarna,
- * dokumentmetadatan, meddelandena och kontrollbalansbedömningen. Resten
- * - dokumentuppladdning, fakturering, deltagare, katalog, drift - ligger
- * kvar hos den befintliga adaptern.
- *
- * Att låta de portarna KASTA hade gjort adaptern obrukbar och därmed
- * omöjlig att pröva i praktiken; att låta dem *tyst* göra ingenting hade
- * varit värre. De delegeras därför, öppet: `MIGRATED_PORTS` nedan säger
- * exakt vad som är flyttat, och `tests/awsAdapter.ts` läser listan. Den
- * som flyttar en port till men glömmer listan får ett rött test.
- *
- * Mönstret är avsiktligt (strangler): flytta en port i taget, låt listan
- * växa, och radera den här filens delegering när den är tom.
- */
 
 import type { DataPort } from "../ports";
 import type { CaseRole } from "@/lib/caseRoles";
@@ -68,150 +48,12 @@ import type {
   VerifiedPhoneRecord,
 } from "../types";
 import type { FinancialSnapshot } from "@/lib/financial/model";
-import { supabaseAdapter } from "../supabase/adapter";
-import { SupabaseSaknasError, supabaseConfigured } from "@/integrations/supabase/client";
 import { ApiRequestError, apiFetch, clearToken, getToken, setToken } from "./client";
 
 /**
  * Portarna som verkligen går mot eget API. Listan är produktens
  * migreringsmätare - den ska växa tills delegeringen kan tas bort.
  */
-export const MIGRATED_PORTS = [
-  "applications.getMine",
-  "applications.create",
-  "applications.listAll",
-  "applications.approve",
-  "applications.review",
-  "referrals.listMine",
-  "referrals.create",
-  "referrals.updateStatus",
-  "cases.listMine",
-  "cases.select",
-  "cases.create",
-  "cases.createMinimal",
-  "documents.upload",
-  "documents.remove",
-  "documents.listSignatures",
-  "documents.sign",
-  "billing.issueInvoice",
-  "billing.registerPayment",
-  "companyLookup.lookup",
-  "auth.getCurrentUser",
-  "auth.onAuthChange",
-  "auth.signUp",
-  "auth.signIn",
-  "auth.signOut",
-  "auth.requestPasswordReset",
-  "auth.updatePassword",
-  "auth.redeemPasswordReset",
-  "contact.submit",
-  "contact.amIAdmin",
-  "contact.listAll",
-  "contact.updateStatus",
-  "members.listMembers",
-  "members.listInvitations",
-  "members.invite",
-  "members.revokeInvitation",
-  "members.peekInvitation",
-  "members.acceptInvitation",
-  "advisorTools.listNotes",
-  "advisorTools.addNote",
-  "advisorTools.removeNote",
-  "advisorTools.listTime",
-  "advisorTools.logTime",
-  "advisorTools.removeTime",
-  "apiKeys.listMine",
-  "apiKeys.create",
-  "apiKeys.revoke",
-  "notificationSettings.getPrefs",
-  "notificationSettings.savePrefs",
-  "notificationSettings.getPhone",
-  "notificationSettings.startPhoneVerification",
-  "notificationSettings.confirmPhoneVerification",
-  "notificationSettings.removePhone",
-  "notificationSettings.listRecentDeliveries",
-  "dialogue.listSessions",
-  "dialogue.saveSession",
-  "ops.listSecrets",
-  "ops.setSecret",
-  "ops.deleteSecret",
-  "ops.listProfessionalTerms",
-  "ops.setReferralFee",
-  "ops.listBillingPlans",
-  "ops.setBillingPlan",
-  "ops.setBillingHold",
-  "ops.setBillingShadow",
-  "ops.setCompanyPlan",
-  "ops.getRetentionPolicy",
-  "ops.setRetentionPolicy",
-  "ops.northStarCounts",
-  "billing.getMine",
-  "billing.listMyInvoices",
-  "billing.getCompanyPlan",
-  "billing.listCustomers",
-  "billing.closeAccount",
-  "billing.listOutbox",
-  "billing.retryEmail",
-  "cases.getLatest",
-  "cases.close",
-  "cases.reopen",
-  "cases.setPlanApproval",
-  "profile.getMine",
-  "profile.create",
-  "profile.update",
-  "shares.list",
-  "shares.create",
-  "shares.revoke",
-  "shares.fetch",
-  "dialogue.listDecisions",
-  "dialogue.recordDecision",
-  "dialogue.reconsiderDecision",
-  "dialogue.acknowledgePremise",
-  "tasks.listByCase",
-  "tasks.add",
-  "tasks.setDone",
-  "tasks.assign",
-  "tasks.seed",
-  "payments.listByCase",
-  "payments.createMany",
-  "payments.updateStatus",
-  "invoices.listByCase",
-  "invoices.createMany",
-  "invoices.updateStatus",
-  "kbr.create",
-  "documents.listByCase",
-  "documents.setReview",
-  "documents.getDownloadUrl",
-  "messages.listByCase",
-  "messages.listByConversation",
-  "messages.send",
-  "messages.markRead",
-  "messages.listConversations",
-  "messages.createDirect",
-  "messages.createGroup",
-  "messages.merge",
-  "messages.ack",
-  "messages.myOpenMentions",
-  "kbr.getLatestByCase",
-  "financial.getLatestSnapshot",
-  "financial.importSie",
-  "sources.google",
-  "sources.website",
-  "sources.news",
-  "privacy.getErasureRequest",
-  "privacy.requestErasure",
-  "privacy.cancelErasure",
-  "simulations.listByCase",
-  "simulations.get",
-  "simulations.create",
-  "simulations.update",
-  "simulations.remove",
-  "simulations.run",
-  "simulations.cancel",
-  "simulations.latestRun",
-  "simulations.getRun",
-  "audit.listByCase",
-] as const;
 
 /** Sessionshanteringen, som appen behöver vid inloggning och utloggning. */
 export const awsAuth = {
@@ -254,7 +96,6 @@ const tillBase64 = (bytes: Uint8Array): string => {
 /* --- Portarna som är flyttade ---------------------------------------------- */
 
 const cases = {
-  ...supabaseAdapter.cases,
   async getLatest(): Promise<CaseRecord | null> {
     const res = await apiFetch<{ cases: CaseRecord[] }>("/v1/cases");
     return res.cases[0] ?? null;
@@ -316,7 +157,6 @@ const cases = {
  * tro att något gått sönder när ingenting gjort det.
  */
 const profile = {
-  ...supabaseAdapter.profile,
   async getMine(): Promise<UserProfile | null> {
     const res = await apiFetch<{ profile: UserProfile | null }>("/v1/profile");
     return res.profile;
@@ -348,7 +188,6 @@ const profile = {
  * den som gissar.
  */
 const shares = {
-  ...supabaseAdapter.shares,
   async list(caseId: string): Promise<CaseShareLinkRecord[]> {
     const res = await apiFetch<{ shareLinks: CaseShareLinkRecord[] }>(
       `/v1/cases/${caseId}/share-links`,
@@ -381,7 +220,6 @@ const shares = {
 };
 
 const dialogue = {
-  ...supabaseAdapter.dialogue,
   async listSessions(caseId: string): Promise<AdvisorSessionRecord[]> {
     const res = await apiFetch<{ sessions: AdvisorSessionRecord[] }>(`/v1/cases/${caseId}/sessions`);
     return res.sessions;
@@ -430,7 +268,6 @@ const dialogue = {
 };
 
 const tasks = {
-  ...supabaseAdapter.tasks,
   async listByCase(caseId: string): Promise<CaseTask[]> {
     const res = await apiFetch<{ tasks: CaseTask[] }>(`/v1/cases/${caseId}/tasks`);
     return res.tasks;
@@ -451,7 +288,6 @@ const tasks = {
 };
 
 const documents = {
-  ...supabaseAdapter.documents,
   async listByCase(caseId: string): Promise<DocumentRecord[]> {
     const res = await apiFetch<{ documents: DocumentRecord[] }>(`/v1/cases/${caseId}/documents`);
     return res.documents;
@@ -540,7 +376,6 @@ const documents = {
 };
 
 const billing = {
-  ...supabaseAdapter.billing,
   async issueInvoice(
     input: Parameters<DataPort["billing"]["issueInvoice"]>[0],
   ): Promise<CustomerInvoiceRecord> {
@@ -581,13 +416,11 @@ const billing = {
   async retryEmail(id: string): Promise<void> {
     await apiFetch(`/v1/billing/outbox/${id}/retry`, { method: "POST" });
   },
-  // issueInvoice och registerPayment ligger kvar hos supabase-adaptern: de
   // köar en momsfaktura/kvitto i utkorgen, vilket kräver att e-postmallarna
   // flyttas till serversidan. Nästa steg för porten.
 };
 
 const ops = {
-  ...supabaseAdapter.ops,
   async listSecrets(): Promise<SecretInfo[]> {
     const res = await apiFetch<{ secrets: SecretInfo[] }>("/v1/ops/secrets");
     return res.secrets;
@@ -655,7 +488,6 @@ const ops = {
 };
 
 const apiKeys = {
-  ...supabaseAdapter.apiKeys,
   async listMine(): Promise<ApiKeyRecord[]> {
     const res = await apiFetch<{ keys: ApiKeyRecord[] }>("/v1/api-keys");
     return res.keys;
@@ -678,7 +510,6 @@ const apiKeys = {
 };
 
 const advisorTools = {
-  ...supabaseAdapter.advisorTools,
   async listNotes(caseId: string): Promise<CaseNoteRecord[]> {
     const res = await apiFetch<{ notes: CaseNoteRecord[] }>(`/v1/cases/${caseId}/notes`);
     return res.notes;
@@ -710,7 +541,6 @@ const advisorTools = {
 };
 
 const members = {
-  ...supabaseAdapter.members,
   async listMembers(caseId: string): Promise<CaseMemberRecord[]> {
     const res = await apiFetch<{ members: CaseMemberRecord[] }>(`/v1/cases/${caseId}/members`);
     return res.members;
@@ -740,7 +570,6 @@ const members = {
 };
 
 const contact = {
-  ...supabaseAdapter.contact,
   async submit(input: NewContactMessage): Promise<void> {
     // INTE anonymous: är avsändaren inloggad följer token med och servern
     // fäster meddelandet vid kontot. Är den inte det skickas ingen token,
@@ -795,7 +624,6 @@ const contact = {
  * Serialiseraren är rättad; det här är resten av porten.
  */
 const messages = {
-  ...supabaseAdapter.messages,
   async listByCase(caseId: string): Promise<CaseMessage[]> {
     const res = await apiFetch<{ messages: CaseMessage[] }>(`/v1/cases/${caseId}/messages`);
     return res.messages;
@@ -880,7 +708,6 @@ const messages = {
  * bevis den som skrev klienten kunde skriva själv.
  */
 const notificationSettings = {
-  ...supabaseAdapter.notificationSettings,
   async getPrefs(): Promise<NotificationPrefsRecord | null> {
     return apiFetch<NotificationPrefsRecord | null>("/v1/notifications/prefs");
   },
@@ -936,7 +763,6 @@ const notificationSettings = {
  * bara ska förifylla ett formulär; det är en annan sak.
  */
 const financial = {
-  ...supabaseAdapter.financial,
   async getLatestSnapshot(caseId: string): Promise<FinancialSnapshot | null> {
     return apiFetch<FinancialSnapshot | null>(`/v1/cases/${caseId}/financial/snapshot`);
   },
@@ -1060,7 +886,6 @@ const simulations = {
 };
 
 const kbr = {
-  ...supabaseAdapter.kbr,
   async create(input: KbrAssessmentInput & { userId: string }): Promise<void> {
     if (!input.caseId) {
       // Ett tydligt fel slår ett tyst. Utan ärende finns ingen rad som
@@ -1096,7 +921,6 @@ const kbr = {
  * user_id är den kolumn som säger vem som förde in raden.
  */
 const payments = {
-  ...supabaseAdapter.payments,
   async listByCase(caseId: string): Promise<PaymentRecord[]> {
     const res = await apiFetch<{ payments: PaymentRecord[] }>(`/v1/cases/${caseId}/payments`);
     return res.payments;
@@ -1125,7 +949,6 @@ const payments = {
 };
 
 const invoices = {
-  ...supabaseAdapter.invoices,
   async listByCase(caseId: string): Promise<InvoiceRecord[]> {
     const res = await apiFetch<{ invoices: InvoiceRecord[] }>(`/v1/cases/${caseId}/invoices`);
     return res.invoices;
@@ -1155,21 +978,144 @@ const invoices = {
 };
 
 const audit = {
-  ...supabaseAdapter.audit,
   async listByCase(caseId: string) {
     const res = await apiFetch<{ events: unknown[] }>(`/v1/cases/${caseId}/journal`);
     return res.events as Awaited<ReturnType<DataPort["audit"]["listByCase"]>>;
   },
 };
 
-/**
- * Adaptern: de flyttade portarna ovanpå den befintliga.
- *
- * Spridningen av `supabaseAdapter` först är det som gör migreringen
- * möjlig att göra stegvis - och samtidigt det som ska försvinna. När
- * MIGRATED_PORTS täcker hela DataPort tas den raden bort, och då är
- * "inte Supabase" sant hela vägen.
- */
+/* --- Förmedlingarna och praktikerregistret ------------------------------ */
+
+type P<K extends keyof DataPort, M extends keyof DataPort[K]> = DataPort[K][M] extends (
+  ...a: infer A
+) => unknown
+  ? A
+  : never;
+type R<K extends keyof DataPort, M extends keyof DataPort[K]> = DataPort[K][M] extends (
+  ...a: never[]
+) => Promise<infer T>
+  ? T
+  : never;
+
+const leads = {
+  async create(input: P<"leads", "create">[0]): Promise<void> {
+    await apiFetch(`/v1/cases/${input.caseId}/leads`, {
+      method: "POST",
+      body: {
+        professionalId: input.professionalId,
+        preview: input.preview,
+        summary: input.summary,
+      },
+    });
+  },
+  async listForCase(caseId: string) {
+    const res = await apiFetch<{ leads: unknown[] }>(`/v1/cases/${caseId}/leads`);
+    return res.leads as R<"leads", "listForCase">;
+  },
+  async listMyLeads() {
+    const res = await apiFetch<{ leads: unknown[] }>("/v1/leads");
+    return res.leads as R<"leads", "listMyLeads">;
+  },
+  async unlock(requestId: string, termsVersion: string) {
+    const res = await apiFetch<{ lead: unknown }>(`/v1/leads/${requestId}/unlock`, {
+      method: "POST",
+      body: { termsVersion },
+    });
+    return res.lead as R<"leads", "unlock">;
+  },
+  async getUnlocked(requestId: string) {
+    try {
+      const res = await apiFetch<{ lead: unknown }>(`/v1/leads/${requestId}`);
+      return res.lead as R<"leads", "getUnlocked">;
+    } catch (err) {
+      // Låst eller okänd förfrågan ger 404. Kontraktet vill ha null, inte
+      // ett kast: vyn ska kunna visa "inte upplåst" i stället för ett fel.
+      if (err instanceof ApiRequestError && err.status === 404) {
+        return null as R<"leads", "getUnlocked">;
+      }
+      throw err;
+    }
+  },
+  async decline(requestId: string, note: string | null): Promise<void> {
+    await apiFetch(`/v1/leads/${requestId}/decline`, { method: "POST", body: { note } });
+  },
+  async listMyCharges() {
+    const res = await apiFetch<{ charges: unknown[] }>("/v1/usage-charges");
+    return res.charges as R<"leads", "listMyCharges">;
+  },
+};
+
+const professionals = {
+  async listActive() {
+    const res = await apiFetch<{ professionals: unknown[] }>("/v1/professionals");
+    return res.professionals as R<"professionals", "listActive">;
+  },
+  async listRatings() {
+    const res = await apiFetch<{ ratings: unknown[] }>("/v1/professionals/ratings");
+    return res.ratings as R<"professionals", "listRatings">;
+  },
+  async getMyProfile() {
+    const res = await apiFetch<{ profile: unknown }>("/v1/professionals/mine");
+    return res.profile as R<"professionals", "getMyProfile">;
+  },
+  async updateMyProfile(input: P<"professionals", "updateMyProfile">[0]): Promise<void> {
+    await apiFetch("/v1/professionals/mine", { method: "PATCH", body: input });
+  },
+  async claimProfile(input: P<"professionals", "claimProfile">[0]): Promise<void> {
+    await apiFetch(`/v1/professionals/${input.professionalId}/claim`, {
+      method: "POST",
+      body: { motivation: input.motivation, contact: input.contact },
+    });
+  },
+  async listMyClaims() {
+    const res = await apiFetch<{ claims: unknown[] }>("/v1/professionals/claims/mine");
+    return res.claims as R<"professionals", "listMyClaims">;
+  },
+  async listClaims() {
+    const res = await apiFetch<{ claims: unknown[] }>("/v1/professionals/claims");
+    return res.claims as R<"professionals", "listClaims">;
+  },
+  async reviewClaim(id: string, approve: boolean, note: string | null): Promise<void> {
+    await apiFetch(`/v1/professionals/claims/${id}/review`, {
+      method: "POST",
+      body: { approve, note },
+    });
+  },
+  async listTeam(professionalId: string) {
+    const res = await apiFetch<{ team: unknown[] }>(`/v1/professionals/${professionalId}/team`);
+    return res.team as R<"professionals", "listTeam">;
+  },
+  async listTeamInvitations(professionalId: string) {
+    const res = await apiFetch<{ invitations: unknown[] }>(
+      `/v1/professionals/${professionalId}/invitations`,
+    );
+    return res.invitations as R<"professionals", "listTeamInvitations">;
+  },
+  async inviteTeamMember(
+    professionalId: string,
+    email: string,
+    role: P<"professionals", "inviteTeamMember">[2],
+  ): Promise<void> {
+    await apiFetch(`/v1/professionals/${professionalId}/invitations`, {
+      method: "POST",
+      body: { email, role },
+    });
+  },
+  async revokeTeamInvitation(invitationId: string): Promise<void> {
+    await apiFetch(`/v1/professionals/invitations/${invitationId}`, { method: "DELETE" });
+  },
+  async removeTeamMember(memberId: string): Promise<void> {
+    await apiFetch(`/v1/professionals/team/${memberId}`, { method: "DELETE" });
+  },
+  async myFirmInvitations() {
+    const res = await apiFetch<{ invitations: unknown[] }>("/v1/firm-invitations");
+    return res.invitations as R<"professionals", "myFirmInvitations">;
+  },
+  async acceptFirmInvitation(invitationId: string): Promise<void> {
+    await apiFetch(`/v1/firm-invitations/${invitationId}/accept`, { method: "POST" });
+  },
+};
+
 /* --- Rådgivaransökningarna och förmedlingarna ---------------------------- */
 
 const applications = {
@@ -1419,19 +1365,13 @@ const auth = {
 /** Läses av sviten: senaste läget sändaren ropade ut. */
 export const sistKandAnvandare = (): AuthUser | null => sistKanda;
 
-/**
- * Adaptern FÖRE bron nedan. Exporterad enbart för tests/awsAdapter.ts, som
- * mäter migreringen på funktionsidentitet: en metod som inte är samma
- * funktionsobjekt som supabase-adapterns är per definition omskriven.
- * Den mätningen måste ske på det oinlindade lagret - Proxyn nedan gör
- * varje metod till ett nytt objekt och hade fått allt att se flyttat ut.
- */
 export const awsAdapterUtanBro: DataPort = {
-  ...supabaseAdapter,
   auth: auth as DataPort["auth"],
   companyLookup: companyLookup as DataPort["companyLookup"],
   applications: applications as DataPort["applications"],
   referrals: referrals as DataPort["referrals"],
+  leads: leads as DataPort["leads"],
+  professionals: professionals as DataPort["professionals"],
   contact: contact as DataPort["contact"],
   billing: billing as DataPort["billing"],
   ops: ops as DataPort["ops"],
@@ -1456,70 +1396,47 @@ export const awsAdapterUtanBro: DataPort = {
   shares: shares as DataPort["shares"],
 };
 
-/* --- Bron: den som ännu inte flyttat ska SÄGA det ----------------------- */
-
 /**
- * VARFÖR ETT LAGER TILL.
+ * ADAPTERN.
  *
- * `...supabaseAdapter` överst gör att varje port som inte flyttats
- * fortfarande fungerar - genom Supabase. Det är hela poängen med
- * strangler-mönstret, och det är också dess tysta pris: ingenting i
- * anropet avslöjar vilken väg det tog.
+ * Här stod ett lager till: en bro som lät varje port som ännu inte
+ * flyttats gå vidare till supabase-adaptern, och som kastade ett
+ * namngivet fel när den inte var uppspänd. Den behövs inte längre -
+ * MIGRATED_PORTS täckte till slut hela DataPort, och då är ett lager som
+ * hanterar undantag ett lager utan undantag att hantera.
  *
- * I en drift som INTE har Supabase-variablerna satta blev priset synligt
- * på värsta sätt: ett engelskt "supabaseUrl is required" ur ett SDK, utan
- * ett ord om vilken port som saknades eller varför.
- *
- * Lagret nedan gör det till ett besked. Rörs en port som inte står i
- * MIGRATED_PORTS, och bron inte är uppspänd, kastas ett fel som NAMNGER
- * porten. Är bron uppspänd händer ingenting alls - anropet går rakt
- * igenom, som förut.
- *
- * När MIGRATED_PORTS täcker hela DataPort tas både det här lagret och
- * `...supabaseAdapter` bort. Då är "inte Supabase" sant hela vägen.
+ * `...supabaseAdapter` överst är också borta. Det var den raden som gjorde
+ * migreringen möjlig att göra stegvis, och det var den raden som skulle
+ * försvinna. Nu finns ingen väg till en annan backend härifrån - inte för
+ * att den är avstängd, utan för att den inte är skriven.
  */
-const FLYTTADE = new Set<string>(MIGRATED_PORTS);
-
-/** Portar som fortfarande går över bron. Läses av tests/awsAdapter.ts. */
-export const delegeradePortar = (): string[] => {
-  const kvar: string[] = [];
-  for (const [grupp, innehall] of Object.entries(awsAdapterUtanBro)) {
-    if (!innehall || typeof innehall !== "object") continue;
-    for (const namn of Object.keys(innehall as Record<string, unknown>)) {
-      if (typeof (innehall as Record<string, unknown>)[namn] !== "function") continue;
-      if (!FLYTTADE.has(`${grupp}.${namn}`)) kvar.push(`${grupp}.${namn}`);
-    }
-  }
-  return kvar.sort();
+export const awsAdapter: DataPort = {
+  auth: auth as DataPort["auth"],
+  companyLookup: companyLookup as DataPort["companyLookup"],
+  applications: applications as DataPort["applications"],
+  referrals: referrals as DataPort["referrals"],
+  leads: leads as DataPort["leads"],
+  professionals: professionals as DataPort["professionals"],
+  contact: contact as DataPort["contact"],
+  billing: billing as DataPort["billing"],
+  ops: ops as DataPort["ops"],
+  apiKeys: apiKeys as DataPort["apiKeys"],
+  advisorTools: advisorTools as DataPort["advisorTools"],
+  members: members as DataPort["members"],
+  cases: cases as DataPort["cases"],
+  dialogue: dialogue as DataPort["dialogue"],
+  tasks: tasks as DataPort["tasks"],
+  payments: payments as DataPort["payments"],
+  invoices: invoices as DataPort["invoices"],
+  financial: financial as DataPort["financial"],
+  simulations: simulations as DataPort["simulations"],
+  privacy: privacy as DataPort["privacy"],
+  sources: sources as DataPort["sources"],
+  documents: documents as DataPort["documents"],
+  messages: messages as DataPort["messages"],
+  notificationSettings: notificationSettings as DataPort["notificationSettings"],
+  kbr: kbr as DataPort["kbr"],
+  audit: audit as DataPort["audit"],
+  profile: profile as DataPort["profile"],
+  shares: shares as DataPort["shares"],
 };
-
-/**
- * Injicerbar `uppspand` så sviten kan pröva NEJ-grenen. Testbygget sätter
- * Supabase-variabler (annars kan supabase-adaptern inte ens laddas), och
- * utan seamen hade den gren som faktiskt kastar aldrig kunnat köras.
- */
-export const broaPort = <T extends object>(
-  grupp: string,
-  innehall: T,
-  uppspand: () => boolean = supabaseConfigured,
-): T =>
-  new Proxy(innehall, {
-    get(mal, egenskap) {
-      const varde = Reflect.get(mal, egenskap) as unknown;
-      if (typeof varde !== "function") return varde;
-      const port = `${grupp}.${String(egenskap)}`;
-      if (FLYTTADE.has(port)) return varde;
-      return (...arg: unknown[]) => {
-        if (!uppspand()) throw new SupabaseSaknasError(port);
-        return (varde as (...a: unknown[]) => unknown)(...arg);
-      };
-    },
-  });
-
-export const awsAdapter: DataPort = Object.fromEntries(
-  Object.entries(awsAdapterUtanBro).map(([grupp, innehall]) =>
-    innehall && typeof innehall === "object"
-      ? [grupp, broaPort(grupp, innehall as object)]
-      : [grupp, innehall],
-  ),
-) as DataPort;

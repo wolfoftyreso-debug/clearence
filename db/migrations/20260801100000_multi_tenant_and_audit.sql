@@ -13,7 +13,7 @@
 --
 -- Losing row scoping here fails open - queries keep working and start
 -- returning other companies' insolvency data. Every policy in this file is
--- exercised by supabase/tests/rls.sql.
+-- exercised by db/rls-tests/rls.sql.
 
 /* -------------------------------------------------------------------------- */
 /* Membership                                                                 */

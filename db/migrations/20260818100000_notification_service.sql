@@ -641,7 +641,7 @@ $$;
 /* --- Leverantören --------------------------------------------------------- */
 
 -- 46elks skickar SMS:en. Nyckeln bor i samma valv som de andra, bakom
--- samma funktioner - se supabase/migrations/20260802220000.
+-- samma funktioner - se db/migrations/20260802220000.
 alter table public.integration_secrets
   drop constraint integration_secrets_provider_known;
 

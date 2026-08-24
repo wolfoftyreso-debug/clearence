@@ -13,15 +13,15 @@
 tests/
 
 # Databasen. `db/worker/` MÅSTE vara kvar - cron-funktionerna importerar
-# den. Resten är schema, prov och en container som Vercel inte kör.
+# den. Resten är schema, migrationer, prov och en container som Vercel
+# inte kör.
 db/tests/
+db/rls-tests/
+db/migrations/
 db/dist/
 db/*.sql
 db/Dockerfile
 db/README.md
-
-# Migrationerna och Supabase-skalet. Körs mot databasen, inte av appen.
-supabase/
 
 # Dokumentation, designunderlag, exempel, skript, CI-konfiguration.
 docs/

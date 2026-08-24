@@ -521,5 +521,47 @@ check(
   }
 }
 
+/* --- Sökvägar som skuggar varandra -------------------------------------- */
+
+/*
+ * ROUTERN MATCHAR PÅ ANTAL SEGMENT, I REGISTRERINGSORDNING.
+ *
+ * `/v1/leads/charges` och `/v1/leads/{requestId}` har lika många segment.
+ * Ligger parametervarianten först vinner den, och "charges" blir ett
+ * ogiltigt id: 400 i stället för listan. Felet syns bara när båda finns,
+ * och bara på den ena av dem.
+ *
+ * Kontrollen jämför varje par av sökvägar med lika många segment: en
+ * bokstavlig sökväg får inte kunna sväljas av en parametervariant som
+ * står FÖRE den i routern.
+ */
+{
+  const ordning = [...serverKod.matchAll(/router\.[a-z]+\("(\/v1\/[^"]+)"/g)].map((m) => m[1]);
+  const skuggade: string[] = [];
+  for (let i = 0; i < ordning.length; i++) {
+    const forsta = ordning[i].split("/");
+    for (let j = i + 1; j < ordning.length; j++) {
+      const senare = ordning[j].split("/");
+      if (forsta.length !== senare.length) continue;
+      // Skuggar den tidigare den senare? Ja, om varje led antingen är
+      // identiskt eller en parameter i den tidigare.
+      const skuggar = forsta.every((led, k) => led === senare[k] || led.startsWith(":"));
+      const harParameter = forsta.some((led) => led.startsWith(":"));
+      const senareArBokstavlig = !senare.some((led) => led.startsWith(":"));
+      if (skuggar && harParameter && senareArBokstavlig) {
+        skuggade.push(`${ordning[j]} skuggas av ${ordning[i]}`);
+      }
+    }
+  }
+  check("ingen bokstavlig sökväg skuggas av en tidigare parametersökväg", skuggade.length === 0, skuggade);
+
+  // Och att kontrollen kan hitta något: den prövas på ett påhittat par.
+  const prov = ["/v1/leads/:requestId", "/v1/leads/charges"];
+  const provSkuggat = prov[0]
+    .split("/")
+    .every((led, k) => led === prov[1].split("/")[k] || led.startsWith(":"));
+  check("kontrollen känner igen ett skuggat par när den ser ett", provSkuggat);
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);

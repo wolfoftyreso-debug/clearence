@@ -33,7 +33,7 @@ Underlag för ett byggteam. Status per 2026-08-01.
 | Revisionsspår | FINNS | `audit_events`, append-only via trigger, triggrar på 6 tabeller |
 | Versionshantering av dokument | NYTT | dokument är oföränderliga filer utan versionskedja |
 
-**Den luckan är stängd.** Ärendet ägs nu av `case_members` med nio roller, och samtliga policyer är omskrivna mot medlemskap. Migrationen ligger i `supabase/migrations/20260801100000_multi_tenant_and_audit.sql`.
+**Den luckan är stängd.** Ärendet ägs nu av `case_members` med nio roller, och samtliga policyer är omskrivna mot medlemskap. Migrationen ligger i `db/migrations/20260801100000_multi_tenant_and_audit.sql`.
 
 **Och nu testas det.** `npm run test:rls` reser en Postgres-instans, applicerar alla migrationer och kör 44 assertions om isolering — borgenärsisolering, revisorns läsrätt utan skrivrätt, återkallad åtkomst, och att revisionsloggen inte går att ändra ens av tabellägaren. Det var tidigare den enskilt största otestade risken i projektet.
 
@@ -753,7 +753,7 @@ Detta rimmar med intäktsmodellen som redan är byggd: fast avgift per förmedla
 ### 10.4 Innan en enda rad produktionskod skrivs
 
 1. **Juridisk granskning av det som finns idag.** Krisanalysen ger frister om personligt betalningsansvar. Under den här sessionens genomgång hittades en påhittad sexveckorsfrist för kontrollstämma i KBR-modulen. Den typen av fel måste hittas av en jurist, inte av tur.
-2. **Migrationerna körda mot en riktig databas.** De fyra migrationerna i `supabase/migrations/` har aldrig applicerats. RLS-policyerna är otestade mot verklig auth.
+2. **Migrationerna körda mot en riktig databas.** De fyra migrationerna i `db/migrations/` har aldrig applicerats. RLS-policyerna är otestade mot verklig auth.
 3. **Beslut om backend.** AWS-riktningen finns men adaptern är inte skriven. Fleranvändarmodellen ska designas mot rätt backend, inte migreras dit.
 4. **En rekonstruktör som pilotpartner, inskriven i planen.** Utan någon som säger "så här går det faktiskt till" byggs fel sak väldigt effektivt.
 

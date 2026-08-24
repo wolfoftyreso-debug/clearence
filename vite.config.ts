@@ -26,7 +26,6 @@ export default defineConfig(({ mode }) => ({
           if (/node_modules\/(react|react-dom|react-router|scheduler)\//.test(id)) {
             return "vendor-react";
           }
-          if (id.includes("node_modules/@supabase/")) return "vendor-supabase";
           if (id.includes("node_modules/@radix-ui/")) return "vendor-radix";
           return undefined;
         },

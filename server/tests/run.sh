@@ -14,7 +14,7 @@ $PSQL -d postgres -c "drop database if exists $DB;" -c "create database $DB;" >/
 $PSQL -d "$DB" -c "create extension if not exists citext;" >/dev/null
 $PSQL -d "$DB" -f db/bootstrap.sql >/dev/null
 $PSQL -d "$DB" -f db/tests/storage-stub.sql >/dev/null
-for f in supabase/migrations/*.sql; do
+for f in db/migrations/*.sql; do
   $PSQL -d "$DB" -f "$f" >/dev/null
 done
 

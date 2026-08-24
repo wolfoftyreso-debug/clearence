@@ -251,7 +251,7 @@ check(
 );
 
 // Frontend får aldrig bära en serversecret.
-const frontendKallor = ["src/data/aws/client.ts", "src/integrations/supabase/client.ts"];
+const frontendKallor = ["src/data/aws/client.ts"];
 for (const f of frontendKallor) {
   let kod = "";
   try {
@@ -491,13 +491,10 @@ check(
   telefonKod.match(/subtle\.digest|hashCode/g),
 );
 
-const supabaseKod = utanKommentarer(
-  readFileSync(join(process.cwd(), "src/data/supabase/adapter.ts"), "utf8"),
-);
 const awsKod = utanKommentarer(
   readFileSync(join(process.cwd(), "src/data/aws/adapter.ts"), "utf8"),
 );
-for (const [namn, kod] of [["supabase", supabaseKod], ["aws", awsKod]] as const) {
+for (const [namn, kod] of [["aws", awsKod]] as const) {
   check(
     `${namn}-adaptern skickar aldrig in en kodhash till verifieringen`,
     !/p_code_sha256/.test(kod),
@@ -519,7 +516,7 @@ for (const [namn, kod] of [["supabase", supabaseKod], ["aws", awsKod]] as const)
  * migrationen som definierar funktionen är den som gäller.
  */
 const gallandeVerifieringsSql = (): string => {
-  const katalog = join(process.cwd(), "supabase/migrations");
+  const katalog = join(process.cwd(), "db/migrations");
   const filer = readdirSync(katalog)
     .filter((f) => f.endsWith(".sql"))
     .sort();
@@ -542,7 +539,7 @@ check("den gällande verifieringsdefinitionen hittades", verifieringSql.length >
  * därför den senaste definitionen.
  */
 const ursprungsMigrationen = readFileSync(
-  join(process.cwd(), "supabase/migrations/20260822100000_verifieringskoden_fods_i_databasen.sql"),
+  join(process.cwd(), "db/migrations/20260822100000_verifieringskoden_fods_i_databasen.sql"),
   "utf8",
 );
 check(

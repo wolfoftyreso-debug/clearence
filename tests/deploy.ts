@@ -705,10 +705,10 @@ const KORS_SEPARAT: Record<string, string> = {
     return { antal, slut: i, inne };
   };
 
-  const sql = readdirSync(join(process.cwd(), "supabase/migrations"))
+  const sql = readdirSync(join(process.cwd(), "db/migrations"))
     .filter((f) => f.endsWith(".sql"))
     .sort()
-    .map((f) => readFileSync(join(process.cwd(), "supabase/migrations", f), "utf8"))
+    .map((f) => readFileSync(join(process.cwd(), "db/migrations", f), "utf8"))
     .join("\n");
 
   const anrop: { namn: string; argc: number; fil: string }[] = [];

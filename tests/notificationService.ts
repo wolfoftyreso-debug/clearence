@@ -345,7 +345,7 @@ check("verifierings-SMS:et ryms i ett segment", codeSms.length <= SMS_SEGMENT_LI
  * migrationen som definierar funktionen är den som gäller.
  */
 const gallandeVerifieringsSql = (): string => {
-  const katalog = join(process.cwd(), "supabase/migrations");
+  const katalog = join(process.cwd(), "db/migrations");
   const filer = readdirSync(katalog)
     .filter((f) => f.endsWith(".sql"))
     .sort();

@@ -15,8 +15,8 @@ verified insolvency professionals.
 - [TanStack Query](https://tanstack.com/query) for data fetching
 - Own HTTP API on `node:http` against Postgres — one runtime dependency
   (`pg`). Lives in `server/`, served by `api/[...path].ts`.
-- [Supabase](https://supabase.com/) as a bridge adapter only, while the
-  remaining ports move to the own API
+- No backend vendor SDK anywhere in `src/` — the client talks to the own
+  API and nothing else. `tests/awsAdapter.ts` enforces that.
 
 ## Where this runs
 
@@ -44,7 +44,8 @@ npm install
 
 # 2. Configure environment variables
 cp .env.example .env
-# then fill in your Supabase project URL and anon/publishable key
+# VITE_API_BASE_URL only matters in dev, where Vite and the API run on
+# different ports. In production they share an origin.
 
 # 3. Start the dev server
 npm run dev
@@ -75,7 +76,7 @@ Databasproven kräver ett Postgres-kluster och körs för sig:
 | Kommando | Vad det bevisar |
 | --- | --- |
 | `npm run test:selfhosted` | Radskyddet och rollerna på en **vanlig Postgres** - alltså det Vercel Postgres och Neon är. 324 kontroller. |
-| `npm run test:rls` | Samma påståenden mot Supabase-skalet. En skillnad mellan miljöerna ska synas här, inte i produktion. |
+| `npm run test:rls` | Radskyddspåståendena i `db/rls-tests/`, körda med psql mot en riktig Postgres. |
 | `npm run test:api` | Hela API:t över riktig HTTP mot en riktig databas, inklusive Vercel-ingången `api/[...path].ts`. 577 kontroller. |
 
 ## Project structure
@@ -95,25 +96,27 @@ src/
     wizard/         Shared crisis-wizard form controls
     ui/             shadcn/ui primitives
   hooks/            Reusable React hooks
-  integrations/     Supabase client + generated database types
   lib/              Org-number validation, PDF/HTML export, utilities
   pages/            Route-level views (Index, CrisisWizard, KBRModule,
                      Dashboard, LiquidityTimeline, Marketplace)
-supabase/
-  functions/        Edge Functions (e.g. lookup-company)
-  migrations/        SQL schema + RLS policies
+db/
+  bootstrap.sql     Schema `app`/`auth`, roles, identity
+  migrations/       SQL schema + RLS policies
+  rls-tests/        Row-level-security assertions, run with psql
+  worker/           The scheduled jobs (outbox, notifications, simulations)
 ```
 
-## Supabase
+## The data layer
 
-The `professionals` and `professional_ratings` tables back the
-`/marketplace` page. Row-Level Security is enabled with public read-only
-policies — writes require the Supabase service role. The `lookup-company`
-edge function looks up a Swedish organization number and falls back to
-built-in demo data if the external lookup fails or is unavailable.
+Everything above `src/data/` talks to `DataPort` (`src/data/ports.ts`) and
+nothing else — 156 methods, all served by the own API over HTTP. Two
+adapters implement it: `aws/` (the real one) and `demo/` (invented data,
+for previews only, behind `VITE_DEMO_MODE=true`).
 
-To develop against your own Supabase project, run the migration in
-`supabase/migrations/` against it and point `.env` at its URL and anon key.
+There used to be a third, `supabase/`, plus a bridge that forwarded
+un-migrated ports to it. Both are gone. Authorization lives in Postgres
+row-level security, reached through `app.current_user_id()`, which the API
+sets transaction-locally on every request (`server/db.ts`).
 
 ## Motorn i en fil
 

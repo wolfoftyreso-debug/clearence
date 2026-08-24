@@ -20,7 +20,7 @@
 | H-2 | Loggen skrev frågans parametervärden (lösenordshashar, poletter, personuppgifter) | MEDIUM | `server/logg.ts` maskerar fält och mönster | `tests/sakerhet.ts` |
 | H-3 | Driftåtgärder lämnade inga spår | MEDIUM | `app.logga_driftatgard()` + revisionspolicy | `server/tests/integration.ts` |
 | H-4 | Uppladdningen litade på filnamn, ändelse och Content-Type — allt tre skriver avsändaren | HIGH | Magic-byte-tillåtelselista, tvåstegsuppladdning, `confirmed_at` | `tests/filtyper.ts`, `tests/lagring.ts` |
-| H-5 | **Telefonverifieringen bevisade ingenting:** koden slumpades i webbläsaren, så den som anropade API:t kunde välja den själv och bekräfta utan att någonsin läsa SMS:et | HIGH | Koden föds i databasen, hashen lagras, klienten får `void`; gamla signaturen och `queue_verification_sms` droppade | `supabase/tests/notifications.sql`, `server/tests/integration.ts`, `tests/sakerhet.ts` |
+| H-5 | **Telefonverifieringen bevisade ingenting:** koden slumpades i webbläsaren, så den som anropade API:t kunde välja den själv och bekräfta utan att någonsin läsa SMS:et | HIGH | Koden föds i databasen, hashen lagras, klienten får `void`; gamla signaturen och `queue_verification_sms` droppade | `db/rls-tests/notifications.sql`, `server/tests/integration.ts`, `tests/sakerhet.ts` |
 
 **Lärdomen ur F-2 och H-5, samma lärdom två gånger:** ett test som kodifierar
 en sårbarhet är sämre än inget test alls. `tests/rateLimit.ts` **beskrev buggen

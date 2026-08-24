@@ -13,10 +13,10 @@ inaktuell.
 | `src/` | Webbappen. React, TypeScript, Tailwind. Ingen backend-SDK ovanför datalagret | ja |
 | `server/` | API:t. Transportlöst — `handle()` vet inget om HTTP-servern över sig | ja |
 | `api/` | Vercels ingångar. Varje fil här blir en endpoint; därför bor koden i `server/` | ja |
-| `db/` | Databasen. `db/worker/` körs av cron och måste följa med; schemat och proven gör det inte | delvis |
+| `db/` | Databasen: schema (`migrations/`), radskyddsprov (`rls-tests/`, `tests/`) och arbetarna. `db/worker/` körs av cron och måste följa med; resten inte | delvis |
 | `public/` | Statiska filer som serveras som de är | ja |
 | `tests/` | Provsviterna. 54 stycken, körda av `npm test` | nej |
-| `supabase/` | Migrationerna och det som är kvar av Supabase-skalet | nej |
+
 | `docs/` | Den här filen och resten av underlaget | nej |
 | `design/` | Designunderlag för Claude Design | nej |
 | `exempel/` | Fristående exempel på hur motorn används | nej |
@@ -32,8 +32,7 @@ bygget faktiskt behöver blir röd här i stället för vid driftsättningen.
 ```
 src/            data.<port>.<metod>()      ingen komponent känner en backend
   └─ src/data/  DataPort — kontraktet
-       ├─ aws/        → eget API över HTTP     ← standard
-       ├─ supabase/   → bron, för det som inte flyttat än
+       ├─ aws/        → eget API över HTTP     ← allt går hit
        └─ demo/       → påhittad data, bara för visningar
 api/[...path].ts      → server/index.ts handle()
 server/               → server/db.ts withUser() / withAnon()
@@ -43,26 +42,26 @@ db/                   → Postgres, radskydd
 Regeln uppåt: **ingenting ovanför `src/data/` importerar en backend-SDK.**
 Regeln nedåt: **ingenting under `server/` känner till HTTP-transporten.**
 
-## De tre backendlägena
+## De två lägena
 
-Väljs vid **byggtid** med `VITE_DATA_ADAPTER`. En bunt byggd utan flaggan
-kan inte pratas över till en annan backend i efterhand.
-
-| Värde | Vad som händer |
+| Läge | Vad som händer |
 | --- | --- |
-| *osatt* | **Eget API.** Standard. Det som ännu inte flyttat går över Supabase-bron |
-| `supabase` | Allt går till Supabase. Ett medvetet val, inte ett standardvärde |
+| *normalt* | **Eget API.** Alla 156 portmetoder i `DataPort` går hit |
 | `VITE_DEMO_MODE=true` | Påhittad data i webbläsaren. Bara för visningar |
 
-## Migreringens läge, mätt och inte påstått
+Här stod tre lägen en gång, valda med `VITE_DATA_ADAPTER`: Supabase var
+standard, eget API krävde en byggflagga, och det som inte flyttats gick
+över en bro. Migreringen är klar, bron är riven och flaggan borttagen — en
+flagga med bara ett giltigt värde är inte ett val, den är en fälla för den
+som stavar fel.
 
-`MIGRATED_PORTS` i `src/data/aws/adapter.ts` säger vad som går mot eget API.
-`delegeradePortar()` säger vad som går över bron. `tests/awsAdapter.ts`
-räknar båda på **två oberoende sätt** — ur listan och ur funktionsidentitet
-— och blir röd om de går isär.
+## Att det stämmer, prövat
 
-Rörs en port som ännu inte flyttat, i en drift utan Supabase-variabler,
-kastas ett fel som **namnger porten**. Ingen tyst omväg.
+`tests/awsAdapter.ts` läser demoadaptern som facit för kontraktets yta och
+kräver att adaptern mot eget API täcker varje port och varje metod. Den
+söker dessutom igenom **hela** `src/` efter en backend-SDK — det var inte
+`src/data/` som importerade Supabase, utan `src/integrations/`, och en vakt
+som bara tittat i datalagret hade missat det.
 
 ## Var driftsläget står skrivet
 

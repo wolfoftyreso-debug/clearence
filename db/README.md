@@ -91,7 +91,7 @@ Arbetaren är TypeScript (`db/worker/email-worker.ts`) och bundlas med `npm run 
 
 `claim_outbound_emails()` låser med `for update skip locked`, så två arbetare skickar aldrig samma rad. Efter fem misslyckade försök blir raden `failed` och syns i driftvyn under Kunder - den plockas aldrig om automatiskt, för en adress som studsar studsar även försök sextio.
 
-Stängningsjobbet `close_overdue_accounts()` är idempotent, jämför svenska kalenderdagar (fristen ska inte bero på vilket klockslag fakturan råkade ställas ut), rör aldrig ett betalt konto och raderar ingenting. Testat i `supabase/tests/billingJob.sql`, i båda miljöerna.
+Stängningsjobbet `close_overdue_accounts()` är idempotent, jämför svenska kalenderdagar (fristen ska inte bero på vilket klockslag fakturan råkade ställas ut), rör aldrig ett betalt konto och raderar ingenting. Testat i `db/rls-tests/billingJob.sql`, i båda miljöerna.
 
 ## Var det här körs
 

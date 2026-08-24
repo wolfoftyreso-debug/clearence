@@ -1,7 +1,8 @@
 /**
  * BOLAGSUPPSLAGET: organisationsnummer in, registerfakta ut.
  *
- * Låg som en Supabase Edge Function (supabase/functions/lookup-company).
+ * Låg som en Supabase Edge Function (supabase/functions/lookup-company i
+ * repots historik).
  * Den var den sista biten körbar infrastruktur utanför den här servern och
  * band produkten till en plattform vi lämnar. Koden är densamma i sak;
  * det som ändrats är var den kör och vad som prövas innan den kör.

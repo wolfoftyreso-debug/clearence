@@ -99,7 +99,7 @@ fi
 # sekunden, och felet ser då ut som en trasig databas i stället för en
 # migration som inte följt med.
 if grep -q "app.rate_limit_hit" server/rateLimit.ts; then
-  if grep -rq "function app.rate_limit_hit" supabase/migrations/; then
+  if grep -rq "function app.rate_limit_hit" db/migrations/; then
     ok "hastighetsgränsens funktion finns i migrationerna"
   else
     stopp "API:t räknar mot app.rate_limit_hit men ingen migration skapar den"

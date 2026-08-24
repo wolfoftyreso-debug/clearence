@@ -16,7 +16,7 @@ som läser det tror att det gäller.
 | `api/openapi.json` | Kontraktet. Publikt med flit — `/api`-sidan renderar det |
 | `server/` | Routern, auth, lagring, loggen. **Utanför `api/`** |
 | `db/worker/` | Jobbens riktiga kod. Cron-endpointerna importerar härifrån |
-| `supabase/migrations/` | Schemat. Körs med `scripts/migrera.sh`, inte av Vercel |
+| `db/migrations/` | Schemat. Körs med `scripts/migrera.sh`, inte av Vercel |
 
 ### Varför serverkoden inte ligger under `api/`
 
@@ -35,17 +35,25 @@ det här.
 
 ## Vad som återstår
 
-Läget, mätt och inte påstått. Siffrorna kommer ur `tests/awsAdapter.ts`,
-som räknar migreringen på två oberoende sätt.
-
 | Hinder | Läge |
 | --- | --- |
-| **41 av 156 portmetoder på bron** | Resten går mot eget API — inklusive HELA auth-gruppen, som var det som gjorde Supabase oundgängligt. `delegeradePortar()` listar dem; en delegerad port utan bro kastar ett fel som namnger sig själv |
-| **Dokumentuppladdning saknas i klienten** | API:t har hela tvåstegsvägen. Klienten har bara nedladdning. Den dagen uppladdningen kopplas in måste `connect-src` i CSP:n vidgas — `tests/vercelredo.ts` blir röd om det glöms |
-| **Blob inte körd mot riktig butik** | Kontroll-API:t är prövat mot en dubbel över riktig HTTP. Objektvärden är hårdkodad i SDK:n och går inte att peka om härifrån |
+| **Blob inte körd mot riktig butik** | Kontroll-API:t är prövat mot en dubbel över riktig HTTP: signering, presignerad PUT, HEAD och DELETE genom den riktiga SDK:n. Objektvärden är hårdkodad i SDK:n och går inte att peka om härifrån, så nedladdnings-URL:en är granskad till sin form men inte hämtad |
+| **Bolagsuppslaget hämtar en extern sida** | `server/bolag.ts` skrapar allabolag.se, som vilken skrapa som helst kan sluta fungera när sidan ändras. Ett null är ett giltigt svar och formuläret låter användaren skriva själv — men uppgiften är inte en registerkälla med avtal |
 
 Det som **inte** står här är prövat och grönt: bygget, funktionerna, cron,
-rollgrindarna, rubrikerna, rewrites och miljövariablernas felbesked.
+rollgrindarna, rubrikerna, rewrites, miljövariablernas felbesked — och
+hela datavägen, som numera går genom CLEARANCE eget API hela vägen.
+
+## Supabase är borta
+
+`DataPort` har 156 metoder. Alla går mot eget API. Det som fanns kvar av
+Supabase — adaptern, klienten, edge-funktionen, paketet, byggvariablerna
+och katalogen — är raderat, och `tests/awsAdapter.ts` söker igenom hela
+`src/` efter en backend-SDK och blir röd om någon kommer tillbaka.
+
+Migrationerna heter nu `db/migrations/` och radskyddsproven
+`db/rls-tests/`. Namnen sa Supabase; innehållet har alltid varit vanlig
+Postgres.
 
 ## Miljövariabler
 

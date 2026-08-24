@@ -2289,6 +2289,101 @@
         }
       }
     },
+    "/cases/{caseId}/leads": {
+      "get": {
+        "operationId": "listCaseLeads",
+        "summary": "Kontaktförfrågningar för ärendet",
+        "description": "Företagarens vy: vilka praktiker som fått förfrågan och var de står.",
+        "x-status": "beta",
+        "parameters": [
+          {
+            "name": "caseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Ärendets id."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "createCaseLead",
+        "summary": "Skicka en kontaktförfrågan",
+        "description": "Förhandsvisningen beskärs av databasfunktionen: den som inte betalat ska aldrig kunna räkna ut vilket bolag som är i kris.",
+        "x-status": "beta",
+        "parameters": [
+          {
+            "name": "caseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Ärendets id."
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "professionalId"
+                ],
+                "properties": {
+                  "professionalId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "preview": {
+                    "type": "object",
+                    "additionalProperties": true
+                  },
+                  "summary": {
+                    "type": "object",
+                    "additionalProperties": true
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/cases/{caseId}/members": {
       "get": {
         "operationId": "listCaseMembers",
@@ -4167,6 +4262,64 @@
         }
       }
     },
+    "/firm-invitations": {
+      "get": {
+        "operationId": "myFirmInvitations",
+        "summary": "Inbjudningar till mig",
+        "description": "Databasfunktionen matchar på den inloggades e-postadress.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/firm-invitations/{invitationId}/accept": {
+      "post": {
+        "operationId": "acceptFirmInvitation",
+        "summary": "Acceptera en inbjudan",
+        "description": "Kopplar kontot till byrån.",
+        "x-status": "beta",
+        "parameters": [
+          {
+            "name": "invitationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Inbjudans id."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/health": {
       "get": {
         "operationId": "health",
@@ -4336,6 +4489,171 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/leads": {
+      "get": {
+        "operationId": "listMyLeads",
+        "summary": "Praktikerns inkorg",
+        "description": "Förhandsvisningen är avsiktligt tunn: bransch, ort, storleksordning - aldrig bolagets namn.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/leads/{requestId}": {
+      "get": {
+        "operationId": "getUnlockedLead",
+        "summary": "Hämta en upplåst förfrågan",
+        "description": "Bara efter upplåsning. En låst förfrågan ger 404 - inte 403, som hade bekräftat att den finns.",
+        "x-status": "beta",
+        "parameters": [
+          {
+            "name": "requestId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Förfrågans id."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/leads/{requestId}/decline": {
+      "post": {
+        "operationId": "declineLead",
+        "summary": "Avböj en förfrågan",
+        "description": "Avböjandet kostar ingenting och är därför alltid ett äkta alternativ.",
+        "x-status": "beta",
+        "parameters": [
+          {
+            "name": "requestId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Förfrågans id."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [],
+                "properties": {
+                  "note": {
+                    "type": "string",
+                    "maxLength": 2000,
+                    "nullable": true
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/leads/{requestId}/unlock": {
+      "post": {
+        "operationId": "unlockLead",
+        "summary": "Lås upp en förfrågan",
+        "description": "DEN ENDA PLATSEN I PRODUKTEN DÄR EN LÄSNING KOSTAR PENGAR. Upplåsningen skriver debiteringsraden i samma transaktion som den öppnar akten - de två får inte kunna gå isär. Villkorsversionen sparas: den som debiteras ska kunna se vilka villkor som gällde vid just det köpet.",
+        "x-status": "beta",
+        "parameters": [
+          {
+            "name": "requestId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Förfrågans id."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "termsVersion"
+                ],
+                "properties": {
+                  "termsVersion": {
+                    "type": "string",
+                    "maxLength": 40
+                  }
                 }
               }
             }
@@ -5773,6 +6091,515 @@
         }
       }
     },
+    "/professionals": {
+      "get": {
+        "operationId": "listProfessionals",
+        "summary": "Praktikerregistret",
+        "description": "Läsbart för den som är inloggad: en företagare i kris ska kunna se vilka som tar uppdrag utan att först be någon om tillstånd.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/professionals/claims": {
+      "get": {
+        "operationId": "listProfileClaims",
+        "summary": "Alla anspråk",
+        "description": "Databasfunktionen släpper bara igenom en administratör.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/professionals/claims/mine": {
+      "get": {
+        "operationId": "listMyClaims",
+        "summary": "Mina anspråk",
+        "description": "Where-sats på användaren, med flit: radskyddet visar även allas anspråk för en administratör, och 'mina' är ett urval - inte en behörighetsfråga.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/professionals/claims/{claimId}/review": {
+      "post": {
+        "operationId": "reviewProfileClaim",
+        "summary": "Granska ett anspråk",
+        "description": "Godkännande kopplar profilen till kontot. Rollprövningen bor i databasfunktionen.",
+        "x-status": "beta",
+        "parameters": [
+          {
+            "name": "claimId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Anspråkets id."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "approve"
+                ],
+                "properties": {
+                  "approve": {
+                    "type": "boolean"
+                  },
+                  "note": {
+                    "type": "string",
+                    "maxLength": 2000,
+                    "nullable": true
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/professionals/invitations/{invitationId}": {
+      "delete": {
+        "operationId": "revokeFirmInvitation",
+        "summary": "Återkalla en inbjudan",
+        "description": "Återkallas, raderas inte - spåret består.",
+        "x-status": "beta",
+        "parameters": [
+          {
+            "name": "invitationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Inbjudans id."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/professionals/mine": {
+      "get": {
+        "operationId": "getMyProfessionalProfile",
+        "summary": "Min praktikerprofil",
+        "description": "Databasfunktionen avgör vilken rad som är min. Ingen profil är ett giltigt läge: 200 med null.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "operationId": "updateMyProfessionalProfile",
+        "summary": "Uppdatera min praktikerprofil",
+        "description": "Endast egna fält. Verifieringsflaggan och kategorin sätts vid godkännandet av ansökan och går inte att ändra här.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [],
+                "properties": {
+                  "description": {
+                    "type": "string",
+                    "maxLength": 4000,
+                    "nullable": true
+                  },
+                  "location": {
+                    "type": "string",
+                    "maxLength": 200,
+                    "nullable": true
+                  },
+                  "email": {
+                    "type": "string",
+                    "maxLength": 320,
+                    "nullable": true
+                  },
+                  "phone": {
+                    "type": "string",
+                    "maxLength": 60,
+                    "nullable": true
+                  },
+                  "website": {
+                    "type": "string",
+                    "maxLength": 500,
+                    "nullable": true
+                  },
+                  "specializations": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "maxItems": 40
+                  },
+                  "fixedPrices": {
+                    "type": "object",
+                    "nullable": true,
+                    "additionalProperties": true
+                  },
+                  "billingEmail": {
+                    "type": "string",
+                    "maxLength": 320,
+                    "nullable": true
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/professionals/ratings": {
+      "get": {
+        "operationId": "listProfessionalRatings",
+        "summary": "Omdömen i aggregat",
+        "description": "Aggregat, aldrig kopplade till ett namngivet ärende.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/professionals/team/{memberId}": {
+      "delete": {
+        "operationId": "removeFirmMember",
+        "summary": "Ta bort en teammedlem",
+        "description": "Åtkomsten upphör; ärendehistoriken består.",
+        "x-status": "beta",
+        "parameters": [
+          {
+            "name": "memberId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Medlemskapets id."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/professionals/{professionalId}/claim": {
+      "post": {
+        "operationId": "claimProfessionalProfile",
+        "summary": "Gör anspråk på en profil",
+        "description": "Registret innehåller profiler hämtade ur offentliga register. Den som känner igen sig kan begära att få ta över sin egen - och en människa granskar.",
+        "x-status": "beta",
+        "parameters": [
+          {
+            "name": "professionalId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Profilens id."
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "motivation",
+                  "contact"
+                ],
+                "properties": {
+                  "motivation": {
+                    "type": "string",
+                    "maxLength": 2000
+                  },
+                  "contact": {
+                    "type": "string",
+                    "maxLength": 320
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/professionals/{professionalId}/invitations": {
+      "get": {
+        "operationId": "listFirmInvitations",
+        "summary": "Obesvarade inbjudningar",
+        "description": "Endast de som varken accepterats eller återkallats.",
+        "x-status": "beta",
+        "parameters": [
+          {
+            "name": "professionalId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Byråns id."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "inviteFirmMember",
+        "summary": "Bjud in till byrån",
+        "description": "Rollen är admin eller member. Behörigheten att bjuda in prövas i databasfunktionen.",
+        "x-status": "beta",
+        "parameters": [
+          {
+            "name": "professionalId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Byråns id."
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "email",
+                  "role"
+                ],
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "format": "email",
+                    "maxLength": 320
+                  },
+                  "role": {
+                    "type": "string",
+                    "enum": [
+                      "admin",
+                      "member"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/professionals/{professionalId}/team": {
+      "get": {
+        "operationId": "listFirmTeam",
+        "summary": "Byråns team",
+        "description": "Vilka som kan arbeta i byråns ärenden.",
+        "x-status": "beta",
+        "parameters": [
+          {
+            "name": "professionalId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Byråns id."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/profile": {
       "get": {
         "operationId": "getMyProfile",
@@ -6928,6 +7755,29 @@
                 }
               }
             }
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/usage-charges": {
+      "get": {
+        "operationId": "listMyCharges",
+        "summary": "Mina debiteringar",
+        "description": "Sökvägen är inte /leads/charges: routern hade matchat den mot /leads/{requestId}, och 'charges' hade blivit ett ogiltigt id.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "OK"
           },
           "default": {
             "description": "Fel",

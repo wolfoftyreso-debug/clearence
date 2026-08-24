@@ -218,7 +218,7 @@ const ignorerat = las(".vercelignore")
   .map((r) => r.trim())
   .filter((r) => r && !r.startsWith("#"));
 
-for (const ska of ["tests/", "supabase/", "docs/", "design/", "exempel/", "scripts/", ".github/"]) {
+for (const ska of ["tests/", "db/migrations/", "docs/", "design/", "exempel/", "scripts/", ".github/"]) {
   check(`${ska} följer inte med till drift`, ignorerat.includes(ska), ignorerat);
 }
 

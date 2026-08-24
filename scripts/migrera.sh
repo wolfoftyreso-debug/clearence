@@ -27,7 +27,7 @@ TORRKOR=0
 : "${DATABASE_URL:?DATABASE_URL måste vara satt}"
 
 ROT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-KATALOG="$ROT/supabase/migrations"
+KATALOG="$ROT/db/migrations"
 
 command -v psql >/dev/null || { echo "psql saknas i PATH"; exit 1; }
 

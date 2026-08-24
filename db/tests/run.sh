@@ -19,37 +19,37 @@ $PSQL -d "$DB" -f db/bootstrap.sql >/dev/null
 # the old migrations need to parse are created - nothing depends on them.
 $PSQL -d "$DB" -f db/tests/storage-stub.sql >/dev/null
 
-for f in supabase/migrations/*.sql; do
+for f in db/migrations/*.sql; do
   $PSQL -d "$DB" -f "$f" >/dev/null
 done
 
-$PSQL -d "$DB" -f supabase/tests/rls.sql 2>&1 \
+$PSQL -d "$DB" -f db/rls-tests/rls.sql 2>&1 \
   | grep -E "^(NOTICE|ERROR|psql:)|ALL RLS" | sed 's/^NOTICE:  //'
 
 # Jobblogiken: stängning av förfallna konton och utkorgen. Körs även
 # självhostat, av samma skäl som RLS-sviten - en skillnad mellan miljöerna
 # ska synas här och inte i produktion.
-$PSQL -d "$DB" -f supabase/tests/billingJob.sql 2>&1 \
+$PSQL -d "$DB" -f db/rls-tests/billingJob.sql 2>&1 \
   | grep -E "^(NOTICE|ERROR|psql:)|ALL BILLING" | sed 's/^NOTICE:  //'
 
-$PSQL -d "$DB" -f supabase/tests/referralInvoicing.sql 2>&1 \
+$PSQL -d "$DB" -f db/rls-tests/referralInvoicing.sql 2>&1 \
   | grep -E "^(NOTICE|ERROR|psql:)|ALL REFERRAL" | sed 's/^NOTICE:  //'
 
-$PSQL -d "$DB" -f supabase/tests/usageInvoicing.sql 2>&1 \
+$PSQL -d "$DB" -f db/rls-tests/usageInvoicing.sql 2>&1 \
   | grep -E "^(NOTICE|ERROR|psql:)|ALL USAGE" | sed 's/^NOTICE:  //'
 
-$PSQL -d "$DB" -f supabase/tests/invoiceNumbering.sql 2>&1 \
+$PSQL -d "$DB" -f db/rls-tests/invoiceNumbering.sql 2>&1 \
   | grep -E "^(NOTICE|ERROR|psql:)|ALL INVOICE NUMBERING" | sed 's/^NOTICE:  //'
 
-$PSQL -d "$DB" -f supabase/tests/notifications.sql 2>&1 \
+$PSQL -d "$DB" -f db/rls-tests/notifications.sql 2>&1 \
   | grep -E "^(NOTICE|ERROR|psql:)|ALL NOTIFICATION" | sed 's/^NOTICE:  //'
 
-$PSQL -d "$DB" -f supabase/tests/radering.sql 2>&1 \
+$PSQL -d "$DB" -f db/rls-tests/radering.sql 2>&1 \
   | grep -E "^(NOTICE|ERROR|psql:)|ALL ERASURE" | sed 's/^NOTICE:  //'
 
 # Gallringen körs självhostat av samma skäl som allt annat här: en gren som
 # beter sig olika i de två miljöerna ska falla här, inte i produktion.
-$PSQL -d "$DB" -f supabase/tests/gallring.sql 2>&1 \
+$PSQL -d "$DB" -f db/rls-tests/gallring.sql 2>&1 \
   | grep -E "^(NOTICE|ERROR|psql:)|ALL RETENTION" | sed 's/^NOTICE:  //'
 
 # Den självhostade rollmodellen: app_worker (betrodd batch-roll) och att

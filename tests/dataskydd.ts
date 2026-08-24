@@ -210,18 +210,18 @@ check(
 );
 
 // Och den skarpa gallringen prövas gren för gren mot en riktig databas.
-const gallringsprov = read("supabase/tests/gallring.sql");
+const gallringsprov = read("db/rls-tests/gallring.sql");
 for (const kategori of DEFAULT_RETENTION.filter((c) => c.action !== "behall").map((c) => c.id)) {
   // Skarpt = tredje argumentet false, med ett brytdatum (inte null): det är
   // den körning som faktiskt rör rader. now() innehåller parenteser, så
   // mönstret får inte stanna vid första ")".
   const skarpt = new RegExp(`app\\.gallra\\('${kategori}',(?![^,]*null)[\\s\\S]{0,80}?false\\s*\\)`);
-  const provad = skarpt.test(gallringsprov) || skarpt.test(read("supabase/tests/radering.sql"));
+  const provad = skarpt.test(gallringsprov) || skarpt.test(read("db/rls-tests/radering.sql"));
   check(`gallringsgrenen körs skarpt i ett prov: ${kategori}`, provad);
 }
 check(
   "gallringsprovet körs i båda databasmiljöerna",
-  /gallring\.sql/.test(read("supabase/tests/run.sh")) && /gallring\.sql/.test(read("db/tests/run.sh")),
+  /gallring\.sql/.test(read("db/rls-tests/run.sh")) && /gallring\.sql/.test(read("db/tests/run.sh")),
 );
 
 // Och driftpanelen visar policyn ärligt.
@@ -277,7 +277,7 @@ check("radering och rättelse har en egen sektion", /ErasureSection/.test(settin
  * funktionen är den som gäller.
  */
 const gallandeMigration = (funktion: string): string => {
-  const katalog = join(process.cwd(), "supabase/migrations");
+  const katalog = join(process.cwd(), "db/migrations");
   const monster = new RegExp(
     `create or replace function ${funktion.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`,
   );

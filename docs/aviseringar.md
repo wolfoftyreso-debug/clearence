@@ -140,7 +140,7 @@ src/lib/notifications/phone.ts       numret, koden, maskeringen
 src/components/settings/AlertChannels.tsx   inställningsytan
 db/worker/notification-worker.ts     arbetaren
 db/worker/sms/                       leverantören - och ingenting annat
-supabase/migrations/20260818100000_notification_service.sql
+db/migrations/20260818100000_notification_service.sql
 ```
 
 **`decideDelivery()` är den enda platsen där beslutet fattas.** Både

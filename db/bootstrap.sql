@@ -154,7 +154,7 @@ grant usage on schema app, auth, public to app_anon, app_user, anon, authenticat
  *
  * Att bristen inte syntes i testerna är själva lärdomen: RLS-sviten
  * delar med flit ut en blank grant för att pröva att append-only-löftena
- * inte vilar på en revoke (supabase/tests/rls.sql). Den grantsen lagade
+ * inte vilar på en revoke (db/rls-tests/rls.sql). Den grantsen lagade
  * i praktiken produktionskonfigurationen åt oss, varje körning. Det som
  * upptäckte det var det egna API:t - första riktiga klienten som gick
  * mot databasen utan att en testfil hade städat före den.

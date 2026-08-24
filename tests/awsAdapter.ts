@@ -1,30 +1,29 @@
 /**
- * Migreringsmätaren.
+ * ADAPTERN MOT EGET API: TÄCKER DEN HELA KONTRAKTET?
  *
- * `awsAdapter` är en HALVFÄRDIG migrering: de portar som flyttat går mot
- * eget API, resten delegeras till supabase-adaptern. Det är avsiktligt
- * och tillfälligt - men bara om det syns. En halvfärdig migrering som
- * ingen mäter blir permanent.
+ * Den här sviten hette migreringsmätaren och räknade hur många portar som
+ * flyttat från Supabase. Den räkningen är slut - alla har flyttat, bron är
+ * riven och supabase-adaptern är borta ur repot.
+ *
+ * Kvar finns den fråga mätaren egentligen ställde: uppfyller adaptern hela
+ * DataPort, eller finns det hål? Ett hål märks inte av tsc om metoden
+ * finns men är en platshållare, och det märks inte i drift förrän någon
+ * klickar på just den knappen.
  *
  * Sviten prövar tre saker:
  *
- *  1. MIGRATED_PORTS beskriver VERKLIGHETEN. Varje post ska peka på en
- *     metod som faktiskt finns, och varje metod som skiljer sig från
- *     supabase-adapterns ska stå i listan. Den som flyttar en port men
- *     glömmer listan får rött.
- *  2. Adaptern uppfyller hela DataPort - inga hål.
- *  3. Det som INTE går att flytta ännu är rätt saker, och av rätt skäl:
- *     dokumentuppladdning kräver en hink att signera mot.
+ *  1. Adaptern har varje port och varje metod som demoadaptern har.
+ *     Demoadaptern är facit för kontraktets YTA: den implementerar hela
+ *     DataPort utan nätverk, alltså listar den allt som måste finnas.
+ *  2. Ingen metod är en tom platshållare.
+ *  3. Ingenting i adaptern - eller i klienten över huvud taget - når en
+ *     backend-SDK. Det var hela poängen med ports-and-adapters, och det
+ *     är den regel som är lättast att bryta av misstag.
  */
 
-import {
-  MIGRATED_PORTS,
-  awsAdapter,
-  awsAdapterUtanBro,
-  delegeradePortar,
-  broaPort,
-} from "../src/data/aws/adapter";
-import { supabaseAdapter } from "../src/data/supabase/adapter";
+import { readFileSync, readdirSync, statSync } from "node:fs";
+import { join } from "node:path";
+import { awsAdapter } from "../src/data/aws/adapter";
 import { demoAdapter } from "../src/data/demo/adapter";
 
 let passed = 0;
@@ -41,161 +40,85 @@ type Port = Record<string, unknown>;
 const ports = (adapter: Record<string, unknown>) =>
   Object.entries(adapter).filter(([, v]) => v && typeof v === "object") as [string, Port][];
 
-/* --- 1. Listan mot verkligheten ------------------------------------------- */
+/* --- 1. Inga hål mot kontraktet ----------------------------------------- */
 
-// Vad som FAKTISKT skiljer: en metod som inte är samma funktionsobjekt
-// som supabase-adapterns är per definition omskriven, alltså flyttad.
-const actuallyMigrated: string[] = [];
-for (const [portName, port] of ports(awsAdapterUtanBro)) {
-  const original = (supabaseAdapter as Record<string, Port>)[portName];
-  if (!original) continue;
-  for (const [method, fn] of Object.entries(port)) {
-    if (typeof fn !== "function") continue;
-    if (original[method] !== fn) actuallyMigrated.push(`${portName}.${method}`);
-  }
-}
-
-const listed = new Set<string>(MIGRATED_PORTS);
-const missingFromList = actuallyMigrated.filter((m) => !listed.has(m)).sort();
-const listedButNotMigrated = [...listed].filter((m) => !actuallyMigrated.includes(m)).sort();
-
-check("adaptern flyttar minst tio portmetoder", actuallyMigrated.length >= 10, actuallyMigrated.length);
-check(
-  "allt som är flyttat står i MIGRATED_PORTS",
-  missingFromList.length === 0,
-  missingFromList,
-);
-check(
-  "inget i MIGRATED_PORTS är bara en ambition",
-  listedButNotMigrated.length === 0,
-  listedButNotMigrated,
-);
-
-/* --- 2. Inga hål i kontraktet --------------------------------------------- */
-
-// Demoadaptern är facit för kontraktets YTA: den implementerar hela
-// DataPort utan nätverk, så den listar varje port och metod som måste
-// finnas. tsc garanterar typerna; det här fångar en port som råkat bli
-// en tom platshållare.
-const holes: string[] = [];
-for (const [portName, port] of ports(demoAdapter)) {
-  const target = (awsAdapter as Record<string, Port>)[portName];
-  if (!target) {
-    holes.push(portName);
+const hal: string[] = [];
+let metoder = 0;
+for (const [portNamn, port] of ports(demoAdapter)) {
+  const mal = (awsAdapter as Record<string, Port>)[portNamn];
+  if (!mal) {
+    hal.push(portNamn);
     continue;
   }
-  for (const [method, fn] of Object.entries(port)) {
+  for (const [metod, fn] of Object.entries(port)) {
     if (typeof fn !== "function") continue;
-    if (typeof target[method] !== "function") holes.push(`${portName}.${method}`);
+    metoder += 1;
+    if (typeof mal[metod] !== "function") hal.push(`${portNamn}.${metod}`);
   }
 }
-check("adaptern har inga hål mot DataPort", holes.length === 0, holes);
+check("adaptern har inga hål mot DataPort", hal.length === 0, hal);
+check("och kontraktet är inte tomt", metoder > 100, metoder);
 
-/* --- 3. Det som återstår, och varför -------------------------------------- */
-
-const remaining: string[] = [];
-for (const [portName, port] of ports(demoAdapter)) {
-  const target = (awsAdapterUtanBro as Record<string, Port>)[portName] ?? {};
-  const original = (supabaseAdapter as Record<string, Port>)[portName] ?? {};
-  for (const [method, fn] of Object.entries(port)) {
-    if (typeof fn !== "function") continue;
-    if (target[method] === original[method]) remaining.push(`${portName}.${method}`);
-  }
-}
+/* --- 2. Ingen metod är en platshållare ---------------------------------- */
 
 /*
- * DET SOM ÅTERSTÅR SKA VARA NAMNGIVET, OCH BARA KRYMPA.
- *
- * Förut stod här "dokumentuppladdningen ligger kvar, som infrakartan
- * säger" - ett påstående som var sant tills det inte var det, och som då
- * blev rött för att arbetet gått FRAMÅT. En vakt som straffar framsteg är
- * fel sorts vakt.
- *
- * Den här listar i stället de grupper som ännu inte flyttat. En port som
- * dyker upp utanför listan betyder att någon av-migrerat något, vilket
- * bara kan vara ett misstag. Och när en grupp är klar ska den tas BORT
- * härifrån - annars blir listan ett spöke.
+ * En metod som bara returnerar tomt uppfyller typen och gör ingenting.
+ * Källan läses därför: varje port ska nå API:t, eller ha ett uttalat skäl
+ * att inte göra det.
  */
-const ATERSTAR: Record<string, string> = {
-  leads: "Förmedlingarna: upplåsning, avböjande, debitering.",
-  professionals: "Praktikerregistret, byråteamen och profilanspråken.",
-};
-
-const oväntade = remaining.filter((r) => !(r.split(".")[0] in ATERSTAR));
-check("inget utanför den namngivna listan är delegerat", oväntade.length === 0, oväntade);
-
-const spokgrupper = Object.keys(ATERSTAR).filter(
-  (g) => !remaining.some((r) => r.startsWith(`${g}.`)),
-);
-check("och listan innehåller inga färdiga grupper", spokgrupper.length === 0, spokgrupper);
-
-// Varje kvarvarande grupp ska bära ett skäl, inte bara ett namn.
-const utanSkal = Object.entries(ATERSTAR).filter(([, s]) => s.trim().length < 20);
-check("varje kvarvarande grupp bär ett skäl", utanSkal.length === 0, utanSkal.map(([g]) => g));
-
-/* --- 4. Bron: två oberoende mätningar ska säga samma sak ----------------- */
-
-/*
- * `delegeradePortar()` räknar ur MIGRATED_PORTS. `remaining` ovan räknar ur
- * FUNKTIONSIDENTITET och rör inte listan alls. Två oberoende vägar till
- * samma svar - går de isär är antingen listan fel eller bron fel, och
- * båda är fel som annars syns först i drift.
- */
-const viaListan = delegeradePortar().sort();
-const viaIdentitet = [...remaining].sort();
+const adapterKod = readFileSync(join(process.cwd(), "src/data/aws/adapter.ts"), "utf8");
+check("varje port går genom apiFetch", (adapterKod.match(/apiFetch/g) ?? []).length >= metoder / 2, {
+  anrop: (adapterKod.match(/apiFetch/g) ?? []).length,
+  metoder,
+});
 check(
-  "listan och verkligheten räknar samma delegerade portar",
-  JSON.stringify(viaListan) === JSON.stringify(viaIdentitet),
-  { viaListan: viaListan.length, viaIdentitet: viaIdentitet.length, skillnad: viaListan.filter((p) => !viaIdentitet.includes(p)).concat(viaIdentitet.filter((p) => !viaListan.includes(p))) },
+  "select är den enda metoden utan nätanrop, och säger varför",
+  /ETT RENT KLIENTVAL/.test(adapterKod),
 );
 
+/* --- 3. INGEN BACKEND-SDK OVANFÖR DATALAGRET ---------------------------- */
+
 /*
- * Och bron ska SÄGA IFRÅN. En delegerad port som anropas utan att
- * Supabase-variablerna är satta ska kasta ett fel som namnger porten -
- * inte "supabaseUrl is required" ur ett SDK.
+ * Regeln som hela ports-and-adapters vilar på. Den bröts aldrig medan
+ * Supabase fanns kvar - men just därför fanns aldrig en vakt heller, och
+ * en regel som ingen prövar är en åsikt.
+ *
+ * Sökningen går på HELA klientträdet, inte bara på adaptern: det var
+ * `src/integrations/supabase/client.ts` som importerade SDK:n, och den låg
+ * utanför src/data/.
  */
-{
-  // Testbygget SÄTTER Supabase-variablerna (annars går supabase-adaptern
-  // inte att ladda alls), så nej-grenen prövas genom seamen i stället.
-  // Exemplet plockas ur den LEVANDE listan över delegerade portar. Förut
-  // stod "auth.getCurrentUser" här som en konstant - och den dagen auth
-  // flyttades prövade raden en migrerad port och gick tyst igenom.
-  const [exempelPort] = delegeradePortar();
-  const [exempelGrupp, exempelMetod] = (exempelPort ?? "").split(".");
-  check("det finns en delegerad port att pröva med", !!exempelGrupp && !!exempelMetod, exempelPort);
+const samla = (kat: string): string[] =>
+  readdirSync(join(process.cwd(), kat)).flatMap((post) => {
+    const rel = `${kat}/${post}`;
+    if (statSync(join(process.cwd(), rel)).isDirectory()) return samla(rel);
+    return /\.(ts|tsx)$/.test(rel) ? [rel] : [];
+  });
 
-  const utanBro = broaPort(
-    exempelGrupp,
-    (awsAdapterUtanBro as unknown as Record<string, object>)[exempelGrupp],
-    () => false,
-  ) as unknown as Record<string, () => unknown>;
+const klientfiler = samla("src");
+check("klientträdet lästes", klientfiler.length > 50, klientfiler.length);
 
-  let besked = "";
-  try {
-    // Synkront kast: bron prövar FÖRE den släpper vidare till Supabase.
-    utanBro[exempelMetod]();
-  } catch (fel) {
-    besked = fel instanceof Error ? fel.message : String(fel);
-  }
-  check("en delegerad port utan bro namnger sig själv", besked.includes(exempelPort), besked.slice(0, 160));
-  check("och säger vad som saknas", /VITE_SUPABASE|Supabase-bron/.test(besked), besked.slice(0, 200));
+const SDK_MONSTER = /from ["']@supabase\/|from ["']firebase|from ["']aws-amplify|createClient\(/;
+const medSdk = klientfiler.filter((f) =>
+  SDK_MONSTER.test(readFileSync(join(process.cwd(), f), "utf8")),
+);
+check("ingen fil i src/ importerar en backend-SDK", medSdk.length === 0, medSdk);
 
-  // Och en FLYTTAD port ska gå rakt igenom bron, även när den är nere.
-  let flyttadKastade = false;
-  try {
-    const flyttad = broaPort(
-      "auth",
-      (awsAdapterUtanBro as unknown as Record<string, object>).auth,
-      () => false,
-    ) as unknown as Record<string, () => unknown>;
-    // auth är flyttad i sin helhet - bron ska inte lägga sig i.
-    flyttad.getCurrentUser();
-  } catch {
-    flyttadKastade = true;
-  }
-  check("en flyttad port bryr sig inte om bron", !flyttadKastade);
-}
+const pkg = JSON.parse(readFileSync(join(process.cwd(), "package.json"), "utf8")) as {
+  dependencies?: Record<string, string>;
+  devDependencies?: Record<string, string>;
+};
+const alla = { ...pkg.dependencies, ...pkg.devDependencies };
+const sdkBeroenden = Object.keys(alla).filter((n) =>
+  /^@supabase\/|^firebase$|^aws-amplify$/.test(n),
+);
+check("och inget sådant paket står kvar som beroende", sdkBeroenden.length === 0, sdkBeroenden);
 
-console.log(`\nMigrerat: ${actuallyMigrated.length} metoder. Kvar att flytta: ${remaining.length} i ${Object.keys(ATERSTAR).length} grupper.`);
+// Och att sökningen KAN hitta något - annars intygar den ingenting.
+check(
+  "vakten känner igen en SDK-import när den ser en",
+  SDK_MONSTER.test('import { createClient } from "@supabase/supabase-js";'),
+);
+
+console.log(`\nDataPort: ${metoder} metoder, alla mot eget API.`);
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

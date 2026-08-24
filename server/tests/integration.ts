@@ -2783,7 +2783,7 @@ check("Agnes kan logga in igen inför aviseringsproven", typeof agnesSession ===
  * Radering är den enda operationen i produkten som förstör något med
  * avsikt. Den ska därför prövas som den faktiskt nås: som `authenticated`
  * över HTTP, med en riktig session - inte som tabellägare i ett SQL-prov.
- * Själva raderingens innehåll prövas i supabase/tests/radering.sql; här
+ * Själva raderingens innehåll prövas i db/rls-tests/radering.sql; här
  * prövas vägen dit, karenstiden och att ingen kan röra någon annans konto.
  */
 {
