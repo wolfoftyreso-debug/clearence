@@ -107,22 +107,33 @@ select id from auth.users where email = 'din@adress.se';
 
 ## 3. Dokumentlagringen
 
-Dokumenten ligger i S3. Det är den enda AWS-tjänst som är kvar, och den är
-kvar för att `storage_path` **aldrig lämnar servern**: klienten får en
-signerad URL, och bara efter att `app.may_read_document()` sagt ja.
+Dokumenten ligger i **Vercel Blob**. `storage_path` **lämnar aldrig
+servern**: klienten får en signerad URL som slutar fungera efter 60
+sekunder, och bara efter att `app.may_read_document()` sagt ja.
 
-**DU:** skapa hinken, en IAM-användare med rätt att läsa och skriva i
-just den, och sätt i Vercel:
+**DU:** skapa en Blob-butik i projektet (Storage → Create → Blob) och
+koppla den till projektet. Vercel sätter då `BLOB_READ_WRITE_TOKEN`
+automatiskt, i alla miljöer. Inget mer behövs.
+
+Blobbarna skapas med `access: 'private'`. Det är avgörande: signeringen är
+hela behörighetsmodellen, och en publik butik gör den meningslös.
+
+### Om du hellre kör S3
+
+Den vägen finns kvar. Sätt då:
 
 ```
+STORAGE_BACKEND=s3
 DOCUMENTS_BUCKET=clearance-dokument
 AWS_REGION=eu-north-1
 AWS_ACCESS_KEY_ID=...
 AWS_SECRET_ACCESS_KEY=...
 ```
 
-Hinken ska vara privat. Signeringen är hela behörighetsmodellen; en publik
-hink gör den meningslös.
+Hinken ska vara privat, av samma skäl. Ett **okänt** värde på
+`STORAGE_BACKEND` ger ingen lagring alls — `/health` säger `storage: false`
+och dokumentrutterna svarar 404. Det är avsiktligt: hellre ett tydligt nej
+än att filer tyst hamnar i fel ände av världen.
 
 ---
 

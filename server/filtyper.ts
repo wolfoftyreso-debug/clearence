@@ -223,6 +223,13 @@ export const provaFil = (input: {
  * Ärendets id leder, sedan ett slumpat id, sedan ett sanerat namn. Inget
  * segment kommer från användaren i obehandlat skick, så `../` har ingenstans
  * att ta vägen: snedstreck och punkter faller bort i saneringen.
+ *
+ * NAMNET LIGGER SIST, i ett eget led. Det är inte kosmetika: Vercel Blob
+ * sätter content-disposition ur sökvägens sista led och tar inte emot ett
+ * eget filnamn vid signeringen (som S3:s response-content-disposition).
+ * Ligger namnet efter ett bindestreck får den som laddar ned en fil som
+ * heter "1a2b3c-arsredovisning.pdf". Med ett snedstreck heter den
+ * "arsredovisning.pdf" - och slumpid:t gör sökvägen unik precis lika bra.
  */
 export const sakerLagringsvag = (caseId: string, filnamn: string, slumpId: string): string => {
   const rent = filnamn
@@ -232,5 +239,5 @@ export const sakerLagringsvag = (caseId: string, filnamn: string, slumpId: strin
     .replace(/-+/g, "-")
     .replace(/^[-.]+/, "")
     .slice(-120);
-  return `${caseId}/${slumpId}-${rent || "fil"}`;
+  return `${caseId}/${slumpId}/${rent || "fil"}`;
 };

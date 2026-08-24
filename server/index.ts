@@ -41,6 +41,7 @@ import {
   presignUpload,
   storageConfigured,
   taBortObjekt,
+  valdRyggstod,
 } from "./storage";
 import { MAX_FILSTORLEK, provaFil, provaMetadata, sakerLagringsvag } from "./filtyper";
 import { anthropicConfigured, clearanceReply, type AdvisorMessage } from "./anthropic";
@@ -657,6 +658,9 @@ router.get("/v1/health", async () => ({
     version: "1.0",
     sources: { google: googleConfigured(), website: websiteConfigured(), news: newsConfigured() },
     storage: storageConfigured(),
+    // Vilken butik den här driften faktiskt skriver till. En felstavad
+    // STORAGE_BACKEND syns här som "ingen" i stället för att gissa.
+    storageBackend: valdRyggstod(),
     advisor: anthropicConfigured(),
   },
 }));

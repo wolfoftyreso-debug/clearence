@@ -456,6 +456,75 @@ check("aviseringsarbetaren har ingen hårdkodad SES-klient", !/new SESClient/.te
   check("SES-paketet är verkligen inget beroende", !("@aws-sdk/client-ses" in (pkgJson.dependencies ?? {})));
 }
 
+/* --- 11b. Dokumentlagringen: Vercel Blob, privat, kortlivad ------------- */
+
+/*
+ * DEN FARLIGASTE RADEN I HELA LAGRINGEN ÄR `access`.
+ *
+ * `presignUrl(..., { access: "public" })` ger en URL mot butikens PUBLIKA
+ * värd. Den fungerar. Den ser likadan ut i loggen. Och den kringgår hela
+ * behörighetsmodellen, eftersom en publik blob är läsbar av var och en som
+ * gissar sökvägen - signaturen blir dekoration.
+ *
+ * tests/blob.ts prövar beteendet mot en dubbel. Den här vakten prövar
+ * KÄLLAN: att ordet "public" inte finns någonstans i lagringen alls.
+ */
+{
+  const lagring = utanKommentarer(read("server/storage.ts"));
+  check('lagringen signerar aldrig något som "public"', !/"public"/.test(lagring), lagring.match(/.{0,40}"public".{0,40}/)?.[0]);
+  check("blobbarna är privata", (lagring.match(/access: "private"/g) ?? []).length >= 2);
+
+  // Delegationerna ska vara smalast möjliga: en sökväg, en operation.
+  check("läsdelegationen ger bara get", /operations: \["get"\]/.test(lagring));
+  check("skrivdelegationen ger bara put", /operations: \["put"\]/.test(lagring));
+  check("ingen delegation ger delete", !/"delete"/.test(lagring));
+
+  /*
+   * TAKEN SKA SITTA PÅ BÅDA STÄLLENA.
+   *
+   * Delegationen (issueSignedToken) och den presignerade URL:en
+   * (presignUrl) bär var sin uppsättning. Räknas bara EN träff räcker det
+   * att taket står kvar i delegationen för att vakten ska se grön ut medan
+   * URL:en signeras utan tak - vilket var precis vad ett muterat utkast av
+   * den här kontrollen släppte igenom.
+   */
+  check("innehållstypen låses i BÅDE delegation och URL", (lagring.match(/allowedContentTypes: \[contentType\]/g) ?? []).length === 2);
+  check("storleken låses i BÅDE delegation och URL", (lagring.match(/maximumSizeInBytes: MAX_FILSTORLEK/g) ?? []).length === 2);
+  check("överskrivning är förbjuden", /allowOverwrite: false/.test(lagring));
+
+  // Valet av ryggstöd prövas som BETEENDE i tests/blob.ts (okänt värde ger
+  // "ingen"). En källsökning på `return "ingen"` hade sett grön ut även när
+  // grenen bytts ut, eftersom funktionen slutar med samma rad.
+
+  // Blob-paketet ÄR ett beroende - till skillnad från SES, som är valfritt.
+  const pkgJson2 = JSON.parse(read("package.json")) as { dependencies?: Record<string, string> };
+  check("@vercel/blob är ett riktigt beroende", "@vercel/blob" in (pkgJson2.dependencies ?? {}));
+
+  /*
+   * FILNAMNET LIGGER SIST I SÖKVÄGEN.
+   *
+   * Blob sätter content-disposition ur sökvägens sista led och tar inte
+   * emot ett eget filnamn vid signeringen. Bygger sakerLagringsvag ihop
+   * slumpid och namn med bindestreck heter den nedladdade filen
+   * "1a2b3c-arsredovisning.pdf" - fungerande, men fel.
+   */
+  const filtyper = utanKommentarer(read("server/filtyper.ts"));
+  check(
+    "sakerLagringsvag lägger namnet i ett eget, sista led",
+    /\$\{caseId\}\/\$\{slumpId\}\/\$\{rent/.test(filtyper),
+    filtyper.match(/return `\$\{caseId\}[^`]*`/)?.[0],
+  );
+
+  // /health ska säga VILKEN butik driften skriver till, inte bara ja/nej.
+  const apiKalla = utanKommentarer(read("server/index.ts"));
+  check("/health rapporterar valt ryggstöd", /storageBackend: valdRyggstod\(\)/.test(apiKalla));
+
+  // Och driftsdokumentet ska säga samma sak som koden gör.
+  const vercelDoc = read("docs/vercel.md");
+  check("driftsdokumentet namnger BLOB_READ_WRITE_TOKEN", /BLOB_READ_WRITE_TOKEN/.test(vercelDoc));
+  check("och säger vad som INTE är kört mot riktiga Blob", /objektvärd/.test(vercelDoc));
+}
+
 /* --- 12. Varje svit ska vara KÖRD eller MEDVETET undantagen ------------- */
 
 /*

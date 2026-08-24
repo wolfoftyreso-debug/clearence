@@ -152,7 +152,7 @@ check(
 }
 check(
   "ett tomt namn ger ändå en giltig sökväg",
-  sakerLagringsvag(CASE, "", ID) === `${CASE}/${ID}-fil`,
+  sakerLagringsvag(CASE, "", ID) === `${CASE}/${ID}/fil`,
   sakerLagringsvag(CASE, "", ID),
 );
 {
@@ -162,6 +162,18 @@ check(
 check(
   "två uppladdningar av samma namn krockar inte",
   sakerLagringsvag(CASE, "rapport.pdf", "aaa") !== sakerLagringsvag(CASE, "rapport.pdf", "bbb"),
+);
+// Blob läser filnamnet ur sista ledet. Ligger det inte där heter den
+// nedladdade filen "<slumpid>-namn.pdf" i stället för "namn.pdf".
+check(
+  "filnamnet ligger SIST i sökvägen, i ett eget led",
+  sakerLagringsvag(CASE, "årsredovisning 2026.pdf", ID).split("/").pop() === "arsredovisning-2026.pdf",
+  sakerLagringsvag(CASE, "årsredovisning 2026.pdf", ID),
+);
+check(
+  "sökvägen har exakt tre led: ärende, slumpid, namn",
+  sakerLagringsvag(CASE, "rapport.pdf", ID).split("/").length === 3,
+  sakerLagringsvag(CASE, "rapport.pdf", ID),
 );
 
 /* --- 4. Listan är en tillåtelselista ------------------------------------ */

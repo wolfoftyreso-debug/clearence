@@ -47,7 +47,10 @@ Sätts i Vercel-projektets inställningar, per miljö.
 | `MAIL_FROM` | ja | Avsändaradress |
 | `MAIL_TRANSPORT` | nej | `smtp` (standard) eller `ses` |
 | `SMTP_HOST`/`PORT`/`USER`/`PASS` | vid smtp | `SMTP_HOST` krävs; port 587 = STARTTLS, 465 = implicit TLS |
-| `DOCUMENTS_BUCKET` | ja | S3-hinken för dokument. `storage_path` lämnar aldrig servern |
+| `BLOB_READ_WRITE_TOKEN` | ja | Vercel Blob-butiken för dokument. Sätts automatiskt när butiken kopplas till projektet |
+| `STORAGE_BACKEND` | nej | `blob` eller `s3`. Osatt = `blob` när ett Blob-kreditiv finns, annars `s3` |
+| `BLOB_PREFIX` | nej | Valfritt prefix i butiken. Tomt = butikens rot |
+| `DOCUMENTS_BUCKET` | vid s3 | Hinken när `STORAGE_BACKEND=s3` (AWS eller MinIO) |
 | `SIM_MAX_MS` | nej | Tak per simulering. Kapas alltid av funktionens gräns |
 | `SIM_BATCH` | nej | Simuleringar per varv. Standard `2` |
 | `APP_BASE_URL` | nej | Bas för länkar i mejl. Standard `https://clearance.se` |
@@ -56,6 +59,54 @@ Sätts i Vercel-projektets inställningar, per miljö.
 ursprung; en relativ `fetch` mot `/v1/...` går rätt via rewriten i
 `vercel.json`. Variabeln finns kvar för utvecklingsläget, där Vite och den
 egna servern kör på olika portar.
+
+## Dokumenten ligger i Vercel Blob
+
+`storage_path` lämnar aldrig servern. Det API:t skickar ut är en signerad
+URL som slutar fungera efter 60 sekunder, och den signeras först efter att
+`app.may_read_document()` svarat ja. Den regeln är oförändrad sedan
+S3-tiden — bara leverantören under den är utbytt.
+
+Blob-vägen ser ut så här:
+
+| Steg | Vad som händer |
+| --- | --- |
+| Nedladdning | `issueSignedToken` med `operations: ["get"]` och **bara den ena sökvägen**, sedan `presignUrl` mot butikens `private`-värd |
+| Uppladdning | `issueSignedToken` med `operations: ["put"]`, låst till en innehållstyp och en maxstorlek, giltig i två minuter |
+| Bekräftelse | `head()` ger den **lagrade** storleken, `get()` ger strömmen — vi läser dess första 1 024 bytes och avbryter resten |
+| Avvisning | `del()` — en fil som inte klarar signaturprövningen ligger inte kvar |
+
+Delegationen är alltid smalast möjliga: en sökväg, en operation. En
+läs-URL kan inte spelas om till en skrivning, och en skriv-URL kan inte
+läsa.
+
+**Filnamnet ligger sist i sökvägen.** Blob sätter `content-disposition` ur
+sökvägens sista led och tar inte emot ett eget filnamn vid signeringen (som
+S3:s `response-content-disposition`). Därför bygger `sakerLagringsvag()`
+sökvägen som `<ärende>/<slumpid>/<sanerat namn>` — annars hade den
+nedladdade filen hetat `1a2b3c-arsredovisning.pdf`.
+
+### S3 finns kvar som alternativ
+
+`STORAGE_BACKEND=s3` väljer den gamla vägen (AWS S3 eller MinIO). Kontraktet
+i `server/storage.ts` är ett och samma; det är bara de fem seamen under det
+som byts. Ett **okänt** värde ger ingen lagring alls — `/health` säger
+`storage: false` och dokumentrutterna svarar 404 med en läsbar text. Hellre
+det än att filer tyst hamnar i fel ände av världen.
+
+### Vad som är prövat, och vad som inte är det
+
+`tests/blob.ts` reser en dubbel av Blobs **kontroll-API** (den som
+`VERCEL_BLOB_API_URL` pekar ut) och kör signeringen, den presignerade PUT:en,
+HEAD och DELETE genom den riktiga SDK:n över riktig HTTP.
+
+Blobs **objektvärd** (`<butik>.private.blob.vercel-storage.com`) är hårdkodad
+i SDK:n och går inte att peka om. Nedladdnings-URL:en granskas därför till
+sin form — värd, sökväg, signatur, utgångstid — men hämtas inte i sviten.
+Detsamma gäller läsningen av de första bytesen; det som är kört där är
+strömklippningen, som är den delen vi själva skrivit. Det återstår alltså
+en körning mot en riktig Blob-butik innan uppladdningskedjan är sedd hela
+vägen.
 
 ## Databasrollen — den enda felkonfiguration som failar öppet
 
