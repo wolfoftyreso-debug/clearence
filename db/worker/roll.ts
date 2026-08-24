@@ -99,5 +99,26 @@ export const kravArbetarroll = async (klient: Client): Promise<void> => {
  * för utveckling och för sviterna, som kör allt mot en databas som ägaren -
  * och den är ofarlig just för att grinden ovan ändå prövar rollen.
  */
-export const arbetarUrl = (): string | undefined =>
-  process.env.WORKER_DATABASE_URL ?? process.env.DATABASE_URL;
+/**
+ * Arbetarens anslutning. WORKER_DATABASE_URL först, DATABASE_URL som
+ * reserv - och ett LÄSBART fel när ingendera finns.
+ *
+ * Utan url bygger `pg` en anslutning ur sina standardvärden och försöker
+ * nå localhost. I ett cron-jobb blev det `ECONNREFUSED 127.0.0.1:5432` i
+ * en logg ingen läser, och jobbet rapporterade fel utan att säga vilken
+ * inställning som fattades.
+ */
+export const arbetarUrl = (): string => {
+  const url = (process.env.WORKER_DATABASE_URL ?? process.env.DATABASE_URL ?? "").trim();
+  if (url) return url;
+  throw new Error(
+    [
+      "WORKER_DATABASE_URL är inte satt (och DATABASE_URL saknas också).",
+      "",
+      "  De schemalagda jobben arbetar över ALLA bolag och behöver därför en",
+      "  roll som inte är begränsad av radskyddet - motsatt krav mot API:ts",
+      "  DATABASE_URL. Sätt WORKER_DATABASE_URL i Vercel-projektets",
+      "  inställningar; se docs/vercel.md.",
+    ].join("\n"),
+  );
+};

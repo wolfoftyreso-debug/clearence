@@ -33,6 +33,21 @@ gång per instans i stället för en gång per resurs. `handle()` i
 `server/index.ts` är transportlös med flit — det var förberedelsen för exakt
 det här.
 
+## Vad som återstår
+
+Läget, mätt och inte påstått. Siffrorna kommer ur `tests/awsAdapter.ts`,
+som räknar migreringen på två oberoende sätt.
+
+| Hinder | Läge |
+| --- | --- |
+| **Auth går fortfarande via Supabase** | Alla sju auth-portar ligger på bron. API:t har `login`, `logout` och `me`; registrering, lösenordsåterställning och lösenordsbyte saknas. Tills det är flyttat krävs `VITE_SUPABASE_URL` och `VITE_SUPABASE_PUBLISHABLE_KEY` för att appen ska gå att **använda** — men inte längre för att den ska gå att **ladda** |
+| **48 av 155 portmetoder på bron** | Resten går mot eget API. `delegeradePortar()` listar dem; en delegerad port utan bro kastar ett fel som namnger sig själv |
+| **Dokumentuppladdning saknas i klienten** | API:t har hela tvåstegsvägen. Klienten har bara nedladdning. Den dagen uppladdningen kopplas in måste `connect-src` i CSP:n vidgas — `tests/vercelredo.ts` blir röd om det glöms |
+| **Blob inte körd mot riktig butik** | Kontroll-API:t är prövat mot en dubbel över riktig HTTP. Objektvärden är hårdkodad i SDK:n och går inte att peka om härifrån |
+
+Det som **inte** står här är prövat och grönt: bygget, funktionerna, cron,
+rollgrindarna, rubrikerna, rewrites och miljövariablernas felbesked.
+
 ## Miljövariabler
 
 Sätts i Vercel-projektets inställningar, per miljö.

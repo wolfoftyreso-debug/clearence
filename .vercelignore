@@ -1,0 +1,43 @@
+# VAD SOM INTE FÖLJER MED TILL VERCEL.
+#
+# Allt i repot laddas annars upp vid varje driftsättning. Det som inte
+# behövs för att BYGGA appen eller KÖRA funktionerna ska inte ligga på
+# en produktionsserver - inte för att det är hemligt, utan för att en
+# driftsättning ska innehålla precis det den behöver och inget mer.
+#
+# Kontrolleras av tests/vercelredo.ts: det bygger repot med exakt de här
+# raderna borttagna. Ignoreras något som behövs blir provet rött här,
+# inte vid en misslyckad driftsättning.
+
+# Provsviterna. Körs i CI och lokalt, aldrig i drift.
+tests/
+
+# Databasen. `db/worker/` MÅSTE vara kvar - cron-funktionerna importerar
+# den. Resten är schema, prov och en container som Vercel inte kör.
+db/tests/
+db/dist/
+db/*.sql
+db/Dockerfile
+db/README.md
+
+# Migrationerna och Supabase-skalet. Körs mot databasen, inte av appen.
+supabase/
+
+# Dokumentation, designunderlag, exempel, skript, CI-konfiguration.
+docs/
+design/
+exempel/
+scripts/
+.github/
+
+# Den extraherade motorfilen. Ett verktyg vid sidan av produkten -
+# ingenting i src/, api/ eller server/ importerar den.
+clearance-motor.ts
+clearance-motor.register.json
+
+# Lokala artefakter.
+.env
+.env.*
+!.env.example
+dist/
+coverage/

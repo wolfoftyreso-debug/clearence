@@ -35,10 +35,36 @@ import { Pool, type PoolClient } from "pg";
 
 let pool: Pool | null = null;
 
+/**
+ * MILJÖVARIABELN SOM SAKNAS SKA SÄGA SITT NAMN.
+ *
+ * Utan DATABASE_URL bygger `pg` en anslutning ur sina egna standardvärden
+ * och försöker nå Postgres på localhost. På Vercel finns ingen sådan, så
+ * felet blev `ECONNREFUSED 127.0.0.1:5432` - ett besked som pekar på en
+ * server som aldrig var meningen, och inte med ett ord på den variabel
+ * som faktiskt fattas. Den som läser loggen börjar leta efter en databas
+ * i stället för efter en inställning.
+ */
+export const kravDatabasUrl = (): string => {
+  const url = (process.env.DATABASE_URL ?? "").trim();
+  if (url) return url;
+  throw new Error(
+    [
+      "DATABASE_URL är inte satt.",
+      "",
+      "  API:t har ingen databas att fråga. Sätt variabeln i Vercel-projektets",
+      "  inställningar, per miljö. Den ska peka på en egen login-roll som är",
+      "  medlem i authenticated och varken äger tabeller eller har BYPASSRLS -",
+      "  se docs/vercel.md. De schemalagda jobben använder WORKER_DATABASE_URL",
+      "  och har motsatt krav.",
+    ].join("\n"),
+  );
+};
+
 export const getPool = (): Pool => {
   if (!pool) {
     pool = new Pool({
-      connectionString: process.env.DATABASE_URL,
+      connectionString: kravDatabasUrl(),
       max: Number(process.env.PGPOOL_MAX ?? 2),
       // En request som väntar på en anslutning i en minut är redan
       // förlorad för användaren; bättre ett ärligt fel än en hängning.
