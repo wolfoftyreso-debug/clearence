@@ -20,6 +20,7 @@ import { WizardCard, WizardCardHeader } from "@/components/wizard/WizardCard";
 import { AmountInput } from "@/components/wizard/AmountInput";
 import { ReportButton } from "@/components/reports/ReportButton";
 import { buildKbrReport } from "@/lib/reports/builders";
+import { bedomKbr, beloppUrText } from "@/lib/kbr";
 import {
   MIN_SHARE_CAPITAL,
   MIN_SHARE_CAPITAL_PRE_2020,
@@ -209,43 +210,36 @@ const KBRModule = () => {
     }
   };
 
-  const parseAmount = (value: string): number => {
-    return parseInt(value.replace(/\s/g, ''), 10) || 0;
-  };
 
-  // Calculate KBR status based on Swedish law
-  // KBR required when equity < 50% of share capital
+
+  /*
+   * REGELN BOR I src/lib/kbr.ts, INTE HÄR.
+   *
+   * Den låg i den här komponenten och gick därför bara att pröva i en
+   * webbläsare - ABL 25:13 är produktens tyngsta bedömning och var den
+   * minst provade. Flyttad utan att ändras; formen nedan är densamma som
+   * de trettionio läsställena i den här filen redan använder.
+   */
   const kbrAnalysis = useMemo(() => {
-    const shareCapital = parseAmount(formData.shareCapital);
-    const totalAssets = parseAmount(formData.totalAssets);
-    const totalLiabilities = parseAmount(formData.totalLiabilities);
-    
-    if (!shareCapital || !totalAssets) {
-      return { status: 'not_required' as KBRStatus, equity: 0, threshold: 0, ratio: 0, message: '' };
-    }
-    
-    const equity = totalAssets - totalLiabilities;
-    const threshold = shareCapital / 2; // 50% of share capital
-    const ratio = shareCapital > 0 ? (equity / shareCapital) * 100 : 0;
-    
-    let status: KBRStatus;
-    let message: string;
-    
-    if (equity >= shareCapital) {
-      status = 'not_required';
-      message = 'Eget kapital överstiger aktiekapitalet. Ingen KBR krävs.';
-    } else if (equity >= threshold) {
-      status = 'warning';
-      message = 'Eget kapital närmar sig kritisk nivå. Överväg åtgärder.';
-    } else if (equity > 0) {
-      status = 'required';
-      message = 'Eget kapital understiger hälften av aktiekapitalet. Kontrollbalansräkning krävs enligt aktiebolagslagen 25 kap. 13 §.';
-    } else {
-      status = 'critical';
-      message = 'Eget kapital är negativt. Omedelbar KBR och åtgärder krävs.';
-    }
-    
-    return { status, equity, threshold, ratio, message, shareCapital, totalAssets, totalLiabilities };
+    const shareCapital = beloppUrText(formData.shareCapital);
+    const totalAssets = beloppUrText(formData.totalAssets);
+    const totalLiabilities = beloppUrText(formData.totalLiabilities);
+    const bedomning = bedomKbr({
+      aktiekapital: shareCapital,
+      tillgangar: totalAssets,
+      skulder: totalLiabilities,
+    });
+    return {
+      status: bedomning.status as KBRStatus,
+      equity: bedomning.egetKapital,
+      threshold: bedomning.grans,
+      ratio: bedomning.andel,
+      message: bedomning.meddelande,
+      harUnderlag: bedomning.harUnderlag,
+      shareCapital,
+      totalAssets,
+      totalLiabilities,
+    };
   }, [formData.shareCapital, formData.totalAssets, formData.totalLiabilities]);
 
   const persistAssessment = async () => {
@@ -272,9 +266,9 @@ const KBRModule = () => {
         ambitionLevel: formData.ambitionLevel,
         hasRelatedCompanies: formData.hasRelatedCompanies,
         isPartOfLargerStructure: formData.isPartOfLargerStructure,
-        shareCapital: parseAmount(formData.shareCapital),
-        totalAssets: parseAmount(formData.totalAssets),
-        totalLiabilities: parseAmount(formData.totalLiabilities),
+        shareCapital: beloppUrText(formData.shareCapital),
+        totalAssets: beloppUrText(formData.totalAssets),
+        totalLiabilities: beloppUrText(formData.totalLiabilities),
         status: kbrAnalysis.status,
       });
       setSaving(false);
@@ -600,9 +594,22 @@ const KBRModule = () => {
         </p>
       </WizardCard>
 
-      {/* Live KBR indicator */}
+      {/*
+        * BEDÖMNINGEN VISAS BARA NÄR DET FINNS EN.
+        *
+        * Panelen visade "KBR ej nödvändig" med en grön bock så fort de tre
+        * fälten hade NÅGOT i sig. Ett bolag med noll i tillgångar och
+        * 400 000 i skulder - eget kapital minus 400 000, alltså det mest
+        * kritiska läge som finns - fick alltså ett godkännande, eftersom
+        * regeln returnerar "not_required" när underlaget inte räcker.
+        *
+        * "Vi vet inte" och "allt är bra" är olika besked. Det här är den
+        * enda platsen i produkten där de fick se likadana ut, och det var
+        * på den sida där felet kostar mest.
+        */}
       {formData.shareCapital && formData.totalAssets && formData.totalLiabilities && (
         <WizardCard className={`${
+          !kbrAnalysis.harUnderlag ? 'bg-secondary border-border' :
           kbrAnalysis.status === 'not_required' ? 'bg-success/5 border-success/30' :
           kbrAnalysis.status === 'warning' ? 'bg-warning/5 border-warning/30' :
           kbrAnalysis.status === 'required' ? 'bg-destructive/5 border-destructive/30' :
@@ -610,11 +617,14 @@ const KBRModule = () => {
         }`}>
           <div className="flex items-start gap-3">
             <div className={`w-10 h-10 rounded-md flex items-center justify-center flex-shrink-0 ${
+              !kbrAnalysis.harUnderlag ? 'bg-muted-foreground' :
               kbrAnalysis.status === 'not_required' ? 'bg-success' :
               kbrAnalysis.status === 'warning' ? 'bg-warning' :
               'bg-destructive'
             }`}>
-              {kbrAnalysis.status === 'not_required' ? (
+              {!kbrAnalysis.harUnderlag ? (
+                <Info className="w-5 h-5 text-background" />
+              ) : kbrAnalysis.status === 'not_required' ? (
                 <CheckCircle2 className="w-5 h-5 text-success-foreground" />
               ) : kbrAnalysis.status === 'warning' ? (
                 <Info className="w-5 h-5 text-warning-foreground" />
@@ -624,12 +634,17 @@ const KBRModule = () => {
             </div>
             <div>
               <h4 className="font-semibold text-foreground">
-                {kbrAnalysis.status === 'not_required' ? 'KBR ej nödvändig' :
+                {!kbrAnalysis.harUnderlag ? 'Underlaget räcker inte för en bedömning' :
+                 kbrAnalysis.status === 'not_required' ? 'KBR ej nödvändig' :
                  kbrAnalysis.status === 'warning' ? 'Bevaka situationen' :
                  kbrAnalysis.status === 'required' ? 'KBR krävs' :
                  'Kritiskt läge'}
               </h4>
-              <p className="text-sm text-muted-foreground mt-1">{kbrAnalysis.message}</p>
+              <p className="text-sm text-muted-foreground mt-1">
+                {kbrAnalysis.harUnderlag
+                  ? kbrAnalysis.message
+                  : 'Fyll i både registrerat aktiekapital och summa tillgångar med siffror. Utan dem går det inte att räkna ut om eget kapital understiger hälften av aktiekapitalet - och då säger vi inte att allt är i sin ordning.'}
+              </p>
               
               <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
                 <div className="p-2 rounded-md bg-background/50">
@@ -756,7 +771,7 @@ const KBRModule = () => {
             <div className="p-3 rounded-md bg-background/50 text-center">
               <span className="text-xs text-muted-foreground block">Aktiekapital</span>
               <p className="font-semibold text-foreground">
-                {parseAmount(formData.shareCapital).toLocaleString('sv-SE')} kr
+                {beloppUrText(formData.shareCapital).toLocaleString('sv-SE')} kr
               </p>
             </div>
             <div className="p-3 rounded-md bg-background/50 text-center">
@@ -884,9 +899,9 @@ const KBRModule = () => {
               buildKbrReport({
                 status: kbrAnalysis.status,
                 message: kbrAnalysis.message,
-                shareCapital: parseAmount(formData.shareCapital),
-                totalAssets: parseAmount(formData.totalAssets),
-                totalLiabilities: parseAmount(formData.totalLiabilities),
+                shareCapital: beloppUrText(formData.shareCapital),
+                totalAssets: beloppUrText(formData.totalAssets),
+                totalLiabilities: beloppUrText(formData.totalLiabilities),
                 equity: kbrAnalysis.equity,
                 threshold: kbrAnalysis.threshold,
                 companyName: formData.companyInfo?.name ?? null,

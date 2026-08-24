@@ -11,7 +11,7 @@
  * driftlarm. Varje notis pekar dit saken hanteras.
  */
 
-import { countdownTo } from "@/lib/actionPlan";
+import { countdownTo, VARSELFONSTER_DAGAR } from "@/lib/actionPlan";
 import type { CaseInvitationRecord, CaseRecord, KbrStatus, OpenMention, OutboundEmailRecord } from "@/data/types";
 import type { TimelineEvent, Urgency } from "@/lib/crisisAnalysis";
 
@@ -121,7 +121,7 @@ export const buildNotifications = (input: NotificationInput): NotificationItem[]
         body: "Sista dagen att agera eller dokumentera beslutet.",
         href: "/dashboard#frister",
       });
-    } else if (countdown.daysLeft <= 3) {
+    } else if (countdown.daysLeft <= VARSELFONSTER_DAGAR) {
       nearFrist = true;
       items.push({
         id: `frist-snart-${event.iso}-${event.label}`,
@@ -139,7 +139,7 @@ export const buildNotifications = (input: NotificationInput): NotificationItem[]
   if (!nearFrist) {
     const upcoming = input.timeline
       .map((event) => ({ event, countdown: countdownTo(event.iso, now) }))
-      .filter(({ countdown }) => countdown.tone !== "passed" && countdown.daysLeft > 3)
+      .filter(({ countdown }) => countdown.tone !== "passed" && countdown.daysLeft > VARSELFONSTER_DAGAR)
       .sort((a, b) => a.countdown.daysLeft - b.countdown.daysLeft)[0];
     if (upcoming) {
       items.push({

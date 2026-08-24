@@ -24,6 +24,18 @@ const DAY_MS = 24 * 60 * 60 * 1000;
  * Kalenderdagar, inte 24-timmarsperioder: en frist den 12:e är "imorgon"
  * hela den 11:e, oavsett klockslag. Samma princip som stängningsjobbet.
  */
+/**
+ * VARSELFÖNSTRET: hur många dagar före en frist läget räknas som nära.
+ *
+ * Ett system som varnar på olika dagar på olika ställen lär användaren att
+ * ignorera varningarna. Siffran stod skriven som "3" på tre ställen -
+ * här, i notifications.ts och i presentation.ts - med en kommentar som
+ * sa att de MÅSTE vara lika. Tre kopior av ett måste är inget måste.
+ *
+ * tests/scenarier.ts kräver att alla tre lagren växlar på samma dag.
+ */
+export const VARSELFONSTER_DAGAR = 3;
+
 export const countdownTo = (iso: string, now: Date): Countdown => {
   const target = new Date(`${iso.slice(0, 10)}T00:00:00`);
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -42,10 +54,7 @@ export const countdownTo = (iso: string, now: Date): Countdown => {
   return {
     daysLeft,
     label: `om ${daysLeft} dagar`,
-    // Samma varselfönster som betalningspåminnelserna och kalendern: tre
-    // dagar. Ett system som varnar på olika dagar på olika ställen lär
-    // användaren att ignorera varningarna.
-    tone: daysLeft <= 3 ? "soon" : "later",
+    tone: daysLeft <= VARSELFONSTER_DAGAR ? "soon" : "later",
   };
 };
 

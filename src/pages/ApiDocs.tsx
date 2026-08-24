@@ -26,17 +26,33 @@ const METHOD_TONE: Record<string, string> = {
   delete: "bg-destructive/10 text-foreground border-destructive/40",
 };
 
-const StatusBadge = ({ status }: { status: string }) => (
-  <span
-    className={`rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
-      status === "live"
-        ? "border-success/50 bg-success/10 text-foreground"
-        : "border-border bg-secondary text-muted-foreground"
-    }`}
-  >
-    {status === "live" ? "Live" : "Beta"}
-  </span>
-);
+/**
+ * TRE LÄGEN, INTE TVÅ.
+ *
+ * Märket visade allt som inte var "live" som BETA. Fyra resurser i
+ * kontraktet svarar 405 från egna API:t - POST /cases och
+ * PATCH /cases/{caseId} bland dem - och stod alltså på den publika sidan
+ * som om de gick att anropa. "Beta" betyder "ny", inte "finns inte".
+ *
+ * En utvecklare som bygger mot en dokumenterad resurs och får metodfel
+ * slutar lita på dokumentationen, och då är hela kontraktet värdelöst.
+ */
+const StatusBadge = ({ status }: { status: string }) => {
+  const stil =
+    status === "live"
+      ? "border-success/50 bg-success/10 text-foreground"
+      : status === "planerad"
+        ? "border-warning/50 bg-warning/10 text-foreground"
+        : "border-border bg-secondary text-muted-foreground";
+  const text = status === "live" ? "Live" : status === "planerad" ? "Planerad" : "Beta";
+  return (
+    <span
+      className={`rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${stil}`}
+    >
+      {text}
+    </span>
+  );
+};
 
 const ApiDocs = () => {
   const paths = spec.paths as Record<string, Record<string, Operation>>;

@@ -22,7 +22,7 @@
 
 import type { ActionHorizon, ExecutiveSummary, SummaryAction } from "@/lib/executiveSummary";
 import type { TimelineEvent } from "@/lib/crisisAnalysis";
-import { countdownTo } from "@/lib/actionPlan";
+import { countdownTo, VARSELFONSTER_DAGAR } from "@/lib/actionPlan";
 
 export type PresentationMode = "text" | "bullets" | "timeline";
 
@@ -150,7 +150,7 @@ export const toTimelineRows = (
         when: countdown.tone === "today" ? "idag" : shortDate(event.iso),
         label: event.label,
         detail: countdown.tone === "today" ? "Sista dagen." : `Om ${countdown.daysLeft} dagar.`,
-        tone: countdown.tone === "today" ? "critical" : countdown.daysLeft <= 3 ? "warning" : "info",
+        tone: countdown.tone === "today" ? "critical" : countdown.daysLeft <= VARSELFONSTER_DAGAR ? "warning" : "info",
         // Datumsatta rader sorteras på dagar kvar, förskjutna så att
         // "omedelbart"-åtgärder (0.0) hamnar före dagens frister (0.5).
         order: 0.5 + countdown.daysLeft,

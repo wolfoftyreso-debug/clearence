@@ -661,7 +661,7 @@
       "post": {
         "operationId": "createCase",
         "summary": "Skapa ärende (motsvarar nulägesanalysens registrering)",
-        "x-status": "beta",
+        "x-status": "planerad",
         "responses": {
           "200": {
             "description": "OK"
@@ -676,7 +676,8 @@
               }
             }
           }
-        }
+        },
+        "description": "PLANERAD: egna API:t svarar 405 i dag. Ärenden skapas genom Supabase-bryggan tills skrivvägen har ägarskap, radskydd och en minimal-form som stämmer med wizarden."
       }
     },
     "/cases/{caseId}": {
@@ -714,7 +715,7 @@
       "patch": {
         "operationId": "updateCase",
         "summary": "Uppdatera registrerade uppgifter",
-        "x-status": "beta",
+        "x-status": "planerad",
         "responses": {
           "200": {
             "description": "OK"
@@ -729,7 +730,8 @@
               }
             }
           }
-        }
+        },
+        "description": "PLANERAD: egna API:t svarar 405 i dag. Ändringen går genom bryggan; fältlistan här är bredare än det egna servern tar emot."
       }
     },
     "/cases/{caseId}/close": {
@@ -2067,7 +2069,7 @@
       "get": {
         "operationId": "getReport",
         "summary": "Rapporten ur samma datamodell, som JSON eller PDF",
-        "x-status": "beta",
+        "x-status": "planerad",
         "responses": {
           "200": {
             "description": "OK"
@@ -2095,7 +2097,8 @@
               ]
             }
           }
-        ]
+        ],
+        "description": "PLANERAD: egna API:t svarar inte på den här ännu. Rapporten renderar en PDF, vilket kräver dokumenthinken och signeringen."
       }
     },
     "/cases/{caseId}/sessions": {
@@ -2546,7 +2549,7 @@
       "patch": {
         "operationId": "updateTasks",
         "summary": "Bocka av eller delegera uppgifter",
-        "x-status": "beta",
+        "x-status": "planerad",
         "responses": {
           "200": {
             "description": "OK"
@@ -2561,7 +2564,8 @@
               }
             }
           }
-        }
+        },
+        "description": "PLANERAD: egna API:t svarar 405 i dag. Använd POST /tasks/{taskId}/done och POST /tasks/{taskId}/assign så länge."
       },
       "post": {
         "operationId": "addTask",

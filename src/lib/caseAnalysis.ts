@@ -9,13 +9,20 @@
 
 import { analyseCrisis, type AnalysisInput, type TimelineEvent } from "@/lib/crisisAnalysis";
 import type { CaseRecord } from "@/data/types";
+import { beloppUrText } from "@/lib/belopp";
 
-/** "1 200 000", "1,2 mkr"-fritt: siffrorna ur ett beloppsfält, annars 0. */
-export const parseAmount = (value: string | null): number => {
-  if (!value) return 0;
-  const digits = value.replace(/[^\d]/g, "");
-  return digits ? Number(digits) : 0;
-};
+/**
+ * Beloppet ur ett fritextfält.
+ *
+ * DEN HÄR FUNKTIONEN HADE EN EGEN TOLKNING, och den var fel: den strök
+ * allt utom siffror. "180000,50" blev då 18 000 050 - hundra gånger för
+ * mycket - och "-500 000" blev en verklig skuld på 500 000. Samma sparade
+ * sträng gav ett annat belopp i kontrollbalansräkningen, som hade sin egen
+ * tolk. Reglerna bor numera på ETT ställe; se src/lib/belopp.ts.
+ *
+ * Namnet står kvar eftersom hela ärendelagret anropar det.
+ */
+export const parseAmount = (value: string | null): number => beloppUrText(value);
 
 export const analysisInputFromCase = (record: CaseRecord): AnalysisInput => ({
   canPaySalary: record.canPaySalary,

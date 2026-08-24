@@ -57,14 +57,22 @@ for (const required of [
   check(`resursen ${required} finns`, paths.includes(required));
 }
 
-/* Varje operation: operationId, sammanfattning och ÄRLIG statusmärkning. */
+/*
+ * Varje operation: operationId, sammanfattning och ÄRLIG statusmärkning.
+ *
+ * TRE LÄGEN. "live" är byggt och verifierat, "beta" är byggt och
+ * kontrakt-först, "planerad" är BESKRIVET MEN INTE BYGGT - egna API:t
+ * svarar 405. Det tredje läget saknades, och fyra resurser stod därför
+ * som beta på den publika sidan trots att de inte gick att anropa.
+ */
+const STATUSAR = new Set(["live", "beta", "planerad"]);
 const ops: { id: string; status: string }[] = [];
 for (const [path, methods] of Object.entries(spec.paths)) {
   for (const [method, def] of Object.entries(methods)) {
     if (method === "parameters") continue;
     const operation = def as { operationId?: string; summary?: string; "x-status"?: string };
     check(`${method.toUpperCase()} ${path} har operationId`, !!operation.operationId);
-    check(`${method.toUpperCase()} ${path} har statusmärkning`, operation["x-status"] === "live" || operation["x-status"] === "beta");
+    check(`${method.toUpperCase()} ${path} har statusmärkning`, STATUSAR.has(operation["x-status"] ?? ""), operation["x-status"]);
     ops.push({ id: operation.operationId ?? "", status: operation["x-status"] ?? "" });
   }
 }
@@ -317,6 +325,73 @@ check(
   JSON.stringify(oimplementerade) === JSON.stringify([...ANNU_INTE_I_EGNA_SERVERN].sort()),
   { hittade: oimplementerade, forvantade: ANNU_INTE_I_EGNA_SERVERN },
 );
+
+/* --- ÅT ANDRA HÅLLET: kontraktet får inte lova mer än servern kan ------- */
+
+/*
+ * VAKTEN OVAN PRÖVADE BARA EN RIKTNING.
+ *
+ * "Är varje implementerad rutt deklarerad?" - ja. Men inte "kan servern
+ * varje METOD kontraktet deklarerar?". Gapkontrollen jämför SÖKVÄGAR, så
+ * en sökväg som finns med en metod räknas som implementerad även om
+ * kontraktet lovar tre.
+ *
+ * Det dolde två stycken: kontraktet deklarerar POST /cases och
+ * PATCH /cases/{caseId} - att SKAPA och ÄNDRA ett ärende, alltså de två
+ * mest grundläggande skrivningarna i hela produkten. Egna servern svarar
+ * 405 på båda. En utvecklare som läser den publika /api-sidan bygger mot
+ * dem och får metodfel.
+ *
+ * Listan nedan gör det till ett BESLUT i stället för en överraskning. Den
+ * som lägger till en metod i kontraktet utan att bygga den måste skriva
+ * ned varför.
+ */
+{
+  const ANNU_INTE_BYGGDA: Record<string, string> = {
+    "POST /cases":
+      "Ärenden skapas i dag genom Supabase-bryggan, inte genom egna servern. Skrivvägen behöver ägarskap, radskydd och en minimal-form som stämmer med wizarden.",
+    "PATCH /cases/{caseId}":
+      "Samma sak: ändringen går genom bryggan. Fältlistan i kontraktet är bredare än det egna servern hittills tagit emot.",
+    "PATCH /cases/{caseId}/tasks":
+      "Uppgifter ändras i dag med POST /tasks/{taskId}/done och POST /tasks/{taskId}/assign. Kontraktets PATCH är en samlad form som ingen klient använder ännu.",
+    "GET /cases/{caseId}/report":
+      "Renderar en PDF, vilket kräver dokumenthinken och signeringen. Samma skäl som documents.upload.",
+  };
+
+  const implementerade = new Set(metodPar.map(([m, r]) => `${m.toUpperCase()} ${somKontraktet(r)}`));
+  const loftenUtanTackning: string[] = [];
+  for (const [sokvag, ops] of Object.entries(spec.paths as Record<string, Record<string, unknown>>)) {
+    for (const metod of Object.keys(ops)) {
+      if (!["get", "post", "put", "patch", "delete"].includes(metod)) continue;
+      const nyckel = `${metod.toUpperCase()} ${sokvag}`;
+      if (!implementerade.has(nyckel)) loftenUtanTackning.push(nyckel);
+    }
+  }
+  loftenUtanTackning.sort();
+
+  check(
+    "kontraktet lovar inget servern saknar, utöver det nedskrivna",
+    JSON.stringify(loftenUtanTackning) === JSON.stringify(Object.keys(ANNU_INTE_BYGGDA).sort()),
+    { hittade: loftenUtanTackning, nedskrivna: Object.keys(ANNU_INTE_BYGGDA).sort() },
+  );
+
+  // Ett undantag utan skäl är ingen förklaring.
+  const utanSkal = Object.entries(ANNU_INTE_BYGGDA).filter(([, s]) => s.trim().length < 40);
+  check("varje obyggd metod bär ett skäl", utanSkal.length === 0, utanSkal.map(([k]) => k));
+
+  /*
+   * OCH DE SKA VARA MÄRKTA I KONTRAKTET.
+   *
+   * En utvecklare läser /api-sidan, inte den här filen. Står det inget om
+   * att metoden inte finns ännu är listan ovan bara vår egen tröst.
+   */
+  const omarkta = Object.keys(ANNU_INTE_BYGGDA).filter((nyckel) => {
+    const [metod, sokvag] = nyckel.split(" ");
+    const op = (spec.paths as Record<string, Record<string, Record<string, unknown>>>)[sokvag]?.[metod.toLowerCase()];
+    return op?.["x-status"] !== "planerad";
+  });
+  check("obyggda metoder är märkta \"planerad\" i kontraktet", omarkta.length === 0, omarkta);
+}
 
 /* --- Publikt i kontraktet ska vara publikt i servern -------------------- */
 

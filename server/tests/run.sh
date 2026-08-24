@@ -78,3 +78,17 @@ npx esbuild server/tests/cron.ts \
   --outfile=node_modules/.cache/api-cron.mjs --log-level=error
 
 node node_modules/.cache/api-cron.mjs
+
+# HUNDRA SCENARIER GENOM VERCEL-INGÅNGEN, mot samma databas.
+#
+# Motorn prövas rent i tests/scenarier.ts. Den här körningen prövar det som
+# ligger MELLAN motorn och användaren: serialiseringen, transporten och
+# radskyddet - hundra ärenden, tre ägare, och varje ärende nekat av de två
+# det inte tillhör.
+npx esbuild server/tests/scenarier.ts \
+  --bundle --platform=node --format=esm --target=node20 \
+  --external:pg --external:nodemailer --external:@aws-sdk/client-ses \
+  --external:@aws-sdk/client-s3 --external:@aws-sdk/s3-request-presigner \
+  --outfile=node_modules/.cache/api-scenarier.mjs --log-level=error
+
+node node_modules/.cache/api-scenarier.mjs
