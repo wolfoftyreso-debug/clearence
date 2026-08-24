@@ -106,8 +106,22 @@ export interface AuthPort {
    * (nätverk, takfrekvens) returneras.
    */
   requestPasswordReset(email: string): Promise<{ error: string | null }>;
-  /** Sätter nytt lösenord för den inloggade sessionen (efter återställningslänken). */
-  updatePassword(newPassword: string): Promise<{ error: string | null }>;
+  /**
+   * Byter lösenord för den INLOGGADE.
+   *
+   * `currentPassword` är inte en formalitet. En session bevisar att någon
+   * loggade in en gång, inte att det är samma människa som sitter där nu -
+   * en olåst dator eller en stulen polett räcker annars för att låsa ut
+   * ägaren ur sitt eget konto. Samma regel gäller redan före kontoradering
+   * och nyckelmyntning.
+   */
+  updatePassword(newPassword: string, currentPassword: string): Promise<{ error: string | null }>;
+  /**
+   * Sätter nytt lösenord med poletten ur återställningslänken. Ingen
+   * session krävs: poletten ÄR beviset, den lever en timme och brinner vid
+   * användning.
+   */
+  redeemPasswordReset(token: string, newPassword: string): Promise<{ error: string | null }>;
 }
 
 export interface CasesPort {

@@ -175,7 +175,30 @@ check("catch-allen kapar /api-prefixet före routern", /replace\(\/\^\\\/api/.te
   const idx = utanKommentarer(read("server/index.ts"));
   check("gränsen är lyft ur transporten", /export const provaHastighet = async/.test(idx));
   check("den egna servern använder den", /const avvisat = await provaHastighet\(/.test(idx));
-  check("inloggningen har eget tak", /path === "\/v1\/auth\/login"/.test(idx));
+  check("kontorutterna har eget tak", /const inloggning = KONTORUTTER\.has\(path\)/.test(idx));
+
+  /*
+   * OCH LISTAN SKA TÄCKA VARJE KONTORUTT SOM FINNS.
+   *
+   * Taket satt förut på en enda jämförelse mot "/v1/auth/login". När
+   * registrering, återställning och lösenordsbyte tillkom hade de tre
+   * hamnat på det ALLMÄNNA taket - 600 anrop i minuten - utan att någon
+   * kontroll blivit röd. Listan byggs därför inte för hand här utan
+   * jämförs mot vad routern faktiskt har.
+   */
+  const authRutter = [...idx.matchAll(/router\.[a-z]+\("(\/v1\/auth\/[^"]+)"/g)].map((m) => m[1]).sort();
+  const iListan = [...(idx.match(/export const KONTORUTTER = new Set\(\[[^\]]*\]/)?.[0].matchAll(/"([^"]+)"/g) ?? [])]
+    .map((m) => m[1])
+    .sort();
+  // /v1/auth/me och /v1/auth/logout kräver redan en giltig session och har
+  // inget att gissa på; de står med flit utanför.
+  const UTANFOR_TAKET = ["/v1/auth/logout", "/v1/auth/me"];
+  const forvantat = authRutter.filter((r) => !UTANFOR_TAKET.includes(r));
+  check(
+    "varje gissningsbar kontorutt står i KONTORUTTER",
+    JSON.stringify(forvantat) === JSON.stringify(iListan),
+    { iRoutern: authRutter, iListan, forvantat },
+  );
 
   const ca = utanKommentarer(catchAll);
   check("Vercel-vägen prövar gränsen FÖRE handle()", ca.indexOf("provaHastighet") < ca.indexOf("await handle("));

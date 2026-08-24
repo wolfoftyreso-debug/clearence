@@ -178,3 +178,195 @@ alter default privileges in schema public
 -- databas. Idempotent, och gör om-körningen ofarlig.
 grant select, insert, update, delete on all tables in schema public to authenticated;
 grant usage, select on all sequences in schema public to authenticated;
+
+/* -------------------------------------------------------------------------- */
+/* Kontot: registrering, lösenordsbyte, återställning                         */
+/* -------------------------------------------------------------------------- */
+
+/*
+ * VARFÖR DET HÄR ÄR FUNKTIONER OCH INTE GRANTS.
+ *
+ * `app_api` har SELECT på auth.users och ingenting mer - inget INSERT,
+ * inget UPDATE. Det är med flit: rollen som tar emot varje anrop från
+ * internet ska inte kunna skriva om vem som helsts lösenord om en enda
+ * SQL-injektion slinker igenom.
+ *
+ * Registrering, lösenordsbyte och återställning behöver ändå skriva. De
+ * ligger därför som SECURITY DEFINER-funktioner: en smal, namngiven väg
+ * med reglerna INNE i databasen, i stället för en bred grant med reglerna
+ * i applikationskoden.
+ *
+ * Lösenordet självt passerar aldrig hit. API:et hashar (server/auth.ts,
+ * scrypt) och skickar hashen. Databasen har ingen funktion som kan hasha
+ * eller verifiera ett lösenord, så ett intrång i databasen delar inte ut
+ * ett verifieringsorakel på köpet.
+ */
+
+create table if not exists auth.password_resets (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users (id) on delete cascade,
+  -- SHA-256 av poletten, precis som sessionerna. En databasdump ska inte
+  -- vara en samling fungerande återställningslänkar.
+  token_hash text not null unique,
+  created_at timestamptz not null default now(),
+  expires_at timestamptz not null,
+  used_at timestamptz
+);
+
+create index if not exists password_resets_user_idx
+  on auth.password_resets (user_id) where used_at is null;
+create index if not exists password_resets_expiry_idx
+  on auth.password_resets (expires_at) where used_at is null;
+
+revoke all on auth.password_resets from public, app_anon, app_user, anon, authenticated;
+
+/*
+ * REGISTRERING.
+ *
+ * Returnerar användarens id, eller null om adressen redan finns. Ingen
+ * profilrad skapas här: profilen (roll, namn) sätts i onboardingen, och
+ * en tom platshållare hade gjort "har användaren fyllt i något?" till en
+ * fråga utan svar.
+ */
+create or replace function app.registrera_konto(p_email citext, p_password_hash text)
+returns uuid
+language plpgsql
+security definer
+set search_path = auth, public, pg_temp
+as $$
+declare
+  v_id uuid;
+begin
+  -- TVÅ FÖRSVAR, INGET AV DEM ÖVERFLÖDIGT.
+  --
+  -- Förhandskontrollen ger det rena fallet ett rent svar. Undantaget
+  -- längst ned tar kapplöpningen: två samtidiga registreringar av samma
+  -- adress hinner båda förbi kontrollen, och då är det unikhetsindexet
+  -- som avgör.
+  --
+  -- Tas BARA förhandskontrollen bort ändras ingenting utåt - det gör den
+  -- lätt att läsa som död kod. Tas båda bort svarar rutten 400 i stället
+  -- för 409, vilket sviten fångar. Behåll dem båda.
+  if exists (select 1 from auth.users where email = p_email) then
+    return null;
+  end if;
+  insert into auth.users (email, password_hash)
+  values (p_email, p_password_hash)
+  returning id into v_id;
+  return v_id;
+exception
+  -- Två samtidiga registreringar av samma adress. Den som förlorar
+  -- kapplöpningen ska få samma svar som den som kom för sent.
+  when unique_violation then
+    return null;
+end $$;
+
+/*
+ * LÖSENORDSBYTE FÖR EN INLOGGAD.
+ *
+ * Anroparens nuvarande lösenord är REDAN prövat av API:et (confirmPassword
+ * i server/index.ts) - den prövningen kräver hashen, och hashning hör inte
+ * hemma i databasen. Det som ligger här är följden av bytet, och den är
+ * hela poängen: ALLA sessioner dör.
+ *
+ * Den som byter lösenord gör det ofta för att någon annan kan det gamla.
+ * Att låta den andres session leva vidare vore att göra bytet till en
+ * gest.
+ */
+create or replace function app.satt_losenord(p_user_id uuid, p_password_hash text)
+returns void
+language plpgsql
+security definer
+set search_path = auth, public, pg_temp
+as $$
+begin
+  update auth.users
+     set password_hash = p_password_hash, updated_at = now()
+   where id = p_user_id and disabled_at is null;
+  if not found then
+    raise exception 'okänt konto';
+  end if;
+  update auth.sessions
+     set revoked_at = now()
+   where user_id = p_user_id and revoked_at is null;
+end $$;
+
+/*
+ * BEGÄRAN OM ÅTERSTÄLLNING.
+ *
+ * Returnerar INGENTING - med flit. Ett svar som skiljer på "adressen finns"
+ * och "adressen finns inte" gör formuläret till ett register över vilka
+ * bolag som är kunder i en insolvenstjänst. API:et svarar alltid likadant,
+ * och den här funktionen ger den inget att råka läcka.
+ *
+ * Tidigare obrukade begäranden makuleras: en ny länk ska döda den gamla.
+ */
+create or replace function app.begar_aterstallning(
+  p_email citext,
+  p_token_hash text,
+  p_expires_at timestamptz,
+  p_subject text,
+  p_body_text text,
+  p_body_html text
+)
+returns void
+language plpgsql
+security definer
+set search_path = auth, public, pg_temp
+as $$
+declare
+  v_user uuid;
+begin
+  select id into v_user from auth.users
+   where email = p_email and disabled_at is null;
+  if v_user is null then
+    return;
+  end if;
+
+  update auth.password_resets set used_at = now()
+   where user_id = v_user and used_at is null;
+
+  insert into auth.password_resets (user_id, token_hash, expires_at)
+  values (v_user, p_token_hash, p_expires_at);
+
+  insert into public.outbound_emails (recipient, subject, body_text, body_html, kind)
+  values (p_email::text, p_subject, p_body_text, p_body_html, 'losenordsaterstallning');
+end $$;
+
+/*
+ * INLÖSEN AV EN ÅTERSTÄLLNING.
+ *
+ * `for update` på raden: två samtidiga inlösen av samma polett ska ge en
+ * vinnare, inte två lösenordsbyten. Poletten brinner oavsett utfall.
+ */
+create or replace function app.los_in_aterstallning(p_token_hash text, p_password_hash text)
+returns boolean
+language plpgsql
+security definer
+set search_path = auth, public, pg_temp
+as $$
+declare
+  v_user uuid;
+begin
+  select user_id into v_user
+    from auth.password_resets
+   where token_hash = p_token_hash
+     and used_at is null
+     and expires_at > now()
+   for update;
+  if v_user is null then
+    return false;
+  end if;
+
+  update auth.password_resets set used_at = now() where token_hash = p_token_hash;
+  perform app.satt_losenord(v_user, p_password_hash);
+  return true;
+end $$;
+
+-- Bara API:t kallar dem. Klientrollerna når dem inte.
+revoke all on function
+  app.registrera_konto(citext, text),
+  app.satt_losenord(uuid, text),
+  app.begar_aterstallning(citext, text, timestamptz, text, text, text),
+  app.los_in_aterstallning(text, text)
+from public, app_anon, app_user, anon, authenticated;

@@ -870,8 +870,24 @@ router.post("/v1/auth/login", async (req) => {
  * inloggningen: anroparen har redan en giltig session för kontot, så
  * svaret röjer ingenting den inte redan visste.
  */
-const confirmPassword = async (caller: Caller, req: ApiRequest): Promise<void> => {
-  const password = str(req.body, "password", { max: 400 });
+const confirmPassword = async (
+  caller: Caller,
+  req: ApiRequest,
+  /*
+   * VILKET FÄLT LÖSENORDET STÅR I.
+   *
+   * De flesta rutter som bekräftar skickar det som `password` - det är
+   * den enda hemligheten i kroppen. LösenordsBYTET har två: `password` är
+   * det NYA och `currentPassword` det som ska bekräftas. Utan den här
+   * parametern läste bekräftelsen `password`, jämförde det nya lösenordet
+   * mot den lagrade hashen och nekade varje korrekt försök.
+   *
+   * Felet kompilerade, typerna stämde och sviterna var gröna - det syntes
+   * först när rutten kördes mot en riktig databas.
+   */
+  falt: "password" | "currentPassword" = "password",
+): Promise<void> => {
+  const password = str(req.body, falt, { max: 400 });
 
   const grans = await provaGrans(`bekraftelse:${caller.userId}`, BEKRAFTELSE);
   if (!grans.tillaten) {
@@ -929,6 +945,159 @@ router.get("/v1/auth/me", async (req) => {
       phone: profile?.phone ?? null,
     },
   };
+});
+
+/* --- Kontot: registrering, återställning, lösenordsbyte ------------------ */
+
+/**
+ * LÖSENORDSKRAVET BOR HÄR, INTE I FORMULÄRET.
+ *
+ * Klienten kontrollerar också - för att kunna säga till innan användaren
+ * trycker - men den kontrollen är en artighet. Den här är regeln, och den
+ * gäller även för den som skickar sitt anrop utan att gå genom formuläret.
+ */
+const LOSENORD_MINSTA_TECKEN = 8;
+const LOSENORD_LANGSTA_TECKEN = 400;
+
+const provaLosenord = (losenord: string): void => {
+  if (losenord.length < LOSENORD_MINSTA_TECKEN) {
+    throw badRequest(`Lösenordet måste vara minst ${LOSENORD_MINSTA_TECKEN} tecken.`);
+  }
+};
+
+/** Så länge en återställningslänk lever. En timme: lång nog att hinna läsa mejlet. */
+export const ATERSTALLNING_TTL_MINUTER = 60;
+
+const appBas = (): string =>
+  (process.env.APP_BASE_URL ?? "https://clearance.se").replace(/\/$/, "");
+
+/**
+ * Registrering.
+ *
+ * Ingen profilrad skapas här. Profilen (roll, namn) sätts i onboardingen -
+ * en tom platshållare hade gjort "har användaren fyllt i något?" till en
+ * fråga utan svar.
+ *
+ * TILL SKILLNAD FRÅN INLOGGNINGEN röjer det här svaret att adressen finns.
+ * Det går inte att undvika: ett konto kan inte skapas två gånger, och att
+ * svara "det gick bra" på något som inte gick vore att låta användaren
+ * försöka logga in med ett lösenord som aldrig sattes. Priset betalas i
+ * stället med takfrekvensen - registreringen räknas mot samma hårda tak
+ * som inloggningen.
+ */
+router.post("/v1/auth/register", async (req) => {
+  const email = str(req.body, "email", { max: 320 }).toLowerCase().trim();
+  const password = str(req.body, "password", { max: LOSENORD_LANGSTA_TECKEN });
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw badRequest("Ange en giltig e-postadress.");
+  provaLosenord(password);
+
+  const hash = await hashPassword(password);
+  const userId = await withAnon(async (tx) => {
+    const { rows } = await tx.query("select app.registrera_konto($1, $2) as id", [email, hash]);
+    return (rows[0]?.id as string | null) ?? null;
+  });
+  if (!userId) throw new ApiError(409, "conflict", "Adressen har redan ett konto.");
+
+  // Direkt inloggad. Ingen e-postbekräftelse: produkten används av någon
+  // vars bolag är i kris, och ett extra steg där är ett steg för mycket.
+  const { token, hash: tokenHash } = issueToken();
+  const session = await withAnon(async (tx) => {
+    const { rows } = await tx.query(
+      `insert into auth.sessions (user_id, token_hash, expires_at, user_agent)
+       values ($1, $2, now() + make_interval(hours => $3), $4)
+       returning expires_at`,
+      [userId, tokenHash, sessionTtlHours(), String(req.headers["user-agent"] ?? "").slice(0, 300)],
+    );
+    return rows[0];
+  });
+
+  return { status: 201, body: { token, expiresAt: iso(session.expires_at), userId } };
+});
+
+/**
+ * Begäran om återställning.
+ *
+ * SVARET ÄR ALLTID DETSAMMA. Skulle det skilja på "adressen finns" och
+ * "adressen finns inte" vore formuläret ett register över vilka bolag som
+ * är kunder i en insolvenstjänst - en uppgift som kan sänka ett bolag helt
+ * på egen hand. Databasfunktionen returnerar därför ingenting heller: det
+ * finns inget att råka läcka vidare.
+ */
+router.post("/v1/auth/password-reset", async (req) => {
+  const email = str(req.body, "email", { max: 320 }).toLowerCase().trim();
+
+  const { token, hash } = issueToken();
+  const lank = `${appBas()}/aterstall?polett=${encodeURIComponent(token)}`;
+  const amne = "Återställ ditt lösenord hos CLEARANCE";
+  const text = [
+    "Någon har begärt ett nytt lösenord för det här kontot hos CLEARANCE.",
+    "",
+    `Öppna länken för att välja ett nytt: ${lank}`,
+    "",
+    `Länken slutar fungera om ${ATERSTALLNING_TTL_MINUTER} minuter och kan bara användas en gång.`,
+    "Var det inte du behöver du inte göra någonting - lösenordet är oförändrat.",
+  ].join("\n");
+  const html = [
+    "<p>Någon har begärt ett nytt lösenord för det här kontot hos CLEARANCE.</p>",
+    `<p><a href="${lank}">Välj ett nytt lösenord</a></p>`,
+    `<p>Länken slutar fungera om ${ATERSTALLNING_TTL_MINUTER} minuter och kan bara användas en gång.</p>`,
+    "<p>Var det inte du behöver du inte göra någonting – lösenordet är oförändrat.</p>",
+  ].join("\n");
+
+  await withAnon(async (tx) => {
+    await tx.query("select app.begar_aterstallning($1, $2, now() + make_interval(mins => $3), $4, $5, $6)", [
+      email,
+      hash,
+      ATERSTALLNING_TTL_MINUTER,
+      amne,
+      text,
+      html,
+    ]);
+  });
+
+  return { status: 200, body: { sent: true } };
+});
+
+/**
+ * Nytt lösenord. Två vägar in, en utgång.
+ *
+ *  - MED POLETT (ur återställningslänken). Ingen session krävs - poletten
+ *    ÄR beviset, den lever en timme och brinner vid användning.
+ *  - INLOGGAD, med det nuvarande lösenordet. Att vara inloggad räcker inte:
+ *    en session är ett bevis på att någon loggade in en gång, inte på att
+ *    det är samma människa som sitter där nu. Samma regel som gäller före
+ *    kontoradering och nyckelmyntning (confirmPassword ovan).
+ *
+ * BÅDA vägarna återkallar alla sessioner. Den som byter lösenord gör det
+ * ofta för att någon annan kan det gamla; att låta den andres session leva
+ * vidare vore att göra bytet till en gest.
+ */
+router.post("/v1/auth/password", async (req) => {
+  const kropp = (req.body ?? {}) as Record<string, unknown>;
+  const nytt = str(req.body, "password", { max: LOSENORD_LANGSTA_TECKEN });
+  provaLosenord(nytt);
+  const hash = await hashPassword(nytt);
+
+  if (typeof kropp.token === "string" && kropp.token.length > 0) {
+    const ok = await withAnon(async (tx) => {
+      const { rows } = await tx.query("select app.los_in_aterstallning($1, $2) as ok", [
+        sha256(kropp.token as string),
+        hash,
+      ]);
+      return rows[0]?.ok === true;
+    });
+    // Utgången, förbrukad och påhittad polett ger samma svar: det finns
+    // inget att lära sig av skillnaden.
+    if (!ok) throw badRequest("Länken är förbrukad eller för gammal. Begär en ny.");
+    return { status: 200, body: { changed: true } };
+  }
+
+  const caller = await authenticate(req);
+  await confirmPassword(caller, req, "currentPassword");
+  await withAnon(async (tx) => {
+    await tx.query("select app.satt_losenord($1, $2)", [caller.userId, hash]);
+  });
+  return { status: 200, body: { changed: true } };
 });
 
 router.get("/v1/cases", async (req) => {
@@ -3811,14 +3980,35 @@ export const handle = async (
  * kroppen av plattformen innan vår kod körs - där går det inte att styra,
  * men på den egna servern gör vi det ändå.
  */
+/**
+ * Rutterna som räknas mot inloggningens hårda tak. Ligger som en mängd och
+ * inte som en regexp: en ny kontorutt ska läggas till med flit, och
+ * tests/vercelredo.ts jämför listan mot vad routern faktiskt har.
+ */
+export const KONTORUTTER = new Set([
+  "/v1/auth/login",
+  "/v1/auth/register",
+  "/v1/auth/password-reset",
+  "/v1/auth/password",
+]);
+
 export const provaHastighet = async (
   path: string,
   headers: ApiRequest["headers"],
   fallbackAdress: string,
 ): Promise<{ status: number; headers: Record<string, string>; body: unknown } | null> => {
-  // Inloggningen har eget, hårdare tak - den är den enda ytan där ett
-  // gissat värde ger åtkomst.
-  const inloggning = path === "/v1/auth/login";
+  /*
+   * KONTORUTTERNA HAR EGET, HÅRDARE TAK.
+   *
+   * Inloggningen är den enda ytan där ett gissat LÖSENORD ger åtkomst -
+   * men den är inte den enda där en maskin tjänar på att köra tusen
+   * anrop. Registreringen röjer vilka adresser som redan har konto (det
+   * går inte att undvika, se rutten), återställningen skickar mejl på
+   * någon annans adress, och lösenordsrutten gissar på poletter.
+   *
+   * Alla fyra räknas därför mot samma hårda tak.
+   */
+  const inloggning = KONTORUTTER.has(path);
   const nyckel = klientNyckel(headers, fallbackAdress);
   let grans: Utfall;
   try {

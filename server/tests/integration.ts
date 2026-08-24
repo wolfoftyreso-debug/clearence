@@ -3288,5 +3288,243 @@ await closePool();
   await closePool();
 }
 
+/* --- KONTOT: registrering, återställning, lösenordsbyte ------------------ */
+
+/*
+ * HELA VÄGEN, MOT RIKTIG DATABAS OCH GENOM HELA HTTP-LAGRET.
+ *
+ * Auth var den sista portgruppen som gick via Supabase, och det gjorde att
+ * produkten inte kunde köras utan Supabase alls. Det som prövas här är
+ * inte att rutterna svarar 200 - det är att reglerna gäller:
+ *
+ *  - Den som byter lösenord blir av med sina sessioner. ALLA.
+ *  - En polett brinner. En återanvänd polett är ingen polett.
+ *  - Att vara inloggad räcker INTE för att byta lösenord.
+ *  - Återställningsformuläret avslöjar inte vilka adresser som har konto.
+ */
+{
+  const NYEMAIL = `nykund-${Date.now() % 100000}@exempel.test`;
+  const NYLOSEN = "ett-riktigt-langt-losenord";
+
+  /* 1. Registrering ------------------------------------------------------ */
+
+  const kort = await call("POST", "/v1/auth/register", { body: { email: NYEMAIL, password: "kort" } });
+  check("för kort lösenord avvisas av SERVERN, inte bara av formuläret", kort.status === 400, kort);
+
+  const trasigAdress = await call("POST", "/v1/auth/register", {
+    body: { email: "inte-en-adress", password: NYLOSEN },
+  });
+  check("en trasig e-postadress avvisas", trasigAdress.status === 400, trasigAdress);
+
+  const nyttKonto = await call("POST", "/v1/auth/register", {
+    body: { email: NYEMAIL, password: NYLOSEN },
+  });
+  check("registreringen skapar kontot", nyttKonto.status === 201, nyttKonto);
+  check("och loggar in direkt", typeof nyttKonto.body.token === "string", nyttKonto.body);
+  const nyToken = String(nyttKonto.body.token);
+
+  const mig = await call("GET", "/v1/auth/me", { token: nyToken });
+  check("poletten från registreringen fungerar", mig.status === 200, mig);
+  check("och pekar på det nya kontot", mig.body.userId === nyttKonto.body.userId);
+
+  const igen = await call("POST", "/v1/auth/register", {
+    body: { email: NYEMAIL, password: NYLOSEN },
+  });
+  check("samma adress två gånger går inte", igen.status === 409, igen);
+
+  // Versaler i adressen ska inte ge ett andra konto.
+  const versaler = await call("POST", "/v1/auth/register", {
+    body: { email: NYEMAIL.toUpperCase(), password: NYLOSEN },
+  });
+  check("adressen är skiftlägesokänslig", versaler.status === 409, versaler);
+
+  /* 2. Lösenordsbyte för en inloggad ------------------------------------- */
+
+  const utanNuvarande = await call("POST", "/v1/auth/password", {
+    token: nyToken,
+    body: { password: "ett-annat-langt-losenord" },
+  });
+  check(
+    "en giltig session räcker INTE - nuvarande lösenord krävs",
+    utanNuvarande.status === 400 || utanNuvarande.status === 403,
+    utanNuvarande,
+  );
+
+  const felNuvarande = await call("POST", "/v1/auth/password", {
+    token: nyToken,
+    body: { password: "ett-annat-langt-losenord", currentPassword: "gissning" },
+  });
+  check("fel nuvarande lösenord avvisas", felNuvarande.status === 403, felNuvarande);
+
+  const NYTT2 = "ett-annat-langt-losenord";
+  const bytt = await call("POST", "/v1/auth/password", {
+    token: nyToken,
+    body: { password: NYTT2, currentPassword: NYLOSEN },
+  });
+  check("med rätt nuvarande lösenord går bytet igenom", bytt.status === 200, bytt);
+
+  const eftersession = await call("GET", "/v1/auth/me", { token: nyToken });
+  check("SESSIONEN DOG av bytet", eftersession.status === 401, eftersession);
+
+  const gamlaLosen = await call("POST", "/v1/auth/login", {
+    body: { email: NYEMAIL, password: NYLOSEN },
+  });
+  check("det gamla lösenordet fungerar inte längre", gamlaLosen.status === 401, gamlaLosen);
+
+  const nyaLosen = await call("POST", "/v1/auth/login", {
+    body: { email: NYEMAIL, password: NYTT2 },
+  });
+  check("det nya gör det", nyaLosen.status === 200, nyaLosen);
+
+  /* 3. Återställning ----------------------------------------------------- */
+
+  const foreAntal = await withAnon(async (tx) =>
+    Number((await tx.query("select count(*)::int as n from public.outbound_emails")).rows[0].n),
+  );
+
+  const okand = await call("POST", "/v1/auth/password-reset", {
+    body: { email: "finns-inte-har@exempel.test" },
+  });
+  check("en okänd adress ger samma svar som en känd", okand.status === 200, okand);
+  check("och sent: true, precis som en känd", okand.body.sent === true, okand.body);
+
+  const mellanAntal = await withAnon(async (tx) =>
+    Number((await tx.query("select count(*)::int as n from public.outbound_emails")).rows[0].n),
+  );
+  check("men INGET mejl lades i utkorgen för den okända adressen", mellanAntal === foreAntal, {
+    fore: foreAntal,
+    efter: mellanAntal,
+  });
+
+  const begard = await call("POST", "/v1/auth/password-reset", { body: { email: NYEMAIL } });
+  check("en känd adress ger också 200", begard.status === 200, begard);
+
+  const brev = await withAnon(async (tx) => {
+    const { rows } = await tx.query(
+      "select recipient, subject, body_text, kind from public.outbound_emails order by created_at desc limit 1",
+    );
+    return rows[0] ?? null;
+  });
+  check("ett mejl lades i utkorgen", brev !== null && brev.recipient === NYEMAIL, brev?.recipient);
+  check("det är märkt som en återställning", brev?.kind === "losenordsaterstallning", brev?.kind);
+
+  // Poletten ur brevet, precis som användaren skulle plocka den ur länken.
+  const polett = /polett=([A-Za-z0-9_-]+)/.exec(String(brev?.body_text ?? ""))?.[1] ?? "";
+  check("brevet bär en polett i länken", polett.length > 20, polett.length);
+  check(
+    "och länken pekar på återställningssidan",
+    /\/aterstall\?polett=/.test(String(brev?.body_text ?? "")),
+    String(brev?.body_text ?? "").slice(0, 120),
+  );
+
+  // POLETTEN SKA INTE FINNAS I KLARTEXT I DATABASEN. Bara i brevet, som
+  // är på väg ut, och som utkorgen raderar när det skickats.
+  const iKlartext = await withAnon(async (tx) => {
+    const { rows } = await tx.query(
+      "select count(*)::int as n from auth.password_resets where token_hash = $1",
+      [polett],
+    );
+    return Number(rows[0].n);
+  });
+  check("poletten lagras aldrig i klartext - bara som hash", iKlartext === 0);
+  const somHash = await withAnon(async (tx) => {
+    const { rows } = await tx.query(
+      "select count(*)::int as n from auth.password_resets where token_hash = $1 and used_at is null",
+      [sha256(polett)],
+    );
+    return Number(rows[0].n);
+  });
+  check("men hashen finns, obrukad", somHash === 1);
+
+  const NYTT3 = "det-tredje-langa-losenordet";
+  const fejkad = await call("POST", "/v1/auth/password", {
+    body: { token: "en-polett-nagon-hittade-pa", password: NYTT3 },
+  });
+  check("en påhittad polett avvisas", fejkad.status === 400, fejkad);
+
+  const inlost = await call("POST", "/v1/auth/password", {
+    body: { token: polett, password: NYTT3 },
+  });
+  check("den riktiga poletten löses in UTAN session", inlost.status === 200, inlost);
+
+  const omigen = await call("POST", "/v1/auth/password", {
+    body: { token: polett, password: "ett-fjarde-langt-losenord" },
+  });
+  check("POLETTEN BRINNER - den går inte att använda två gånger", omigen.status === 400, omigen);
+
+  const efterAterstallning = await call("POST", "/v1/auth/login", {
+    body: { email: NYEMAIL, password: NYTT3 },
+  });
+  check("det återställda lösenordet fungerar", efterAterstallning.status === 200, efterAterstallning);
+
+  const gamlaEfterAterstallning = await call("POST", "/v1/auth/login", {
+    body: { email: NYEMAIL, password: NYTT2 },
+  });
+  check("och det förra slutade fungera", gamlaEfterAterstallning.status === 401);
+
+  // Sessionen som fanns FÖRE återställningen ska vara död.
+  const gammalSession = await call("GET", "/v1/auth/me", { token: String(nyaLosen.body.token) });
+  check("återställningen dödade också de sessioner som redan fanns", gammalSession.status === 401, gammalSession);
+
+  /* 4. En ny begäran makulerar den förra ---------------------------------- */
+
+  await call("POST", "/v1/auth/password-reset", { body: { email: NYEMAIL } });
+  const forstaBrev = await withAnon(async (tx) => {
+    const { rows } = await tx.query(
+      "select body_text from public.outbound_emails where recipient = $1 order by created_at desc limit 1",
+      [NYEMAIL],
+    );
+    return String(rows[0]?.body_text ?? "");
+  });
+  const polettA = /polett=([A-Za-z0-9_-]+)/.exec(forstaBrev)?.[1] ?? "";
+
+  await call("POST", "/v1/auth/password-reset", { body: { email: NYEMAIL } });
+  const andraBrev = await withAnon(async (tx) => {
+    const { rows } = await tx.query(
+      "select body_text from public.outbound_emails where recipient = $1 order by created_at desc limit 1",
+      [NYEMAIL],
+    );
+    return String(rows[0]?.body_text ?? "");
+  });
+  const polettB = /polett=([A-Za-z0-9_-]+)/.exec(andraBrev)?.[1] ?? "";
+  check("två begäranden ger två olika poletter", polettA.length > 20 && polettB.length > 20 && polettA !== polettB);
+
+  const gammalPolett = await call("POST", "/v1/auth/password", {
+    body: { token: polettA, password: "ett-femte-langt-losenord" },
+  });
+  check("EN NY LÄNK DÖDAR DEN GAMLA", gammalPolett.status === 400, gammalPolett);
+
+  const farskPolett = await call("POST", "/v1/auth/password", {
+    body: { token: polettB, password: "ett-femte-langt-losenord" },
+  });
+  check("den färska fungerar", farskPolett.status === 200, farskPolett);
+
+  /* 5. En utgången polett ------------------------------------------------- */
+
+  await call("POST", "/v1/auth/password-reset", { body: { email: NYEMAIL } });
+  const sistaBrev = await withAnon(async (tx) => {
+    const { rows } = await tx.query(
+      "select body_text from public.outbound_emails where recipient = $1 order by created_at desc limit 1",
+      [NYEMAIL],
+    );
+    return String(rows[0]?.body_text ?? "");
+  });
+  const polettC = /polett=([A-Za-z0-9_-]+)/.exec(sistaBrev)?.[1] ?? "";
+  await withAnon(async (tx) => {
+    await tx.query("update auth.password_resets set expires_at = now() - interval '1 minute' where token_hash = $1", [
+      sha256(polettC),
+    ]);
+  });
+  const utgangen = await call("POST", "/v1/auth/password", {
+    body: { token: polettC, password: "ett-sjatte-langt-losenord" },
+  });
+  check("en UTGÅNGEN polett avvisas", utgangen.status === 400, utgangen);
+  check(
+    "och beskedet skiljer inte utgången från påhittad",
+    JSON.stringify(utgangen.body) === JSON.stringify(fejkad.body),
+    { utgangen: utgangen.body, fejkad: fejkad.body },
+  );
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

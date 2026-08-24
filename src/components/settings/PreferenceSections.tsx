@@ -210,6 +210,7 @@ export const NotificationSection = () => {
 
 export const AccountSecuritySection = () => {
   const { signOut } = useAuth();
+  const [nuvarande, setNuvarande] = useState("");
   const [password, setPassword] = useState("");
   const [repeat, setRepeat] = useState("");
 
@@ -217,10 +218,12 @@ export const AccountSecuritySection = () => {
     mutationFn: async () => {
       if (password.length < 8) throw new Error("Minst 8 tecken.");
       if (password !== repeat) throw new Error("Lösenorden stämmer inte överens.");
-      const { error } = await data.auth.updatePassword(password);
+      if (!nuvarande) throw new Error("Fyll i ditt nuvarande lösenord.");
+      const { error } = await data.auth.updatePassword(password, nuvarande);
       if (error) throw new Error(error);
     },
     onSuccess: () => {
+      setNuvarande("");
       setPassword("");
       setRepeat("");
     },
@@ -239,6 +242,26 @@ export const AccountSecuritySection = () => {
         }}
         className="space-y-3"
       >
+        {/*
+          NUVARANDE LÖSENORD KRÄVS.
+
+          Att vara inloggad räcker inte: en session bevisar att någon
+          loggade in en gång, inte att det är samma människa som sitter
+          där nu. En olåst dator skulle annars räcka för att låsa ut
+          ägaren ur sitt eget konto. Samma regel gäller redan före
+          kontoradering och innan en API-nyckel myntas.
+        */}
+        <label className="block text-sm">
+          <span className="font-medium text-foreground">Nuvarande lösenord</span>
+          <Input
+            type="password"
+            autoComplete="current-password"
+            value={nuvarande}
+            onChange={(e) => setNuvarande(e.target.value)}
+            className="mt-1 sm:max-w-xs"
+            data-prov="nuvarande-losenord"
+          />
+        </label>
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="block text-sm">
             <span className="font-medium text-foreground">Nytt lösenord</span>
@@ -265,7 +288,7 @@ export const AccountSecuritySection = () => {
           <Button
             type="submit"
             variant="outline"
-            disabled={password.length < 8 || change.isPending}
+            disabled={password.length < 8 || nuvarande.length === 0 || change.isPending}
           >
             {change.isPending && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
             Byt lösenord
@@ -273,7 +296,7 @@ export const AccountSecuritySection = () => {
           {change.isSuccess && (
             <span className="flex items-center gap-1 text-sm text-success">
               <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
-              Lösenordet är bytt
+              Lösenordet är bytt. Du loggas ut ur alla enheter.
             </span>
           )}
         </div>

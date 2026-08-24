@@ -142,6 +142,18 @@ grant usage on schema app, public, auth to app_api;
  * inte, för spårbarheten är löftet.
  */
 grant select on auth.users to app_api;
+
+/*
+ * Kontofunktionerna. app_api har med flit INTE insert/update på auth.users;
+ * registrering, lösenordsbyte och återställning går via app-schemats
+ * SECURITY DEFINER-funktioner, som bär reglerna själva.
+ */
+grant execute on function
+  app.registrera_konto(citext, text),
+  app.satt_losenord(uuid, text),
+  app.begar_aterstallning(citext, text, timestamptz, text, text, text),
+  app.los_in_aterstallning(text, text)
+to app_api;
 grant select, insert, update on auth.sessions to app_api;
 
 -- Anonymvägens funktioner: den nyckelautentiserade journalen och

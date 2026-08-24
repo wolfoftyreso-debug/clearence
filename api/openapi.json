@@ -330,6 +330,158 @@
         }
       }
     },
+    "/auth/register": {
+      "post": {
+        "operationId": "register",
+        "summary": "Skapa ett konto",
+        "description": "Skapar kontot och loggar in direkt - ingen e-postbekräftelse. Produkten används av någon vars bolag är i kris, och ett extra steg där är ett steg för mycket. Till skillnad från inloggningen röjer svaret att adressen finns: ett konto kan inte skapas två gånger. Priset betalas med takfrekvensen, som är inloggningens. Profilen (roll, namn) sätts separat i onboardingen. Kräver ingen autentisering.",
+        "x-status": "beta",
+        "responses": {
+          "201": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "email",
+                  "password"
+                ],
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "format": "email",
+                    "maxLength": 320
+                  },
+                  "password": {
+                    "type": "string",
+                    "minLength": 8,
+                    "maxLength": 400
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/password-reset": {
+      "post": {
+        "operationId": "requestPasswordReset",
+        "summary": "Begär en återställningslänk",
+        "description": "Svaret är ALLTID detsamma, oavsett om adressen har ett konto. Skulle det skilja vore formuläret ett register över vilka bolag som är kunder i en insolvenstjänst. Finns kontot läggs ett mejl i utkorgen med en länk som lever en timme och kan användas en gång; en ny begäran makulerar den förra. Kräver ingen autentisering.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "email"
+                ],
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "format": "email",
+                    "maxLength": 320
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/password": {
+      "post": {
+        "operationId": "setPassword",
+        "summary": "Sätt ett nytt lösenord",
+        "description": "Två vägar in. MED POLETT ur återställningslänken: poletten är beviset, den lever en timme och brinner vid användning - ingen session krävs. INLOGGAD: skicka Authorization och currentPassword. Att vara inloggad räcker inte, för en session bevisar att någon loggade in en gång, inte att det är samma människa som sitter där nu. Båda vägarna återkallar ALLA sessioner för kontot.",
+        "x-status": "beta",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "description": "Fel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {},
+          {
+            "session": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "password"
+                ],
+                "properties": {
+                  "password": {
+                    "type": "string",
+                    "minLength": 8,
+                    "maxLength": 400
+                  },
+                  "token": {
+                    "type": "string",
+                    "description": "Poletten ur återställningslänken. Utelämnas när anropet är inloggat."
+                  },
+                  "currentPassword": {
+                    "type": "string",
+                    "maxLength": 400,
+                    "description": "Nuvarande lösenord. Krävs när anropet är inloggat."
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/auth/logout": {
       "post": {
         "operationId": "logout",

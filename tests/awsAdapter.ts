@@ -136,31 +136,39 @@ check(
 {
   // Testbygget SÄTTER Supabase-variablerna (annars går supabase-adaptern
   // inte att ladda alls), så nej-grenen prövas genom seamen i stället.
+  // Exemplet plockas ur den LEVANDE listan över delegerade portar. Förut
+  // stod "auth.getCurrentUser" här som en konstant - och den dagen auth
+  // flyttades prövade raden en migrerad port och gick tyst igenom.
+  const [exempelPort] = delegeradePortar();
+  const [exempelGrupp, exempelMetod] = (exempelPort ?? "").split(".");
+  check("det finns en delegerad port att pröva med", !!exempelGrupp && !!exempelMetod, exempelPort);
+
   const utanBro = broaPort(
-    "auth",
-    (awsAdapterUtanBro as unknown as Record<string, object>).auth,
+    exempelGrupp,
+    (awsAdapterUtanBro as unknown as Record<string, object>)[exempelGrupp],
     () => false,
   ) as unknown as Record<string, () => unknown>;
 
   let besked = "";
   try {
     // Synkront kast: bron prövar FÖRE den släpper vidare till Supabase.
-    utanBro.getCurrentUser();
+    utanBro[exempelMetod]();
   } catch (fel) {
     besked = fel instanceof Error ? fel.message : String(fel);
   }
-  check("en delegerad port utan bro namnger sig själv", besked.includes("auth.getCurrentUser"), besked.slice(0, 160));
+  check("en delegerad port utan bro namnger sig själv", besked.includes(exempelPort), besked.slice(0, 160));
   check("och säger vad som saknas", /VITE_SUPABASE|Supabase-bron/.test(besked), besked.slice(0, 200));
 
   // Och en FLYTTAD port ska gå rakt igenom bron, även när den är nere.
   let flyttadKastade = false;
   try {
     const flyttad = broaPort(
-      "contact",
-      (awsAdapterUtanBro as unknown as Record<string, object>).contact,
+      "auth",
+      (awsAdapterUtanBro as unknown as Record<string, object>).auth,
       () => false,
     ) as unknown as Record<string, () => unknown>;
-    void flyttad.amIAdmin;
+    // auth är flyttad i sin helhet - bron ska inte lägga sig i.
+    flyttad.getCurrentUser();
   } catch {
     flyttadKastade = true;
   }

@@ -20,6 +20,7 @@ const LegalPage = lazy(() => import("./pages/LegalPage"));
 const Knowledge = lazy(() => import("./pages/Knowledge"));
 const ApiDocs = lazy(() => import("./pages/ApiDocs"));
 const Login = lazy(() => import("./pages/Login"));
+const PasswordReset = lazy(() => import("./pages/PasswordReset"));
 const CrisisWizard = lazy(() => import("./pages/CrisisWizard"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Marketplace = lazy(() => import("./pages/Marketplace"));
@@ -89,6 +90,7 @@ const App = () => (
                 <Route path="/api" element={<ApiDocs />} />
                 <Route path="/kunskap/:slug" element={<Knowledge />} />
                 <Route path="/login" element={<Login />} />
+                <Route path="/aterstall" element={<PasswordReset />} />
                 <Route path="/wizard" element={<CrisisWizard />} />
                 <Route path="/kbr" element={<KBRModule />} />
                 <Route

@@ -70,13 +70,21 @@ import type {
 import type { FinancialSnapshot } from "@/lib/financial/model";
 import { supabaseAdapter } from "../supabase/adapter";
 import { SupabaseSaknasError, supabaseConfigured } from "@/integrations/supabase/client";
-import { ApiRequestError, apiFetch, clearToken, setToken } from "./client";
+import { ApiRequestError, apiFetch, clearToken, getToken, setToken } from "./client";
 
 /**
  * Portarna som verkligen går mot eget API. Listan är produktens
  * migreringsmätare - den ska växa tills delegeringen kan tas bort.
  */
 export const MIGRATED_PORTS = [
+  "auth.getCurrentUser",
+  "auth.onAuthChange",
+  "auth.signUp",
+  "auth.signIn",
+  "auth.signOut",
+  "auth.requestPasswordReset",
+  "auth.updatePassword",
+  "auth.redeemPasswordReset",
   "contact.submit",
   "contact.amIAdmin",
   "contact.listAll",
@@ -1036,6 +1044,183 @@ const audit = {
  * MIGRATED_PORTS täcker hela DataPort tas den raden bort, och då är
  * "inte Supabase" sant hela vägen.
  */
+/* --- auth: hela gruppen mot eget API ------------------------------------- */
+
+/**
+ * SESSIONEN LIGGER I EN POLETT, INTE I EN SDK.
+ *
+ * Supabase-adaptern kunde luta sig mot `onAuthStateChange` - ett abonnemang
+ * SDK:n själv höll levande. Utan SDK finns ingen sådan ström, och det är
+ * inget att sörja: sanningen om vem som är inloggad är poletten i
+ * localStorage, och den ändras bara när VI ändrar den.
+ *
+ * `lyssnare` är därför en egen, mycket liten sändare. Den ropar när
+ * signIn, signUp eller signOut kört - och när en ANNAN flik ändrat
+ * poletten, vilket webbläsaren berättar med `storage`-händelsen. Utan den
+ * sista biten kunde en utloggning i en flik lämna en annan flik som såg
+ * inloggad ut ända tills något anrop kom tillbaka med 401.
+ */
+type AuthUser = { id: string; email: string | null };
+
+const lyssnare = new Set<(user: AuthUser | null) => void>();
+let sistKanda: AuthUser | null = null;
+
+const ropa = (user: AuthUser | null): void => {
+  sistKanda = user;
+  for (const l of [...lyssnare]) l(user);
+};
+
+/** Vem poletten hör till, eller null. Ett nej är inte ett fel här. */
+const hamtaMig = async (): Promise<AuthUser | null> => {
+  if (!getToken()) return null;
+  try {
+    const res = await apiFetch<{ userId: string; email?: string | null }>("/v1/auth/me");
+    return { id: res.userId, email: res.email ?? null };
+  } catch (err) {
+    // 401 = poletten är död. Städa bort den; att behålla en polett som
+    // inte fungerar ger en app som ser inloggad ut och inte är det.
+    if (err instanceof ApiRequestError && err.status === 401) {
+      clearToken();
+      return null;
+    }
+    throw err;
+  }
+};
+
+/**
+ * Fel från API:t blir text, inte kast.
+ *
+ * AuthPort lovar `{ error }` och inte ett undantag - anropen sitter i
+ * formulär, och ett kast där blir en vit sida i stället för en rad under
+ * fältet. Nätverksfel skiljs från nej: "kunde inte nå" och "fick nej" är
+ * olika besked för den som sitter fast.
+ */
+const somBesked = (err: unknown): { error: string } => {
+  if (err instanceof ApiRequestError) {
+    return {
+      error:
+        err.status === 0
+          ? "Kunde inte nå tjänsten. Kontrollera din uppkoppling och försök igen."
+          : err.message,
+    };
+  }
+  return { error: "Något gick fel. Försök igen." };
+};
+
+const auth = {
+  getCurrentUser: hamtaMig,
+
+  onAuthChange(callback: (user: AuthUser | null) => void): () => void {
+    lyssnare.add(callback);
+    // Första svaret ska komma av sig självt: den som prenumererar vill
+    // veta läget nu, inte vid nästa ändring.
+    void hamtaMig().then(ropa).catch(() => ropa(null));
+
+    const franAnnanFlik = (e: StorageEvent) => {
+      if (e.key !== null && !e.key.includes("clearance-api-token")) return;
+      void hamtaMig().then(ropa).catch(() => ropa(null));
+    };
+    window.addEventListener("storage", franAnnanFlik);
+
+    return () => {
+      lyssnare.delete(callback);
+      window.removeEventListener("storage", franAnnanFlik);
+    };
+  },
+
+  async signUp(email: string, password: string) {
+    try {
+      const res = await apiFetch<{ token: string; userId: string }>("/v1/auth/register", {
+        method: "POST",
+        anonymous: true,
+        body: { email, password },
+      });
+      setToken(res.token);
+      ropa({ id: res.userId, email });
+      // Ingen e-postbekräftelse. Produkten används av någon vars bolag är
+      // i kris; ett extra steg där är ett steg för mycket.
+      return { error: null, needsEmailConfirmation: false };
+    } catch (err) {
+      return { ...somBesked(err), needsEmailConfirmation: false };
+    }
+  },
+
+  async signIn(email: string, password: string) {
+    try {
+      const res = await apiFetch<{ token: string; userId: string }>("/v1/auth/login", {
+        method: "POST",
+        anonymous: true,
+        body: { email, password },
+      });
+      setToken(res.token);
+      ropa({ id: res.userId, email });
+      return { error: null };
+    } catch (err) {
+      return somBesked(err);
+    }
+  },
+
+  async signOut() {
+    // Serverns återkallelse först, den lokala poletten sedan - men
+    // utloggningen får ALDRIG fastna på ett nätverksfel. En användare som
+    // trycker "logga ut" på en delad dator ska bli utloggad lokalt även
+    // när tjänsten inte svarar.
+    try {
+      await apiFetch("/v1/auth/logout", { method: "POST" });
+    } catch {
+      /* poletten rensas ändå nedan */
+    }
+    clearToken();
+    ropa(null);
+  },
+
+  async requestPasswordReset(email: string) {
+    try {
+      await apiFetch("/v1/auth/password-reset", {
+        method: "POST",
+        anonymous: true,
+        body: { email },
+      });
+      return { error: null };
+    } catch (err) {
+      return somBesked(err);
+    }
+  },
+
+  async updatePassword(newPassword: string, currentPassword: string) {
+    try {
+      await apiFetch("/v1/auth/password", {
+        method: "POST",
+        body: { password: newPassword, currentPassword },
+      });
+      // Servern återkallade ALLA sessioner, inklusive den här. Att låta
+      // poletten ligga kvar hade gett en app som ser inloggad ut och får
+      // 401 på nästa anrop.
+      clearToken();
+      ropa(null);
+      return { error: null };
+    } catch (err) {
+      return somBesked(err);
+    }
+  },
+
+  async redeemPasswordReset(token: string, newPassword: string) {
+    try {
+      await apiFetch("/v1/auth/password", {
+        method: "POST",
+        anonymous: true,
+        body: { token, password: newPassword },
+      });
+      return { error: null };
+    } catch (err) {
+      return somBesked(err);
+    }
+  },
+};
+
+/** Läses av sviten: senaste läget sändaren ropade ut. */
+export const sistKandAnvandare = (): AuthUser | null => sistKanda;
+
 /**
  * Adaptern FÖRE bron nedan. Exporterad enbart för tests/awsAdapter.ts, som
  * mäter migreringen på funktionsidentitet: en metod som inte är samma
@@ -1045,6 +1230,7 @@ const audit = {
  */
 export const awsAdapterUtanBro: DataPort = {
   ...supabaseAdapter,
+  auth: auth as DataPort["auth"],
   contact: contact as DataPort["contact"],
   billing: billing as DataPort["billing"],
   ops: ops as DataPort["ops"],

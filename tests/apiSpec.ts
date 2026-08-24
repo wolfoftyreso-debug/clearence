@@ -415,14 +415,48 @@ check(
 {
   const paths = spec.paths as Record<string, Record<string, { security?: unknown[] }>>;
   const publikaIKontraktet = new Set<string>();
+  const valfriIdentitet = new Set<string>();
   for (const [sokvag, ops] of Object.entries(paths)) {
     for (const [metod, op] of Object.entries(ops)) {
-      if (Array.isArray(op?.security) && op.security.length === 0) {
+      if (!Array.isArray(op?.security)) continue;
+      if (op.security.length === 0) {
         publikaIKontraktet.add(`${metod} ${sokvag}`);
+        continue;
+      }
+      /*
+       * DEN TREDJE STATEN: VALFRI IDENTITET.
+       *
+       * `security: [{}, {session: []}]` är OpenAPI:s sätt att säga "går
+       * att anropa både med och utan". Ett tomt objekt i listan betyder
+       * att inget krav också duger.
+       *
+       * Vakten var binär förut, och den binära formen hade tvingat fram
+       * en lögn åt något håll: antingen "publik" om en rutt som kan kräva
+       * en session, eller "skyddad" om en rutt som fungerar utan. Båda
+       * hade gjort kontraktet mindre sant än koden.
+       *
+       * POST /v1/auth/password är den enda rutten som är det: med polett
+       * ur återställningslänken krävs ingen session (poletten ÄR beviset),
+       * inloggad krävs både session och nuvarande lösenord.
+       */
+      if (op.security.some((s) => s !== null && typeof s === "object" && Object.keys(s as object).length === 0)) {
+        valfriIdentitet.add(`${metod} ${sokvag}`);
       }
     }
   }
   check("kontraktet pekar ut några publika rutter", publikaIKontraktet.size > 0, publikaIKontraktet.size);
+
+  /*
+   * "Valfri" får inte bli en bekväm utväg för en rutt ingen orkat bestämma
+   * sig om. Den ska vara sällsynt, och var och en ska stå namngiven här.
+   */
+  const MEDVETET_VALFRI: Record<string, string> = {
+    "post /auth/password": "Två vägar in: polett ur återställningslänken (ingen session) eller inloggad med nuvarande lösenord.",
+  };
+  const ovantatValfria = [...valfriIdentitet].filter((r) => !(r in MEDVETET_VALFRI));
+  check("varje rutt med valfri identitet står namngiven", ovantatValfria.length === 0, ovantatValfria);
+  const spokenValfria = Object.keys(MEDVETET_VALFRI).filter((r) => !valfriIdentitet.has(r));
+  check("och listan innehåller inga spöken", spokenValfria.length === 0, spokenValfria);
 
   /*
    * Handlern för EN metod och EN sökväg. Fönstret söks per metod - en
@@ -445,6 +479,25 @@ check(
     const kraverIdentitet = /await authenticate\(req\)|apiNyckelAnropare|authenticateApiKey/.test(kropp);
     const nyckel = `${metod} ${somKontraktet(rutt)}`;
     const deklareradPublik = publikaIKontraktet.has(nyckel);
+
+    if (valfriIdentitet.has(nyckel)) {
+      /*
+       * Handlern MÅSTE ha båda vägarna. En som bara autentiserar är inte
+       * valfri - då ljuger kontraktet - och en som aldrig gör det är
+       * publik och ska deklareras så.
+       */
+      check(
+        `${metod.toUpperCase()} ${rutt} har en inloggad väg`,
+        kraverIdentitet,
+        "kontraktet säger valfri identitet, men handlern autentiserar aldrig",
+      );
+      check(
+        `${metod.toUpperCase()} ${rutt} har också en väg utan session`,
+        /return\s*\{[\s\S]{0,400}?\}[\s\S]{0,200}?await authenticate\(req\)/.test(kropp),
+        "kontraktet säger valfri identitet, men handlern autentiserar innan någon annan väg kan tas",
+      );
+      continue;
+    }
 
     if (deklareradPublik) {
       check(

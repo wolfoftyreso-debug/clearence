@@ -525,7 +525,22 @@ export const supabaseAdapter: DataPort = {
       if (error && /not found|user/i.test(error.message)) return { error: null };
       return { error: error?.message ?? null };
     },
+    /*
+     * `currentPassword` tas emot men skickas inte vidare: Supabase kräver
+     * det inte, och att kasta ett fel för att argumentet finns vore att
+     * göra bron sämre än den var. Regeln - att en session inte räcker -
+     * är verklig först på eget API, där den prövas i handlern.
+     */
     async updatePassword(newPassword) {
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      return { error: error?.message ?? null };
+    },
+    /*
+     * Supabase återställningslänk skapar en SESSION i webbläsaren i stället
+     * för att bära en polett vi kan lösa in. Poletten är därför oanvänd
+     * här; det som byter lösenord är sessionen länken redan gav.
+     */
+    async redeemPasswordReset(_token, newPassword) {
       const { error } = await supabase.auth.updateUser({ password: newPassword });
       return { error: error?.message ?? null };
     },

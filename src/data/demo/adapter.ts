@@ -1160,6 +1160,9 @@ export const demoAdapter: DataPort = {
     async updatePassword() {
       return { error: null };
     },
+    async redeemPasswordReset() {
+      return { error: null };
+    },
   },
 
   contact: {
