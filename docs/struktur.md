@@ -70,3 +70,4 @@ som bara tittat i datalagret hade missat det.
 | Vilka miljövariabler? | [docs/vercel.md](vercel.md#miljövariabler) |
 | Hur sätter jag upp det första gången? | [docs/driftsattning.md](driftsattning.md) |
 | Vad hindrar en driftsättning just nu? | [docs/vercel.md](vercel.md#vad-som-återstår) |
+| Vad gör jag härnäst? | [docs/nasta-steg.md](nasta-steg.md) |
